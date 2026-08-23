@@ -1,14 +1,8 @@
-# Mesen Community Edition
+# MesenCE — sbihaiko's fork
 
-Mesen is a multi-system emulator for Windows, Linux, and macOS. It supports NES, SNES, Game Boy (GB/SGB/GBC), Game Boy Advance, PC Engine, SMS/Game Gear, and WonderSwan (WS/WSC).
+A personal fork of [MesenCE](https://github.com/nesdev-org/MesenCE) (itself a fork of [Mesen](https://github.com/SourMesen/Mesen2)), a multi-system emulator for Windows, Linux, and macOS covering NES, SNES, Game Boy (GB/SGB/GBC), Game Boy Advance, PC Engine, SMS/Game Gear, and WonderSwan (WS/WSC).
 
-This is a community-managed fork, created to maintain and expand this emulator into the future.
-
-## About This Fork
-
-This is [sbihaiko](https://github.com/sbihaiko)'s personal fork of MesenCE, built on top of the upstream project above.
-
-### Enhanced Audio (NES)
+## Enhanced Audio (NES)
 
 This fork adds an experimental **Enhanced Audio** mode for the NES core: an alternative synthesizer that reinterprets the live APU channel state (frequency, volume, duty) with modern instrument timbres in real time, on any ROM, with zero per-game assets. The APU stays the source of truth — the synth only reads its state and mixes on top of (or replaces) the original chip output. Enable it from the NES audio settings.
 
@@ -29,7 +23,7 @@ This feature was originally proposed upstream as [PR #262](https://github.com/ne
 
 Other builds (per-commit) are available in the [Actions](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amaster) tab. macOS builds are self-signed and require approval via Gatekeeper before they can run.
 
-
 ## License
+
 Mesen is available under the GPL V3 license.  Full text here: <http://www.gnu.org/licenses/gpl-3.0.en.html>
 Copyright (C) 2014-2026 Sour, 2026 contributors
