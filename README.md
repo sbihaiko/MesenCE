@@ -10,16 +10,6 @@ Five built-in styles are included: Synthwave, Chip Deluxe, Orchestral Lite, Dry,
 
 This feature was originally proposed upstream as [PR #262](https://github.com/nesdev-org/MesenCE/pull/262). It was built with the help of AI tools, which the upstream project's contribution policy does not allow, so the PR was closed and this work now lives here instead, for personal use.
 
-### Hear it
-
-Mega Man 3, Shadow Man stage. **Before** is the original NES chip audio; **after** is the reference mix the **Studio** preset is a verbatim port of — melody and timing come straight from the game's own APU register log, only the instrument timbres change.
-
-| 🔊 Before (original NES) | 🔊 After (Enhanced Audio — Studio) |
-|---|---|
-| [shadowman-before.mp3](docs/media/shadowman-before.mp3) | [shadowman-enhanced.mp3](docs/media/shadowman-enhanced.mp3) |
-
-![Spectrogram: original NES chip audio vs. resynthesized mix vs. Enhanced Audio remaster](docs/media/shadowman-spectrogram.png)
-
 ## Development Builds
 
 [![Mesen](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amaster)
