@@ -56,7 +56,7 @@ double EnhancedSynthEngine::BlepSaw(double phase, double inc)
 	return (2.0 * phase - 1.0) - PolyBlep(phase, inc);
 }
 
-void EnhancedSynthEngine::Retrigger(Voice& voice, double freq, double vol)
+void EnhancedSynthEngine::Retrigger(Voice& voice, double vol)
 {
 	//Reset oscillator phases only on an attack out of silence - the voice is
 	//near-silent there, so the reset is inaudible. Legato pitch changes keep
@@ -69,7 +69,6 @@ void EnhancedSynthEngine::Retrigger(Voice& voice, double freq, double vol)
 		voice.PhaseB = 0;
 		voice.SubPhase = 0;
 	}
-	voice.LastFreq = freq;
 	voice.LastVol = vol;
 }
 
@@ -86,9 +85,9 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 {
 	constexpr double pi2 = 2.0 * 3.14159265358979;
 
-	Retrigger(_lead, in.LeadFreq, in.LeadVol);
-	Retrigger(_harmony, in.HarmFreq, in.HarmVol);
-	Retrigger(_bass, in.BassFreq, in.BassVol);
+	Retrigger(_lead, in.LeadVol);
+	Retrigger(_harmony, in.HarmVol);
+	Retrigger(_bass, in.BassVol);
 
 	//A low thump is triggered only on attacks (volume rising into a slow+loud
 	//noise), so sustained noise (wind, engines) does not turn into a hum - the
@@ -126,7 +125,7 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	uint32_t fmVoiceCount = std::min(in.FmVoiceCount, MaxFmVoices);
 	double fmInc[MaxFmVoices];
 	for(uint32_t ch = 0; ch < fmVoiceCount; ch++) {
-		Retrigger(_fmVoices[ch], in.FmFreq[ch], in.FmVol[ch]);
+		Retrigger(_fmVoices[ch], in.FmVol[ch]);
 		fmInc[ch] = in.FmFreq[ch] / sampleRate;
 	}
 	double fmLpCoeff = 1.0 - std::exp(-pi2 * p.LeadLpHz / sampleRate);

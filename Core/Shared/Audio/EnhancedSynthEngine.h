@@ -38,7 +38,6 @@ private:
 		double SubPhase = 0;
 		double SmoothedVol = 0;
 		double Lp = 0;
-		double LastFreq = 0;
 		double LastVol = 0;
 	};
 
@@ -79,7 +78,7 @@ private:
 
 	static double PolyBlep(double t, double dt);
 	static double BlepSaw(double phase, double inc);
-	static void Retrigger(Voice& voice, double freq, double vol);
+	static void Retrigger(Voice& voice, double vol);
 	double NextNoise();
 
 public:
