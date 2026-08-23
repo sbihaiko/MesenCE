@@ -774,7 +774,13 @@ namespace Mesen.Windows
 		private void OnActiveChanged()
 		{
 			if(!_isClosing) {
-				ConfigApi.SetEmulationFlag(EmulationFlags.InBackground, !IsActive);
+				//Only the main window's own active state was checked here before, so
+				//focusing any other window belonging to the app (e.g. the Settings
+				//dialog) counted as "in background" and triggered the volume
+				//reduction/mute meant for switching away to a different application.
+				//Check across all of the app's windows instead - "in background"
+				//should mean none of them has focus.
+				ConfigApi.SetEmulationFlag(EmulationFlags.InBackground, ApplicationHelper.GetActiveWindow() == null);
 				InputApi.ResetKeyState();
 			}
 		}
