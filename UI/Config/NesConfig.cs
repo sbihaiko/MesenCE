@@ -125,10 +125,10 @@ namespace Mesen.Config
 		[ObservableProperty][MinMax(1, 100)] public partial Int32 StereoCombFilterDelay { get; set; } = 5;
 		[ObservableProperty][MinMax(1, 200)] public partial Int32 StereoCombFilterStrength { get; set; } = 100;
 
-		[ObservableProperty] public partial bool EnableEnhancedAudio { get; set; } = false;
+		[ObservableProperty] public partial bool EnableEnhancedAudio { get; set; } = true;
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioVolume { get; set; } = 100;
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioApuMix { get; set; } = 0;
-		[ObservableProperty] public partial EnhancedAudioPreset EnhancedAudioPreset { get; set; } = EnhancedAudioPreset.Synthwave;
+		[ObservableProperty] public partial EnhancedAudioPreset EnhancedAudioPreset { get; set; } = EnhancedAudioPreset.Studio;
 
 		//Misc
 		[ObservableProperty] public partial bool BreakOnCrash { get; set; } = false;

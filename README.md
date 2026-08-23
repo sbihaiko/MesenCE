@@ -4,7 +4,7 @@ A personal fork of [MesenCE](https://github.com/nesdev-org/MesenCE) (itself a fo
 
 ## Enhanced Audio (NES)
 
-This fork adds an experimental **Enhanced Audio** mode for the NES core: an alternative synthesizer that reinterprets the live APU channel state (frequency, volume, duty) with modern instrument timbres in real time, on any ROM, with zero per-game assets. The APU stays the source of truth — the synth only reads its state and mixes on top of (or replaces) the original chip output. Enable it from the NES audio settings.
+This fork adds an experimental **Enhanced Audio** mode for the NES core: an alternative synthesizer that reinterprets the live APU channel state (frequency, volume, duty) with modern instrument timbres in real time, on any ROM, with zero per-game assets. The APU stays the source of truth — the synth only reads its state and mixes on top of (or replaces) the original chip output. **It's on by default** (Style: Studio). To change or disable it: **Settings → NES → Audio tab → "Enhanced audio (experimental)"**, where you can toggle it, pick a Style, and adjust the synth volume and original APU mix.
 
 Five built-in styles are included: Synthwave, Chip Deluxe, Orchestral Lite, Dry, and Studio (a port of an offline remaster mix, with a fixed detuned-saw lead and a light bus compressor). Every instrument parameter can also be tuned without recompiling, via an `EnhancedAudioPresets.cfg` file placed in the Mesen home folder.
 
