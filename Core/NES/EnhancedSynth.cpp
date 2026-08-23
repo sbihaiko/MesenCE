@@ -134,6 +134,14 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 		in.NoiseVol = envVolume(apu.Noise.Envelope);
 	}
 
+	//Per-channel volume settings (Settings > NES > Audio) apply to the synth
+	//voices too, so muting a chip channel also mutes its enhanced voice
+	NesConfig& nesCfg = _console->GetNesConfig();
+	in.LeadVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square1] / 100.0;
+	in.HarmVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square2] / 100.0;
+	in.BassVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Triangle] / 100.0;
+	in.NoiseVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Noise] / 100.0;
+
 	//The duty cycle is part of the arrangement (12.5% leads vs 50% pads);
 	//map it to the synth's pulse width so that character survives.
 	//Duty 3 (75%) sounds identical to 25% on the NES, so it maps back to 0.25.

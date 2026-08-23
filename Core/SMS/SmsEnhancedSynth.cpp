@@ -133,13 +133,19 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 	//registers either, or stale notes/noise would play under the FM voices.
 	bool psgMuted = _console->IsPsgAudioMuted();
 	if(!psgMuted) {
+		//Per-channel volume settings (Settings > SMS/ColecoVision > Audio)
+		//apply to the synth voices too, so muting a chip channel also mutes
+		//its enhanced voice - same indexing as SmsPsg::Run()
+		uint32_t* chVol = _console->GetModel() == SmsModel::ColecoVision
+			? _emu->GetSettings()->GetCvConfig().ChannelVolumes
+			: _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
 		in.LeadFreq = toneFreq(psg.Tone[0].ReloadValue);
-		in.LeadVol = toneVol(psg.Tone[0].Volume);
+		in.LeadVol = toneVol(psg.Tone[0].Volume) * chVol[0] / 100.0;
 		in.HarmFreq = toneFreq(psg.Tone[1].ReloadValue);
-		in.HarmVol = toneVol(psg.Tone[1].Volume);
+		in.HarmVol = toneVol(psg.Tone[1].Volume) * chVol[1] / 100.0;
 		in.BassFreq = toneFreq(psg.Tone[2].ReloadValue);
-		in.BassVol = toneVol(psg.Tone[2].Volume);
-		in.NoiseVol = toneVol(psg.Noise.Volume);
+		in.BassVol = toneVol(psg.Tone[2].Volume) * chVol[2] / 100.0;
+		in.NoiseVol = toneVol(psg.Noise.Volume) * chVol[3] / 100.0;
 	}
 
 	//The SN76489 has no duty register - the lead/harmony pulse width is
@@ -177,6 +183,9 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 	uint8_t fmRegs[0x40];
 	_console->GetFmAudio()->GetRegisters(fmRegs);
 	bool fmRhythmMode = (fmRegs[0x0E] & 0x20) != 0;
+	//The FM add-on's volume setting (Settings > SMS > Audio) applies to the
+	//synth's FM voices too, like the PSG channel volumes above
+	double fmVolume = _emu->GetSettings()->GetSmsConfig().FmAudioVolume / 100.0;
 	in.FmVoiceCount = 9;
 	for(uint32_t ch = 0; ch < 9; ch++) {
 		uint8_t keyBlock = fmRegs[0x20 + ch];
@@ -185,7 +194,7 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 		uint8_t block = (keyBlock >> 1) & 0x07;
 		in.FmFreq[ch] = fnum * (double)masterClockRate / (72.0 * (double)(1u << (19 - block)));
 		uint8_t attenuation = fmRegs[0x30 + ch] & 0x0F;
-		in.FmVol[ch] = keyOn ? (15 - attenuation) / 15.0 : 0.0;
+		in.FmVol[ch] = keyOn ? (15 - attenuation) / 15.0 * fmVolume : 0.0;
 	}
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
