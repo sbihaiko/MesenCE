@@ -4,6 +4,18 @@ Mesen is a multi-system emulator for Windows, Linux, and macOS. It supports NES,
 
 This is a community-managed fork, created to maintain and expand this emulator into the future.
 
+## About This Fork
+
+This is [sbihaiko](https://github.com/sbihaiko)'s personal fork of MesenCE, built on top of the upstream project above.
+
+### Enhanced Audio (NES)
+
+This fork adds an experimental **Enhanced Audio** mode for the NES core: an alternative synthesizer that reinterprets the live APU channel state (frequency, volume, duty) with modern instrument timbres in real time, on any ROM, with zero per-game assets. The APU stays the source of truth — the synth only reads its state and mixes on top of (or replaces) the original chip output. Enable it from the NES audio settings.
+
+Five built-in styles are included: Synthwave, Chip Deluxe, Orchestral Lite, Dry, and Studio (a port of an offline remaster mix, with a fixed detuned-saw lead and a light bus compressor). Every instrument parameter can also be tuned without recompiling, via an `EnhancedAudioPresets.cfg` file placed in the Mesen home folder.
+
+This feature was originally proposed upstream as [PR #262](https://github.com/nesdev-org/MesenCE/pull/262). It was built with the help of AI tools, which the upstream project's contribution policy does not allow, so the PR was closed and this work now lives here instead, for personal use.
+
 ## Releases
 
 The latest stable version is available from the [releases page on GitHub](https://github.com/nesdev-org/MesenCE/releases).
