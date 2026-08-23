@@ -21,7 +21,7 @@ class SmsConsole;
 //After Burner, Shadow Dancer) switch their whole soundtrack over to FM and
 //mute the PSG entirely, leaving nothing in the PSG registers above to
 //re-interpret. Rhythm-mode percussion (channels 6-8 repurposed as BD/SD/
-//TOM/CYM/HH) is left untouched - see MixAudio.
+//TOM/CYM/HH) is mapped onto the engine's drum path - see MixAudio.
 class SmsEnhancedSynth final : public IAudioProvider
 {
 private:

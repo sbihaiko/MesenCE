@@ -178,8 +178,9 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 	//bits1-3 = octave (block), bit4 = key-on. $30-$38: bits4-7 = instrument
 	//(unused here), bits0-3 = 4-bit attenuation (0 = loudest, 15 = silent,
 	//same convention as the PSG). $0E bit5 = rhythm mode, which repurposes
-	//channels 6-8 (BD/SD/TOM/CYM/HH) - left unhandled for now, so those 3
-	//channels are forced silent instead of misread as melodic notes.
+	//channels 6-8 (BD/SD/TOM/CYM/HH) - those 3 channels are kept out of the
+	//melodic bus (they'd be misread as notes) and mapped onto the engine's
+	//drum path instead, below.
 	uint8_t fmRegs[0x40];
 	_console->GetFmAudio()->GetRegisters(fmRegs);
 	bool fmRhythmMode = (fmRegs[0x0E] & 0x20) != 0;
@@ -195,6 +196,35 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 		in.FmFreq[ch] = fnum * (double)masterClockRate / (72.0 * (double)(1u << (19 - block)));
 		uint8_t attenuation = fmRegs[0x30 + ch] & 0x0F;
 		in.FmVol[ch] = keyOn ? (15 - attenuation) / 15.0 * fmVolume : 0.0;
+	}
+
+	//Rhythm mode: 5 percussion instruments keyed by $0E bits 0-4 (bit4 = BD,
+	//bit3 = SD, bit2 = TOM, bit1 = CYM, bit0 = HH), leveled by the nibbles of
+	//$36-$38 ($36 low = BD, $37 high/low = HH/SD, $38 high/low = TOM/CYM).
+	//Rather than emulating the OPLL percussion, map it onto the engine's
+	//existing drum path the same way the PSG noise channel is: dark hits
+	//(BD/TOM) drive the noise "body", bright ones (SD/CYM/HH) the "top", and
+	//a keyed bass drum qualifies for the attack-triggered low thump. The drum
+	//bus is single, so when both the PSG noise and FM rhythm are active the
+	//louder source wins.
+	if(fmRhythmMode) {
+		auto rhythmVol = [fmVolume](bool keyed, uint8_t attenuation) {
+			return keyed ? (15 - (attenuation & 0x0F)) / 15.0 * fmVolume : 0.0;
+		};
+		uint8_t keys = fmRegs[0x0E];
+		double bd = rhythmVol(keys & 0x10, fmRegs[0x36]);
+		double sd = rhythmVol(keys & 0x08, fmRegs[0x37]);
+		double tom = rhythmVol(keys & 0x04, fmRegs[0x38] >> 4);
+		double cym = rhythmVol(keys & 0x02, fmRegs[0x38]);
+		double hh = rhythmVol(keys & 0x01, fmRegs[0x37] >> 4);
+		double body = std::max(bd, tom);
+		double top = std::max({ sd, cym, hh });
+		double vol = std::max(body, top);
+		if(vol > in.NoiseVol) {
+			in.NoiseVol = vol;
+			in.NoiseBrightness = top / (top + body);
+			in.ThumpEligible = bd > 0;
+		}
 	}
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
