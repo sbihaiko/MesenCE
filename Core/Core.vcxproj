@@ -120,6 +120,7 @@
     <ClInclude Include="SMS\SmsControlManager.h" />
     <ClInclude Include="SMS\SmsCpu.h" />
     <ClInclude Include="SMS\SmsDefaultVideoFilter.h" />
+    <ClInclude Include="SMS\SmsEnhancedSynth.h" />
     <ClInclude Include="SMS\SmsFmAudio.h" />
     <ClInclude Include="SMS\SmsMemoryManager.h" />
     <ClInclude Include="SMS\SmsNtscFilter.h" />
@@ -765,6 +766,8 @@
     <ClInclude Include="Shared\MemoryType.h" />
     <ClInclude Include="SNES\Input\SnesMouse.h" />
     <ClInclude Include="Shared\Audio\SoundMixer.h" />
+    <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
+    <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h" />
     <ClInclude Include="Shared\Audio\SoundResampler.h" />
     <ClInclude Include="SNES\SnesState.h" />
     <ClInclude Include="SNES\Spc.h" />
@@ -965,6 +968,7 @@
     <ClCompile Include="SMS\SmsConsole.cpp" />
     <ClCompile Include="SMS\SmsControlManager.cpp" />
     <ClCompile Include="SMS\SmsCpu.cpp" />
+    <ClCompile Include="SMS\SmsEnhancedSynth.cpp" />
     <ClCompile Include="SMS\SmsFmAudio.cpp" />
     <ClCompile Include="SMS\SmsMemoryManager.cpp" />
     <ClCompile Include="SMS\SmsNtscFilter.cpp" />
@@ -1091,6 +1095,8 @@
     <ClCompile Include="Shared\ShortcutKeyHandler.cpp" />
     <ClCompile Include="SNES\Input\SnesController.cpp" />
     <ClCompile Include="Shared\Audio\SoundMixer.cpp" />
+    <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp" />
+    <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp" />
     <ClCompile Include="Shared\Audio\SoundResampler.cpp" />
     <ClCompile Include="SNES\Spc.cpp" />
     <ClCompile Include="SNES\Spc.Instructions.cpp" />

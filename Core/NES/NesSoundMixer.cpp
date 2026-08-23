@@ -4,6 +4,7 @@
 #include "NES/NesConstants.h"
 #include "NES/NesTypes.h"
 #include "Shared/Emulator.h"
+#include "Shared/EmuSettings.h"
 #include "Shared/SettingTypes.h"
 #include "Shared/Audio/SoundMixer.h"
 #include "Shared/Utilities/AvMergeUtilities.h"
@@ -146,7 +147,10 @@ void NesSoundMixer::UpdateRates(bool forceUpdate)
 	//scaled down to the configured mix level (0 = replaced, 100 = layered).
 	//Applied after the non-linear DAC formula (see GetOutputVolume) so the
 	//DMC and expansion audio levels are not affected by the ducking.
-	_enhancedDuck = cfg.EnableEnhancedAudio ? cfg.EnhancedAudioApuMix / 100.0 : 1.0;
+	//Enhanced audio settings are shared across consoles (AudioConfig), not
+	//NES-specific - see EnhancedSynth::MixAudio.
+	AudioConfig& audioCfg = _console->GetEmulator()->GetSettings()->GetAudioConfig();
+	_enhancedDuck = audioCfg.EnableEnhancedAudio ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
 
 	bool hasPanning = false;
 	for(uint32_t i = 0; i < MaxChannelCount; i++) {

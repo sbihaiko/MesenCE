@@ -988,6 +988,18 @@
     <ClInclude Include="Shared\Audio\SoundMixer.h">
       <Filter>Shared\Audio</Filter>
     </ClInclude>
+    <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp">
+      <Filter>Shared\Audio</Filter>
+    </ClCompile>
+    <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp">
+      <Filter>Shared\Audio</Filter>
+    </ClCompile>
+    <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h">
+      <Filter>Shared\Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h">
+      <Filter>Shared\Audio</Filter>
+    </ClInclude>
     <ClCompile Include="Shared\Audio\SoundResampler.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
@@ -2658,6 +2670,9 @@
     <ClInclude Include="SMS\SmsFmAudio.h">
       <Filter>SMS</Filter>
     </ClInclude>
+    <ClInclude Include="SMS\SmsEnhancedSynth.h">
+      <Filter>SMS</Filter>
+    </ClInclude>
     <ClInclude Include="Shared\Utilities\Emu2413Serializer.h">
       <Filter>Shared\Utilities</Filter>
     </ClInclude>
@@ -3192,6 +3207,9 @@
       <Filter>SMS</Filter>
     </ClCompile>
     <ClCompile Include="SMS\SmsFmAudio.cpp">
+      <Filter>SMS</Filter>
+    </ClCompile>
+    <ClCompile Include="SMS\SmsEnhancedSynth.cpp">
       <Filter>SMS</Filter>
     </ClCompile>
     <ClCompile Include="Shared\Utilities\emu2413.cpp">

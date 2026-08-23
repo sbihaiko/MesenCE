@@ -170,6 +170,14 @@ struct AudioConfig
 	uint32_t AudioPlayerTrackLength = 120;
 	bool AudioPlayerAutoDetectSilence = true;
 	uint32_t AudioPlayerSilenceDelay = 3;
+
+	//Shared across all consoles - each console's enhanced audio synth (NES:
+	//EnhancedSynth, SMS/GG/SG/CV: SmsEnhancedSynth) reads this same config, and
+	//applies its own set of built-in presets.
+	bool EnableEnhancedAudio = true;
+	uint32_t EnhancedAudioVolume = 100;
+	uint32_t EnhancedAudioApuMix = 0;
+	uint32_t EnhancedAudioPreset = 4; //Studio
 };
 
 enum class ControllerType
@@ -730,11 +738,6 @@ struct NesConfig
 	int32_t StereoPanningAngle = 0;
 	int32_t StereoCombFilterDelay = 0;
 	int32_t StereoCombFilterStrength = 0;
-
-	bool EnableEnhancedAudio = true;
-	uint32_t EnhancedAudioVolume = 100;
-	uint32_t EnhancedAudioApuMix = 0;
-	uint32_t EnhancedAudioPreset = 4; //Studio
 };
 
 enum class SmsRevision

@@ -26,6 +26,11 @@ public:
 
 	bool IsPsgAudioMuted();
 
+	//Copies the OPLL's raw register file (0x00-0x3F) out for
+	//SmsEnhancedSynth to re-interpret, the same way it reads SmsPsg's live
+	//channel state - see SmsEnhancedSynth::MixAudio.
+	void GetRegisters(uint8_t out[0x40]) const;
+
 	uint8_t Read();
 	void Write(uint8_t port, uint8_t value);
 

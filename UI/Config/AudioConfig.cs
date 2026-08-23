@@ -58,6 +58,14 @@ namespace Mesen.Config
 		[ObservableProperty] public partial bool AudioPlayerAutoDetectSilence { get; set; } = true;
 		[ObservableProperty][MinMax(0, 999999)] public partial UInt32 AudioPlayerSilenceDelay { get; set; } = 3;
 
+		//Shared across all consoles - each console's enhanced audio synth (NES:
+		//EnhancedSynth, SMS/GG/SG/CV: SmsEnhancedSynth) reads this same config,
+		//and applies its own set of built-in presets.
+		[ObservableProperty] public partial bool EnableEnhancedAudio { get; set; } = true;
+		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioVolume { get; set; } = 100;
+		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioApuMix { get; set; } = 0;
+		[ObservableProperty] public partial EnhancedAudioPreset EnhancedAudioPreset { get; set; } = EnhancedAudioPreset.Studio;
+
 		public void ApplyConfig()
 		{
 			ConfigApi.SetAudioConfig(new InteropAudioConfig() {
@@ -105,7 +113,12 @@ namespace Mesen.Config
 				AudioPlayerEnableTrackLength = AudioPlayerEnableTrackLength,
 				AudioPlayerTrackLength = AudioPlayerTrackLength,
 				AudioPlayerAutoDetectSilence = AudioPlayerAutoDetectSilence,
-				AudioPlayerSilenceDelay = AudioPlayerSilenceDelay
+				AudioPlayerSilenceDelay = AudioPlayerSilenceDelay,
+
+				EnableEnhancedAudio = EnableEnhancedAudio,
+				EnhancedAudioVolume = EnhancedAudioVolume,
+				EnhancedAudioApuMix = EnhancedAudioApuMix,
+				EnhancedAudioPreset = EnhancedAudioPreset
 			});
 		}
 	}
@@ -159,6 +172,20 @@ namespace Mesen.Config
 		public UInt32 AudioPlayerTrackLength;
 		[MarshalAs(UnmanagedType.I1)] public bool AudioPlayerAutoDetectSilence;
 		public UInt32 AudioPlayerSilenceDelay;
+
+		[MarshalAs(UnmanagedType.I1)] public bool EnableEnhancedAudio;
+		public UInt32 EnhancedAudioVolume;
+		public UInt32 EnhancedAudioApuMix;
+		public EnhancedAudioPreset EnhancedAudioPreset;
+	}
+
+	public enum EnhancedAudioPreset
+	{
+		Synthwave = 0,
+		ChipDeluxe = 1,
+		OrchestralLite = 2,
+		Dry = 3,
+		Studio = 4
 	}
 
 	public enum AudioSampleRate

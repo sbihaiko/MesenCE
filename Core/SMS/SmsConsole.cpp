@@ -5,6 +5,7 @@
 #include "SMS/SmsVdp.h"
 #include "SMS/SmsPsg.h"
 #include "SMS/SmsFmAudio.h"
+#include "SMS/SmsEnhancedSynth.h"
 #include "SMS/SmsMemoryManager.h"
 #include "SMS/SmsDefaultVideoFilter.h"
 #include "SMS/SmsNtscFilter.h"
@@ -64,6 +65,7 @@ LoadRomResult SmsConsole::LoadRom(VirtualFile& romFile)
 		_cpu.reset(new SmsCpu());
 		_psg.reset(new SmsPsg(_emu, this));
 		_fmAudio.reset(new SmsFmAudio(_emu, this));
+		_enhancedSynth.reset(new SmsEnhancedSynth(_emu, this));
 		_controlManager.reset(new SmsControlManager(_emu, this, _vdp.get()));
 
 		InitCart(romData);

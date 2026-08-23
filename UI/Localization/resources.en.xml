@@ -27,6 +27,12 @@
 			<Control ID="grpVolume">Volume</Control>
 			<Control ID="btnReset">Reset to Defaults</Control>
 
+			<Control ID="grpEnhancedAudio">Enhanced audio (experimental)</Control>
+			<Control ID="chkEnableEnhancedAudio">Play music and sound effects with modern instrument sounds</Control>
+			<Control ID="lblEnhancedAudioPreset">Style: </Control>
+			<Control ID="lblEnhancedAudioVolume">Synth volume: </Control>
+			<Control ID="lblEnhancedAudioApuMix">Original chip mix: </Control>
+
 			<Control ID="lblAudioPlayerSettings">Audio Player Settings</Control>
 			<Control ID="lblAudioPlayerHint">When a track has an unknown duration:</Control>
 			<Control ID="chkAudioPlayerAutoDetectSilence">Move to the next track after</Control>
@@ -330,11 +336,6 @@
 			<Control ID="chkReduceDmcPopping">Reduce popping sounds on the DMC channel</Control>
 			<Control ID="chkDisableNoiseModeFlag">Disable noise channel mode flag (mimics oldest Famicom models)</Control>
 			<Control ID="grpEffects">Effects</Control>
-			<Control ID="grpEnhancedAudio">Enhanced audio (experimental)</Control>
-			<Control ID="chkEnableEnhancedAudio">Play music and sound effects with modern instrument sounds</Control>
-			<Control ID="lblEnhancedAudioPreset">Style: </Control>
-			<Control ID="lblEnhancedAudioVolume">Synth volume: </Control>
-			<Control ID="lblEnhancedAudioApuMix">Original APU mix: </Control>
 			<Control ID="lblStereoEffect">Stereo effect: </Control>
 			<Control ID="lblDelay">Delay: </Control>
 			<Control ID="lblStrength">Strength: </Control>

@@ -12,6 +12,7 @@ class SmsCpu;
 class SmsVdp;
 class SmsPsg;
 class SmsFmAudio;
+class SmsEnhancedSynth;
 class SmsCart;
 class SmsControlManager;
 class SmsMemoryManager;
@@ -26,6 +27,7 @@ private:
 	unique_ptr<SmsMemoryManager> _memoryManager;
 	unique_ptr<SmsPsg> _psg;
 	unique_ptr<SmsFmAudio> _fmAudio;
+	unique_ptr<SmsEnhancedSynth> _enhancedSynth;
 	unique_ptr<SmsCart> _cart;
 	RomFormat _romFormat = RomFormat::Sms;
 	SmsModel _model = SmsModel::Sms;
@@ -45,6 +47,7 @@ public:
 	SmsCpu* GetCpu() { return _cpu.get(); }
 	SmsVdp* GetVdp() { return _vdp.get(); }
 	SmsPsg* GetPsg() { return _psg.get(); }
+	SmsFmAudio* GetFmAudio() { return _fmAudio.get(); }
 	SmsMemoryManager* GetMemoryManager() { return _memoryManager.get(); }
 
 	SmsModel GetModel() { return _model; }

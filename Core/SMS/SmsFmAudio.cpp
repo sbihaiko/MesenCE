@@ -49,6 +49,11 @@ bool SmsFmAudio::IsPsgAudioMuted()
 	return _audioControl == 0x01 || _audioControl == 0x02;
 }
 
+void SmsFmAudio::GetRegisters(uint8_t out[0x40]) const
+{
+	memcpy(out, _opll->reg, 0x40);
+}
+
 uint8_t SmsFmAudio::Read()
 {
 	//TODOSMS - c-sync counter bits?
@@ -81,8 +86,13 @@ void SmsFmAudio::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sampleRat
 		return;
 	}
 
+	//Ducked the same way as SmsPsg's own channels when the enhanced synth is
+	//active - see SmsPsg::Run() and SmsEnhancedSynth::MixAudio.
+	AudioConfig& audioCfg = _emu->GetSettings()->GetAudioConfig();
+	double duck = audioCfg.EnableEnhancedAudio ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
+
 	_resampler.SetSampleRates(_console->GetMasterClockRate() / 72.0, sampleRate);
-	_resampler.SetVolume(_emu->GetSettings()->GetSmsConfig().FmAudioVolume * 1.5 / 100.0);
+	_resampler.SetVolume(_emu->GetSettings()->GetSmsConfig().FmAudioVolume * 1.5 / 100.0 * duck);
 	_resampler.Resample<true>(_samplesToPlay.data(), (uint32_t)_samplesToPlay.size() / 2, out, sampleCount, true);
 	_samplesToPlay.clear();
 }

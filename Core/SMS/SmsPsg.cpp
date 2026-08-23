@@ -69,6 +69,16 @@ void SmsPsg::Run()
 	uint64_t runTo = _console->GetMasterClock();
 	uint32_t* volumes = _console->GetModel() == SmsModel::ColecoVision ? _settings->GetCvConfig().ChannelVolumes : _settings->GetSmsConfig().ChannelVolumes;
 
+	//When the enhanced synth is active, the PSG channels it replaces are
+	//scaled down to the configured mix level (0 = replaced, 100 = layered).
+	//Unlike the NES, the SN76489's mix is linear and its 4 channels are
+	//exactly the 4 the synth re-synthesizes, so there's no non-linear DAC
+	//curve or bystander channel (like the NES's DMC) to protect - the duck
+	//applies uniformly to tone and noise alike. Enhanced audio settings are
+	//shared across consoles (AudioConfig) - see SmsEnhancedSynth::MixAudio.
+	AudioConfig& audioCfg = _settings->GetAudioConfig();
+	double duck = audioCfg.EnableEnhancedAudio ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
+
 	while(_masterClock + 16 < runTo) {
 		int16_t outputLeft = 0;
 		int16_t outputRight = 0;
@@ -79,7 +89,7 @@ void SmsPsg::Run()
 				_state.Tone[i].Timer = _state.Tone[i].ReloadValue;
 			}
 
-			channelOutput = _state.Tone[i].Output * _volumeLut[_state.Tone[i].Volume] * volumes[i] / 100;
+			channelOutput = (int16_t)(_state.Tone[i].Output * _volumeLut[_state.Tone[i].Volume] * volumes[i] / 100 * duck);
 			if(_state.GameGearPanningReg & (0x01 << i)) {
 				outputRight += channelOutput;
 			}
@@ -89,7 +99,7 @@ void SmsPsg::Run()
 		}
 
 		RunNoise(_state.Noise);
-		channelOutput = _state.Noise.Output * _volumeLut[_state.Noise.Volume] * volumes[3] / 100;
+		channelOutput = (int16_t)(_state.Noise.Output * _volumeLut[_state.Noise.Volume] * volumes[3] / 100 * duck);
 		if(_state.GameGearPanningReg & 0x08) {
 			outputRight += channelOutput;
 		}
