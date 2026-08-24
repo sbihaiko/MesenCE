@@ -769,6 +769,7 @@ namespace Mesen.ViewModels
 
 				GetSoundRecorderMenu(wnd),
 				GetVideoRecorderMenu(wnd),
+				GetMusicRecorderMenu(wnd),
 
 				new ContextMenuSeparator() {
 					IsVisible = () =>  MainWindow.RomInfo.ConsoleType == ConsoleType.Nes && MainWindow.RomInfo.Format != RomFormat.Nsf
@@ -859,6 +860,34 @@ namespace Mesen.ViewModels
 						IsEnabled = () => IsGameRunning && RecordApi.WaveIsRecording(),
 						OnClick = () => {
 							RecordApi.WaveStop();
+						}
+					}
+				}
+			};
+		}
+
+		private MainMenuAction GetMusicRecorderMenu(MainWindow wnd)
+		{
+			return new MainMenuAction() {
+				ActionType = ActionType.MusicRecorder,
+				SubActions = new List<object> {
+					new MainMenuAction() {
+						ActionType = ActionType.Record,
+						IsEnabled = () => IsGameRunning && !RecordApi.MidiIsRecording() && !RecordApi.VgmIsRecording(),
+						OnClick = async () => {
+							string? filename = await FileDialogHelper.SaveFile(ConfigManager.WaveFolder, EmuApi.GetRomInfo().GetRomName() + ".mid", wnd, FileDialogHelper.MidiExt, FileDialogHelper.VgmExt);
+							if(filename != null) {
+								RecordApi.MidiRecord(Path.ChangeExtension(filename, FileDialogHelper.MidiExt));
+								RecordApi.VgmRecord(Path.ChangeExtension(filename, FileDialogHelper.VgmExt));
+							}
+						}
+					},
+					new MainMenuAction() {
+						ActionType = ActionType.Stop,
+						IsEnabled = () => IsGameRunning && (RecordApi.MidiIsRecording() || RecordApi.VgmIsRecording()),
+						OnClick = () => {
+							RecordApi.MidiStop();
+							RecordApi.VgmStop();
 						}
 					}
 				}
