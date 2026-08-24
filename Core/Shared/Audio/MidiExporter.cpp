@@ -14,10 +14,9 @@ namespace
 	};
 }
 
-MidiExporter::MidiExporter(string outputFile) :
-	_outputFile(outputFile),
-	_stream(outputFile, ios::out | ios::binary),
-	_smf(kTrackCount, (uint16_t)kTicksPerQuarterNote)
+MidiExporter::MidiExporter(string outputFile) : _outputFile(outputFile),
+																_stream(outputFile, ios::out | ios::binary),
+																_smf(kTrackCount, (uint16_t)kTicksPerQuarterNote)
 {
 }
 
