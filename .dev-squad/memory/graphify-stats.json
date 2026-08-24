@@ -18,6 +18,15 @@
       "scoutMs": null,
       "classification": "new-feature",
       "diverged": false
+    },
+    {
+      "sid": "0570161c4bd2",
+      "exposed": true,
+      "status": "skipped-absent",
+      "queries": 0,
+      "scoutMs": null,
+      "classification": "new-feature",
+      "diverged": false
     }
   ]
 }

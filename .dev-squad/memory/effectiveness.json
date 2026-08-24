@@ -1,5 +1,23 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-24T03:04:22.501Z",
-  "byId": {}
+  "updatedAt": "2026-08-24T11:09:56.916Z",
+  "byId": {
+    "L-ff73acd33912-000": {
+      "class": "new-feature",
+      "status": "advisory",
+      "scope": [
+        "Core/Shared/Audio/MidiExporter.h",
+        "Core/Shared/Audio/MidiExporter.cpp"
+      ],
+      "category": "code-quality",
+      "injected": 1,
+      "exposed": 1,
+      "recurred": 0,
+      "firstSeen": "2026-08-24T11:09:56.916Z",
+      "contentHash": "a9d8ef5fd8ea0c13a78c527c3ac0ad1df1b445688ce9af4ea3473b26429d6671",
+      "lastInjectedSid": "0570161c4bd2",
+      "lastUpdated": "2026-08-24T11:09:56.916Z",
+      "lastExposedSid": "0570161c4bd2"
+    }
+  }
 }
