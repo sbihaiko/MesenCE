@@ -12,6 +12,9 @@ class SoundMixer;
 class EmuSettings;
 struct GameboyConfig;
 
+//Live VGM capture note: every GB APU register write ($FF10-$FF3F) funnels
+//through Write() below, which carries a single VgmExporter::LogWrite tap -
+//see VgmExporter.h for the log format.
 class GbApu : public ISerializable
 {
 public:

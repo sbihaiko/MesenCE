@@ -3,6 +3,7 @@
 #include "NES/INesMemoryHandler.h"
 #include "NES/NesConsole.h"
 #include "NES/NesCpu.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Utilities/ISerializable.h"
 #include "Utilities/Serializer.h"
 
@@ -201,6 +202,10 @@ public:
 	void WriteRam(uint16_t addr, uint8_t value) override
 	{
 		_console->GetApu()->Run();
+
+		//Raw register-write tap for a live VGM capture - see VgmExporter.h.
+		VgmExporter::LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
+
 		_newValue = value;
 
 		//Reset sequence after $4017 is written to

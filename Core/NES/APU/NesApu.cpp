@@ -11,6 +11,7 @@
 #include "NES/NesMemoryManager.h"
 #include "NES/NesSoundMixer.h"
 #include "Shared/Emulator.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Utilities/Serializer.h"
 
 NesApu::NesApu(NesConsole* console)
@@ -131,6 +132,14 @@ void NesApu::WriteRam(uint16_t addr, uint8_t value)
 {
 	//$4015 write
 	Run();
+
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h.
+	//This site only ever sees $4015 (the other APU registers are each
+	//registered directly with NesMemoryManager by their owning channel
+	//class, which taps VgmExporter itself - see SquareChannel::WriteRam,
+	//TriangleChannel::WriteRam, NoiseChannel::WriteRam,
+	//DeltaModulationChannel::WriteRam and ApuFrameCounter::WriteRam).
+	VgmExporter::LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
 
 	//Writing to $4015 clears the DMC interrupt flag.
 	//This needs to be done before setting the enabled flag for the DMC (because doing so can trigger an IRQ)

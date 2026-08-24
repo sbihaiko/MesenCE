@@ -6,6 +6,7 @@
 #include "NES/NesConstants.h"
 #include "NES/NesConsole.h"
 #include "NES/NesMemoryManager.h"
+#include "Shared/Audio/VgmExporter.h"
 
 DeltaModulationChannel::DeltaModulationChannel(NesConsole* console) : _timer(AudioChannel::DMC, console->GetSoundMixer())
 {
@@ -190,6 +191,9 @@ void DeltaModulationChannel::GetMemoryRanges(MemoryRanges& ranges)
 void DeltaModulationChannel::WriteRam(uint16_t addr, uint8_t value)
 {
 	_console->GetApu()->Run();
+
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h.
+	VgmExporter::LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
 
 	switch(addr & 0x03) {
 		case 0: //4010

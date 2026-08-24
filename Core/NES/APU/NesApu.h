@@ -17,6 +17,12 @@ class EmuSettings;
 enum class FrameType;
 enum class ConsoleRegion;
 
+//Live VGM capture note: NesApu::WriteRam only ever sees $4015 (enable/status) -
+//the other APU registers ($4000-4013, $4017) are each memory-mapped directly
+//to their owning channel class by NesMemoryManager, so those classes
+//(SquareChannel, TriangleChannel, NoiseChannel, DeltaModulationChannel,
+//ApuFrameCounter) each carry their own VgmExporter::LogWrite tap instead of
+//routing back through here - see VgmExporter.h for the log format.
 class NesApu : public ISerializable, public INesMemoryHandler
 {
 	friend ApuFrameCounter;
