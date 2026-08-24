@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <map>
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTilePack.h"
 #include "Shared/Emulator.h"
+#include "Shared/MessageManager.h"
 #include "Utilities/xBRZ/xbrz.h"
 #include "Utilities/HQX/hqx.h"
 #include "Utilities/Scale2x/scalebit.h"
@@ -20,6 +22,49 @@ HdTilePackBuilder::HdTilePackBuilder(Emulator* emu, string system, HdPackBuilder
 	_filterType = options.FilterType;
 	_sortByUsageFrequency = options.SortByUsageFrequency;
 	_romSha1 = _emu->GetRomInfo().RomFile.GetSha1Hash();
+
+	MergeExistingPack();
+}
+
+//Re-recording into a folder that already holds a pack keeps every existing
+//tile - including hand-edited art, brightness and defaultTile flags - and
+//only appends the newly captured ones (same behavior as the NES builder)
+void HdTilePackBuilder::MergeExistingPack()
+{
+	HdTilePack existingPack;
+	if(!HdTilePack::LoadFromFolder(_saveFolder, existingPack, true)) {
+		return;
+	}
+
+	if(existingPack.GetSystem() != _system) {
+		MessageManager::Log("[HDPack] Existing pack in the save folder is for '" + existingPack.GetSystem() + "' - it will be overwritten");
+		return;
+	}
+
+	if(existingPack.GetScale() != _scale) {
+		//The existing art wins: new captures are scaled to match it
+		MessageManager::Log("[HDPack] Existing pack uses scale " + std::to_string(existingPack.GetScale()) + " - keeping it");
+		_scale = existingPack.GetScale();
+	}
+
+	uint32_t index = 0;
+	for(unique_ptr<HdLoadedTile>& tile : existingPack.GetTiles()) {
+		TileEntry& entry = _tiles[tile->Key];
+		if(entry.UsageCount != 0) {
+			//Duplicate line in the existing hires.txt - first one wins
+			continue;
+		}
+		entry.Key = tile->Key;
+		entry.HdPixels = std::move(tile->HdData);
+		entry.Brightness = tile->Brightness;
+		entry.DefaultTile = tile->DefaultTile;
+		//High usage seed preserves the existing order ahead of new captures
+		entry.UsageCount = 0xFFFFFFFF - index;
+		entry.Order = _nextOrder++;
+		index++;
+	}
+
+	MessageManager::Log("[HDPack] Merging with existing pack: " + std::to_string(index) + " tiles kept");
 }
 
 HdTilePackBuilder::~HdTilePackBuilder()
@@ -160,7 +205,9 @@ void HdTilePackBuilder::SaveHdPack()
 				uint32_t x = (i % tilesPerRow) * tileDimension;
 				uint32_t y = (i / tilesPerRow) * tileDimension;
 
-				vector<uint32_t> hdTile = ScaleTile(tile->Rgba);
+				//Tiles merged from an existing pack keep their (possibly
+				//hand-edited) pixels verbatim; new captures are scaled here
+				vector<uint32_t> hdTile = tile->HdPixels.size() == (size_t)tileDimension * tileDimension ? tile->HdPixels : ScaleTile(tile->Rgba);
 				for(uint32_t row = 0; row < tileDimension; row++) {
 					memcpy(pngBuffer.data() + (y + row) * pngDimension + x, hdTile.data() + row * tileDimension, tileDimension * sizeof(uint32_t));
 				}
@@ -168,7 +215,13 @@ void HdTilePackBuilder::SaveHdPack()
 				tileRows << "<tile>" << pngIndex << ",";
 				tileRows << GetTileDataText(tile->Key) << ",";
 				tileRows << GetPaletteKeyText(tile->Key) << ",";
-				tileRows << x << "," << y << ",1,N" << std::endl;
+				tileRows << x << "," << y << ",";
+				if(tile->Brightness == 255) {
+					tileRows << "1";
+				} else {
+					tileRows << (tile->Brightness / 255.0);
+				}
+				tileRows << "," << (tile->DefaultTile ? "Y" : "N") << std::endl;
 			}
 
 			PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, pngName), pngBuffer.data(), pngDimension, pngDimension, 32);

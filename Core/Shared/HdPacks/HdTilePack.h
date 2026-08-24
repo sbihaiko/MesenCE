@@ -36,23 +36,38 @@ struct HdTilePixelInfo
 class HdTilePack
 {
 private:
+	struct SheetData
+	{
+		vector<uint32_t> Pixels;
+		uint32_t Width = 0;
+		uint32_t BankId = 0;
+	};
+
 	uint32_t _scale = 1;
 	string _system;
+	//Raw mode (used by the re-record merge in HdTilePackBuilder) keeps the
+	//PNG pixels untouched instead of baking premultiplied alpha + brightness
+	bool _rawPixels = false;
 	vector<unique_ptr<HdLoadedTile>> _tiles;
 	std::unordered_map<HdCapturedTile, HdLoadedTile*> _tilesByKey;
 	std::unordered_map<HdCapturedTile, HdLoadedTile*> _defaultTilesByKey;
 
 	bool LoadFile(string definitionPath);
-	bool ParseTileLine(string& line, vector<std::pair<vector<uint32_t>, uint32_t>>& sheets);
+	bool ParseTileLine(string& line, vector<SheetData>& sheets);
 
 public:
 	uint32_t GetScale() { return _scale; }
 	string GetSystem() { return _system; }
 	uint32_t GetTileCount() { return (uint32_t)_tiles.size(); }
+	vector<unique_ptr<HdLoadedTile>>& GetTiles() { return _tiles; }
 
 	//Finds the pack for the ROM (HdPacks/<romname>/hires.txt) and loads it
 	//when its <system> matches. Returns false when there is no (valid) pack.
 	static bool Load(VirtualFile& romFile, string system, HdTilePack& outPack);
+
+	//Loads <packFolder>/hires.txt directly (any system). With rawPixels the
+	//tile pixels round-trip unmodified - required to re-save an existing pack.
+	static bool LoadFromFolder(string packFolder, HdTilePack& outPack, bool rawPixels);
 
 	HdLoadedTile* GetTile(const HdCapturedTile& key)
 	{

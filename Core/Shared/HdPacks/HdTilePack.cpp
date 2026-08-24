@@ -45,6 +45,16 @@ bool HdTilePack::Load(VirtualFile& romFile, string system, HdTilePack& outPack)
 	return true;
 }
 
+bool HdTilePack::LoadFromFolder(string packFolder, HdTilePack& outPack, bool rawPixels)
+{
+	string definitionPath = FolderUtilities::CombinePath(packFolder, "hires.txt");
+	if(!ifstream(definitionPath)) {
+		return false;
+	}
+	outPack._rawPixels = rawPixels;
+	return outPack.LoadFile(definitionPath);
+}
+
 bool HdTilePack::LoadFile(string definitionPath)
 {
 	ifstream file(definitionPath, ios::in | ios::binary);
@@ -53,7 +63,7 @@ bool HdTilePack::LoadFile(string definitionPath)
 	}
 
 	string packFolder = FolderUtilities::GetFolderName(definitionPath);
-	vector<std::pair<vector<uint32_t>, uint32_t>> sheets;
+	vector<SheetData> sheets;
 	bool versionOk = false;
 	bool unknownTagLogged = false;
 
@@ -94,7 +104,20 @@ bool HdTilePack::LoadFile(string definitionPath)
 				MessageManager::Log("[HDPack] Invalid PNG file: " + line.substr(5));
 				return false;
 			}
-			sheets.push_back({ std::move(pixelData), width });
+
+			SheetData sheet;
+			sheet.Pixels = std::move(pixelData);
+			sheet.Width = width;
+			//Sheet names follow "Tiles_<bankHex>_<page>.png" - the bank is
+			//PNG grouping only (ADR-0036) but the re-record merge preserves it
+			string pngName = line.substr(5);
+			if(pngName.substr(0, 6) == "Tiles_") {
+				size_t bankEnd = pngName.find('_', 6);
+				if(bankEnd != string::npos) {
+					sheet.BankId = (uint32_t)strtoul(pngName.substr(6, bankEnd - 6).c_str(), nullptr, 16);
+				}
+			}
+			sheets.push_back(std::move(sheet));
 		} else if(line.substr(0, 6) == "<tile>") {
 			string tileLine = line.substr(6);
 			if(!ParseTileLine(tileLine, sheets)) {
@@ -112,7 +135,7 @@ bool HdTilePack::LoadFile(string definitionPath)
 	return versionOk && !_tiles.empty();
 }
 
-bool HdTilePack::ParseTileLine(string& line, vector<std::pair<vector<uint32_t>, uint32_t>>& sheets)
+bool HdTilePack::ParseTileLine(string& line, vector<SheetData>& sheets)
 {
 	vector<string> tokens = StringUtilities::Split(line, ',');
 	if(tokens.size() < 7) {
@@ -136,9 +159,10 @@ bool HdTilePack::ParseTileLine(string& line, vector<std::pair<vector<uint32_t>, 
 	uint32_t y = (uint32_t)atoi(tokens[4].c_str());
 	tile->Brightness = (uint32_t)(atof(tokens[5].c_str()) * 255);
 	tile->DefaultTile = tokens[6] == "Y";
+	tile->Key.BankId = sheets[sheetIndex].BankId;
 
-	vector<uint32_t>& pixels = sheets[sheetIndex].first;
-	uint32_t sheetWidth = sheets[sheetIndex].second;
+	vector<uint32_t>& pixels = sheets[sheetIndex].Pixels;
+	uint32_t sheetWidth = sheets[sheetIndex].Width;
 	uint32_t tileDimension = 8 * _scale;
 	if(sheetWidth == 0 || x + tileDimension > sheetWidth || (uint64_t)(y + tileDimension) * sheetWidth > pixels.size()) {
 		return false;
@@ -149,23 +173,25 @@ bool HdTilePack::ParseTileLine(string& line, vector<std::pair<vector<uint32_t>, 
 		memcpy(tile->HdData.data() + (size_t)row * tileDimension, pixels.data() + (size_t)(y + row) * sheetWidth + x, tileDimension * sizeof(uint32_t));
 	}
 
-	//Premultiply alpha (same convention as the NES pack loader)
-	for(uint32_t& pixel : tile->HdData) {
-		if(pixel < 0xFF000000) {
-			uint8_t* output = (uint8_t*)&pixel;
-			uint16_t alpha = output[3] + 1;
-			output[0] = (uint8_t)((alpha * output[0]) >> 8);
-			output[1] = (uint8_t)((alpha * output[1]) >> 8);
-			output[2] = (uint8_t)((alpha * output[2]) >> 8);
-		}
-	}
-
-	if(tile->Brightness != 255) {
+	if(!_rawPixels) {
+		//Premultiply alpha (same convention as the NES pack loader)
 		for(uint32_t& pixel : tile->HdData) {
-			uint8_t* output = (uint8_t*)&pixel;
-			output[0] = (uint8_t)std::min<uint32_t>(255, output[0] * tile->Brightness / 255);
-			output[1] = (uint8_t)std::min<uint32_t>(255, output[1] * tile->Brightness / 255);
-			output[2] = (uint8_t)std::min<uint32_t>(255, output[2] * tile->Brightness / 255);
+			if(pixel < 0xFF000000) {
+				uint8_t* output = (uint8_t*)&pixel;
+				uint16_t alpha = output[3] + 1;
+				output[0] = (uint8_t)((alpha * output[0]) >> 8);
+				output[1] = (uint8_t)((alpha * output[1]) >> 8);
+				output[2] = (uint8_t)((alpha * output[2]) >> 8);
+			}
+		}
+
+		if(tile->Brightness != 255) {
+			for(uint32_t& pixel : tile->HdData) {
+				uint8_t* output = (uint8_t*)&pixel;
+				output[0] = (uint8_t)std::min<uint32_t>(255, output[0] * tile->Brightness / 255);
+				output[1] = (uint8_t)std::min<uint32_t>(255, output[1] * tile->Brightness / 255);
+				output[2] = (uint8_t)std::min<uint32_t>(255, output[2] * tile->Brightness / 255);
+			}
 		}
 	}
 

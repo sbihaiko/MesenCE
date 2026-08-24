@@ -65,6 +65,12 @@ private:
 		uint32_t Rgba[64] = {};
 		uint32_t UsageCount = 0;
 		uint32_t Order = 0;
+
+		//Carried over from an existing pack on re-record: HdPixels (already at
+		//the pack's scale, possibly hand-edited) is written back verbatim
+		vector<uint32_t> HdPixels;
+		uint32_t Brightness = 255;
+		bool DefaultTile = false;
 	};
 
 	Emulator* _emu = nullptr;
@@ -82,6 +88,7 @@ private:
 	vector<uint32_t> ScaleTile(const uint32_t* rgba);
 	string GetPaletteKeyText(const HdCapturedTile& key);
 	string GetTileDataText(const HdCapturedTile& key);
+	void MergeExistingPack();
 
 public:
 	HdTilePackBuilder(Emulator* emu, string system, HdPackBuilderOptions options);
