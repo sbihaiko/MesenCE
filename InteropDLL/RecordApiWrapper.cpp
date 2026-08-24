@@ -2,6 +2,8 @@
 #include "Core/Shared/Emulator.h"
 #include "Core/Shared/Video/VideoRenderer.h"
 #include "Core/Shared/Audio/SoundMixer.h"
+#include "Core/Shared/Audio/MidiExporter.h"
+#include "Core/Shared/Audio/VgmExporter.h"
 #include "Core/Shared/Movies/MovieManager.h"
 
 extern unique_ptr<Emulator> _emu;
@@ -36,6 +38,36 @@ extern "C"
 	DllExport bool __stdcall WaveIsRecording()
 	{
 		return _emu->GetSoundMixer()->IsRecording();
+	}
+
+	DllExport void __stdcall MidiRecord(char* filename)
+	{
+		MidiExporter::StartRecording(filename);
+	}
+
+	DllExport void __stdcall MidiStop()
+	{
+		MidiExporter::StopRecording();
+	}
+
+	DllExport bool __stdcall MidiIsRecording()
+	{
+		return MidiExporter::IsRecording();
+	}
+
+	DllExport void __stdcall VgmRecord(char* filename)
+	{
+		VgmExporter::StartRecording(filename);
+	}
+
+	DllExport void __stdcall VgmStop()
+	{
+		VgmExporter::StopRecording();
+	}
+
+	DllExport bool __stdcall VgmIsRecording()
+	{
+		return VgmExporter::IsRecording();
 	}
 
 	DllExport void __stdcall MoviePlay(char* filename)

@@ -20,6 +20,14 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern void WaveStop();
 		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool WaveIsRecording();
 
+		[DllImport(DllPath)] public static extern void MidiRecord([MarshalAs(UnmanagedType.LPUTF8Str)] string filename);
+		[DllImport(DllPath)] public static extern void MidiStop();
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool MidiIsRecording();
+
+		[DllImport(DllPath)] public static extern void VgmRecord([MarshalAs(UnmanagedType.LPUTF8Str)] string filename);
+		[DllImport(DllPath)] public static extern void VgmStop();
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool VgmIsRecording();
+
 		[DllImport(DllPath)] public static extern void MoviePlay([MarshalAs(UnmanagedType.LPUTF8Str)] string filename);
 		[DllImport(DllPath)] public static extern void MovieRecord(RecordMovieOptions options);
 		[DllImport(DllPath)] public static extern void MovieStop();
