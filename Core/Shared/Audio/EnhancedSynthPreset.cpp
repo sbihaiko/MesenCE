@@ -6,9 +6,18 @@
 //members they override. Keeping this table next to the struct means adding a
 //new preset field only ever requires editing this one file (shared by every
 //engine that uses EnhancedSynthPreset).
-namespace {
-	struct PresetDoubleField { const char* Name; double EnhancedSynthPreset::* Field; };
-	struct PresetBoolField { const char* Name; bool EnhancedSynthPreset::* Field; };
+namespace
+{
+	struct PresetDoubleField
+	{
+		const char* Name;
+		double EnhancedSynthPreset::* Field;
+	};
+	struct PresetBoolField
+	{
+		const char* Name;
+		bool EnhancedSynthPreset::* Field;
+	};
 
 	static constexpr PresetDoubleField _presetDoubleFields[] = {
 		{ "LeadDetune", &EnhancedSynthPreset::LeadDetune },

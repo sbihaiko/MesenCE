@@ -14,9 +14,9 @@ struct EnhancedSynthPreset
 	//Pulse voices
 	double LeadDetune;
 	double HarmDetune;
-	bool FollowDuty;        //pulse width follows the game's duty setting (no effect on chips with no duty register)
-	double FixedWidth;      //used when FollowDuty is false
-	bool LeadAlwaysSaw;     //true: lead is a fixed detuned-saw stack, duty ignored entirely
+	bool FollowDuty; //pulse width follows the game's duty setting (no effect on chips with no duty register)
+	double FixedWidth; //used when FollowDuty is false
+	bool LeadAlwaysSaw; //true: lead is a fixed detuned-saw stack, duty ignored entirely
 	double LeadOctaveUpMix;
 	double LeadLpHz;
 	double HarmLpHz;

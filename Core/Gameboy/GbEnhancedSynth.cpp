@@ -13,6 +13,7 @@
 //(Core/NES/EnhancedSynth.cpp) - the GB APU is the closest sibling of the 2A03
 //(duty squares + noise; the wave channel stands in for the triangle), so the
 //NES tuning is the natural starting point. Expect to retune by ear.
+// clang-format off
 static constexpr EnhancedSynthPreset _presets[5] = {
 	//Synthwave: detuned pulse-width leads, saw+sub bass, tight drums
 	{
@@ -68,6 +69,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.55, 3.0, 8, 140, 1.18
 	},
 };
+// clang-format on
 
 GbEnhancedSynth::GbEnhancedSynth(Emulator* emu, Gameboy* console)
 {

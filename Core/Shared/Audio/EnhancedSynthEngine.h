@@ -23,9 +23,9 @@ public:
 		double NoiseVol = 0;
 		double NoiseBrightness = 0; //0 = slow LFSR (snare/tom body), 1 = fast (bright hi-hat top)
 		bool ThumpEligible = false; //noise rate low enough for the attack-triggered low thump
-		double LeadWidth = 0.5;     //pulse width; consoles with a duty register map it here
+		double LeadWidth = 0.5; //pulse width; consoles with a duty register map it here
 		double HarmWidth = 0.5;
-		uint32_t FmVoiceCount = 0;  //0 on consoles with no FM add-on
+		uint32_t FmVoiceCount = 0; //0 on consoles with no FM add-on
 		double FmFreq[MaxFmVoices] = {};
 		double FmVol[MaxFmVoices] = {};
 	};

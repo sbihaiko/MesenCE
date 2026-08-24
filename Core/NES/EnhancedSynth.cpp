@@ -10,6 +10,7 @@
 //Built-in instrument presets. Order must match the EnhancedAudioPreset enum
 //on the UI side (Synthwave = 0, ChipDeluxe = 1, OrchestralLite = 2, Dry = 3,
 //Studio = 4).
+// clang-format off
 static constexpr EnhancedSynthPreset _presets[5] = {
 	//Synthwave: detuned pulse-width leads, saw+sub bass, tight drums
 	{
@@ -67,6 +68,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.55, 3.0, 8, 140, 1.18
 	},
 };
+// clang-format on
 
 EnhancedSynth::EnhancedSynth(Emulator* emu, NesConsole* console)
 {

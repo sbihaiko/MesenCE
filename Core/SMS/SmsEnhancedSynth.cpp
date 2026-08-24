@@ -15,6 +15,7 @@
 //character differs enough from the 2A03 that these will likely need ear
 //tuning once heard in-game; until then they're a reasonable starting point
 //since the DSP itself is shared (EnhancedSynthEngine).
+// clang-format off
 static constexpr EnhancedSynthPreset _presets[5] = {
 	//Synthwave: detuned pulse-width leads, saw+sub bass, tight drums
 	{
@@ -72,6 +73,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.55, 3.0, 8, 140, 1.18
 	},
 };
+// clang-format on
 
 SmsEnhancedSynth::SmsEnhancedSynth(Emulator* emu, SmsConsole* console)
 {
@@ -137,9 +139,7 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 		//Per-channel volume settings (Settings > SMS/ColecoVision > Audio)
 		//apply to the synth voices too, so muting a chip channel also mutes
 		//its enhanced voice - same indexing as SmsPsg::Run()
-		uint32_t* chVol = _console->GetModel() == SmsModel::ColecoVision
-			? _emu->GetSettings()->GetCvConfig().ChannelVolumes
-			: _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
+		uint32_t* chVol = _console->GetModel() == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().ChannelVolumes : _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
 		in.LeadFreq = toneFreq(psg.Tone[0].ReloadValue);
 		in.LeadVol = toneVol(psg.Tone[0].Volume) * chVol[0] / 100.0;
 		in.HarmFreq = toneFreq(psg.Tone[1].ReloadValue);

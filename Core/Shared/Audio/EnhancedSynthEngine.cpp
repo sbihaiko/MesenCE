@@ -181,30 +181,23 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		//detuned-saw stack that ignores the pulse width entirely
 		double lead;
 		if(p.LeadAlwaysSaw) {
-			lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune))
-				+ 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune))
-				+ p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
+			lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune)) + 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune)) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
 		} else {
-			lead = 0.45 * pulse(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune), in.LeadWidth)
-				+ 0.45 * pulse(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune), in.LeadWidth)
-				+ p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
+			lead = 0.45 * pulse(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune), in.LeadWidth) + 0.45 * pulse(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune), in.LeadWidth) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
 		}
 		lead = softClip(lead * p.LeadDrive);
 		_lead.Lp += (lead - _lead.Lp) * leadLpCoeff;
 		lead = _lead.Lp * _lead.SmoothedVol;
 
 		//Harmony: softer detuned pulse pair
-		double harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth)
-			+ 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
+		double harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
 		_harmony.Lp += (harm - _harmony.Lp) * harmLpCoeff;
 		harm = _harmony.Lp * _harmony.SmoothedVol;
 
 		//Bass: sine + saw + half-frequency sub sine, mildly driven
 		step(_bass.Phase, bassInc);
 		step(_bass.SubPhase, bassInc * 0.5);
-		double bass = p.BassSine * std::sin(pi2 * _bass.Phase)
-			+ p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc)
-			+ p.BassSub * std::sin(pi2 * _bass.SubPhase);
+		double bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
 		bass = softClip(bass * p.BassDrive);
 		_bass.Lp += (bass - _bass.Lp) * bassLpCoeff;
 		bass = _bass.Lp * _bass.SmoothedVol;
@@ -217,8 +210,7 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		double body = (_drumLpHigh - _drumLpLow) * p.DrumBodyGain;
 		double top = n - _drumLpTop;
 		step(_thumpPhase, thumpInc);
-		double drum = (in.NoiseBrightness * top + (1.0 - in.NoiseBrightness) * body) * _noiseVol
-			+ p.ThumpGain * std::sin(pi2 * _thumpPhase) * _thumpGate * _noiseVol;
+		double drum = (in.NoiseBrightness * top + (1.0 - in.NoiseBrightness) * body) * _noiseVol + p.ThumpGain * std::sin(pi2 * _thumpPhase) * _thumpGate * _noiseVol;
 
 		//FM bus (skipped entirely on consoles with no FM voices)
 		double fmBus = 0;
