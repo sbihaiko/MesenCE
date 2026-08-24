@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "SMS/SmsPsg.h"
 #include "SMS/SmsFmAudio.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Utilities/Serializer.h"
 
 SmsPsg::SmsPsg(Emulator* emu, SmsConsole* console)
@@ -143,6 +144,11 @@ void SmsPsg::Write(uint8_t value)
 {
 	Run();
 
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h. The
+	//SN76489 command is a single data byte (0x50 dd); addrOrPort is unused
+	//for this chip, the register is fully encoded in the byte itself.
+	VgmExporter::LogWrite(VgmChip::SmsPsg, 0, value);
+
 	if(value & 0x80) {
 		_state.SelectedReg = (value >> 4) & 0x07;
 	}
@@ -179,6 +185,10 @@ void SmsPsg::Write(uint8_t value)
 void SmsPsg::WritePanningReg(uint8_t value)
 {
 	_state.GameGearPanningReg = value;
+
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h
+	//(Game Gear stereo panning byte, VGM command 0x4F dd).
+	VgmExporter::LogWrite(VgmChip::SmsPsgStereo, 0, value);
 }
 
 void SmsPsg::Serialize(Serializer& s)

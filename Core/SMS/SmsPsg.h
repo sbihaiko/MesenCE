@@ -7,6 +7,9 @@
 #include "Utilities/ISerializable.h"
 #include "Utilities/Audio/blip_buf.h"
 
+//Live VGM capture note: both Write() (SN76489 data byte) and
+//WritePanningReg() (Game Gear stereo panning byte) carry their own
+//VgmExporter::LogWrite tap - see VgmExporter.h for the log format.
 class SmsPsg final : public ISerializable
 {
 private:

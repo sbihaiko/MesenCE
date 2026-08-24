@@ -6,6 +6,9 @@ class Emulator;
 class SmsConsole;
 typedef struct __OPLL OPLL;
 
+//Live VGM capture note: Write() carries a VgmExporter::LogWrite tap for the
+//YM2413 register-select ($F0) and data ($F1) ports - see VgmExporter.h for
+//the log format and the 2-call latch/data protocol.
 class SmsFmAudio final : public ISerializable, public IAudioProvider
 {
 private:

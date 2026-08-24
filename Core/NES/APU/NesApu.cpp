@@ -11,7 +11,16 @@
 #include "NES/NesMemoryManager.h"
 #include "NES/NesSoundMixer.h"
 #include "Shared/Emulator.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Utilities/Serializer.h"
+
+void NesApuRegisterTap::WriteRam(uint16_t addr, uint8_t value)
+{
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h and
+	//the NesApuRegisterTap comment in NesApu.h.
+	VgmExporter::LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
+	_handler->WriteRam(addr, value);
+}
 
 NesApu::NesApu(NesConsole* console)
 {
@@ -30,12 +39,22 @@ NesApu::NesApu(NesConsole* console)
 	_dmc.reset(new DeltaModulationChannel(_console));
 	_frameCounter.reset(new ApuFrameCounter(_console));
 
-	_console->GetMemoryManager()->RegisterIODevice(_square1.get());
-	_console->GetMemoryManager()->RegisterIODevice(_square2.get());
-	_console->GetMemoryManager()->RegisterIODevice(_frameCounter.get());
-	_console->GetMemoryManager()->RegisterIODevice(_triangle.get());
-	_console->GetMemoryManager()->RegisterIODevice(_noise.get());
-	_console->GetMemoryManager()->RegisterIODevice(_dmc.get());
+	//Each channel is registered through a NesApuRegisterTap decorator (rather
+	//than directly) so a live VGM capture can log every raw register write -
+	//see the comment on NesApuRegisterTap in NesApu.h.
+	_square1Tap.reset(new NesApuRegisterTap(_square1.get()));
+	_square2Tap.reset(new NesApuRegisterTap(_square2.get()));
+	_triangleTap.reset(new NesApuRegisterTap(_triangle.get()));
+	_noiseTap.reset(new NesApuRegisterTap(_noise.get()));
+	_dmcTap.reset(new NesApuRegisterTap(_dmc.get()));
+	_frameCounterTap.reset(new NesApuRegisterTap(_frameCounter.get()));
+
+	_console->GetMemoryManager()->RegisterIODevice(_square1Tap.get());
+	_console->GetMemoryManager()->RegisterIODevice(_square2Tap.get());
+	_console->GetMemoryManager()->RegisterIODevice(_frameCounterTap.get());
+	_console->GetMemoryManager()->RegisterIODevice(_triangleTap.get());
+	_console->GetMemoryManager()->RegisterIODevice(_noiseTap.get());
+	_console->GetMemoryManager()->RegisterIODevice(_dmcTap.get());
 
 	Reset(false);
 }
@@ -131,6 +150,12 @@ void NesApu::WriteRam(uint16_t addr, uint8_t value)
 {
 	//$4015 write
 	Run();
+
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h.
+	//This site only ever sees $4015 (the other APU registers are each
+	//registered directly with NesMemoryManager through a NesApuRegisterTap
+	//decorator wrapping the owning channel object - see NesApu.h).
+	VgmExporter::LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
 
 	//Writing to $4015 clears the DMC interrupt flag.
 	//This needs to be done before setting the enabled flag for the DMC (because doing so can trigger an IRQ)

@@ -5,6 +5,7 @@
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Shared/Utilities/AvMergeUtilities.h"
 #include "Utilities/Serializer.h"
 
@@ -348,6 +349,11 @@ void GbApu::Write(uint16_t addr, uint8_t value)
 			return;
 		}
 	}
+
+	//Raw register-write tap for a live VGM capture - see VgmExporter.h. Only
+	//writes that actually reach a channel/state register are logged (the
+	//"APU disabled" early-return above already filtered out no-op writes).
+	VgmExporter::LogWrite(VgmChip::GameBoyDmg, (uint8_t)(addr - 0xFF10), value);
 
 	switch(addr) {
 		case 0xFF10:

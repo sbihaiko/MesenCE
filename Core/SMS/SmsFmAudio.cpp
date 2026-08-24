@@ -4,6 +4,7 @@
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "Shared/Utilities/emu2413.h"
 #include "Shared/Utilities/Emu2413Serializer.h"
 #include "Utilities/Serializer.h"
@@ -68,6 +69,14 @@ void SmsFmAudio::Write(uint8_t port, uint8_t value)
 			_fmEnabled = true;
 			Run();
 			OPLL_writeIO(_opll, port, value);
+
+			//Raw register-write tap for a live VGM capture - see
+			//VgmExporter.h. Port $F0 latches the YM2413 register number
+			//(addrOrPort=0), port $F1 writes the data byte to the latched
+			//register (addrOrPort=1) - VgmExporter itself remembers the
+			//latched register across the two calls and emits the combined
+			//0x51 aa dd command only once the data write arrives.
+			VgmExporter::LogWrite(VgmChip::SmsYm2413, port == 0xF0 ? 0 : 1, value);
 			break;
 
 		case 0xF2:
