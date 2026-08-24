@@ -3619,6 +3619,7 @@ E
 			<Value ID="Stop">Stop</Value>
 			<Value ID="SoundRecorder">Sound Recorder</Value>
 			<Value ID="VideoRecorder">Video Recorder</Value>
+			<Value ID="MusicRecorder">Record Music (MIDI/VGM)</Value>
 			<Value ID="Cheats">Cheats</Value>
 			<Value ID="LogWindow">Log Window</Value>
 			<Value ID="HdPacks">HD Packs (NES)</Value>

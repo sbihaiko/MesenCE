@@ -600,6 +600,7 @@ namespace Mesen.Debugger.Utilities
 		SoundRecorder,
 		[IconFile("VideoRecorder")]
 		VideoRecorder,
+		MusicRecorder,
 
 		[IconFile("HdPack")]
 		HdPacks,
