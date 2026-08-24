@@ -49,7 +49,7 @@ This feature was originally proposed upstream as [PR #262](https://github.com/ne
 These definitions are the fork's charter — the reason it exists beyond any single feature. The plan grows Enhanced Audio into an open enhancement ecosystem, in five self-contained phases:
 
 1. **MIDI/VGM music exporter** — record a game's music to VGM (+GD3 tags) or MIDI (SMF/GM) while playing, built on the Enhanced Synth tap. ✅ **Done** (NES, GB, SMS — PSG + YM2413).
-2. **HD Pack Builder generalized** to Game Boy and SMS. 🚧 **In progress** — tile capture and hires.txt `<ver>200` dumps work for GB/GBC and SMS/GG (tile identity keys recorded as ADR-0036/0037, validated 1:1 against the dumped PNG sheets); the in-emulator pack loader/renderer and the UI entry point are being built next.
+2. **HD Pack Builder generalized** to Game Boy and SMS. ✅ **Done** — the full record → edit → replace loop works for GB/GBC and SMS/GG: tile capture and hires.txt `<ver>200` dumps (tile identity keys recorded as ADR-0036/0037), plus the in-emulator pack loader/renderer and the HD Packs menu for both consoles. A neutral recorded pack re-renders pixel-identical when reinstalled (validated headless on DMG, CGB and SMS). SMS coverage is VDP mode 4 (SG-1000 legacy modes excluded from v1); re-recording overwrites rather than merging an existing pack.
 3. **Unified enhancement pack format** — textures + audio + synth preset in one hash-keyed archive, every layer individually toggleable.
 4. **In-UI pack browser** consuming federated indexes (GitHub-backed, no custom server).
 5. **Offline AI pipeline** — ESRGAN tile upscaling and LLM-assisted preset ear-tuning producing first-draft packs for the community to refine.
