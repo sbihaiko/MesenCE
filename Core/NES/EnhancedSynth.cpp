@@ -5,6 +5,7 @@
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
+#include "Shared/Audio/MidiExporter.h"
 
 //Built-in instrument presets. Order must match the EnhancedAudioPreset enum
 //on the UI side (Synthwave = 0, ChipDeluxe = 1, OrchestralLite = 2, Dry = 3,
@@ -154,6 +155,11 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 	//for the engine's low thump.
 	in.NoiseBrightness = std::min(1.0, apu.Noise.Frequency / 200000.0);
 	in.ThumpEligible = apu.Noise.Frequency <= 15000.0;
+
+	//Live MIDI capture tap: no-ops (via the safe_ptr lock inside LogFrame)
+	//unless a MidiExporter recording is active - see MidiExporter.h for the
+	//Enhanced-Audio-gating limitation this implies.
+	MidiExporter::LogFrame("NES", cfg.EnhancedAudioPreset, in);
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
 }

@@ -6,71 +6,8 @@
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
-
-//Built-in instrument presets. Order must match the EnhancedAudioPreset enum
-//on the UI side (Synthwave = 0, ChipDeluxe = 1, OrchestralLite = 2, Dry = 3,
-//Studio = 4). Values start as a copy of the NES engine's tuning
-//(Core/NES/EnhancedSynth.cpp) - the SN76489's plain 50%-duty square/noise
-//character differs enough from the 2A03 that these will likely need ear
-//tuning once heard in-game; until then they're a reasonable starting point
-//since the DSP itself is shared (EnhancedSynthEngine).
-static constexpr EnhancedSynthPreset _presets[5] = {
-	//Synthwave: detuned pulse-width leads, saw+sub bass, tight drums
-	{
-		0.004, 0.002, false, 0.5, false, 0.25, 5200, 3200, 1.4,
-		0.65, 0.45, 0.35, 900, 1.3,
-		1400, 6800, 6500, 1.2, 0.5, 0.06, 165,
-		4, 4,
-		0.24, 0.45, 0.65, 0.16,
-		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
-	},
-	//Chip deluxe: stays close to the PSG character - pure-ish pulses,
-	//round bass, crisp drums, just a touch of space
-	{
-		0.0015, 0.001, false, 0.5, false, 0.10, 8000, 6000, 1.1,
-		0.9, 0.1, 0.2, 1200, 1.0,
-		1800, 7500, 7000, 1.0, 0.35, 0.045, 165,
-		2, 3,
-		0.12, 0.25, 0.35, 0.08,
-		1.0, 0.6, 0.8, 0.85,
-		0, 0, 0, 0, 0
-	},
-	//Orchestral lite: slow-attack string-like leads, low string bass,
-	//timpani-weight drums, larger room
-	{
-		0.007, 0.005, false, 0.5, false, 0.35, 3800, 2600, 1.0,
-		0.5, 0.6, 0.25, 700, 1.2,
-		900, 4500, 6000, 1.0, 0.7, 0.12, 110,
-		35, 80,
-		0.30, 0.30, 0.45, 0.30,
-		0.95, 0.65, 0.9, 0.6,
-		0, 0, 0, 0, 0
-	},
-	//Dry: Synthwave voices with no echo/reverb tail - SFX stay tight
-	{
-		0.004, 0.002, false, 0.5, false, 0.25, 5200, 3200, 1.4,
-		0.65, 0.45, 0.35, 900, 1.3,
-		1400, 6800, 6500, 1.2, 0.5, 0.06, 165,
-		3, 4,
-		0.05, 0.0, 0.0, 0.0,
-		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
-	},
-	//Studio: fixed detuned-saw stack lead (the SN76489 has no duty register to
-	//ignore, but the always-saw lead still gives it a fuller, less "chip"
-	//character), same tuned pan/bass/drum balance as Synthwave, plus a gentle
-	//bus compressor.
-	{
-		0.003, 0.002, false, 0.5, true, 0.25, 5200, 3200, 1.4,
-		0.70, 0.45, 0.35, 900, 1.3,
-		1400, 6800, 6500, 1.2, 0.5, 0.06, 165,
-		4, 4,
-		0.24, 0.45, 0.65, 0.18,
-		1.0, 0.56, 0.85, 0.75,
-		0.55, 3.0, 8, 140, 1.18
-	},
-};
+#include "Shared/Audio/MidiExporter.h"
+#include "SMS/SmsEnhancedSynthPresets.h"
 
 SmsEnhancedSynth::SmsEnhancedSynth(Emulator* emu, SmsConsole* console)
 {
@@ -226,6 +163,11 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 			in.ThumpEligible = bd > 0;
 		}
 	}
+
+	//Live MIDI capture tap: no-ops (via the safe_ptr lock inside LogFrame)
+	//unless a MidiExporter recording is active - see MidiExporter.h for the
+	//Enhanced-Audio-gating limitation this implies.
+	MidiExporter::LogFrame("SMS", cfg.EnhancedAudioPreset, in);
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
 }
