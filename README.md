@@ -48,20 +48,20 @@ This feature was originally proposed upstream as [PR #262](https://github.com/ne
 
 These definitions are the fork's charter — the reason it exists beyond any single feature. The plan grows Enhanced Audio into an open enhancement ecosystem, in five self-contained phases:
 
-1. **MIDI/VGM music exporter** — record a game's music to VGM (+GD3 tags) or MIDI (SMF/GM) while playing, built on the Enhanced Synth tap.
-2. **HD Pack Builder generalized** to Game Boy and SMS.
+1. **MIDI/VGM music exporter** — record a game's music to VGM (+GD3 tags) or MIDI (SMF/GM) while playing, built on the Enhanced Synth tap. ✅ **Done** (NES, GB, SMS — PSG + YM2413).
+2. **HD Pack Builder generalized** to Game Boy and SMS. 🚧 **In progress** — tile capture and hires.txt `<ver>200` dumps work for GB/GBC and SMS/GG (tile identity keys recorded as ADR-0036/0037, validated 1:1 against the dumped PNG sheets); the in-emulator pack loader/renderer and the UI entry point are being built next.
 3. **Unified enhancement pack format** — textures + audio + synth preset in one hash-keyed archive, every layer individually toggleable.
 4. **In-UI pack browser** consuming federated indexes (GitHub-backed, no custom server).
 5. **Offline AI pipeline** — ESRGAN tile upscaling and LLM-assisted preset ear-tuning producing first-draft packs for the community to refine.
 
 Wherever a community standard already exists we adopt it instead of inventing one: **No-Intro** hashes for ROM identification, **VGM + GD3** for register logs, **SMF/General MIDI** for note data, **HDNes `hires.txt`** for textures, **MSU-1** and **OGG HD-pack audio** for audio replacement, **BPS** for patches. Where none exists, we are formalizing small open specs — **CC0-licensed**, RFC 2119 language, semver, golden files — so any emulator or pack author can adopt them:
 
-| Spec | Defines |
-|---|---|
-| **ESP v1** — Enhanced Synth Preset | The `EnhancedAudioPresets.cfg` format (grammar, per-chip voice parameters, fallback rules) |
-| **MEP v1** — Enhancement Pack | A thin `.zip` envelope composing existing formats, keyed by No-Intro hash |
-| **MEI v1** — Enhancement Index | A federated pack-discovery manifest — anyone can publish an index |
-| **hires.txt GB/SMS extension** | Backward-compatible HDNes extension for GB/SMS tiles and OGG audio |
+| Spec | Defines | Status |
+|---|---|---|
+| **ESP v1** — Enhanced Synth Preset | The `EnhancedAudioPresets.cfg` format (grammar, per-chip voice parameters, fallback rules) | [Published](docs/specs/ESP-v1.md) |
+| **MEP v1** — Enhancement Pack | A thin `.zip` envelope composing existing formats, keyed by No-Intro hash | [Published](docs/specs/MEP-v1.md) |
+| **MEI v1** — Enhancement Index | A federated pack-discovery manifest — anyone can publish an index | [Published](docs/specs/MEI-v1.md) |
+| **hires.txt GB/SMS extension** | Backward-compatible HDNes extension for GB/SMS tiles and OGG audio | [v1 draft](docs/specs/hires-gbsms-v1-draft.md) — open for community review before freezing |
 
 Ground rule that keeps the project safe: extraction is local, the official channel carries only clean data (presets, mappings, manifests, tools), and derivative content lives in the existing community hubs — the emulator never hosts, bundles, or embeds distribution of it.
 
