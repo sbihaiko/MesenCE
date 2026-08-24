@@ -152,6 +152,11 @@ uint8_t MidiExporter::FreqToMidiNote(double freqHz)
 }
 
 uint8_t MidiExporter::MelodicChannel(uint32_t voiceIndex)
-{ return (uint8_t)(voiceIndex < kDrumChannel ? voiceIndex : voiceIndex + 1); }
+{
+	return (uint8_t)(voiceIndex < kDrumChannel ? voiceIndex : voiceIndex + 1);
+}
+
 uint8_t MidiExporter::VelocityFromVol(double vol)
-{ return (uint8_t)std::clamp((int)std::lround(vol * 127.0), 1, 127); }
+{
+	return (uint8_t)std::clamp((int)std::lround(vol * 127.0), 1, 127);
+}
