@@ -1,0 +1,16 @@
+# ADR-0013: Exporter timing derives from an emulated 44100 Hz sample counter, not host clock or nominal cadence
+
+- Status: proposed
+- Date: 2026-08-24
+
+## Context
+Raised during decompose, Execute/T1, Execute/T2 and auditor-b (consolidates former ADR-0015, ADR-0018, ADR-0019, ADR-0023): The mandated timestamp-free signatures (LogWrite(chip, addr, value); LogFrame(consoleTag, presetId, Input)) forced both exporters to invent time. Confirmed in code: VgmExporter::EmitWait derives VGM waits from std::chrono::steady_clock wall-clock deltas — so fast-forward, rewind, pause at a breakpoint, save-state load, frame-limiter off, or a stalled host frame all write waits that do not correspond to the music actually produced; tempo becomes a function of host performance. MidiExporter derives ticks from a hardcoded nominal cadence (FlushRateHz = 179.0) — but the real cadence is set by each console's PlayAudioBuffer rhythm (NES NTSC ~179 Hz, PAL ~149 Hz, GB/SMS their own rates), so a PAL capture comes out ~20% fast against the 120 BPM / 480 PPQN grid. Both defects directly contradict the PRD's success criteria (VGM opens correctly in vgmrips/foobar2000 tooling; MIDI opens correctly in MuseScore). Two proposed remedies were incompatible: a per-call masterClock argument versus a registered sample-count clock source.
+
+## Decision
+Adopt the emulated-sample-counter variant: SoundMixer (or each console's audio flush, the same ~179 Hz cadence the Enhanced Synth already runs at) updates a 44100 Hz sample counter on the exporter, and both VGM waits and MIDI ticks are derived from that counter. For MIDI, extend LogFrame() with the sampleCount/sampleRate every MixAudio(out, sampleCount, sampleRate) caller already has in hand, keeping FlushRateHz only as a fallback when the caller passes 0. steady_clock remains only as a fallback when no clock source has been registered. The per-call masterClock alternative is rejected: it means three heterogeneous clock domains (NES 1.79 MHz, GB 4.19 MHz, SMS 3.58 MHz) that every write-site must convert, whereas the 44100 Hz counter is uniform across consoles, matches the VGM timebase natively, and preserves the one-liner call sites.
+
+## Consequences
+Captures become cycle-faithful and immune to fast-forward/pause/host stalls. This is the highest-priority fix in the audit set: the cost is six call sites now and much higher after F1.3 and the remaining console wiring, so it lands before any further wiring. It changes what a produced file means, not merely how it is produced.
+
+## Alternatives
+Per-call masterClock argument (rejected above). Keep host wall-clock / nominal cadence (wrong tempo per region and per host condition, violating the PRD's own success criteria).
