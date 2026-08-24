@@ -176,13 +176,13 @@ void VgmExporter::WriteChipCommand(VgmChip chip, uint8_t addrOrPort, uint8_t val
 {
 	switch(chip) {
 		case VgmChip::NesApu:
-			_stream.put((char)0xB4);
+			_stream.put((char)(uint8_t)0xB4);
 			_stream.put((char)addrOrPort);
 			_stream.put((char)value);
 			break;
 
 		case VgmChip::GameBoyDmg:
-			_stream.put((char)0xB3);
+			_stream.put((char)(uint8_t)0xB3);
 			_stream.put((char)addrOrPort);
 			_stream.put((char)value);
 			break;
