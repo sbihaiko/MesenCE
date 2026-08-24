@@ -216,6 +216,12 @@ ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
+#Headless MIDI/VGM capture harness (F1 regression tool) - see scripts/headless_record.cpp
+capture-tool: core
+	$(CXX) -std=c++17 -O2 -I . -I Core -Wl,-headerpad_max_install_names scripts/headless_record.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/headless_record
+	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/headless_record 2>/dev/null || true
+	codesign -f -s - scripts/headless_record 2>/dev/null || true
+
 pgohelper: InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p PGOHelper/$(OBJFOLDER) && cd PGOHelper/$(OBJFOLDER) && $(CXX) $(CXXFLAGS) $(LINKCHECKUNRESOLVED) -o pgohelper ../PGOHelper.cpp ../../bin/pgohelperlib.so -pthread $(FSLIB) $(SDL2LIB) $(LIBEVDEVLIB) $(X11LIB)
 

@@ -28,6 +28,8 @@ enum class VgmChip : uint8_t
 	SmsYm2413
 };
 
+class Emulator;
+
 //Live logger for the VGM (Video Game Music) v1.71 file format, see
 //https://vgmrips.net/wiki/VGM_Specification . Writes raw per-chip register
 //writes as VGM stream commands as they happen and appends a GD3 tag block
@@ -68,16 +70,25 @@ private:
 	//after the fixed header with no gap.
 	static constexpr uint32_t HeaderSize = 0xC0;
 
-	//Standard clock rates for the 4 chips this writer supports; always
-	//written into the header (whether or not that chip receives any writes
-	//in a given capture) so a single header shape covers every console.
+	//NTSC fallback clock rates for the 4 chips this writer supports. Used
+	//only when SetChipClock() was never called for a chip that did receive
+	//writes; PatchHeader zeroes the clock of any chip with no writes at all,
+	//so players don't allocate (or validators flag) chips absent from the
+	//capture.
 	static constexpr uint32_t NesApuClockHz = 1789773;
 	static constexpr uint32_t GameBoyClockHz = 4194304;
 	static constexpr uint32_t SmsPsgClockHz = 3579545;
 	static constexpr uint32_t SmsYm2413ClockHz = 3579545;
 
+	Emulator* _emu = nullptr;
 	ofstream _stream;
 	string _outputFile;
+
+	//Per-chip state for the final header patch: which chips actually got
+	//commands, and the console's real clock for them (0 = use the NTSC
+	//fallback above). Indexed by (int)VgmChip.
+	bool _chipUsed[5] = {};
+	uint32_t _chipClock[5] = {};
 
 	//Command-stream bytes are appended here on the emulation thread and only
 	//reach the ofstream in FlushCommandBuffer(), called at the audio flush
@@ -111,8 +122,14 @@ private:
 public:
 	//Opens and validates the output stream immediately, so a bad path fails
 	//at StartVgmRecording time. Check IsValid() after construction.
-	explicit VgmExporter(string outputFile);
+	VgmExporter(string outputFile, Emulator* emu);
 	~VgmExporter();
+
+	//Records the console's real clock for a chip (e.g. the PAL SMS master
+	//clock), written into the header at teardown instead of the NTSC
+	//fallback. Call right after construction - SoundMixer::StartVgmRecording
+	//does this from Emulator::GetMasterClockRate().
+	void SetChipClock(VgmChip chip, uint32_t clockHz) { _chipClock[(int)chip] = clockHz; }
 
 	bool IsValid() { return (bool)_stream; }
 

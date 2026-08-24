@@ -195,6 +195,13 @@ roms/*
 roms/**
 claudei.sh
 
+
+# graphify - generated knowledge graph output (regenerable, machine-local paths)
+graphify-out/
+
+# git worktrees (dev-squad task branches)
+.worktrees/
+
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
 !.claude/guardrails/
@@ -203,9 +210,4 @@ claudei.sh
 !.dev-squad/adr/
 !.dev-squad/memory/
 # <<< dev-squad shared team assets (managed) <<<
-
-# graphify - generated knowledge graph output (regenerable, machine-local paths)
-graphify-out/
-
-# git worktrees (dev-squad task branches)
-.worktrees/
+scripts/headless_record

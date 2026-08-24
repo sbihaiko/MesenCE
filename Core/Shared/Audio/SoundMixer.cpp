@@ -212,12 +212,32 @@ bool SoundMixer::IsRecording()
 
 void SoundMixer::StartVgmRecording(string filepath)
 {
-	unique_ptr<VgmExporter> exporter(new VgmExporter(filepath));
+	unique_ptr<VgmExporter> exporter(new VgmExporter(filepath, _emu));
 	if(!exporter->IsValid()) {
 		//Fail loudly at start time instead of losing the capture at stop time (ADR-0033)
 		MessageManager::DisplayMessage("MusicRecorder", "CouldNotWriteToFile", filepath);
 		return;
 	}
+
+	//Give the exporter the console's real chip clock so a PAL capture's
+	//header doesn't claim the NTSC rate (~0.9% sharp on playback). The GB
+	//APU clock is fixed at 4.19MHz regardless of region/CGB speed, so the
+	//exporter's own default already matches.
+	uint32_t masterClock = _emu->GetMasterClockRate();
+	switch(_emu->GetConsoleType()) {
+		case ConsoleType::Nes:
+			exporter->SetChipClock(VgmChip::NesApu, masterClock);
+			break;
+
+		case ConsoleType::Sms:
+			exporter->SetChipClock(VgmChip::SmsPsg, masterClock);
+			exporter->SetChipClock(VgmChip::SmsYm2413, masterClock);
+			break;
+
+		default:
+			break;
+	}
+
 	_vgmExporter.reset(exporter);
 }
 

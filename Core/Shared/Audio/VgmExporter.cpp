@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Shared/Audio/VgmExporter.h"
+#include "Shared/Emulator.h"
 
 namespace
 {
@@ -14,9 +15,10 @@ namespace
 	}
 }
 
-VgmExporter::VgmExporter(string outputFile) : _stream(outputFile, ios::out | ios::binary)
+VgmExporter::VgmExporter(string outputFile, Emulator* emu) : _stream(outputFile, ios::out | ios::binary)
 {
 	_outputFile = outputFile;
+	_emu = emu;
 	_lastEventTime = std::chrono::steady_clock::now();
 	if(_stream) {
 		WriteHeader();
@@ -57,6 +59,13 @@ void VgmExporter::FlushCommandBuffer()
 
 void VgmExporter::LogWrite(VgmChip chip, uint8_t addrOrPort, uint8_t value)
 {
+	//Run-ahead frames replay emulated time that will run again for real -
+	//logging their writes would duplicate every command (with zero-length
+	//waits, since AddSamples already excludes these frames).
+	if(_emu->IsRunAheadFrame()) {
+		return;
+	}
+	_chipUsed[(int)chip] = true;
 	EmitWait();
 	WriteChipCommand(chip, addrOrPort, value);
 }
@@ -67,7 +76,9 @@ void VgmExporter::WriteHeader()
 	//header offset fields; zero-filled first so every unused chip clock
 	//(anything beyond the 4 consoles this writer targets) reads as "absent"
 	//per spec, and VgmDataOffset (0x34) always resolves to HeaderSize since
-	//the data block starts right where this buffer ends.
+	//the data block starts right where this buffer ends. The 4 supported
+	//clocks written here are provisional NTSC values - PatchHeader rewrites
+	//them at teardown (real console clock, or 0 for chips never written).
 	vector<uint8_t> header(HeaderSize, 0);
 	memcpy(header.data(), "Vgm ", 4);
 	PutU32(header, 0x08, VgmVersion);
@@ -100,6 +111,30 @@ void VgmExporter::PatchHeader(uint32_t gd3Offset)
 
 	_stream.seekp(0x18);
 	_stream.write((char*)&totalSamples, sizeof(totalSamples));
+
+	//Final chip-clock values: a chip that received no commands gets clock 0
+	//("absent" per spec - players won't allocate it, validators won't flag
+	//it); a used chip gets the console's real clock when SetChipClock was
+	//called (e.g. PAL SMS), else the NTSC fallback the header started with.
+	auto patchClock = [this](uint32_t offset, VgmChip chip, uint32_t fallbackHz) {
+		uint32_t clock = 0;
+		if(_chipUsed[(int)chip]) {
+			clock = _chipClock[(int)chip] ? _chipClock[(int)chip] : fallbackHz;
+		}
+		_stream.seekp(offset);
+		_stream.write((char*)&clock, sizeof(clock));
+	};
+	patchClock(0x0C, VgmChip::SmsPsg, SmsPsgClockHz);
+	patchClock(0x10, VgmChip::SmsYm2413, SmsYm2413ClockHz);
+	patchClock(0x80, VgmChip::GameBoyDmg, GameBoyClockHz);
+	patchClock(0x84, VgmChip::NesApu, NesApuClockHz);
+	//The Game Gear stereo command (0x4F) belongs to the SN76489 stream - a
+	//capture that only panned still needs the PSG clock present.
+	if(_chipUsed[(int)VgmChip::SmsPsgStereo] && !_chipUsed[(int)VgmChip::SmsPsg]) {
+		uint32_t clock = _chipClock[(int)VgmChip::SmsPsg] ? _chipClock[(int)VgmChip::SmsPsg] : SmsPsgClockHz;
+		_stream.seekp(0x0C);
+		_stream.write((char*)&clock, sizeof(clock));
+	}
 }
 
 void VgmExporter::WriteGd3Tag()
