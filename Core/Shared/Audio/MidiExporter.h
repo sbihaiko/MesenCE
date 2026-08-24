@@ -1,61 +1,46 @@
 #pragma once
 #include "pch.h"
-#include <chrono>
-#include "Utilities/safe_ptr.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
+#include "Shared/Audio/SmfWriter.h"
 
 //Live logger that turns per-flush EnhancedSynthEngine::Input snapshots into a
-//Standard MIDI File (SMF) format-1 / General MIDI capture, mirroring
-//VgmExporter's "live logger, static-instance API" shape (see VgmExporter.h)
-//but consuming aggregated synth-voice state instead of raw chip register
-//writes: each console wrapper's already-Enhanced-Audio-enabled MixAudio
-//branch gets one added, IsRecording()-guarded call to
-//MidiExporter::LogFrame(consoleTag, presetId, in) right before
-//_engine.Render(in, ...), reusing the exact Input values already built for
-//the synth - no parallel snapshot type, no extra state threaded through
-//SoundMixer/Emulator.
+//Standard MIDI File (SMF) format-1 / General MIDI capture. Consumes the
+//aggregated synth-voice state each console wrapper already builds: the
+//Enhanced-Audio-enabled MixAudio branch calls LogFrame(consoleTag, presetId,
+//in, sampleCount, sampleRate) right before _engine.Render(in, ...), reusing
+//the exact Input values already built for the synth.
 //
 //KNOWN v1 LIMITATION: because LogFrame is only ever called from inside that
 //Enhanced-Audio-gated branch (Core/NES/EnhancedSynth.cpp,
 //Core/Gameboy/GbEnhancedSynth.cpp, Core/SMS/SmsEnhancedSynth.cpp all early-
 //return before building "in" when cfg.EnableEnhancedAudio is false), MIDI
 //capture is silently empty for any console-second where Enhanced Audio is
-//off, even while a MIDI recording is active. This is a stated, accepted
-//limitation of this slice - not a new gating mechanism invented here - and
-//is unlike VgmExporter's raw-register tap, which keeps working regardless of
-//that toggle.
+//off, even while a MIDI recording is active. SoundMixer::StartMidiRecording
+//surfaces a MessageManager notice when a capture starts in that state
+//(ADR-0014); the gate itself is a stated, accepted limitation of this slice,
+//unlike the VGM raw-register tap which works regardless of the toggle.
 //
-//Ownership: a single static-instance singleton (StartRecording/StopRecording
-//create and destroy it), exactly like VgmExporter's own _instance. This is a
-//documented, accepted trade-off (see ADR-0012/0016/0017): only one MIDI
-//capture can be active process-wide at a time. The VS DualSystem sub-console
-//(two active cores sharing one process) therefore shares this single
-//instance across both cores rather than getting one MidiExporter each - a
-//single-active-console contract inherited unchanged from VgmExporter, not
-//redesigned by this class.
+//Ownership (ADR-0012): owned per-Emulator by SoundMixer (safe_ptr member,
+//mirroring _waveRecorder). Start/stop go through SoundMixer and must run
+//while the emulation thread is paused (the interop layer wraps them in
+//Emulator::AcquireLock()); captures stop on ROM load/unload and power-off
+//(Emulator::Stop/LoadRom call StopMidiRecording()) and survive a soft reset.
 //
-//Timing model - HONESTLY NOT sample/cycle accurate, and NOT PAL/GB/SMS
-//corrected: LogFrame() carries no elapsed-time or master-clock parameter of
-//its own (each console wrapper simply calls it once per audio-mix flush).
-//kFlushRateHz below is the same nominal ~179Hz NTSC flush cadence already
-//assumed by the parallel VgmExporter-adjacent timing code in this directory;
-//it is a fixed constant, not measured via std::chrono the way VgmExporter's
-//EmitWait() measures real wall-clock time between chip writes. Every MIDI
-//tick this class advances is therefore ticks-per-flush = (kTicksPerQuarterNote
-//* tempoBpm / 60) / kFlushRateHz, accumulated with a carried fractional
-//remainder (see AdvanceTick()) so rounding cannot drift the capture over a
-//long session - but the nominal 179Hz itself only holds on NTSC. On PAL,
-//Game Boy or SMS consoles whose actual flush cadence differs, playback tempo
-//will drift proportionally; this is a known, un-fixed limitation (flagged by
-//ADR-0018/0019/0023) that this slice only documents rather than corrects.
+//Timing (ADR-0013): each LogFrame call advances the tick clock by the
+//emulated duration of the flush it accompanies - sampleCount/sampleRate, the
+//values every MixAudio caller already has in hand - so the capture is
+//correct on every region/console and immune to fast-forward, pause and
+//save-state loads. kFlushRateHz survives only as the fallback tick length
+//when a caller passes sampleRate == 0 (see AdvanceTick()).
+//
+//SMF byte-level encoding lives in SmfWriter (ADR-0034); this class keeps the
+//note-segmentation state machine and the GM voice/channel mapping.
 class MidiExporter
 {
 private:
-	//See the class comment above for the honest NTSC-nominal-only rationale
-	//behind these two constants.
 	static constexpr uint32_t kTicksPerQuarterNote = 480;
-	static constexpr double kFlushRateHz = 179.0;
-	static constexpr double kDefaultTempoBpm = 120.0; //Fixed playback reference tempo (FF 51 03 meta); the ticks themselves already encode the real nominal-cadence timing, so this only needs to be "a sane default", not the true tempo.
+	static constexpr double kFlushRateHz = 179.0; //Fallback-only nominal NTSC flush cadence (see AdvanceTick)
+	static constexpr double kDefaultTempoBpm = 120.0; //Fixed playback reference tempo (FF 51 03 meta); the ticks themselves already encode the real timing, so this only needs to be "a sane default", not the true tempo.
 
 	//Onset-detection thresholds. A Note-On fires in exactly one of two cases:
 	// 1) Volume-attack-from-silence: vol > kOnsetVolThreshold &&
@@ -108,56 +93,47 @@ private:
 		double HeldCents = 0; //Absolute pitch (cents relative to A4) of the currently-held note, for the pitch-jump-with-hysteresis check above
 	};
 
-	static safe_ptr<MidiExporter> _instance;
-
 	string _outputFile;
+	ofstream _stream;
+	SmfWriter _smf;
 	VoiceState _voices[kNumMelodicVoices];
 	bool _drumActive = false;
 	uint8_t _drumNote = 0;
 	double _drumLastVol = 0;
-	vector<uint8_t> _trackData[kTrackCount];
-	uint32_t _trackLastTick[kTrackCount] = { 0, 0, 0 };
 	uint32_t _currentTick = 0;
 	double _tickFraction = 0;
 	bool _programsSent = false;
 
-	explicit MidiExporter(string outputFile);
+	//Advances the tick clock by the emulated duration of one flush; the
+	//fractional remainder is carried so rounding cannot drift the capture
+	//over a long session. sampleRate == 0 falls back to the nominal
+	//kFlushRateHz cadence (see the timing comment above).
+	void AdvanceTick(uint32_t sampleCount, uint32_t sampleRate);
 
 	void EnsureProgramsSent(const char* consoleTag, uint32_t presetId);
 	void ProcessMelodicVoice(uint32_t voiceIndex, double freq, double vol);
 	void ProcessDrumVoice(const EnhancedSynthEngine::Input& in);
 
-	//Appends one channel-voice MIDI event (Note-On/Off = 0x9n/0x8n, Program
-	//Change = 0xCn) to "track", preceded by its delta-time. "data2" is the
-	//event's 3rd byte (velocity, or 0 for a Note-Off); left at -1 for the
-	//2-byte Program Change event, which has no 3rd byte.
-	void EmitEvent(uint32_t track, uint8_t status, uint8_t data1, int data2 = -1);
-	void AppendDelta(uint32_t track);
-	void AppendBytes(uint32_t track, std::initializer_list<uint8_t> bytes);
-
 	//Emits a Note-Off for every voice still held (melodic or drum). Called
-	//from StopRecording()/the destructor BEFORE the End-Of-Track meta event
-	//is written (see WriteFile()), so a capture stopped mid-note never ships
-	//with a hung Note-On that some players/DAWs would otherwise sustain
-	//forever or misinterpret.
+	//from the destructor BEFORE the End-Of-Track meta event is written, so a
+	//capture stopped mid-note never ships with a hung Note-On that some
+	//players/DAWs would otherwise sustain forever or misinterpret.
 	void FlushActiveVoices();
-	void WriteFile();
 
-	static void WriteVarLen(vector<uint8_t>& buf, uint32_t value);
 	static uint8_t FreqToMidiNote(double freqHz);
 	static uint8_t MelodicChannel(uint32_t voiceIndex);
 	static uint8_t VelocityFromVol(double vol);
 
 public:
+	//Opens and validates the output stream immediately (ADR-0033), so a bad
+	//path fails at StartMidiRecording time instead of destroying the capture
+	//at stop time. Check IsValid() after construction.
+	explicit MidiExporter(string outputFile);
 	~MidiExporter();
 
-	static void StartRecording(string outputFile);
-	static void StopRecording();
-	static bool IsRecording();
+	bool IsValid() { return (bool)_stream; }
 
-	//Consumes one console wrapper's per-flush synth-voice snapshot. Guarded
-	//internally by IsRecording() (via the safe_ptr lock), so call sites don't
-	//need their own IsRecording() check - see the class comment above for
-	//exactly where each console wrapper should call this from.
-	static void LogFrame(const char* consoleTag, uint32_t presetId, const EnhancedSynthEngine::Input& in);
+	//Consumes one console wrapper's per-flush synth-voice snapshot, advancing
+	//the tick clock by that flush's emulated sampleCount/sampleRate duration.
+	void LogFrame(const char* consoleTag, uint32_t presetId, const EnhancedSynthEngine::Input& in, uint32_t sampleCount, uint32_t sampleRate);
 };

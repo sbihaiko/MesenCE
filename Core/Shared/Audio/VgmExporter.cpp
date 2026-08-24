@@ -1,8 +1,6 @@
 #include "pch.h"
 #include "Shared/Audio/VgmExporter.h"
 
-safe_ptr<VgmExporter> VgmExporter::_instance;
-
 namespace
 {
 	void PutU32(vector<uint8_t>& buffer, uint32_t offset, uint32_t value)
@@ -28,6 +26,7 @@ VgmExporter::VgmExporter(string outputFile) : _stream(outputFile, ios::out | ios
 VgmExporter::~VgmExporter()
 {
 	if(_stream && _stream.is_open()) {
+		FlushCommandBuffer();
 		_stream.put((char)0x66); //VGM "end of sound data" command
 
 		uint32_t gd3Offset = (uint32_t)_stream.tellp();
@@ -38,28 +37,28 @@ VgmExporter::~VgmExporter()
 	}
 }
 
-void VgmExporter::StartRecording(string outputFile)
+void VgmExporter::AddSamples(uint32_t sampleCount, uint32_t sampleRate)
 {
-	_instance.reset(new VgmExporter(outputFile));
+	if(sampleRate == 0) {
+		return;
+	}
+	_sampleClock += (double)sampleCount * VgmSampleRate / sampleRate;
+	_clockFed = true;
+	FlushCommandBuffer();
 }
 
-void VgmExporter::StopRecording()
+void VgmExporter::FlushCommandBuffer()
 {
-	_instance.reset();
-}
-
-bool VgmExporter::IsRecording()
-{
-	return _instance != nullptr;
+	if(!_cmdBuffer.empty()) {
+		_stream.write((char*)_cmdBuffer.data(), _cmdBuffer.size());
+		_cmdBuffer.clear();
+	}
 }
 
 void VgmExporter::LogWrite(VgmChip chip, uint8_t addrOrPort, uint8_t value)
 {
-	shared_ptr<VgmExporter> instance = _instance.lock();
-	if(instance) {
-		instance->EmitWait();
-		instance->WriteChipCommand(chip, addrOrPort, value);
-	}
+	EmitWait();
+	WriteChipCommand(chip, addrOrPort, value);
 }
 
 void VgmExporter::WriteHeader()
@@ -151,22 +150,42 @@ void VgmExporter::WriteUtf16String(ofstream& stream, const string& value)
 
 void VgmExporter::EmitWait()
 {
-	//Real-time-based sample clock - see the class comment in the header for
-	//why LogWrite() has no timestamp/cycle-counter parameter of its own.
-	//The fractional leftover is carried into the next call so repeated
-	//rounding can't drift the capture's timing over a long session.
-	auto now = std::chrono::steady_clock::now();
-	std::chrono::duration<double> elapsed = now - _lastEventTime;
-	_lastEventTime = now;
+	if(_clockFed) {
+		//Emulated sample clock (ADR-0013): emit exactly the samples that have
+		//elapsed on the 44100Hz counter and not yet been written as waits.
+		//The fractional part stays in _sampleClock so rounding can't drift
+		//the capture over a long session.
+		uint64_t target = (uint64_t)_sampleClock;
+		if(target > _emittedSamples) {
+			EmitWaitSamples(target - _emittedSamples);
+			_emittedSamples = target;
+		}
+	} else {
+		//Real-time fallback - no flush has fed the sample clock yet (writes
+		//arriving before the console's first PlayAudioBuffer of the capture).
+		auto now = std::chrono::steady_clock::now();
+		std::chrono::duration<double> elapsed = now - _lastEventTime;
+		_lastEventTime = now;
 
-	double exactSamples = elapsed.count() * VgmSampleRate + _pendingSampleFraction;
-	uint64_t wholeSamples = (uint64_t)exactSamples;
-	_pendingSampleFraction = exactSamples - (double)wholeSamples;
+		double exactSamples = elapsed.count() * VgmSampleRate + _pendingSampleFraction;
+		uint64_t wholeSamples = (uint64_t)exactSamples;
+		_pendingSampleFraction = exactSamples - (double)wholeSamples;
 
+		EmitWaitSamples(wholeSamples);
+		//Keep the emulated clock's baseline aligned with what was emitted, so
+		//the switch to clock-fed waits doesn't double-count the ramp-up.
+		_sampleClock += (double)wholeSamples;
+		_emittedSamples += wholeSamples;
+	}
+}
+
+void VgmExporter::EmitWaitSamples(uint64_t wholeSamples)
+{
 	while(wholeSamples > 0) {
 		uint16_t chunk = (uint16_t)((wholeSamples > 0xFFFF) ? 0xFFFF : wholeSamples);
-		_stream.put((char)0x61);
-		_stream.write((char*)&chunk, sizeof(chunk));
+		_cmdBuffer.push_back(0x61);
+		_cmdBuffer.push_back((uint8_t)chunk);
+		_cmdBuffer.push_back((uint8_t)(chunk >> 8));
 		wholeSamples -= chunk;
 		_totalSamples += chunk;
 	}
@@ -176,25 +195,25 @@ void VgmExporter::WriteChipCommand(VgmChip chip, uint8_t addrOrPort, uint8_t val
 {
 	switch(chip) {
 		case VgmChip::NesApu:
-			_stream.put((char)(uint8_t)0xB4);
-			_stream.put((char)addrOrPort);
-			_stream.put((char)value);
+			_cmdBuffer.push_back(0xB4);
+			_cmdBuffer.push_back(addrOrPort);
+			_cmdBuffer.push_back(value);
 			break;
 
 		case VgmChip::GameBoyDmg:
-			_stream.put((char)(uint8_t)0xB3);
-			_stream.put((char)addrOrPort);
-			_stream.put((char)value);
+			_cmdBuffer.push_back(0xB3);
+			_cmdBuffer.push_back(addrOrPort);
+			_cmdBuffer.push_back(value);
 			break;
 
 		case VgmChip::SmsPsg:
-			_stream.put((char)0x50);
-			_stream.put((char)value);
+			_cmdBuffer.push_back(0x50);
+			_cmdBuffer.push_back(value);
 			break;
 
 		case VgmChip::SmsPsgStereo:
-			_stream.put((char)0x4F);
-			_stream.put((char)value);
+			_cmdBuffer.push_back(0x4F);
+			_cmdBuffer.push_back(value);
 			break;
 
 		case VgmChip::SmsYm2413:
@@ -203,9 +222,9 @@ void VgmExporter::WriteChipCommand(VgmChip chip, uint8_t addrOrPort, uint8_t val
 				//0x51 command is only emitted on the matching data write
 				_pendingYm2413Register = value;
 			} else {
-				_stream.put((char)0x51);
-				_stream.put((char)_pendingYm2413Register);
-				_stream.put((char)value);
+				_cmdBuffer.push_back(0x51);
+				_cmdBuffer.push_back(_pendingYm2413Register);
+				_cmdBuffer.push_back(value);
 			}
 			break;
 	}

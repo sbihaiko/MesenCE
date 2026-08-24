@@ -228,10 +228,12 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 		}
 	}
 
-	//Live MIDI capture tap: no-ops (via the safe_ptr lock inside LogFrame)
-	//unless a MidiExporter recording is active - see MidiExporter.h for the
-	//Enhanced-Audio-gating limitation this implies.
-	MidiExporter::LogFrame("SMS", cfg.EnhancedAudioPreset, in);
+	//Live MIDI capture tap: no-ops unless a MIDI recording is active - see
+	//MidiExporter.h for the Enhanced-Audio-gating limitation this implies.
+	//The flush's sampleCount/sampleRate feed the emulated tick clock (ADR-0013).
+	if(MidiExporter* midi = _emu->GetSoundMixer()->GetMidiExporter()) {
+		midi->LogFrame("SMS", cfg.EnhancedAudioPreset, in, sampleCount, sampleRate);
+	}
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
 }

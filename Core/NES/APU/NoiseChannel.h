@@ -4,6 +4,8 @@
 #include "NES/APU/ApuTimer.h"
 #include "NES/APU/ApuEnvelope.h"
 #include "NES/NesConstants.h"
+#include "Shared/Audio/SoundMixer.h"
+#include "Shared/Audio/VgmExporter.h"
 #include "NES/NesConsole.h"
 #include "NES/INesMemoryHandler.h"
 #include "Utilities/ISerializable.h"
@@ -109,6 +111,12 @@ public:
 	void WriteRam(uint16_t addr, uint8_t value) override
 	{
 		_console->GetApu()->Run();
+
+		//Raw register-write tap for a live VGM capture - see VgmExporter.h and
+		//the class comment in NesApu.h (ADR-0021: inlined per channel).
+		if(VgmExporter* vgm = _console->GetSharedSoundMixer()->GetVgmExporter()) {
+			vgm->LogWrite(VgmChip::NesApu, (uint8_t)(addr - 0x4000), value);
+		}
 
 		switch(addr & 0x03) {
 			case 0: //400C

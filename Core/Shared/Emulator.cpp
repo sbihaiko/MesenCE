@@ -309,6 +309,12 @@ void Emulator::Stop(bool sendNotification, bool preventRecentGameSave, bool save
 	}
 
 	_movieManager->Stop();
+
+	//Music captures follow the console lifecycle (ADR-0012): finalize the
+	//files before the console (and its chip objects) goes away.
+	_soundMixer->StopVgmRecording();
+	_soundMixer->StopMidiRecording();
+
 	_videoDecoder->StopThread();
 	_rewindManager->Reset();
 
@@ -433,6 +439,11 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 	}
 
 	_soundMixer->StopAudio();
+
+	//Music captures don't survive a ROM load/swap (ADR-0012): finalize them
+	//while the previous console's chip objects still exist.
+	_soundMixer->StopVgmRecording();
+	_soundMixer->StopMidiRecording();
 
 	if(!forPowerCycle) {
 		_movieManager->Stop();

@@ -41,6 +41,7 @@
 NesConsole::NesConsole(Emulator* emu)
 {
 	_emu = emu;
+	_sharedSoundMixer = emu->GetSoundMixer();
 }
 
 NesConsole::~NesConsole()

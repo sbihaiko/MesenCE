@@ -1,7 +1,6 @@
 #pragma once
 #include "pch.h"
 #include <chrono>
-#include "Utilities/safe_ptr.h"
 
 //Which chip a LogWrite() call targets. The VGM command opcode (and whether
 //"addrOrPort" is even meaningful) depends entirely on this - see
@@ -34,24 +33,26 @@ enum class VgmChip : uint8_t
 //writes as VGM stream commands as they happen and appends a GD3 tag block
 //(see WriteGd3Tag) when recording stops.
 //
-//Self-contained by design: chip write-sites (NesApu::WriteRam, GbApu::Write,
-//SmsPsg::Write/WritePanningReg, SmsFmAudio::Write, ...) only need to add one
-//call - VgmExporter::LogWrite(chip, addrOrPort, value) - guarded by
-//IsRecording() so it's a no-op otherwise. No sample count, cycle counter or
-//other timing value needs to be threaded through SoundMixer/Emulator to get
-//there: the class owns a single static instance (StartRecording/StopRecording
-//create and destroy it) and times events itself.
+//Ownership (ADR-0012): owned per-Emulator by SoundMixer (safe_ptr member,
+//mirroring _waveRecorder). Chip write-sites (SquareChannel::WriteRam,
+//GbApu::Write, SmsPsg::Write/WritePanningReg, SmsFmAudio::Write, ...) guard
+//with a single cached-pointer load - `if(VgmExporter* vgm =
+//soundMixer->GetVgmExporter())` - so the no-recording steady state costs a
+//couple of dependent loads and one branch, with no lock, refcount traffic or
+//virtual dispatch on the hottest emulation paths (ADR-0011). Start/stop go
+//through SoundMixer and must run while the emulation thread is paused (the
+//interop layer wraps them in Emulator::AcquireLock()); captures stop on ROM
+//load/unload and power-off and survive a soft reset.
 //
-//Command timing: VGM streams are sample-accurate at a fixed 44100Hz timebase
-//(see EmitWait). Since LogWrite() only receives the raw register write - not
-//the emulated master clock - elapsed time between successive writes is
-//measured on a real-time (std::chrono::steady_clock) basis and quantized to
-//44100Hz "wait" samples, with the leftover fraction carried forward so
-//rounding never accumulates into audible drift over a long capture. This
-//keeps every call site a plain one-liner at the cost of drifting from
-//perfect cycle accuracy only while the host itself isn't running the
-//emulation in real time (e.g. paused at a breakpoint, fast-forward, a
-//save-state load) - normal gameplay capture is unaffected.
+//Command timing (ADR-0013): VGM streams are sample-accurate at a fixed
+//44100Hz timebase. SoundMixer::PlayAudioBuffer feeds AddSamples() with every
+//flush's emulated sampleCount/sourceRate (run-ahead frames excluded), and
+//EmitWait() derives waits from that emulated 44100Hz counter - so captures
+//are region-correct and immune to fast-forward, pause-at-breakpoint and
+//save-state loads. If no sample clock has been fed yet (no flush since
+//recording started), EmitWait falls back to real-time std::chrono deltas so
+//a capture never stalls; the fraction carry in both paths keeps rounding
+//from accumulating into audible drift over a long capture.
 class VgmExporter
 {
 public:
@@ -75,29 +76,53 @@ private:
 	static constexpr uint32_t SmsPsgClockHz = 3579545;
 	static constexpr uint32_t SmsYm2413ClockHz = 3579545;
 
-	static safe_ptr<VgmExporter> _instance;
-
 	ofstream _stream;
 	string _outputFile;
+
+	//Command-stream bytes are appended here on the emulation thread and only
+	//reach the ofstream in FlushCommandBuffer(), called at the audio flush
+	//cadence from AddSamples() and at teardown - so a register write never
+	//does stream I/O on the hot path (ADR-0011).
+	vector<uint8_t> _cmdBuffer;
+
+	//Emulated 44100Hz sample clock (see the class comment): total emulated
+	//samples elapsed since recording started, and how many of them have
+	//already been emitted as wait commands.
+	double _sampleClock = 0;
+	uint64_t _emittedSamples = 0;
+	bool _clockFed = false;
+
+	//Real-time fallback state, used only until the first AddSamples() call.
 	std::chrono::steady_clock::time_point _lastEventTime;
 	double _pendingSampleFraction = 0;
+
 	uint64_t _totalSamples = 0;
 	uint8_t _pendingYm2413Register = 0;
-
-	explicit VgmExporter(string outputFile);
 
 	void WriteHeader();
 	void WriteGd3Tag();
 	void PatchHeader(uint32_t gd3Offset);
 	void EmitWait();
+	void EmitWaitSamples(uint64_t wholeSamples);
 	void WriteChipCommand(VgmChip chip, uint8_t addrOrPort, uint8_t value);
+	void FlushCommandBuffer();
 	static void WriteUtf16String(ofstream& stream, const string& value);
 
 public:
+	//Opens and validates the output stream immediately, so a bad path fails
+	//at StartVgmRecording time. Check IsValid() after construction.
+	explicit VgmExporter(string outputFile);
 	~VgmExporter();
 
-	static void StartRecording(string outputFile);
-	static void StopRecording();
-	static bool IsRecording();
-	static void LogWrite(VgmChip chip, uint8_t addrOrPort, uint8_t value);
+	bool IsValid() { return (bool)_stream; }
+
+	//Advances the emulated sample clock by one audio flush's worth of time
+	//(sampleCount samples at sampleRate Hz, rescaled to the 44100Hz VGM
+	//timebase). Called by SoundMixer::PlayAudioBuffer with the pre-resample
+	//sample count/rate; run-ahead frames must not be fed.
+	void AddSamples(uint32_t sampleCount, uint32_t sampleRate);
+
+	//Logs one raw chip register write, preceded by the waits accumulated on
+	//the sample clock since the previous command.
+	void LogWrite(VgmChip chip, uint8_t addrOrPort, uint8_t value);
 };

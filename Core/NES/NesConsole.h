@@ -7,6 +7,7 @@
 #include "Utilities/safe_ptr.h"
 
 class Emulator;
+class SoundMixer;
 class NesCpu;
 class BaseNesPpu;
 class NesApu;
@@ -34,6 +35,7 @@ class NesConsole final : public IConsole
 {
 private:
 	Emulator* _emu = nullptr;
+	SoundMixer* _sharedSoundMixer = nullptr; //see GetSharedSoundMixer()
 
 	unique_ptr<NesConsole> _vsSubConsole;
 	NesConsole* _vsMainConsole = nullptr;
@@ -83,6 +85,13 @@ public:
 	NesMemoryManager* GetMemoryManager() { return _memoryManager.get(); }
 	BaseMapper* GetMapper() { return _mapper.get(); }
 	NesSoundMixer* GetSoundMixer() { return _mixer.get(); }
+
+	//Emulator-level (shared) SoundMixer, cached at construction: the APU
+	//channels' VGM tap reads it on every register write, so this stays an
+	//inline member load instead of the non-inline GetEmulator() call
+	//(ADR-0011 hot-path guard).
+	SoundMixer* GetSharedSoundMixer() { return _sharedSoundMixer; }
+
 	Emulator* GetEmulator();
 	NesConfig& GetNesConfig();
 

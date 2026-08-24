@@ -1006,6 +1006,9 @@
     <ClCompile Include="Shared\Audio\MidiExporter.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\Audio\SmfWriter.cpp">
+      <Filter>Shared\Audio</Filter>
+    </ClCompile>
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h">
       <Filter>Shared\Audio</Filter>
     </ClInclude>
@@ -1016,6 +1019,9 @@
       <Filter>Shared\Audio</Filter>
     </ClInclude>
     <ClInclude Include="Shared\Audio\MidiExporter.h">
+      <Filter>Shared\Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\Audio\SmfWriter.h">
       <Filter>Shared\Audio</Filter>
     </ClInclude>
     <ClCompile Include="Shared\Audio\SoundResampler.cpp">

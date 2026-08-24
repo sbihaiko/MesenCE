@@ -7,6 +7,9 @@
 #include "Shared/RewindManager.h"
 #include "Shared/Video/VideoRenderer.h"
 #include "Shared/Audio/WaveRecorder.h"
+#include "Shared/Audio/VgmExporter.h"
+#include "Shared/Audio/MidiExporter.h"
+#include "Shared/MessageManager.h"
 #include "Shared/Interfaces/IAudioProvider.h"
 #include "Utilities/Audio/Equalizer.h"
 #include "Utilities/Audio/ReverbFilter.h"
@@ -86,6 +89,15 @@ void SoundMixer::PlayAudioBuffer(int16_t* samples, uint32_t sampleCount, uint32_
 			}
 		} else if(cfg.ReduceSoundInFastForward && settings->CheckFlag(EmulationFlags::TurboOrRewind)) {
 			masterVolume = cfg.VolumeReduction == 100 ? 0 : masterVolume * (100 - cfg.VolumeReduction) / 100;
+		}
+	}
+
+	//Feed the music captures' emulated 44100Hz sample clock (ADR-0013) with
+	//the pre-resample count/rate - the true emulated duration of this flush.
+	//Run-ahead frames replay emulated time and must not advance the clock.
+	if(VgmExporter* vgm = GetVgmExporter()) {
+		if(!_emu->IsRunAheadFrame()) {
+			vgm->AddSamples(sampleCount, sourceRate);
 		}
 	}
 
@@ -196,6 +208,54 @@ void SoundMixer::StopRecording()
 bool SoundMixer::IsRecording()
 {
 	return _waveRecorder != nullptr;
+}
+
+void SoundMixer::StartVgmRecording(string filepath)
+{
+	unique_ptr<VgmExporter> exporter(new VgmExporter(filepath));
+	if(!exporter->IsValid()) {
+		//Fail loudly at start time instead of losing the capture at stop time (ADR-0033)
+		MessageManager::DisplayMessage("MusicRecorder", "CouldNotWriteToFile", filepath);
+		return;
+	}
+	_vgmExporter.reset(exporter);
+}
+
+void SoundMixer::StopVgmRecording()
+{
+	_vgmExporter.reset();
+}
+
+bool SoundMixer::IsVgmRecording()
+{
+	return _vgmExporter != nullptr;
+}
+
+void SoundMixer::StartMidiRecording(string filepath)
+{
+	unique_ptr<MidiExporter> exporter(new MidiExporter(filepath));
+	if(!exporter->IsValid()) {
+		//Fail loudly at start time instead of losing the capture at stop time (ADR-0033)
+		MessageManager::DisplayMessage("MusicRecorder", "CouldNotWriteToFile", filepath);
+		return;
+	}
+	if(!_emu->GetSettings()->GetAudioConfig().EnableEnhancedAudio) {
+		//The MIDI tap only sees Enhanced Audio's per-flush snapshots, so the
+		//capture will be empty until the synth is enabled - tell the user now
+		//instead of shipping a silently-empty file (ADR-0014).
+		MessageManager::DisplayMessage("MusicRecorder", "MidiNeedsEnhancedAudio");
+	}
+	_midiExporter.reset(exporter);
+}
+
+void SoundMixer::StopMidiRecording()
+{
+	_midiExporter.reset();
+}
+
+bool SoundMixer::IsMidiRecording()
+{
+	return _midiExporter != nullptr;
 }
 
 void SoundMixer::GetLastSamples(int16_t& left, int16_t& right)

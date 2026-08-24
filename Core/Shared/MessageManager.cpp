@@ -43,6 +43,8 @@ std::unordered_map<string, string> MessageManager::_enResources = {
 	{ "KeyboardModeEnabled", u8"Keyboard connected - shortcut keys disabled." },
 	{ "Lag", u8"Lag" },
 	{ "Mapper", u8"Mapper: %1, SubMapper: %2" },
+	{ "MidiNeedsEnhancedAudio", u8"Enhanced Audio is disabled - the MIDI capture will be empty until it is enabled (Audio settings)." },
+	{ "MusicRecorder", u8"Music Recorder" },
 	{ "MovieEnded", u8"Movie ended." },
 	{ "MovieStopped", u8"Movie stopped." },
 	{ "MovieInvalid", u8"Invalid movie file." },

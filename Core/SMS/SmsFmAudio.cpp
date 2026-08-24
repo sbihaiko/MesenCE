@@ -76,7 +76,9 @@ void SmsFmAudio::Write(uint8_t port, uint8_t value)
 			//register (addrOrPort=1) - VgmExporter itself remembers the
 			//latched register across the two calls and emits the combined
 			//0x51 aa dd command only once the data write arrives.
-			VgmExporter::LogWrite(VgmChip::SmsYm2413, port == 0xF0 ? 0 : 1, value);
+			if(VgmExporter* vgm = _emu->GetSoundMixer()->GetVgmExporter()) {
+				vgm->LogWrite(VgmChip::SmsYm2413, port == 0xF0 ? 0 : 1, value);
+			}
 			break;
 
 		case 0xF2:

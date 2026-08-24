@@ -2,8 +2,6 @@
 #include "Core/Shared/Emulator.h"
 #include "Core/Shared/Video/VideoRenderer.h"
 #include "Core/Shared/Audio/SoundMixer.h"
-#include "Core/Shared/Audio/MidiExporter.h"
-#include "Core/Shared/Audio/VgmExporter.h"
 #include "Core/Shared/Movies/MovieManager.h"
 
 extern unique_ptr<Emulator> _emu;
@@ -40,34 +38,41 @@ extern "C"
 		return _emu->GetSoundMixer()->IsRecording();
 	}
 
+	//Music-capture start/stop mutate exporter instances the emulation thread
+	//reads through plain pointer loads (see SoundMixer::GetVgmExporter), so
+	//they take the emulator lock to pause emulation for the swap (ADR-0012).
 	DllExport void __stdcall MidiRecord(char* filename)
 	{
-		MidiExporter::StartRecording(filename);
+		auto lock = _emu->AcquireLock();
+		_emu->GetSoundMixer()->StartMidiRecording(filename);
 	}
 
 	DllExport void __stdcall MidiStop()
 	{
-		MidiExporter::StopRecording();
+		auto lock = _emu->AcquireLock();
+		_emu->GetSoundMixer()->StopMidiRecording();
 	}
 
 	DllExport bool __stdcall MidiIsRecording()
 	{
-		return MidiExporter::IsRecording();
+		return _emu->GetSoundMixer()->IsMidiRecording();
 	}
 
 	DllExport void __stdcall VgmRecord(char* filename)
 	{
-		VgmExporter::StartRecording(filename);
+		auto lock = _emu->AcquireLock();
+		_emu->GetSoundMixer()->StartVgmRecording(filename);
 	}
 
 	DllExport void __stdcall VgmStop()
 	{
-		VgmExporter::StopRecording();
+		auto lock = _emu->AcquireLock();
+		_emu->GetSoundMixer()->StopVgmRecording();
 	}
 
 	DllExport bool __stdcall VgmIsRecording()
 	{
-		return VgmExporter::IsRecording();
+		return _emu->GetSoundMixer()->IsVgmRecording();
 	}
 
 	DllExport void __stdcall MoviePlay(char* filename)

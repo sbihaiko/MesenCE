@@ -877,8 +877,16 @@ namespace Mesen.ViewModels
 						OnClick = async () => {
 							string? filename = await FileDialogHelper.SaveFile(ConfigManager.WaveFolder, EmuApi.GetRomInfo().GetRomName() + ".mid", wnd, FileDialogHelper.MidiExt, FileDialogHelper.VgmExt);
 							if(filename != null) {
-								RecordApi.MidiRecord(Path.ChangeExtension(filename, FileDialogHelper.MidiExt));
-								RecordApi.VgmRecord(Path.ChangeExtension(filename, FileDialogHelper.VgmExt));
+								//Strip only a known recorder extension before appending both -
+								//Path.ChangeExtension would truncate ROM names containing a
+								//dot ("Zelda v1.2") at the wrong separator.
+								string basePath = filename;
+								string ext = Path.GetExtension(filename).TrimStart('.').ToLowerInvariant();
+								if(ext == FileDialogHelper.MidiExt || ext == FileDialogHelper.VgmExt) {
+									basePath = filename.Substring(0, filename.Length - ext.Length - 1);
+								}
+								RecordApi.MidiRecord(basePath + "." + FileDialogHelper.MidiExt);
+								RecordApi.VgmRecord(basePath + "." + FileDialogHelper.VgmExt);
 							}
 						}
 					},
