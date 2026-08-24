@@ -1,21 +1,34 @@
-# Licensing
+# Contributing to this fork
 
-Although MesenCE is currently GPL, we are interested in removing GPL code over time and potentially relicensing the emulator under a more permissive license, such as MIT, at some point in the future. Thus, if you submit code to MesenCE, you agree that:
-- **Your code is licensed under the MIT License.** You may explicitly provide it under additional optional licenses if you wish.
-- Your submission does not contain code that is incompatible with the MIT License. (For example, your submission may not be based on GPL code or include a GPL library.)
+This is a personal fork of [MesenCE](https://github.com/nesdev-org/MesenCE). It exists because the work here — the Enhanced Audio engine and the broader [Community Enhancement Ecosystem](docs/enhancement-ecosystem.md) — is built with the help of AI tools, which the upstream project's [contribution policy](https://github.com/nesdev-org/MesenCE/blob/master/CONTRIBUTING.md) does not allow. There is no upstream PR flow for this work; it lives here. Code merged *from* upstream keeps following upstream's rules and history.
 
-# AI / LLM code
+## Licensing
 
-**AI-generated code is prohibited.** While you may consult with LLMs, all submitted code must be written and understood by you, the contributor, to ensure accuracy and copyright integrity.
+- **Code** is licensed under the **GPL v3**, like the rest of Mesen (see [LICENSE](LICENSE)). Contributions must be GPL-compatible. This fork makes no MIT relicensing claim over its own additions.
+- **Open specs** under `docs/specs/` (ESP, MEP, MEI, the hires.txt GB/SMS extension) are **CC0 / public domain**, so any emulator or pack author can implement them without touching GPL code. By contributing to a spec you agree your contribution to it is CC0.
 
-# Style
+## Tools, never content
 
-MesenCE requires a consistent style across the codebase. Most of this style is currently enforced with clang-format (for C++) and dotnet format (for C#), and these must be run on any code submitted to MesenCE. In Visual Studio, these can be configured to run automatically when saving. On other platforms, you can use these commands:
+The repository ships **tools and clean data only**: source code, synth presets, ROM-hash mappings, index manifests, documentation. Never commit derivative content — extracted tiles, ripped samples, transcribed MIDIs, covers, or third-party pack art (see the [ecosystem principles](docs/enhancement-ecosystem.md#principles)).
+
+**One deliberate exception:** short before/after demonstration excerpts and gameplay screenshots in `docs/media/`, the same de facto practice every emulator's documentation relies on — kept brief, credited where a community author is involved, never full tracks or complete asset sets.
+
+## AI-assisted code
+
+AI-assisted contributions are **welcome** in this fork. You remain responsible for the result:
+
+- Review and understand what you submit — you are the author of record.
+- Test it (build on at least one platform; for Enhanced Audio changes, verify by ear against the reference games listed in the presets template).
+- Keep the emulation cores accurate: enhancements are a layer *on top of* accurate emulation and must never affect determinism, save states, rewind, or movies.
+
+## Style
+
+The fork keeps upstream's style so merges stay cheap. It is enforced with clang-format (C++) and dotnet format (C#):
 
 - clang-format: `find ./ -iname '*.h' -o -iname '*.cpp' | xargs clang-format -i`
 - dotnet format: `dotnet format`
 
-In addition, we require the following naming conventions:
+Naming conventions:
 
 - ExampleFunction
 - exampleVariable
@@ -23,11 +36,8 @@ In addition, we require the following naming conventions:
 
 When in doubt, follow the formatting you see elsewhere in the project.
 
-# Guidance
+## Quality bar
 
-- Performance: Changes may be rejected if they cause a drop in maximum FPS (press F9 to run at an unlocked framerate and F10 to view the FPS). Where possible, ensure that your changes avoid doing things like adding if statements to hot paths.
-- Warnings: The MesenCE MSVC builds treat warnings as errors. These must be resolved before code can be accepted.
-- Commit messages: Including context and test ROMs with your pull requests allows us to more easily and quickly evaluate the code. If we don't understand a change, it is less likely to be accepted.
-- Usefulness: Changes and features may not be accepted if we determine they're not useful enough or they are out of scope. MesenCE is not intended to cover every niche use case.
-
-**Pull requests may be rejected for a variety of reasons, even if they are functional. Please consult with the team before making any significant changes.**
+- **Performance:** avoid new work in hot paths (press F9 to run at an unlocked framerate and F10 to view FPS); the enhanced synth must never regress the audio thread.
+- **Warnings:** MSVC builds treat warnings as errors; Linux clang builds use `-Werror`. Resolve them.
+- **Context:** commit messages and PRs should explain the *why* and name the games/ROMs used to verify the change.
