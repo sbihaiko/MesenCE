@@ -194,3 +194,18 @@ roms
 roms/*
 roms/**
 claudei.sh
+
+# >>> dev-squad shared team assets (managed — do not edit) >>>
+.claude/*
+!.claude/guardrails/
+!.claude/dev-squad.local.md
+.dev-squad/*
+!.dev-squad/adr/
+!.dev-squad/memory/
+# <<< dev-squad shared team assets (managed) <<<
+
+# graphify - generated knowledge graph output (regenerable, machine-local paths)
+graphify-out/
+
+# git worktrees (dev-squad task branches)
+.worktrees/
