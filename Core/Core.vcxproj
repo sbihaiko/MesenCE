@@ -767,6 +767,7 @@
     <ClInclude Include="Shared\MemoryType.h" />
     <ClInclude Include="SNES\Input\SnesMouse.h" />
     <ClInclude Include="Shared\Audio\SoundMixer.h" />
+    <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h" />
     <ClInclude Include="Shared\Audio\VgmExporter.h" />
@@ -1101,6 +1102,7 @@
     <ClCompile Include="SNES\Input\SnesController.cpp" />
     <ClCompile Include="Shared\Audio\SoundMixer.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp" />
+    <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp" />
     <ClCompile Include="Shared\Audio\VgmExporter.cpp" />
     <ClCompile Include="Shared\Audio\MidiExporter.cpp" />

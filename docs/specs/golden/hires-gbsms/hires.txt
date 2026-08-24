@@ -2,6 +2,6 @@
 <system>gb
 <scale>4
 <img>tiles.png
-<tile>0,FF00FF00FF00FF00FF00FF00FF00FF00,E4,0,0,0,N
+<tile>0,FF00FF00FF00FF00FF00FF00FF00FF00,00E4,0,0,1,N
 <bgm>0,title.ogg,441000
 <sfx>1,jump.ogg

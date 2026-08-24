@@ -26,6 +26,23 @@ enum class ScaleFilterType
 	LcdGrid = 7,
 };
 
+//Options for the HD pack tile recorders (NES HdPackBuilder and the shared
+//GB/SMS HdTilePackBuilder). Passed by the UI/harness via the
+//StartRecordHdPack shortcut; ChrRamBankSize and the NES-specific flags are
+//ignored by the non-NES builders.
+struct HdPackBuilderOptions
+{
+	char* SaveFolder;
+	ScaleFilterType FilterType;
+	uint32_t Scale;
+	uint32_t ChrRamBankSize;
+
+	bool UseLargeSprites;
+	bool SortByUsageFrequency;
+	bool GroupBlankTiles;
+	bool IgnoreOverscan;
+};
+
 enum class VideoFilterType
 {
 	None = 0,

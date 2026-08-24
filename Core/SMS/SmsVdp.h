@@ -10,6 +10,7 @@ class SmsConsole;
 class SmsCpu;
 class SmsControlManager;
 class SmsMemoryManager;
+class HdTilePackBuilder;
 
 enum class SmsVdpMemAccess : uint8_t
 {
@@ -112,6 +113,12 @@ private:
 
 	SmsVdpMemAccess _memAccess[342] = {};
 
+	//HD pack recording tap (F2.1) - null unless a recording is active
+	HdTilePackBuilder* _tileCapture = nullptr;
+
+	void CaptureBgTile(uint16_t tileIndex, bool useHighPalette);
+	void CaptureSpriteTile(uint16_t tileAddr);
+
 	void UpdateIrqState();
 
 	void UpdateDisplayMode();
@@ -191,6 +198,8 @@ public:
 	SmsVdpState& GetState() { return _state; }
 
 	void DebugWritePalette(uint8_t addr, uint8_t value);
+
+	void SetTileCaptureBuilder(HdTilePackBuilder* builder) { _tileCapture = builder; }
 
 	uint16_t* GetScreenBuffer(bool previousBuffer)
 	{

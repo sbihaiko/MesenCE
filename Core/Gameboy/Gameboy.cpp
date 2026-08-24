@@ -24,6 +24,7 @@
 #include "Shared/EmuSettings.h"
 #include "Shared/MessageManager.h"
 #include "Shared/FirmwareHelper.h"
+#include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Utilities/VirtualFile.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/CRC32.h"
@@ -793,4 +794,36 @@ void Gameboy::InitializeRam(void* data, uint32_t length)
 {
 	EmuSettings* settings = _emu->GetSettings();
 	settings->InitializeRam(settings->GetGameboyConfig().RamPowerOnState, data, length);
+}
+
+void Gameboy::ProcessNotification(ConsoleNotificationType type, void* parameter)
+{
+	if(type == ConsoleNotificationType::ExecuteShortcut) {
+		ExecuteShortcutParams* params = (ExecuteShortcutParams*)parameter;
+		switch(params->Shortcut) {
+			default: break;
+			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
+			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;
+		}
+	}
+}
+
+void Gameboy::StartRecordingHdPack(HdPackBuilderOptions options)
+{
+	auto lock = _emu->AcquireLock();
+	_ppu->SetTileCaptureBuilder(nullptr);
+	//Key format per mode: ADR-0036. IsCgbEnabled() (not the model) decides
+	//gb vs gbc - a DMG game on CGB hardware renders through the DMG path.
+	_hdPackBuilder.reset(new HdTilePackBuilder(_emu, _ppu->IsCgbEnabled() ? "gbc" : "gb", options));
+	_ppu->SetTileCaptureBuilder(_hdPackBuilder.get());
+}
+
+void Gameboy::StopRecordingHdPack()
+{
+	if(_hdPackBuilder) {
+		auto lock = _emu->AcquireLock();
+		_ppu->SetTileCaptureBuilder(nullptr);
+		//The builder writes the PNG sheets + hires.txt when destroyed
+		_hdPackBuilder.reset();
+	}
 }

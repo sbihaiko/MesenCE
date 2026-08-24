@@ -12,6 +12,7 @@
 #include "Shared/EventType.h"
 #include "Shared/NotificationManager.h"
 #include "Shared/ColorUtilities.h"
+#include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/RandomHelper.h"
 #include "Debugger/SmsVdpTools.h"
@@ -373,6 +374,10 @@ void SmsVdp::LoadBgTilesSms()
 			_bgPalette |= ((ntData & 0x800) ? 0xFF : 0) << (16 - _pixelsAvailable);
 			_bgTileAddr = tileIndex * 32 + tileRow * 4;
 			_bgHorizontalMirror = (ntData & 0x200);
+
+			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4) {
+				CaptureBgTile(tileIndex, (ntData & 0x800) != 0);
+			}
 			break;
 		}
 
@@ -795,6 +800,10 @@ void SmsVdp::LoadSpriteTilesSms()
 			_spriteShifters[_spriteCount].SpriteX = ReadVram(loadAddr, SmsVdpMemAccess::SpriteLoadTable);
 			uint8_t sprTileIndex = ReadVram(loadAddr + 1, SmsVdpMemAccess::SpriteLoadTable);
 			_spriteShifters[_spriteCount].TileAddr = GetSmsSpriteTileAddr(sprTileIndex, _spriteShifters[_spriteCount].SpriteRow, _inRangeSprites[_spriteCount]);
+
+			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4 && _state.Scanline < _state.VisibleScanlineCount) {
+				CaptureSpriteTile(_spriteShifters[_spriteCount].TileAddr);
+			}
 			break;
 		}
 
@@ -809,6 +818,10 @@ void SmsVdp::LoadSpriteTilesSms()
 			_spriteShifters[_spriteCount + 1].SpriteX = ReadVram(loadAddr, SmsVdpMemAccess::SpriteLoadTable);
 			uint8_t sprTileIndex = ReadVram(loadAddr + 1, SmsVdpMemAccess::SpriteLoadTable);
 			_spriteShifters[_spriteCount + 1].TileAddr = GetSmsSpriteTileAddr(sprTileIndex, _spriteShifters[_spriteCount + 1].SpriteRow, _inRangeSprites[_spriteCount + 1]);
+
+			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4 && _state.Scanline < _state.VisibleScanlineCount) {
+				CaptureSpriteTile(_spriteShifters[_spriteCount + 1].TileAddr);
+			}
 			break;
 		}
 
@@ -885,6 +898,11 @@ void SmsVdp::LoadExtraSpritesSms()
 
 		uint8_t sprTileIndex = _videoRam[spriteAddr + 0x80 + _inRangeSprites[i] * 2 + 1];
 		uint16_t sprTileAddr = GetSmsSpriteTileAddr(sprTileIndex, _spriteShifters[i].SpriteRow, _inRangeSprites[i]);
+
+		if(_tileCapture && _state.RenderingEnabled && _state.UseMode4 && _state.Scanline < _state.VisibleScanlineCount) {
+			CaptureSpriteTile(sprTileAddr);
+		}
+
 		_spriteShifters[i].TileData[0] = _videoRam[sprTileAddr];
 		_spriteShifters[i].TileData[1] = _videoRam[sprTileAddr + 1];
 		_spriteShifters[i].TileData[2] = _videoRam[sprTileAddr + 2];
@@ -897,6 +915,84 @@ void SmsVdp::LoadExtraSpritesSms()
 			ShiftSprite(i);
 		}
 	}
+}
+
+//HD pack recording (F2.1) - tile identity key semantics: ADR-0037
+void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
+{
+	uint16_t tileAddr = tileIndex * 32;
+	uint8_t cramBase = useHighPalette ? 0x10 : 0x00;
+
+	HdCapturedTile tile = {};
+	tile.DataSize = 32;
+	memcpy(tile.Data, _videoRam + tileAddr, 32);
+
+	tile.PalKey[0] = 0x00; //BG
+	tile.PalKey[1] = cramBase;
+	if(_model == SmsModel::GameGear) {
+		tile.PalKeySize = 2 + 32;
+		for(int i = 0; i < 16; i++) {
+			//RGB444 entries, big-endian in the textual key (draft §3.2)
+			tile.PalKey[2 + i * 2] = _paletteRam[(cramBase + i) * 2 + 1];
+			tile.PalKey[3 + i * 2] = _paletteRam[(cramBase + i) * 2];
+		}
+	} else {
+		tile.PalKeySize = 2 + 16;
+		memcpy(tile.PalKey + 2, _paletteRam + cramBase, 16);
+	}
+
+	uint32_t rgba[64];
+	for(int y = 0; y < 8; y++) {
+		const uint8_t* row = tile.Data + y * 4;
+		for(int x = 0; x < 8; x++) {
+			uint8_t color =
+				((row[0] >> (7 - x)) & 0x01) |
+				(((row[1] >> (7 - x)) & 0x01) << 1) |
+				(((row[2] >> (7 - x)) & 0x01) << 2) |
+				(((row[3] >> (7 - x)) & 0x01) << 3);
+			rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_internalPaletteRam[cramBase + color]);
+		}
+	}
+
+	_tileCapture->ProcessTile(tile, rgba);
+}
+
+void SmsVdp::CaptureSpriteTile(uint16_t tileAddr)
+{
+	tileAddr &= ~0x1F; //row offset -> canonical tile base
+
+	HdCapturedTile tile = {};
+	tile.DataSize = 32;
+	memcpy(tile.Data, _videoRam + tileAddr, 32);
+
+	tile.PalKey[0] = 0x01; //OBJ - sprites always use the upper CRAM half
+	tile.PalKey[1] = 0x10;
+	if(_model == SmsModel::GameGear) {
+		tile.PalKeySize = 2 + 32;
+		for(int i = 0; i < 16; i++) {
+			tile.PalKey[2 + i * 2] = _paletteRam[(0x10 + i) * 2 + 1];
+			tile.PalKey[3 + i * 2] = _paletteRam[(0x10 + i) * 2];
+		}
+	} else {
+		tile.PalKeySize = 2 + 16;
+		memcpy(tile.PalKey + 2, _paletteRam + 0x10, 16);
+	}
+
+	uint32_t rgba[64];
+	for(int y = 0; y < 8; y++) {
+		const uint8_t* row = tile.Data + y * 4;
+		for(int x = 0; x < 8; x++) {
+			uint8_t color =
+				((row[0] >> (7 - x)) & 0x01) |
+				(((row[1] >> (7 - x)) & 0x01) << 1) |
+				(((row[2] >> (7 - x)) & 0x01) << 2) |
+				(((row[3] >> (7 - x)) & 0x01) << 3);
+			//Sprite color 0 is transparent
+			rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_internalPaletteRam[0x10 + color]);
+		}
+	}
+
+	_tileCapture->ProcessTile(tile, rgba);
 }
 
 void SmsVdp::LoadSpriteTilesSg()

@@ -13,6 +13,8 @@
 #include "Shared/Video/VideoDecoder.h"
 #include "Shared/NotificationManager.h"
 #include "Shared/MessageManager.h"
+#include "Shared/ColorUtilities.h"
+#include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "SNES/Coprocessors/SGB/SuperGameboy.h"
 #include "Utilities/HexUtilities.h"
 #include "Utilities/Serializer.h"
@@ -748,6 +750,10 @@ void GbPpu::PushSpriteToPixelFifo()
 		return;
 	}
 
+	if(_tileCapture) {
+		CaptureObjTile();
+	}
+
 	uint8_t pos = _oamFifo.Position;
 
 	//Overlap sprite
@@ -768,6 +774,10 @@ void GbPpu::PushSpriteToPixelFifo()
 
 void GbPpu::PushTileToPixelFifo()
 {
+	if(_tileCapture) {
+		CaptureBgTile();
+	}
+
 	//Add new tile to fifo
 	for(int i = 0; i < 8; i++) {
 		uint8_t shift = (_bgFetcher.Attributes & 0x20) ? i : (7 - i);
@@ -782,6 +792,106 @@ void GbPpu::PushTileToPixelFifo()
 	_bgFifo.Position = 0;
 	_bgFifo.Size = 8;
 	_bgFetcher.Step = 0;
+}
+
+//HD pack recording (F2.1) - tile identity key semantics: ADR-0036
+void GbPpu::CaptureBgTile()
+{
+	if(_gbcTileGlitch) {
+		//The glitch corrupts the fetched bytes - don't capture garbage
+		return;
+	}
+
+	uint16_t tileAddr = _bgFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
+	HdCapturedTile tile = {};
+	tile.DataSize = 16;
+	memcpy(tile.Data, _vram + tileAddr, 16);
+	tile.BankId = (tileAddr & 0x2000) ? 1 : 0;
+
+	uint32_t rgba[64];
+	if(_state.CgbEnabled) {
+		uint8_t palette = (_bgFetcher.Attributes & 0x07) << 2;
+		tile.PalKeySize = 9;
+		tile.PalKey[0] = 0x00; //BG
+		for(int i = 0; i < 4; i++) {
+			uint16_t color = _state.CgbBgPalettes[palette + i] & 0x7FFF;
+			tile.PalKey[1 + i * 2] = (uint8_t)(color >> 8);
+			tile.PalKey[2 + i * 2] = (uint8_t)color;
+		}
+		for(int y = 0; y < 8; y++) {
+			uint8_t low = _vram[tileAddr + y * 2];
+			uint8_t high = _vram[tileAddr + y * 2 + 1];
+			for(int x = 0; x < 8; x++) {
+				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[palette + color] & 0x7FFF);
+			}
+		}
+	} else {
+		if(!_state.BgEnabled) {
+			//DMG: the tile is not displayed when the BG is disabled
+			return;
+		}
+		tile.PalKeySize = 2;
+		tile.PalKey[0] = 0x00; //BG
+		tile.PalKey[1] = _state.BgPalette;
+		for(int y = 0; y < 8; y++) {
+			uint8_t low = _vram[tileAddr + y * 2];
+			uint8_t high = _vram[tileAddr + y * 2 + 1];
+			for(int x = 0; x < 8; x++) {
+				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+				uint8_t shade = (_state.BgPalette >> (color * 2)) & 0x03;
+				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[shade] & 0x7FFF);
+			}
+		}
+	}
+
+	_tileCapture->ProcessTile(tile, rgba);
+}
+
+void GbPpu::CaptureObjTile()
+{
+	uint16_t tileAddr = _oamFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
+	HdCapturedTile tile = {};
+	tile.DataSize = 16;
+	memcpy(tile.Data, _vram + tileAddr, 16);
+	tile.BankId = (tileAddr & 0x2000) ? 1 : 0;
+
+	uint32_t rgba[64];
+	if(_state.CgbEnabled) {
+		uint8_t palette = (_oamFetcher.Attributes & 0x07) << 2;
+		tile.PalKeySize = 9;
+		tile.PalKey[0] = 0x01; //OBJ
+		for(int i = 0; i < 4; i++) {
+			uint16_t color = _state.CgbObjPalettes[palette + i] & 0x7FFF;
+			tile.PalKey[1 + i * 2] = (uint8_t)(color >> 8);
+			tile.PalKey[2 + i * 2] = (uint8_t)color;
+		}
+		for(int y = 0; y < 8; y++) {
+			uint8_t low = _vram[tileAddr + y * 2];
+			uint8_t high = _vram[tileAddr + y * 2 + 1];
+			for(int x = 0; x < 8; x++) {
+				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+				rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palette + color] & 0x7FFF);
+			}
+		}
+	} else {
+		uint8_t palByte = (_oamFetcher.Attributes & 0x10) ? _state.ObjPalette1 : _state.ObjPalette0;
+		uint8_t palOffset = (_oamFetcher.Attributes & 0x10) ? 4 : 0;
+		tile.PalKeySize = 2;
+		tile.PalKey[0] = 0x01; //OBJ
+		tile.PalKey[1] = palByte;
+		for(int y = 0; y < 8; y++) {
+			uint8_t low = _vram[tileAddr + y * 2];
+			uint8_t high = _vram[tileAddr + y * 2 + 1];
+			for(int x = 0; x < 8; x++) {
+				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+				uint8_t shade = (palByte >> (color * 2)) & 0x03;
+				rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palOffset + shade] & 0x7FFF);
+			}
+		}
+	}
+
+	_tileCapture->ProcessTile(tile, rgba);
 }
 
 void GbPpu::UpdateStatIrq()

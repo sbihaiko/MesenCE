@@ -18,6 +18,8 @@
 #include "Shared/Emulator.h"
 #include "Shared/CheatManager.h"
 #include "Shared/FirmwareHelper.h"
+#include "Shared/MessageManager.h"
+#include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/StringUtilities.h"
 #include "Utilities/CRC32.h"
@@ -359,6 +361,43 @@ void SmsConsole::InitializeRam(void* data, uint32_t length)
 	EmuSettings* settings = _emu->GetSettings();
 	RamState ramState = _model == SmsModel::ColecoVision ? settings->GetCvConfig().RamPowerOnState : settings->GetSmsConfig().RamPowerOnState;
 	settings->InitializeRam(ramState, data, length);
+}
+
+void SmsConsole::ProcessNotification(ConsoleNotificationType type, void* parameter)
+{
+	if(type == ConsoleNotificationType::ExecuteShortcut) {
+		ExecuteShortcutParams* params = (ExecuteShortcutParams*)parameter;
+		switch(params->Shortcut) {
+			default: break;
+			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
+			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;
+		}
+	}
+}
+
+void SmsConsole::StartRecordingHdPack(HdPackBuilderOptions options)
+{
+	if(_model != SmsModel::Sms && _model != SmsModel::GameGear) {
+		//The capture tap only covers VDP mode 4 (ADR-0037)
+		MessageManager::DisplayMessage("HDPack", "HD pack recording is not supported for this system");
+		return;
+	}
+
+	auto lock = _emu->AcquireLock();
+	_vdp->SetTileCaptureBuilder(nullptr);
+	//Key format: ADR-0037
+	_hdPackBuilder.reset(new HdTilePackBuilder(_emu, _model == SmsModel::GameGear ? "gg" : "sms", options));
+	_vdp->SetTileCaptureBuilder(_hdPackBuilder.get());
+}
+
+void SmsConsole::StopRecordingHdPack()
+{
+	if(_hdPackBuilder) {
+		auto lock = _emu->AcquireLock();
+		_vdp->SetTileCaptureBuilder(nullptr);
+		//The builder writes the PNG sheets + hires.txt when destroyed
+		_hdPackBuilder.reset();
+	}
 }
 
 void SmsConsole::Serialize(Serializer& s)

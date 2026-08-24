@@ -43,17 +43,27 @@ de criar um formato novo.
 ### 3.2 `<tile>` — chave de tile por sistema
 
 A chave de identidade do tile (hoje: dados do tile NES + paleta) passa a ser
-definida por sistema:
+definida por sistema. Decisão registrada em ADR-0036 (GB/GBC) e ADR-0037
+(SMS/GG): a chave usa sempre os **valores** de paleta aplicados no momento da
+captura (nunca índices/slots, que são realocados dinamicamente pelos jogos),
+seguindo o precedente do formato NES — é isso que garante replacement 1:1.
 
-| Sistema | Dados do tile | Chave de paleta |
+| Sistema | Dados do tile | Chave de paleta (campo hex único) |
 |---|---|---|
-| `gb` (DMG) | 16 bytes 2bpp | valor do registrador BGP/OBP0/OBP1 aplicado (1 byte) |
-| `gbc` | 16 bytes 2bpp + banco VRAM (0/1) | índice de paleta CGB (0-7) + tipo (BG/OBJ) |
-| `sms`/`gg` | 32 bytes 4bpp (VDP mode 4) | entrada base da paleta CRAM (0/16) |
-| `sg1000`/`coleco` | 8 bytes 1bpp (TMS9918) | par cor-frente/cor-fundo do pattern |
+| `gb` (DMG) | 16 bytes 2bpp | `TTPP` — TT: `00`=BG, `01`=OBJ; PP: valor do registrador BGP/OBPx aplicado |
+| `gbc` | 16 bytes 2bpp | `TT` + 4×RGB555 big-endian da paleta CGB aplicada (18 hex) |
+| `sms` | 32 bytes 4bpp (VDP mode 4) | `TT` + base CRAM (`00`/`10`) + snapshot das 16 entradas CRAM RGB222 (36 hex) |
+| `gg` | 32 bytes 4bpp (VDP mode 4) | `TT` + base CRAM (`00`/`10`) + snapshot das 16 entradas CRAM RGB444 big-endian (68 hex) |
+| `sg1000`/`coleco` | 8 bytes 1bpp (TMS9918) | par cor-frente/cor-fundo do pattern (draft; fora da v1 do builder) |
 
-Formato textual: os mesmos campos separados por vírgula do formato atual,
-com os dados do tile em hex e a chave de paleta conforme a tabela.
+Notas normativas (MUST): banco VRAM (GBC) e espelhamento H/V ficam **fora**
+da chave de identidade — banco só organiza as folhas PNG dumpeadas e
+espelhamento é atributo de exibição, como no NES. Os dados do tile são
+gravados na orientação canônica (sem espelhos).
+
+Formato textual: os mesmos campos separados por vírgula do formato atual —
+`<tile>png,dadosHex,chavePaletaHex,x,y,brilho,defaultTile` — com os dados do
+tile em hex e a chave de paleta conforme a tabela.
 
 ### 3.3 `<background>` / `<condition>`
 

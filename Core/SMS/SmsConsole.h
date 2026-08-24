@@ -16,6 +16,7 @@ class SmsEnhancedSynth;
 class SmsCart;
 class SmsControlManager;
 class SmsMemoryManager;
+class HdTilePackBuilder;
 
 class SmsConsole final : public IConsole
 {
@@ -29,6 +30,7 @@ private:
 	unique_ptr<SmsFmAudio> _fmAudio;
 	unique_ptr<SmsEnhancedSynth> _enhancedSynth;
 	unique_ptr<SmsCart> _cart;
+	unique_ptr<HdTilePackBuilder> _hdPackBuilder;
 	RomFormat _romFormat = RomFormat::Sms;
 	SmsModel _model = SmsModel::Sms;
 	ConsoleRegion _region = ConsoleRegion::Ntsc;
@@ -93,6 +95,10 @@ public:
 	void GetConsoleState(BaseState& state, ConsoleType consoleType) override;
 
 	void InitializeRam(void* data, uint32_t length);
+
+	void ProcessNotification(ConsoleNotificationType type, void* parameter) override;
+	void StartRecordingHdPack(HdPackBuilderOptions options);
+	void StopRecordingHdPack();
 
 	void Serialize(Serializer& s) override;
 };

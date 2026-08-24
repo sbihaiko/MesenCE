@@ -1,0 +1,183 @@
+#include "pch.h"
+#include <algorithm>
+#include <map>
+#include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/Emulator.h"
+#include "Utilities/xBRZ/xbrz.h"
+#include "Utilities/HQX/hqx.h"
+#include "Utilities/Scale2x/scalebit.h"
+#include "Utilities/KreedSaiEagle/SaiEagle.h"
+#include "Utilities/FolderUtilities.h"
+#include "Utilities/PNGHelper.h"
+#include "Utilities/HexUtilities.h"
+
+HdTilePackBuilder::HdTilePackBuilder(Emulator* emu, string system, HdPackBuilderOptions options)
+{
+	_emu = emu;
+	_system = system;
+	_saveFolder = options.SaveFolder;
+	_scale = std::max<uint32_t>(1, options.Scale);
+	_filterType = options.FilterType;
+	_sortByUsageFrequency = options.SortByUsageFrequency;
+	_romSha1 = _emu->GetRomInfo().RomFile.GetSha1Hash();
+}
+
+HdTilePackBuilder::~HdTilePackBuilder()
+{
+	SaveHdPack();
+}
+
+void HdTilePackBuilder::ProcessTile(const HdCapturedTile& tile, const uint32_t* rgba)
+{
+	auto result = _tiles.find(tile);
+	if(result == _tiles.end()) {
+		TileEntry& entry = _tiles[tile];
+		entry.Key = tile;
+		entry.UsageCount = 1;
+		entry.Order = _nextOrder++;
+		memcpy(entry.Rgba, rgba, sizeof(entry.Rgba));
+	} else if(result->second.UsageCount < 0x7FFFFFFF) {
+		result->second.UsageCount++;
+	}
+}
+
+vector<uint32_t> HdTilePackBuilder::ScaleTile(const uint32_t* rgba)
+{
+	vector<uint32_t> originalTile(rgba, rgba + 64);
+	vector<uint32_t> hdTile(8 * 8 * _scale * _scale, 0);
+
+	if(_scale == 1) {
+		return originalTile;
+	}
+
+	switch(_filterType) {
+		case ScaleFilterType::HQX:
+			hqx(_scale, originalTile.data(), hdTile.data(), 8, 8);
+			break;
+
+		case ScaleFilterType::Scale2x:
+			scale(_scale, hdTile.data(), 8 * sizeof(uint32_t) * _scale, originalTile.data(), 8 * sizeof(uint32_t), 4, 8, 8);
+			break;
+
+		case ScaleFilterType::_2xSai:
+			twoxsai_generic_xrgb8888(8, 8, originalTile.data(), 8, hdTile.data(), 8 * _scale);
+			break;
+
+		case ScaleFilterType::Super2xSai:
+			supertwoxsai_generic_xrgb8888(8, 8, originalTile.data(), 8, hdTile.data(), 8 * _scale);
+			break;
+
+		case ScaleFilterType::SuperEagle:
+			supereagle_generic_xrgb8888(8, 8, originalTile.data(), 8, hdTile.data(), 8 * _scale);
+			break;
+
+		case ScaleFilterType::xBRZ:
+			xbrz::scale(_scale, originalTile.data(), hdTile.data(), 8, 8, xbrz::ColorFormat::ARGB);
+			break;
+
+		default:
+		case ScaleFilterType::Prescale:
+			for(uint32_t i = 0; i < 8 * _scale; i++) {
+				for(uint32_t j = 0; j < 8 * _scale; j++) {
+					hdTile[i * 8 * _scale + j] = originalTile[i / _scale * 8 + j / _scale];
+				}
+			}
+			break;
+	}
+
+	return hdTile;
+}
+
+string HdTilePackBuilder::GetTileDataText(const HdCapturedTile& key)
+{
+	stringstream out;
+	for(uint32_t i = 0; i < key.DataSize; i++) {
+		out << HexUtilities::ToHex(key.Data[i]);
+	}
+	return out.str();
+}
+
+string HdTilePackBuilder::GetPaletteKeyText(const HdCapturedTile& key)
+{
+	stringstream out;
+	for(uint32_t i = 0; i < key.PalKeySize; i++) {
+		out << HexUtilities::ToHex(key.PalKey[i]);
+	}
+	return out.str();
+}
+
+void HdTilePackBuilder::SaveHdPack()
+{
+	if(_saved) {
+		return;
+	}
+	_saved = true;
+
+	FolderUtilities::CreateFolder(_saveFolder);
+
+	//Group tiles by bank (PNG sheet organization only - see ADR-0036)
+	std::map<uint32_t, vector<TileEntry*>> tilesByBank;
+	for(auto& kvp : _tiles) {
+		tilesByBank[kvp.second.Key.BankId].push_back(&kvp.second);
+	}
+
+	stringstream header;
+	stringstream tileRows;
+	header << "<ver>200" << std::endl;
+	header << "<system>" << _system << std::endl;
+	header << "<scale>" << _scale << std::endl;
+	header << "<supportedRom>" << _romSha1 << std::endl;
+
+	constexpr uint32_t tilesPerRow = 16;
+	constexpr uint32_t tilesPerPng = tilesPerRow * tilesPerRow;
+	uint32_t tileDimension = 8 * _scale;
+	uint32_t pngDimension = tilesPerRow * tileDimension;
+	vector<uint32_t> pngBuffer(pngDimension * pngDimension);
+
+	int pngIndex = 0;
+	for(auto& bankKvp : tilesByBank) {
+		vector<TileEntry*>& tiles = bankKvp.second;
+		if(_sortByUsageFrequency) {
+			std::sort(tiles.begin(), tiles.end(), [](TileEntry* a, TileEntry* b) {
+				return a->UsageCount != b->UsageCount ? a->UsageCount > b->UsageCount : a->Order < b->Order;
+			});
+		} else {
+			std::sort(tiles.begin(), tiles.end(), [](TileEntry* a, TileEntry* b) { return a->Order < b->Order; });
+		}
+
+		uint32_t pageCount = ((uint32_t)tiles.size() + tilesPerPng - 1) / tilesPerPng;
+		for(uint32_t page = 0; page < pageCount; page++) {
+			std::fill(pngBuffer.begin(), pngBuffer.end(), 0xFFFF00FF);
+
+			string pngName = "Tiles_" + HexUtilities::ToHex(bankKvp.first) + "_" + std::to_string(page) + ".png";
+			header << "<img>" << pngName << std::endl;
+			tileRows << std::endl
+						<< "#" << pngName << std::endl;
+
+			uint32_t tileCount = std::min<uint32_t>(tilesPerPng, (uint32_t)tiles.size() - page * tilesPerPng);
+			for(uint32_t i = 0; i < tileCount; i++) {
+				TileEntry* tile = tiles[page * tilesPerPng + i];
+				uint32_t x = (i % tilesPerRow) * tileDimension;
+				uint32_t y = (i / tilesPerRow) * tileDimension;
+
+				vector<uint32_t> hdTile = ScaleTile(tile->Rgba);
+				for(uint32_t row = 0; row < tileDimension; row++) {
+					memcpy(pngBuffer.data() + (y + row) * pngDimension + x, hdTile.data() + row * tileDimension, tileDimension * sizeof(uint32_t));
+				}
+
+				tileRows << "<tile>" << pngIndex << ",";
+				tileRows << GetTileDataText(tile->Key) << ",";
+				tileRows << GetPaletteKeyText(tile->Key) << ",";
+				tileRows << x << "," << y << ",1,N" << std::endl;
+			}
+
+			PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, pngName), pngBuffer.data(), pngDimension, pngDimension, 32);
+			pngIndex++;
+		}
+	}
+
+	ofstream hiresFile(FolderUtilities::CombinePath(_saveFolder, "hires.txt"), ios::out);
+	hiresFile << header.str();
+	hiresFile << tileRows.str();
+	hiresFile.close();
+}

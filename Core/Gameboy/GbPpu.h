@@ -8,6 +8,7 @@ class Gameboy;
 class GbMemoryManager;
 class GbDmaController;
 class EmuSettings;
+class HdTilePackBuilder;
 struct RenderedFrame;
 
 class GbPpu : public ISerializable
@@ -72,6 +73,9 @@ private:
 	GbPixelType _lastPixelType = {};
 	uint8_t _lastBgColor = 0;
 
+	//HD pack recording tap (F2.1) - null unless a recording is active
+	HdTilePackBuilder* _tileCapture = nullptr;
+
 	uint16_t _overclockScanlineCount = 0;
 	uint16_t _vblankStartScanline = 144;
 	uint16_t _lastScanline = 153;
@@ -112,6 +116,9 @@ private:
 	uint8_t ReadCgbPalette(uint8_t& pos, uint16_t* pal);
 	void WriteCgbPalette(uint8_t& pos, uint16_t* pal, bool autoInc, uint8_t value);
 
+	void CaptureBgTile();
+	void CaptureObjTile();
+
 public:
 	virtual ~GbPpu();
 
@@ -141,6 +148,8 @@ public:
 	void Write(uint16_t addr, uint8_t value);
 
 	void SetTileFetchGlitchState();
+
+	void SetTileCaptureBuilder(HdTilePackBuilder* builder) { _tileCapture = builder; }
 
 	bool IsVramReadAllowed();
 	bool IsVramWriteAllowed();

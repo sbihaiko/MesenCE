@@ -997,6 +997,9 @@
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp">
+      <Filter>Shared\HdPacks</Filter>
+    </ClCompile>
     <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
@@ -1011,6 +1014,9 @@
     </ClCompile>
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h">
       <Filter>Shared\Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h">
+      <Filter>Shared\HdPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h">
       <Filter>Shared\Audio</Filter>
@@ -1551,6 +1557,9 @@
     </Filter>
     <Filter Include="Shared\Movies">
       <UniqueIdentifier>4673d59f-75b6-4514-a387-d573403dc058</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shared\HdPacks">
+      <UniqueIdentifier>{a1f2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d}</UniqueIdentifier>
     </Filter>
     <Filter Include="Shared\Video">
       <UniqueIdentifier>0f929ae6-fb17-42e9-8d14-a51a3d7fe699</UniqueIdentifier>

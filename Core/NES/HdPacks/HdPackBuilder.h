@@ -8,19 +8,6 @@
 class Emulator;
 class BaseMapper;
 
-struct HdPackBuilderOptions
-{
-	char* SaveFolder;
-	ScaleFilterType FilterType;
-	uint32_t Scale;
-	uint32_t ChrRamBankSize;
-
-	bool UseLargeSprites;
-	bool SortByUsageFrequency;
-	bool GroupBlankTiles;
-	bool IgnoreOverscan;
-};
-
 class HdPackBuilder
 {
 private:

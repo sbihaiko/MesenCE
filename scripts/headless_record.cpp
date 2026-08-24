@@ -5,10 +5,13 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack]
 //
-//Writes <output_prefix>.mid and <output_prefix>.vgm from the ROM's first N
-//seconds of audio (power-on attract/title music - no input is ever fed).
+//Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
+//ROM's first N seconds of audio (power-on attract/title music - no input is
+//ever fed). With the "hdpack" flag it records an HD pack skeleton instead
+//(tiles seen during those N seconds), written to <output_prefix>-hdpack/
+//via the StartRecordHdPack shortcut (NES, GB and SMS/GG - F2 validation).
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
@@ -31,6 +34,15 @@ struct TimingInfoAbi
 	uint32_t CycleCount;
 };
 
+//Same ABI as Core/Shared/Interfaces/INotificationListener.h (see the
+//TimingInfoAbi note above about why these are mirrored locally)
+struct ExecuteShortcutParamsAbi
+{
+	EmulatorShortcut Shortcut;
+	uint32_t Param;
+	void* ParamPtr;
+};
+
 extern "C"
 {
 	TimingInfoAbi GetTimingInfo(uint8_t cpuType);
@@ -40,7 +52,9 @@ extern "C"
 	void SetSmsConfig(SmsConfig config);
 	void SetCvConfig(CvConfig config);
 	void SetNesConfig(NesConfig config);
+	void SetGameboyConfig(GameboyConfig config);
 	NesConfig GetNesConfig();
+	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
 	void MidiRecord(char* filename);
 	void MidiStop();
 	bool MidiIsRecording();
@@ -78,13 +92,21 @@ namespace
 int main(int argc, char** argv)
 {
 	if(argc < 4) {
-		fprintf(stderr, "uso: %s <rom> <segundos> <prefixo-saida> [pal]\n", argv[0]);
+		fprintf(stderr, "uso: %s <rom> <segundos> <prefixo-saida> [pal] [hdpack]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
 	double seconds = atof(argv[2]);
 	std::string prefix = argv[3];
-	bool pal = argc > 4 && strcmp(argv[4], "pal") == 0;
+	bool pal = false;
+	bool hdPack = false;
+	for(int i = 4; i < argc; i++) {
+		if(strcmp(argv[i], "pal") == 0) {
+			pal = true;
+		} else if(strcmp(argv[i], "hdpack") == 0) {
+			hdPack = true;
+		}
+	}
 
 	std::filesystem::path outDir = std::filesystem::absolute(prefix).parent_path();
 	std::filesystem::path home = outDir / "mesen-home";
@@ -131,6 +153,13 @@ int main(int argc, char** argv)
 	}
 	SetNesConfig(nes);
 
+	//Pin the GB model to the ROM extension so the HD pack capture path
+	//(DMG vs CGB tile keys - ADR-0036) is deterministic; the default
+	//AutoFavorGbc would run plain .gb ROMs on CGB hardware.
+	GameboyConfig gameboy = {};
+	gameboy.Model = std::filesystem::path(rom).extension() == ".gb" ? GameboyModel::Gameboy : GameboyModel::AutoFavorGbc;
+	SetGameboyConfig(gameboy);
+
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
 		fprintf(stderr, "FALHA ao carregar ROM: %s\n", rom.c_str());
 		return 1;
@@ -140,9 +169,20 @@ int main(int argc, char** argv)
 	printf("fps emulado: %.3f (clock mestre %u Hz)\n", timing.Fps, timing.MasterClockRate);
 
 	std::string mid = prefix + ".mid", vgm = prefix + ".vgm";
-	MidiRecord((char*)mid.c_str());
-	VgmRecord((char*)vgm.c_str());
-	printf("gravando: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
+	std::string packFolder = std::filesystem::absolute(prefix + "-hdpack").string();
+	if(hdPack) {
+		HdPackBuilderOptions options = {};
+		options.SaveFolder = (char*)packFolder.c_str();
+		options.FilterType = ScaleFilterType::Prescale;
+		options.Scale = 1;
+		options.ChrRamBankSize = 0x1000; //NES-only field
+		ExecuteShortcut({ EmulatorShortcut::StartRecordHdPack, 0, &options });
+		printf("gravando: hdpack=%s\n", packFolder.c_str());
+	} else {
+		MidiRecord((char*)mid.c_str());
+		VgmRecord((char*)vgm.c_str());
+		printf("gravando: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
+	}
 
 	auto t0 = std::chrono::steady_clock::now();
 	while(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
@@ -153,8 +193,12 @@ int main(int argc, char** argv)
 		}
 	}
 
-	MidiStop();
-	VgmStop();
+	if(hdPack) {
+		ExecuteShortcut({ EmulatorShortcut::StopRecordHdPack, 0, nullptr });
+	} else {
+		MidiStop();
+		VgmStop();
+	}
 	printf("captura encerrada (%.1fs)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
 	Stop();
 	Release();

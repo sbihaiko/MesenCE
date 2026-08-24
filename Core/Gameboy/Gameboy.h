@@ -17,6 +17,7 @@ class GbMemoryManager;
 class GbDmaController;
 class GbControlManager;
 class GbEnhancedSynth;
+class HdTilePackBuilder;
 class SuperGameboy;
 class VirtualFile;
 class BaseControlManager;
@@ -43,6 +44,7 @@ private:
 	unique_ptr<GbTimer> _timer;
 	unique_ptr<GbDmaController> _dmaController;
 	unique_ptr<GbControlManager> _controlManager;
+	unique_ptr<HdTilePackBuilder> _hdPackBuilder;
 
 	GameboyModel _model = GameboyModel::AutoFavorGbc;
 
@@ -158,4 +160,8 @@ public:
 
 	void RefreshRamCheats();
 	void InitializeRam(void* data, uint32_t length);
+
+	void ProcessNotification(ConsoleNotificationType type, void* parameter) override;
+	void StartRecordingHdPack(HdPackBuilderOptions options);
+	void StopRecordingHdPack();
 };
