@@ -31,7 +31,8 @@ struct TimingInfoAbi
 	uint32_t CycleCount;
 };
 
-extern "C" {
+extern "C"
+{
 	TimingInfoAbi GetTimingInfo(uint8_t cpuType);
 	void InitDll();
 	void InitializeEmu(const char* homeFolder, void* windowHandle, void* viewerHandle, bool softwareRenderer, bool noAudio, bool noVideo, bool noInput);
@@ -61,9 +62,15 @@ namespace
 	uint8_t CpuTypeFromExtension(const std::string& rom)
 	{
 		std::string ext = std::filesystem::path(rom).extension().string();
-		for(char& c : ext) c = (char)tolower(c);
-		if(ext == ".nes") return kCpuTypeNes;
-		if(ext == ".gb" || ext == ".gbc") return kCpuTypeGameboy;
+		for(char& c : ext) {
+			c = (char)tolower(c);
+		}
+		if(ext == ".nes") {
+			return kCpuTypeNes;
+		}
+		if(ext == ".gb" || ext == ".gbc") {
+			return kCpuTypeGameboy;
+		}
 		return kCpuTypeSms; //.sms/.gg/.sg/.col
 	}
 }
@@ -101,17 +108,27 @@ int main(int argc, char** argv)
 	//100s the user actually hears), which would silence the enhanced synth
 	//and therefore the MIDI capture. GB/SNES default to 100 in the core.
 	SmsConfig sms = {};
-	for(int i = 0; i < 4; i++) sms.ChannelVolumes[i] = 100;
-	if(pal) { sms.Region = ConsoleRegion::Pal; }
+	for(int i = 0; i < 4; i++) {
+		sms.ChannelVolumes[i] = 100;
+	}
+	if(pal) {
+		sms.Region = ConsoleRegion::Pal;
+	}
 	SetSmsConfig(sms);
 
 	CvConfig cv = {};
-	for(int i = 0; i < 4; i++) cv.ChannelVolumes[i] = 100;
+	for(int i = 0; i < 4; i++) {
+		cv.ChannelVolumes[i] = 100;
+	}
 	SetCvConfig(cv);
 
 	NesConfig nes = GetNesConfig();
-	for(int i = 0; i < 11; i++) nes.ChannelVolumes[i] = 100;
-	if(pal) { nes.Region = ConsoleRegion::Pal; }
+	for(int i = 0; i < 11; i++) {
+		nes.ChannelVolumes[i] = 100;
+	}
+	if(pal) {
+		nes.Region = ConsoleRegion::Pal;
+	}
 	SetNesConfig(nes);
 
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
@@ -130,7 +147,10 @@ int main(int argc, char** argv)
 	auto t0 = std::chrono::steady_clock::now();
 	while(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
-		if(!IsRunning()) { fprintf(stderr, "emulacao parou inesperadamente\n"); break; }
+		if(!IsRunning()) {
+			fprintf(stderr, "emulacao parou inesperadamente\n");
+			break;
+		}
 	}
 
 	MidiStop();
