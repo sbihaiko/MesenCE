@@ -44,6 +44,9 @@ private:
 	uint64_t _powerOnCycle = 0;
 	bool _overclockApuEnabled = true;
 
+	//Enhanced-audio chip mix factor (see Run()); 1.0 when the synth is off
+	double _enhancedDuck = 1.0;
+
 	GbApuState _state = {};
 
 	uint8_t InternalRead(uint16_t addr);

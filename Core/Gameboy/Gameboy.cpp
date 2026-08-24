@@ -3,6 +3,7 @@
 #include "Gameboy/GbCpu.h"
 #include "Gameboy/GbPpu.h"
 #include "Gameboy/APU/GbApu.h"
+#include "Gameboy/GbEnhancedSynth.h"
 #include "Gameboy/Carts/GbCart.h"
 #include "Gameboy/GbTimer.h"
 #include "Gameboy/GbControlManager.h"
@@ -140,6 +141,14 @@ void Gameboy::Init(GbCart* cart, std::vector<uint8_t>& romData, uint32_t cartRam
 void Gameboy::PowerOn(SuperGameboy* sgb)
 {
 	_superGameboy = sgb;
+
+	//Enhanced audio synth: main handheld console only. On SGB the audio
+	//pipeline belongs to the SNES core, and the link-cable secondary console
+	//re-interpreting a second game at the same time would just double the
+	//synth output.
+	if(!sgb && !_mainConsole && !_enhancedSynth) {
+		_enhancedSynth.reset(new GbEnhancedSynth(_emu, this));
+	}
 
 	_timer->Init(_memoryManager.get(), _apu.get());
 	_apu->Init(_emu, this);

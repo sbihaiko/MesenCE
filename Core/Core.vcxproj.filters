@@ -193,7 +193,13 @@
     <ClCompile Include="Gameboy\GbCpu.cpp">
       <Filter>Gameboy</Filter>
     </ClCompile>
+    <ClCompile Include="Gameboy\GbEnhancedSynth.cpp">
+      <Filter>Gameboy</Filter>
+    </ClCompile>
     <ClInclude Include="Gameboy\GbCpu.h">
+      <Filter>Gameboy</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameboy\GbEnhancedSynth.h">
       <Filter>Gameboy</Filter>
     </ClInclude>
     <ClCompile Include="Gameboy\GbDefaultVideoFilter.cpp">

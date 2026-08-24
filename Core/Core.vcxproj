@@ -621,6 +621,7 @@
     <ClInclude Include="Gameboy\Carts\GbCart.h" />
     <ClInclude Include="Gameboy\GbCartFactory.h" />
     <ClInclude Include="Gameboy\GbCpu.h" />
+    <ClInclude Include="Gameboy\GbEnhancedSynth.h" />
     <ClInclude Include="Gameboy\Debugger\GbDebugger.h" />
     <ClInclude Include="Gameboy\GbDmaController.h" />
     <ClInclude Include="Gameboy\Debugger\GbEventManager.h" />
@@ -1030,6 +1031,7 @@
     <ClCompile Include="Gameboy\APU\GbApu.cpp" />
     <ClCompile Include="Gameboy\Debugger\GbAssembler.cpp" />
     <ClCompile Include="Gameboy\GbCpu.cpp" />
+    <ClCompile Include="Gameboy\GbEnhancedSynth.cpp" />
     <ClCompile Include="Gameboy\Debugger\GbDebugger.cpp" />
     <ClCompile Include="Gameboy\GbDmaController.cpp" />
     <ClCompile Include="Gameboy\Debugger\GbEventManager.cpp" />

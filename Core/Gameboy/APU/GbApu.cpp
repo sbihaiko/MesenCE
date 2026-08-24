@@ -83,6 +83,15 @@ void GbApu::Run()
 
 	GameboyConfig& cfg = _settings->GetGameboyConfig();
 
+	//When the enhanced synth is active, the APU output is scaled down to the
+	//configured mix level (0 = replaced, 100 = layered) - like the SN76489,
+	//the 4 channels are exactly the 4 the synth re-synthesizes, so the duck
+	//applies uniformly (see SmsPsg::Run()). Gated on this Gameboy actually
+	//owning a synth: the SGB and link-cable secondary consoles don't get one,
+	//and ducking them would just silence their audio with nothing on top.
+	AudioConfig& audioCfg = _settings->GetAudioConfig();
+	_enhancedDuck = (audioCfg.EnableEnhancedAudio && _gameboy->HasEnhancedSynth()) ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
+
 	if(!_state.ApuEnabled) {
 		_clockCounter += clocksToRun;
 	} else {
@@ -128,7 +137,7 @@ void GbApu::UpdateOutput(GameboyConfig& cfg)
 		(_wave->GetOutput() * (int32_t)(cfg.WaveVol & _state.EnableLeftWave) / 100) +
 		(_noise->GetOutput() * (int32_t)(cfg.NoiseVol & _state.EnableLeftNoise) / 100);
 
-	int16_t leftOutput = baseLeftOutput * (_state.LeftVolume + 1) * 40;
+	int16_t leftOutput = (int16_t)(baseLeftOutput * (_state.LeftVolume + 1) * 40 * _enhancedDuck);
 
 	if(_prevLeftOutput != leftOutput) {
 		blip_add_delta(_leftChannel, _clockCounter, leftOutput - _prevLeftOutput);
@@ -141,7 +150,7 @@ void GbApu::UpdateOutput(GameboyConfig& cfg)
 		(_wave->GetOutput() * (int32_t)(cfg.WaveVol & _state.EnableRightWave) / 100) +
 		(_noise->GetOutput() * (int32_t)(cfg.NoiseVol & _state.EnableRightNoise) / 100);
 
-	int16_t rightOutput = baseRightOutput * (_state.RightVolume + 1) * 40;
+	int16_t rightOutput = (int16_t)(baseRightOutput * (_state.RightVolume + 1) * 40 * _enhancedDuck);
 
 	if(_prevRightOutput != rightOutput) {
 		blip_add_delta(_rightChannel, _clockCounter, rightOutput - _prevRightOutput);

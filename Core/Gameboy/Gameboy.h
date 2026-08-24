@@ -16,6 +16,7 @@ class GbTimer;
 class GbMemoryManager;
 class GbDmaController;
 class GbControlManager;
+class GbEnhancedSynth;
 class SuperGameboy;
 class VirtualFile;
 class BaseControlManager;
@@ -37,6 +38,7 @@ private:
 	unique_ptr<GbCpu> _cpu;
 	unique_ptr<GbPpu> _ppu;
 	unique_ptr<GbApu> _apu;
+	unique_ptr<GbEnhancedSynth> _enhancedSynth;
 	unique_ptr<GbCart> _cart;
 	unique_ptr<GbTimer> _timer;
 	unique_ptr<GbDmaController> _dmaController;
@@ -89,6 +91,11 @@ public:
 	Emulator* GetEmulator();
 
 	GbApu* GetApu();
+
+	//True when this Gameboy owns an enhanced synth (main handheld console
+	//only - never SGB or the link-cable secondary console); GbApu uses it to
+	//decide whether the enhanced-audio chip mix should duck its output
+	bool HasEnhancedSynth() { return _enhancedSynth != nullptr; }
 	GbPpu* GetPpu();
 	GbCpu* GetCpu();
 	GbTimer* GetTimer();
