@@ -148,9 +148,11 @@ void NesSoundMixer::UpdateRates(bool forceUpdate)
 	//Applied after the non-linear DAC formula (see GetOutputVolume) so the
 	//DMC and expansion audio levels are not affected by the ducking.
 	//Enhanced audio settings are shared across consoles (AudioConfig), not
-	//NES-specific - see EnhancedSynth::MixAudio.
+	//NES-specific - see EnhancedSynth::MixAudio. Gated on this console
+	//actually owning a synth: the VS DualSystem sub console doesn't get one,
+	//and ducking it would just silence its audio with nothing on top.
 	AudioConfig& audioCfg = _console->GetEmulator()->GetSettings()->GetAudioConfig();
-	_enhancedDuck = audioCfg.EnableEnhancedAudio ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
+	_enhancedDuck = (audioCfg.EnableEnhancedAudio && _console->HasEnhancedSynth()) ? audioCfg.EnhancedAudioApuMix / 100.0 : 1.0;
 
 	bool hasPanning = false;
 	for(uint32_t i = 0; i < MaxChannelCount; i++) {

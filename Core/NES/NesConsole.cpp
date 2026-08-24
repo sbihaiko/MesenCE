@@ -191,7 +191,12 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 
 		_mapper.swap(mapper);
 		_mixer.reset(new NesSoundMixer(this));
-		_enhancedSynth.reset(new EnhancedSynth(_emu, this));
+		if(IsVsMainConsole()) {
+			//Main console only: on VS DualSystem the sub console registering a
+			//second synth would just double the enhanced audio output (same
+			//rule as the GB link-cable secondary console - see Gameboy::PowerOn)
+			_enhancedSynth.reset(new EnhancedSynth(_emu, this));
+		}
 		_memoryManager.reset(new NesMemoryManager(this, _mapper.get()));
 		_cpu.reset(new NesCpu(this));
 		_apu.reset(new NesApu(this));

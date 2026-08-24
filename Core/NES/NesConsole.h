@@ -73,6 +73,11 @@ public:
 	static vector<string> GetSupportedSignatures() { return { "NES\x1a", "FDS\x1a", "\x1*NINTENDO-HVC*", "NESM\x1a", "NSFE", "UNIF", "STBX" }; }
 
 	NesCpu* GetCpu() { return _cpu.get(); }
+
+	//True when this console owns an enhanced synth (VS DualSystem main
+	//console only); NesSoundMixer uses it to decide whether the
+	//enhanced-audio chip mix should duck its output
+	bool HasEnhancedSynth() { return _enhancedSynth != nullptr; }
 	BaseNesPpu* GetPpu() { return _ppu.get(); }
 	NesApu* GetApu() { return _apu.get(); }
 	NesMemoryManager* GetMemoryManager() { return _memoryManager.get(); }
