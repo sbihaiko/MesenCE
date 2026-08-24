@@ -1,0 +1,23 @@
+{
+  "mei": "1.0.0",
+  "name": "Índice de exemplo canônico (golden da spec MEI v1)",
+  "maintainer": "MesenCE",
+  "updated": "2026-08-24",
+  "packs": [
+    {
+      "name": "F1 Test Tone — pack de exemplo canônico",
+      "version": "1.0.0",
+      "game": "F1 Test Tone (homebrew)",
+      "system": "gb",
+      "rom": {
+        "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B",
+        "crc32": "6C648F63"
+      },
+      "mep": "1.0.0",
+      "license": "CC0-1.0",
+      "url": "https://example.org/packs/f1-test-tone-1.0.0.zip",
+      "size": 4096,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}
