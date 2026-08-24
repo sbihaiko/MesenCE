@@ -5,13 +5,16 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot]
 //
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
 //ever fed). With the "hdpack" flag it records an HD pack skeleton instead
 //(tiles seen during those N seconds), written to <output_prefix>-hdpack/
 //via the StartRecordHdPack shortcut (NES, GB and SMS/GG - F2 validation).
+//With the "screenshot" flag it runs N seconds and saves the final frame to
+//<home>/Screenshots/ - installing a recorded pack into <home>/HdPacks/<rom>/
+//between two runs gives a with/without-replacement pair to diff (F2.3).
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
@@ -55,6 +58,7 @@ extern "C"
 	void SetGameboyConfig(GameboyConfig config);
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
+	void TakeScreenshot();
 	void MidiRecord(char* filename);
 	void MidiStop();
 	bool MidiIsRecording();
@@ -100,11 +104,14 @@ int main(int argc, char** argv)
 	std::string prefix = argv[3];
 	bool pal = false;
 	bool hdPack = false;
+	bool screenshot = false;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
 		} else if(strcmp(argv[i], "hdpack") == 0) {
 			hdPack = true;
+		} else if(strcmp(argv[i], "screenshot") == 0) {
+			screenshot = true;
 		}
 	}
 
@@ -158,6 +165,10 @@ int main(int argc, char** argv)
 	//AutoFavorGbc would run plain .gb ROMs on CGB hardware.
 	GameboyConfig gameboy = {};
 	gameboy.Model = std::filesystem::path(rom).extension() == ".gb" ? GameboyModel::Gameboy : GameboyModel::AutoFavorGbc;
+	//Neutral video pipeline so a 1:1 HD pack screenshot matches the default
+	//filter's output exactly (GbcAdjustColors/BlendFrames both recolor pixels)
+	gameboy.GbcAdjustColors = false;
+	gameboy.BlendFrames = false;
 	SetGameboyConfig(gameboy);
 
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
@@ -178,6 +189,8 @@ int main(int argc, char** argv)
 		options.ChrRamBankSize = 0x1000; //NES-only field
 		ExecuteShortcut({ EmulatorShortcut::StartRecordHdPack, 0, &options });
 		printf("gravando: hdpack=%s\n", packFolder.c_str());
+	} else if(screenshot) {
+		printf("rodando %.1fs para screenshot final\n", seconds);
 	} else {
 		MidiRecord((char*)mid.c_str());
 		VgmRecord((char*)vgm.c_str());
@@ -193,9 +206,14 @@ int main(int argc, char** argv)
 		}
 	}
 
+	if(screenshot) {
+		TakeScreenshot();
+		printf("screenshot salvo em %s\n", (home / "Screenshots").string().c_str());
+	}
+
 	if(hdPack) {
 		ExecuteShortcut({ EmulatorShortcut::StopRecordHdPack, 0, nullptr });
-	} else {
+	} else if(!screenshot) {
 		MidiStop();
 		VgmStop();
 	}

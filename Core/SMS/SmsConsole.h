@@ -16,6 +16,7 @@ class SmsEnhancedSynth;
 class SmsCart;
 class SmsControlManager;
 class SmsMemoryManager;
+class HdTilePack;
 class HdTilePackBuilder;
 
 class SmsConsole final : public IConsole
@@ -31,6 +32,7 @@ private:
 	unique_ptr<SmsEnhancedSynth> _enhancedSynth;
 	unique_ptr<SmsCart> _cart;
 	unique_ptr<HdTilePackBuilder> _hdPackBuilder;
+	unique_ptr<HdTilePack> _hdPack;
 	RomFormat _romFormat = RomFormat::Sms;
 	SmsModel _model = SmsModel::Sms;
 	ConsoleRegion _region = ConsoleRegion::Ntsc;

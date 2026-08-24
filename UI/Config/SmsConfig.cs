@@ -48,6 +48,8 @@ public partial class SmsConfig : BaseConfig<SmsConfig>
 	[ObservableProperty] public partial OverscanConfig PalOverscan { get; set; } = new() { Top = 24, Bottom = 24 };
 	[ObservableProperty] public partial OverscanConfig GameGearOverscan { get; set; } = new() { Top = 48, Bottom = 48, Left = 48, Right = 48 };
 
+	[ObservableProperty] public partial bool EnableHdPacks { get; set; } = true;
+
 	public void ApplyConfig()
 	{
 		ConfigManager.Config.Video.ApplyConfig();
@@ -78,6 +80,8 @@ public partial class SmsConfig : BaseConfig<SmsConfig>
 			NtscOverscan = NtscOverscan.ToInterop(),
 			PalOverscan = PalOverscan.ToInterop(),
 			GameGearOverscan = GameGearOverscan.ToInterop(),
+
+			EnableHdPacks = EnableHdPacks
 		});
 	}
 
@@ -115,6 +119,8 @@ public struct InteropSmsConfig
 	public InteropOverscanDimensions NtscOverscan;
 	public InteropOverscanDimensions PalOverscan;
 	public InteropOverscanDimensions GameGearOverscan;
+
+	[MarshalAs(UnmanagedType.I1)] public bool EnableHdPacks;
 }
 
 public enum SmsRevision

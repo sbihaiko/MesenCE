@@ -11,6 +11,10 @@ class SmsCpu;
 class SmsControlManager;
 class SmsMemoryManager;
 class HdTilePackBuilder;
+class HdTilePack;
+struct HdLoadedTile;
+struct HdCapturedTile;
+struct HdTilePixelInfo;
 
 enum class SmsVdpMemAccess : uint8_t
 {
@@ -81,6 +85,10 @@ private:
 		int16_t SpriteX = 0;
 		uint8_t SpriteRow = 0;
 		bool HardwareSprite = false;
+
+		//HD pack replacement for this sprite's tile (F2.3)
+		HdLoadedTile* HdTile = nullptr;
+		uint8_t HdRow = 0;
 	};
 
 	uint8_t _evalCounter = 0;
@@ -115,6 +123,41 @@ private:
 
 	//HD pack recording tap (F2.1) - null unless a recording is active
 	HdTilePackBuilder* _tileCapture = nullptr;
+
+	//HD pack replacement (F2.3) - null unless a pack is loaded
+	HdTilePack* _hdPack = nullptr;
+	HdTilePixelInfo* _hdScreenInfoBuffers[2] = {};
+	HdTilePixelInfo* _currentHdScreenInfo = nullptr;
+
+	//Provenance of the 8-pixel groups sitting in the bg shifters. StartPixel is
+	//in "pixels shifted out this scanline" units (_hdBgPixelCounter); at most 2
+	//groups (16 pixels) are alive at once, the ring never wraps onto live data.
+	struct HdBgTileGroup
+	{
+		HdLoadedTile* Tile = nullptr;
+		uint8_t Row = 0;
+		bool HMirror = false;
+		uint32_t StartPixel = 0;
+	};
+	HdBgTileGroup _hdBgGroups[4] = {};
+	uint8_t _hdBgGroupIndex = 0;
+	uint32_t _hdBgPixelCounter = 0;
+	HdLoadedTile* _hdBgPendingTile = nullptr;
+	uint8_t _hdBgPendingRow = 0;
+	bool _hdBgPendingMirror = false;
+
+	//Winning sprite for the pixel GetPixelColor just resolved
+	bool _hdSpriteOnTop = false;
+	HdLoadedTile* _hdSprTile = nullptr;
+	uint8_t _hdSprRow = 0;
+	uint8_t _hdSprCol = 0;
+	uint16_t _hdBgColor555 = 0;
+
+	void BuildBgTileKey(HdCapturedTile& tile, uint16_t tileIndex, bool useHighPalette);
+	void BuildSpriteTileKey(HdCapturedTile& tile, uint16_t tileAddr);
+	HdLoadedTile* LookupBgHdTile(uint16_t tileIndex, bool useHighPalette);
+	HdLoadedTile* LookupSpriteHdTile(uint16_t tileAddr);
+	void ProcessHdPackPixel();
 
 	void CaptureBgTile(uint16_t tileIndex, bool useHighPalette);
 	void CaptureSpriteTile(uint16_t tileAddr);
@@ -200,6 +243,8 @@ public:
 	void DebugWritePalette(uint8_t addr, uint8_t value);
 
 	void SetTileCaptureBuilder(HdTilePackBuilder* builder) { _tileCapture = builder; }
+
+	void SetHdPack(HdTilePack* hdPack);
 
 	uint16_t* GetScreenBuffer(bool previousBuffer)
 	{

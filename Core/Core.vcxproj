@@ -120,6 +120,7 @@
     <ClInclude Include="SMS\SmsControlManager.h" />
     <ClInclude Include="SMS\SmsCpu.h" />
     <ClInclude Include="SMS\SmsDefaultVideoFilter.h" />
+    <ClInclude Include="SMS\SmsHdTileVideoFilter.h" />
     <ClInclude Include="SMS\SmsEnhancedSynth.h" />
     <ClInclude Include="SMS\SmsFmAudio.h" />
     <ClInclude Include="SMS\SmsMemoryManager.h" />
@@ -768,6 +769,8 @@
     <ClInclude Include="SNES\Input\SnesMouse.h" />
     <ClInclude Include="Shared\Audio\SoundMixer.h" />
     <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h" />
+    <ClInclude Include="Shared\HdPacks\HdTilePack.h" />
+    <ClInclude Include="Shared\HdPacks\HdTileVideoFilter.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h" />
     <ClInclude Include="Shared\Audio\VgmExporter.h" />
@@ -1103,6 +1106,8 @@
     <ClCompile Include="Shared\Audio\SoundMixer.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp" />
     <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp" />
+    <ClCompile Include="Shared\HdPacks\HdTilePack.cpp" />
+    <ClCompile Include="Shared\HdPacks\HdTileVideoFilter.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp" />
     <ClCompile Include="Shared\Audio\VgmExporter.cpp" />
     <ClCompile Include="Shared\Audio\MidiExporter.cpp" />

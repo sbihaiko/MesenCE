@@ -9,6 +9,11 @@ class GbMemoryManager;
 class GbDmaController;
 class EmuSettings;
 class HdTilePackBuilder;
+class HdTilePack;
+struct HdLoadedTile;
+struct HdCapturedTile;
+struct HdTilePixelInfo;
+struct GbFifoEntry;
 struct RenderedFrame;
 
 class GbPpu : public ISerializable
@@ -76,6 +81,19 @@ private:
 	//HD pack recording tap (F2.1) - null unless a recording is active
 	HdTilePackBuilder* _tileCapture = nullptr;
 
+	//HD pack replacement (F2.3) - null unless a pack is loaded
+	HdTilePack* _hdPack = nullptr;
+	HdTilePixelInfo* _hdScreenInfoBuffers[2] = {};
+	HdTilePixelInfo* _currentHdScreenInfo = nullptr;
+
+	//Provenance of the pixels currently in the FIFOs (HD pack replacement)
+	HdLoadedTile* _bgFifoHdTile = nullptr;
+	uint8_t _bgFifoHdRow = 0;
+	bool _bgFifoHdMirror = false;
+	HdLoadedTile* _oamHdTile[8] = {};
+	uint8_t _oamHdRow[8] = {};
+	uint8_t _oamHdCol[8] = {};
+
 	uint16_t _overclockScanlineCount = 0;
 	uint16_t _vblankStartScanline = 144;
 	uint16_t _lastScanline = 153;
@@ -116,8 +134,11 @@ private:
 	uint8_t ReadCgbPalette(uint8_t& pos, uint16_t* pal);
 	void WriteCgbPalette(uint8_t& pos, uint16_t* pal, bool autoInc, uint8_t value);
 
+	bool BuildBgTileKey(HdCapturedTile& tile, uint16_t& tileAddr);
+	void BuildObjTileKey(HdCapturedTile& tile, uint16_t& tileAddr);
 	void CaptureBgTile();
 	void CaptureObjTile();
+	void ProcessHdPackPixel(GbFifoEntry& bgEntry, bool spriteOnTop, bool glitchPixel);
 
 public:
 	virtual ~GbPpu();
@@ -150,6 +171,8 @@ public:
 	void SetTileFetchGlitchState();
 
 	void SetTileCaptureBuilder(HdTilePackBuilder* builder) { _tileCapture = builder; }
+
+	void SetHdPack(HdTilePack* hdPack);
 
 	bool IsVramReadAllowed();
 	bool IsVramWriteAllowed();

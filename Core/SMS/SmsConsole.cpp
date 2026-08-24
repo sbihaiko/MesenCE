@@ -20,6 +20,9 @@
 #include "Shared/FirmwareHelper.h"
 #include "Shared/MessageManager.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTilePack.h"
+#include "SMS/SmsHdTileVideoFilter.h"
+#include "Shared/Video/VideoDecoder.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/StringUtilities.h"
 #include "Utilities/CRC32.h"
@@ -82,6 +85,16 @@ LoadRomResult SmsConsole::LoadRom(VirtualFile& romFile)
 		_memoryManager->Init(_emu, this, romData, biosRom, _vdp.get(), _controlManager.get(), _cart.get(), _psg.get(), _fmAudio.get());
 		_vdp->Init(_emu, this, _cpu.get(), _controlManager.get(), _memoryManager.get());
 		_cpu->Init(_emu, this, _memoryManager.get());
+
+		//HD pack replacement only covers VDP mode 4 (ADR-0037)
+		if(_emu->GetSettings()->GetSmsConfig().EnableHdPacks && (_model == SmsModel::Sms || _model == SmsModel::GameGear)) {
+			_hdPack.reset(new HdTilePack());
+			if(HdTilePack::Load(romFile, _model == SmsModel::GameGear ? "gg" : "sms", *_hdPack)) {
+				_vdp->SetHdPack(_hdPack.get());
+			} else {
+				_hdPack.reset();
+			}
+		}
 
 		UpdateRegion(true);
 
@@ -271,6 +284,10 @@ BaseVideoFilter* SmsConsole::GetVideoFilter(bool getDefaultFilter)
 		return new SmsDefaultVideoFilter(_emu, this);
 	}
 
+	if(_hdPack && !_hdPackBuilder) {
+		return new SmsHdTileVideoFilter(_emu, this, _hdPack.get());
+	}
+
 	VideoFilterType filterType = _emu->GetSettings()->GetVideoConfig().VideoFilter;
 
 	switch(filterType) {
@@ -388,6 +405,9 @@ void SmsConsole::StartRecordingHdPack(HdPackBuilderOptions options)
 	//Key format: ADR-0037
 	_hdPackBuilder.reset(new HdTilePackBuilder(_emu, _model == SmsModel::GameGear ? "gg" : "sms", options));
 	_vdp->SetTileCaptureBuilder(_hdPackBuilder.get());
+
+	//While recording, the original (non-replaced) frame is shown
+	_emu->GetVideoDecoder()->ForceFilterUpdate();
 }
 
 void SmsConsole::StopRecordingHdPack()
@@ -397,6 +417,7 @@ void SmsConsole::StopRecordingHdPack()
 		_vdp->SetTileCaptureBuilder(nullptr);
 		//The builder writes the PNG sheets + hires.txt when destroyed
 		_hdPackBuilder.reset();
+		_emu->GetVideoDecoder()->ForceFilterUpdate();
 	}
 }
 

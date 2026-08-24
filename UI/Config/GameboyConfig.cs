@@ -45,6 +45,8 @@ namespace Mesen.Config
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 NoiseVol { get; set; } = 100;
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 WaveVol { get; set; } = 100;
 
+		[ObservableProperty] public partial bool EnableHdPacks { get; set; } = true;
+
 		public void ApplyConfig()
 		{
 			ConfigManager.Config.Video.ApplyConfig();
@@ -78,7 +80,9 @@ namespace Mesen.Config
 				Square1Vol = Square1Vol,
 				Square2Vol = Square2Vol,
 				NoiseVol = NoiseVol,
-				WaveVol = WaveVol
+				WaveVol = WaveVol,
+
+				EnableHdPacks = EnableHdPacks
 			});
 		}
 
@@ -127,6 +131,8 @@ namespace Mesen.Config
 		public UInt32 Square2Vol;
 		public UInt32 NoiseVol;
 		public UInt32 WaveVol;
+
+		[MarshalAs(UnmanagedType.I1)] public bool EnableHdPacks;
 	}
 
 	public enum GbLocalLinkOutputOption

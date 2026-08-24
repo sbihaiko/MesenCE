@@ -772,12 +772,12 @@ namespace Mesen.ViewModels
 				GetMusicRecorderMenu(wnd),
 
 				new ContextMenuSeparator() {
-					IsVisible = () =>  MainWindow.RomInfo.ConsoleType == ConsoleType.Nes && MainWindow.RomInfo.Format != RomFormat.Nsf
+					IsVisible = () => IsHdPackMenuVisible()
 				},
 
 				new MainMenuAction() {
 					ActionType = ActionType.HdPacks,
-					IsVisible = () => MainWindow.RomInfo.ConsoleType == ConsoleType.Nes && MainWindow.RomInfo.Format != RomFormat.Nsf,
+					IsVisible = () => IsHdPackMenuVisible(),
 					SubActions = new List<object> {
 						new MainMenuAction() {
 							ActionType = ActionType.InstallHdPack,
@@ -1221,6 +1221,17 @@ namespace Mesen.ViewModels
 					});
 				}
 			});
+		}
+
+		private bool IsHdPackMenuVisible()
+		{
+			//NES packs, plus the GB/SMS hires.txt extension (mode 4 only for SMS - ADR-0037)
+			return MainWindow.RomInfo.ConsoleType switch {
+				ConsoleType.Nes => MainWindow.RomInfo.Format != RomFormat.Nsf,
+				ConsoleType.Gameboy => MainWindow.RomInfo.Format != RomFormat.Gbs,
+				ConsoleType.Sms => MainWindow.RomInfo.Format is RomFormat.Sms or RomFormat.GameGear,
+				_ => false
+			};
 		}
 
 		private async void InstallHdPack(Window wnd)

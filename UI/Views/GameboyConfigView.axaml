@@ -196,6 +196,7 @@
 					</c:OptionSection>
 					<c:OptionSection Header="{l:Translate lblMiscSettings}">
 						<CheckBox IsChecked="{Binding Config.HideSgbBorders}" Content="{l:Translate chkHideSgbBorders}"/>
+						<CheckBox IsChecked="{Binding Config.EnableHdPacks}" Content="{l:Translate chkEnableHdPacks}" />
 					</c:OptionSection>
 				</StackPanel>
 			</ScrollViewer>

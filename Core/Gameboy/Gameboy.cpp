@@ -25,6 +25,9 @@
 #include "Shared/MessageManager.h"
 #include "Shared/FirmwareHelper.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTilePack.h"
+#include "Shared/HdPacks/HdTileVideoFilter.h"
+#include "Shared/Video/VideoDecoder.h"
 #include "Utilities/VirtualFile.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/CRC32.h"
@@ -158,6 +161,10 @@ void Gameboy::PowerOn(SuperGameboy* sgb)
 	_cpu->Init(_emu, this, _memoryManager.get());
 	_ppu->Init(_emu, this, _memoryManager.get(), _dmaController.get(), _videoRam, _spriteRam);
 	_dmaController->Init(this, _memoryManager.get(), _ppu.get(), _cpu.get());
+
+	if(_hdPack) {
+		_ppu->SetHdPack(_hdPack.get());
+	}
 
 	_cpu->PowerOn();
 }
@@ -503,6 +510,22 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 
 			EmuSettings* settings = _emu->GetSettings();
 			GameboyConfig cfg = settings->GetGameboyConfig();
+
+			if(!_mainConsole && !_allowSgb && cfg.EnableHdPacks && GetRomFormat() != RomFormat::Gbs) {
+				//The pack's key format depends on the render mode the game will
+				//actually use (ADR-0036): CGB-exclusive/compatible carts on a CGB
+				//model run the CGB path; everything else runs the DMG path.
+				bool cgbMode = IsCgb() && ((int)header.CgbFlag & 0x80);
+				_hdPack.reset(new HdTilePack());
+				if(HdTilePack::Load(romFile, cgbMode ? "gbc" : "gb", *_hdPack)) {
+					//Init() (and its PowerOn call) already ran above, so the
+					//PPU has to be wired up here, not just in PowerOn
+					_ppu->SetHdPack(_hdPack.get());
+				} else {
+					_hdPack.reset();
+				}
+			}
+
 			if(!_mainConsole && cfg.UseLocalLinkCable && !_allowSgb) { // Don't allow link cable with SGB for now
 
 				// Create second console and link it with this one
@@ -732,6 +755,10 @@ BaseVideoFilter* Gameboy::GetVideoFilter(bool getDefaultFilter)
 		return new GbDefaultVideoFilter(_emu, false);
 	}
 
+	if(_hdPack && !_hdPackBuilder) {
+		return new HdTileVideoFilter(_emu, _hdPack.get());
+	}
+
 	VideoFilterType filterType = _emu->GetSettings()->GetVideoConfig().VideoFilter;
 
 	switch(filterType) {
@@ -816,6 +843,9 @@ void Gameboy::StartRecordingHdPack(HdPackBuilderOptions options)
 	//gb vs gbc - a DMG game on CGB hardware renders through the DMG path.
 	_hdPackBuilder.reset(new HdTilePackBuilder(_emu, _ppu->IsCgbEnabled() ? "gbc" : "gb", options));
 	_ppu->SetTileCaptureBuilder(_hdPackBuilder.get());
+
+	//While recording, the original (non-replaced) frame is shown
+	_emu->GetVideoDecoder()->ForceFilterUpdate();
 }
 
 void Gameboy::StopRecordingHdPack()
@@ -825,5 +855,6 @@ void Gameboy::StopRecordingHdPack()
 		_ppu->SetTileCaptureBuilder(nullptr);
 		//The builder writes the PNG sheets + hires.txt when destroyed
 		_hdPackBuilder.reset();
+		_emu->GetVideoDecoder()->ForceFilterUpdate();
 	}
 }

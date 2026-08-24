@@ -111,6 +111,7 @@
 
 					<c:OptionSection Header="{l:Translate lblMiscSettings}">
 						<CheckBox IsChecked="{Binding Config.GgBlendFrames}" Content="{l:Translate chkGgBlendFrames}" />
+						<CheckBox IsChecked="{Binding Config.EnableHdPacks}" Content="{l:Translate chkEnableHdPacks}" />
 						<CheckBox IsChecked="{Binding Config.UseSgPalette}" Content="{l:Translate chkUseSgPalette}" />
 						<CheckBox IsChecked="{Binding Config.RemoveSpriteLimit}" Content="{l:Translate chkRemoveSpriteLimit}" />
 						<c:CheckBoxWarning IsChecked="{Binding Config.DisableBackground}" Text="{l:Translate chkDisableBackground}" />

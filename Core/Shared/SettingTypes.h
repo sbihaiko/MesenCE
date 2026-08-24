@@ -473,6 +473,8 @@ struct GameboyConfig
 	uint32_t Square2Vol = 100;
 	uint32_t NoiseVol = 100;
 	uint32_t WaveVol = 100;
+
+	bool EnableHdPacks = true;
 };
 
 enum class GbaSaveType
@@ -789,6 +791,8 @@ struct SmsConfig
 	OverscanDimensions NtscOverscan = {};
 	OverscanDimensions PalOverscan = {};
 	OverscanDimensions GameGearOverscan = {};
+
+	bool EnableHdPacks = true;
 };
 
 struct CvConfig

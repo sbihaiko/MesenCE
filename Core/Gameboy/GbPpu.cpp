@@ -15,6 +15,7 @@
 #include "Shared/MessageManager.h"
 #include "Shared/ColorUtilities.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTilePack.h"
 #include "SNES/Coprocessors/SGB/SuperGameboy.h"
 #include "Utilities/HexUtilities.h"
 #include "Utilities/Serializer.h"
@@ -89,6 +90,8 @@ GbPpu::~GbPpu()
 	delete[] _outputBuffers[1];
 	delete[] _eventViewerBuffers[0];
 	delete[] _eventViewerBuffers[1];
+	delete[] _hdScreenInfoBuffers[0];
+	delete[] _hdScreenInfoBuffers[1];
 }
 
 GbPpuState GbPpu::GetState()
@@ -515,6 +518,10 @@ void GbPpu::RunDrawCycle()
 				_lastPixelType = GbPixelType::Background;
 				_lastBgColor = entry.Color;
 			}
+
+			if(_hdPack) {
+				ProcessHdPackPixel(entry, _lastPixelType == GbPixelType::Object, _insertGlitchBgPixel);
+			}
 		}
 
 		if(!_insertGlitchBgPixel) {
@@ -601,6 +608,7 @@ void GbPpu::ResetRenderer()
 	_fetchColumn = 0;
 
 	_insertGlitchBgPixel = false;
+	_bgFifoHdTile = nullptr;
 }
 
 void GbPpu::ClockSpriteFetcher()
@@ -754,6 +762,18 @@ void GbPpu::PushSpriteToPixelFifo()
 		CaptureObjTile();
 	}
 
+	HdLoadedTile* hdTile = nullptr;
+	uint8_t hdRow = 0;
+	if(_hdPack) {
+		HdCapturedTile tile = {};
+		uint16_t tileAddr;
+		BuildObjTileKey(tile, tileAddr);
+		hdTile = _hdPack->GetTile(tile);
+		//The fetcher address has the (v-mirror adjusted) row baked in;
+		//tileAddr comes back masked to the tile base
+		hdRow = (_oamFetcher.Addr & 0x0F) >> 1;
+	}
+
 	uint8_t pos = _oamFifo.Position;
 
 	//Overlap sprite
@@ -766,6 +786,11 @@ void GbPpu::PushSpriteToPixelFifo()
 			_oamFifo.Content[pos].Color = bits;
 			_oamFifo.Content[pos].Attributes = _oamFetcher.Attributes;
 			_oamFifo.Content[pos].Index = spriteIndex;
+			if(_hdPack) {
+				_oamHdTile[pos] = hdTile;
+				_oamHdRow[pos] = hdRow;
+				_oamHdCol[pos] = (_oamFetcher.Attributes & 0x20) ? 7 - i : i;
+			}
 		}
 		pos = (pos + 1) & 0x07;
 	}
@@ -776,6 +801,20 @@ void GbPpu::PushTileToPixelFifo()
 {
 	if(_tileCapture) {
 		CaptureBgTile();
+	}
+
+	if(_hdPack) {
+		HdCapturedTile tile = {};
+		uint16_t tileAddr;
+		if(BuildBgTileKey(tile, tileAddr)) {
+			_bgFifoHdTile = _hdPack->GetTile(tile);
+			//The fetcher address has the (v-mirror adjusted) row baked in;
+			//tileAddr comes back masked to the tile base
+			_bgFifoHdRow = (_bgFetcher.Addr & 0x0F) >> 1;
+			_bgFifoHdMirror = (_bgFetcher.Attributes & 0x20) != 0;
+		} else {
+			_bgFifoHdTile = nullptr;
+		}
 	}
 
 	//Add new tile to fifo
@@ -794,21 +833,21 @@ void GbPpu::PushTileToPixelFifo()
 	_bgFetcher.Step = 0;
 }
 
-//HD pack recording (F2.1) - tile identity key semantics: ADR-0036
-void GbPpu::CaptureBgTile()
+//HD pack tile identity key semantics: ADR-0036 (shared by the F2.1 recorder
+//and the F2.3 pack lookup). Returns false when the tile is not displayable
+//(DMG with BG disabled, or the corrupted gbcTileGlitch fetch).
+bool GbPpu::BuildBgTileKey(HdCapturedTile& tile, uint16_t& tileAddr)
 {
 	if(_gbcTileGlitch) {
-		//The glitch corrupts the fetched bytes - don't capture garbage
-		return;
+		//The glitch corrupts the fetched bytes
+		return false;
 	}
 
-	uint16_t tileAddr = _bgFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
-	HdCapturedTile tile = {};
+	tileAddr = _bgFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
 	tile.DataSize = 16;
 	memcpy(tile.Data, _vram + tileAddr, 16);
 	tile.BankId = (tileAddr & 0x2000) ? 1 : 0;
 
-	uint32_t rgba[64];
 	if(_state.CgbEnabled) {
 		uint8_t palette = (_bgFetcher.Attributes & 0x07) << 2;
 		tile.PalKeySize = 9;
@@ -818,27 +857,60 @@ void GbPpu::CaptureBgTile()
 			tile.PalKey[1 + i * 2] = (uint8_t)(color >> 8);
 			tile.PalKey[2 + i * 2] = (uint8_t)color;
 		}
-		for(int y = 0; y < 8; y++) {
-			uint8_t low = _vram[tileAddr + y * 2];
-			uint8_t high = _vram[tileAddr + y * 2 + 1];
-			for(int x = 0; x < 8; x++) {
-				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
-				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[palette + color] & 0x7FFF);
-			}
-		}
 	} else {
 		if(!_state.BgEnabled) {
 			//DMG: the tile is not displayed when the BG is disabled
-			return;
+			return false;
 		}
 		tile.PalKeySize = 2;
 		tile.PalKey[0] = 0x00; //BG
 		tile.PalKey[1] = _state.BgPalette;
-		for(int y = 0; y < 8; y++) {
-			uint8_t low = _vram[tileAddr + y * 2];
-			uint8_t high = _vram[tileAddr + y * 2 + 1];
-			for(int x = 0; x < 8; x++) {
-				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+	}
+	return true;
+}
+
+void GbPpu::BuildObjTileKey(HdCapturedTile& tile, uint16_t& tileAddr)
+{
+	tileAddr = _oamFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
+	tile.DataSize = 16;
+	memcpy(tile.Data, _vram + tileAddr, 16);
+	tile.BankId = (tileAddr & 0x2000) ? 1 : 0;
+
+	if(_state.CgbEnabled) {
+		uint8_t palette = (_oamFetcher.Attributes & 0x07) << 2;
+		tile.PalKeySize = 9;
+		tile.PalKey[0] = 0x01; //OBJ
+		for(int i = 0; i < 4; i++) {
+			uint16_t color = _state.CgbObjPalettes[palette + i] & 0x7FFF;
+			tile.PalKey[1 + i * 2] = (uint8_t)(color >> 8);
+			tile.PalKey[2 + i * 2] = (uint8_t)color;
+		}
+	} else {
+		tile.PalKeySize = 2;
+		tile.PalKey[0] = 0x01; //OBJ
+		tile.PalKey[1] = (_oamFetcher.Attributes & 0x10) ? _state.ObjPalette1 : _state.ObjPalette0;
+	}
+}
+
+//HD pack recording (F2.1)
+void GbPpu::CaptureBgTile()
+{
+	HdCapturedTile tile = {};
+	uint16_t tileAddr;
+	if(!BuildBgTileKey(tile, tileAddr)) {
+		return;
+	}
+
+	uint32_t rgba[64];
+	for(int y = 0; y < 8; y++) {
+		uint8_t low = _vram[tileAddr + y * 2];
+		uint8_t high = _vram[tileAddr + y * 2 + 1];
+		for(int x = 0; x < 8; x++) {
+			uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+			if(_state.CgbEnabled) {
+				uint8_t palette = (_bgFetcher.Attributes & 0x07) << 2;
+				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[palette + color] & 0x7FFF);
+			} else {
 				uint8_t shade = (_state.BgPalette >> (color * 2)) & 0x03;
 				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[shade] & 0x7FFF);
 			}
@@ -850,48 +922,71 @@ void GbPpu::CaptureBgTile()
 
 void GbPpu::CaptureObjTile()
 {
-	uint16_t tileAddr = _oamFetcher.Addr & ~0x0F; //keeps the CGB bank bit (0x2000)
 	HdCapturedTile tile = {};
-	tile.DataSize = 16;
-	memcpy(tile.Data, _vram + tileAddr, 16);
-	tile.BankId = (tileAddr & 0x2000) ? 1 : 0;
+	uint16_t tileAddr;
+	BuildObjTileKey(tile, tileAddr);
 
 	uint32_t rgba[64];
-	if(_state.CgbEnabled) {
-		uint8_t palette = (_oamFetcher.Attributes & 0x07) << 2;
-		tile.PalKeySize = 9;
-		tile.PalKey[0] = 0x01; //OBJ
-		for(int i = 0; i < 4; i++) {
-			uint16_t color = _state.CgbObjPalettes[palette + i] & 0x7FFF;
-			tile.PalKey[1 + i * 2] = (uint8_t)(color >> 8);
-			tile.PalKey[2 + i * 2] = (uint8_t)color;
-		}
-		for(int y = 0; y < 8; y++) {
-			uint8_t low = _vram[tileAddr + y * 2];
-			uint8_t high = _vram[tileAddr + y * 2 + 1];
-			for(int x = 0; x < 8; x++) {
-				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
-				rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palette + color] & 0x7FFF);
-			}
-		}
-	} else {
-		uint8_t palByte = (_oamFetcher.Attributes & 0x10) ? _state.ObjPalette1 : _state.ObjPalette0;
-		uint8_t palOffset = (_oamFetcher.Attributes & 0x10) ? 4 : 0;
-		tile.PalKeySize = 2;
-		tile.PalKey[0] = 0x01; //OBJ
-		tile.PalKey[1] = palByte;
-		for(int y = 0; y < 8; y++) {
-			uint8_t low = _vram[tileAddr + y * 2];
-			uint8_t high = _vram[tileAddr + y * 2 + 1];
-			for(int x = 0; x < 8; x++) {
-				uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+	for(int y = 0; y < 8; y++) {
+		uint8_t low = _vram[tileAddr + y * 2];
+		uint8_t high = _vram[tileAddr + y * 2 + 1];
+		for(int x = 0; x < 8; x++) {
+			uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+			if(color == 0) {
+				rgba[y * 8 + x] = 0x00FFFFFF;
+			} else if(_state.CgbEnabled) {
+				uint8_t palette = (_oamFetcher.Attributes & 0x07) << 2;
+				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palette + color] & 0x7FFF);
+			} else {
+				uint8_t palByte = (_oamFetcher.Attributes & 0x10) ? _state.ObjPalette1 : _state.ObjPalette0;
+				uint8_t palOffset = (_oamFetcher.Attributes & 0x10) ? 4 : 0;
 				uint8_t shade = (palByte >> (color * 2)) & 0x03;
-				rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palOffset + shade] & 0x7FFF);
+				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbObjPalettes[palOffset + shade] & 0x7FFF);
 			}
 		}
 	}
 
 	_tileCapture->ProcessTile(tile, rgba);
+}
+
+//HD pack replacement (F2.3): fills the per-pixel provenance consumed by
+//HdTileVideoFilter. Called for every drawn pixel while a pack is active.
+void GbPpu::ProcessHdPackPixel(GbFifoEntry& bgEntry, bool spriteOnTop, bool glitchPixel)
+{
+	HdTilePixelInfo& info = _currentHdScreenInfo[_state.Scanline * GbConstants::ScreenWidth + _drawnPixels];
+	info = {};
+
+	if(!glitchPixel && _bgFifoHdTile && !_emu->GetSettings()->GetGameboyConfig().DisableBackground) {
+		uint8_t pos = _bgFifo.Position;
+		info.BgTile = _bgFifoHdTile;
+		info.BgRow = _bgFifoHdRow;
+		info.BgCol = _bgFifoHdMirror ? 7 - pos : pos;
+	}
+
+	if(spriteOnTop) {
+		info.SpriteOnTop = true;
+		uint8_t pos = _oamFifo.Position;
+		info.SprTile = _oamHdTile[pos];
+		info.SprRow = _oamHdRow[pos];
+		info.SprCol = _oamHdCol[pos];
+
+		//The BG color this sprite pixel is covering (for translucent HD sprites)
+		if(_state.CgbEnabled) {
+			info.BgColor555 = LcdReadBgPalette(bgEntry.Color | ((bgEntry.Attributes & 0x07) << 2)) & 0x7FFF;
+		} else {
+			info.BgColor555 = LcdReadBgPalette(_state.BgEnabled ? ((_state.BgPalette >> (bgEntry.Color * 2)) & 0x03) : (_state.BgPalette & 0x03)) & 0x7FFF;
+		}
+	}
+}
+
+void GbPpu::SetHdPack(HdTilePack* hdPack)
+{
+	_hdPack = hdPack;
+	if(hdPack && !_hdScreenInfoBuffers[0]) {
+		_hdScreenInfoBuffers[0] = new HdTilePixelInfo[GbConstants::PixelCount]();
+		_hdScreenInfoBuffers[1] = new HdTilePixelInfo[GbConstants::PixelCount]();
+		_currentHdScreenInfo = _currentBuffer == _outputBuffers[0] ? _hdScreenInfoBuffers[0] : _hdScreenInfoBuffers[1];
+	}
 }
 
 void GbPpu::UpdateStatIrq()
@@ -990,6 +1085,7 @@ void GbPpu::SendFrame()
 	_isFirstFrame = false;
 
 	RenderedFrame frame(_currentBuffer, GbConstants::ScreenWidth, GbConstants::ScreenHeight, 1.0, _state.FrameCount, _gameboy->GetControlManager()->GetPortStates());
+	frame.Data = _currentHdScreenInfo; //HD packs (null unless a pack is active)
 	if(_gameboy->GetLinkedConsole()) {
 		SendLinkedFrame(frame);
 		if(_gameboy->IsPrimaryConsole()) {
@@ -1004,6 +1100,9 @@ void GbPpu::SendFrame()
 	_gameboy->ProcessEndOfFrame();
 
 	_currentBuffer = _currentBuffer == _outputBuffers[0] ? _outputBuffers[1] : _outputBuffers[0];
+	if(_hdScreenInfoBuffers[0]) {
+		_currentHdScreenInfo = _currentBuffer == _outputBuffers[0] ? _hdScreenInfoBuffers[0] : _hdScreenInfoBuffers[1];
+	}
 }
 
 void GbPpu::SendLinkedFrame(RenderedFrame& frame)

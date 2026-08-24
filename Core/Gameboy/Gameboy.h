@@ -17,6 +17,7 @@ class GbMemoryManager;
 class GbDmaController;
 class GbControlManager;
 class GbEnhancedSynth;
+class HdTilePack;
 class HdTilePackBuilder;
 class SuperGameboy;
 class VirtualFile;
@@ -45,6 +46,7 @@ private:
 	unique_ptr<GbDmaController> _dmaController;
 	unique_ptr<GbControlManager> _controlManager;
 	unique_ptr<HdTilePackBuilder> _hdPackBuilder;
+	unique_ptr<HdTilePack> _hdPack;
 
 	GameboyModel _model = GameboyModel::AutoFavorGbc;
 

@@ -13,6 +13,7 @@
 #include "Shared/NotificationManager.h"
 #include "Shared/ColorUtilities.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTilePack.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/RandomHelper.h"
 #include "Debugger/SmsVdpTools.h"
@@ -78,6 +79,18 @@ SmsVdp::~SmsVdp()
 	delete[] _videoRam;
 	delete[] _outputBuffers[0];
 	delete[] _outputBuffers[1];
+	delete[] _hdScreenInfoBuffers[0];
+	delete[] _hdScreenInfoBuffers[1];
+}
+
+void SmsVdp::SetHdPack(HdTilePack* hdPack)
+{
+	_hdPack = hdPack;
+	if(hdPack && !_hdScreenInfoBuffers[0]) {
+		_hdScreenInfoBuffers[0] = new HdTilePixelInfo[256 * 240]();
+		_hdScreenInfoBuffers[1] = new HdTilePixelInfo[256 * 240]();
+	}
+	_currentHdScreenInfo = hdPack ? _hdScreenInfoBuffers[0] : nullptr;
 }
 
 void SmsVdp::Run(uint64_t runTo)
@@ -378,6 +391,12 @@ void SmsVdp::LoadBgTilesSms()
 			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4) {
 				CaptureBgTile(tileIndex, (ntData & 0x800) != 0);
 			}
+
+			if(_hdPack) {
+				_hdBgPendingTile = LookupBgHdTile(tileIndex, (ntData & 0x800) != 0);
+				_hdBgPendingRow = tileRow;
+				_hdBgPendingMirror = _bgHorizontalMirror;
+			}
 			break;
 		}
 
@@ -413,6 +432,15 @@ void SmsVdp::LoadBgTilesSms()
 			if(_disableBackground) {
 				memset(_bgShifters, 0, sizeof(_bgShifters));
 				_bgPriority = 0;
+			}
+
+			if(_hdPack) {
+				HdBgTileGroup& group = _hdBgGroups[_hdBgGroupIndex];
+				group.Tile = _disableBackground ? nullptr : _hdBgPendingTile;
+				group.Row = _hdBgPendingRow;
+				group.HMirror = _hdBgPendingMirror;
+				group.StartPixel = _hdBgPixelCounter + _pixelsAvailable;
+				_hdBgGroupIndex = (_hdBgGroupIndex + 1) & 0x03;
 			}
 
 			_pixelsAvailable += 8;
@@ -578,6 +606,9 @@ void SmsVdp::DrawPixel()
 	if(_needCramDot) {
 		_currentOutputBuffer[_state.Scanline * 256 + GetVisiblePixelIndex()] = _cramDotColor;
 	}
+	if(_currentHdScreenInfo) {
+		ProcessHdPackPixel();
+	}
 	_bgShifters[0] <<= 1;
 	_bgShifters[1] <<= 1;
 	_bgShifters[2] <<= 1;
@@ -585,6 +616,37 @@ void SmsVdp::DrawPixel()
 	_bgPriority <<= 1;
 	_bgPalette <<= 1;
 	_pixelsAvailable--;
+	_hdBgPixelCounter++;
+}
+
+void SmsVdp::ProcessHdPackPixel()
+{
+	HdTilePixelInfo& info = _currentHdScreenInfo[_state.Scanline * 256 + GetVisiblePixelIndex()];
+	info = {};
+
+	//Only mode 4 pixels can have replacements (ADR-0037); masked/backdrop
+	//pixels and CRAM dots keep the original color
+	if(!_state.RenderingEnabled || !_state.UseMode4 || _state.Cycle < _minDrawCycle || _needCramDot) {
+		return;
+	}
+
+	for(HdBgTileGroup& group : _hdBgGroups) {
+		if(group.Tile && _hdBgPixelCounter >= group.StartPixel && _hdBgPixelCounter < group.StartPixel + 8) {
+			uint8_t pos = (uint8_t)(_hdBgPixelCounter - group.StartPixel);
+			info.BgTile = group.Tile;
+			info.BgRow = group.Row;
+			info.BgCol = group.HMirror ? 7 - pos : pos;
+			break;
+		}
+	}
+
+	info.SpriteOnTop = _hdSpriteOnTop;
+	if(_hdSpriteOnTop) {
+		info.BgColor555 = _hdBgColor555;
+		info.SprTile = _hdSprTile;
+		info.SprRow = _hdSprRow;
+		info.SprCol = _hdSprCol;
+	}
 }
 
 void SmsVdp::ProcessScanlineEvents()
@@ -651,6 +713,7 @@ void SmsVdp::ProcessEndOfScanline()
 		_emu->GetNotificationManager()->SendNotification(ConsoleNotificationType::PpuFrameDone);
 
 		RenderedFrame frame(_currentOutputBuffer, 256, 240, 1.0, _state.FrameCount, _console->GetControlManager()->GetPortStates());
+		frame.Data = _currentHdScreenInfo;
 		bool rewinding = _emu->GetRewindManager()->IsRewinding();
 		_emu->GetVideoDecoder()->UpdateFrame(frame, rewinding, rewinding);
 
@@ -663,6 +726,9 @@ void SmsVdp::ProcessEndOfScanline()
 		_state.VerticalScrollLatch = _state.VerticalScroll;
 		_emu->ProcessEvent(EventType::StartFrame, CpuType::Sms);
 		_currentOutputBuffer = _currentOutputBuffer == _outputBuffers[0] ? _outputBuffers[1] : _outputBuffers[0];
+		if(_currentHdScreenInfo) {
+			_currentHdScreenInfo = _currentHdScreenInfo == _hdScreenInfoBuffers[0] ? _hdScreenInfoBuffers[1] : _hdScreenInfoBuffers[0];
+		}
 	}
 
 	_bgShifters[0] = 0;
@@ -690,6 +756,14 @@ void SmsVdp::ProcessEndOfScanline()
 		_bgPalette |= 0x800000 >> i;
 	}
 	_pixelsAvailable = borderWidth;
+
+	//Fine-scroll border pixels (0 to borderWidth-1) have no tile provenance
+	_hdBgPixelCounter = 0;
+	if(_hdPack) {
+		for(HdBgTileGroup& group : _hdBgGroups) {
+			group.Tile = nullptr;
+		}
+	}
 
 	//Mask feature only works in mode 4
 	bool maskFirstColumn = _state.UseMode4 ? _state.MaskFirstColumn : false;
@@ -804,6 +878,9 @@ void SmsVdp::LoadSpriteTilesSms()
 			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4 && _state.Scanline < _state.VisibleScanlineCount) {
 				CaptureSpriteTile(_spriteShifters[_spriteCount].TileAddr);
 			}
+
+			_spriteShifters[_spriteCount].HdTile = _hdPack ? LookupSpriteHdTile(_spriteShifters[_spriteCount].TileAddr) : nullptr;
+			_spriteShifters[_spriteCount].HdRow = (_spriteShifters[_spriteCount].TileAddr >> 2) & 0x07;
 			break;
 		}
 
@@ -822,6 +899,9 @@ void SmsVdp::LoadSpriteTilesSms()
 			if(_tileCapture && _state.RenderingEnabled && _state.UseMode4 && _state.Scanline < _state.VisibleScanlineCount) {
 				CaptureSpriteTile(_spriteShifters[_spriteCount + 1].TileAddr);
 			}
+
+			_spriteShifters[_spriteCount + 1].HdTile = _hdPack ? LookupSpriteHdTile(_spriteShifters[_spriteCount + 1].TileAddr) : nullptr;
+			_spriteShifters[_spriteCount + 1].HdRow = (_spriteShifters[_spriteCount + 1].TileAddr >> 2) & 0x07;
 			break;
 		}
 
@@ -903,6 +983,9 @@ void SmsVdp::LoadExtraSpritesSms()
 			CaptureSpriteTile(sprTileAddr);
 		}
 
+		_spriteShifters[i].HdTile = _hdPack ? LookupSpriteHdTile(sprTileAddr) : nullptr;
+		_spriteShifters[i].HdRow = (sprTileAddr >> 2) & 0x07;
+
 		_spriteShifters[i].TileData[0] = _videoRam[sprTileAddr];
 		_spriteShifters[i].TileData[1] = _videoRam[sprTileAddr + 1];
 		_spriteShifters[i].TileData[2] = _videoRam[sprTileAddr + 2];
@@ -917,13 +1000,13 @@ void SmsVdp::LoadExtraSpritesSms()
 	}
 }
 
-//HD pack recording (F2.1) - tile identity key semantics: ADR-0037
-void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
+//Tile identity key semantics: ADR-0037 - shared by the recorder (F2.1) and
+//the pack lookups (F2.3) so both sides always agree on the key
+void SmsVdp::BuildBgTileKey(HdCapturedTile& tile, uint16_t tileIndex, bool useHighPalette)
 {
 	uint16_t tileAddr = tileIndex * 32;
 	uint8_t cramBase = useHighPalette ? 0x10 : 0x00;
 
-	HdCapturedTile tile = {};
 	tile.DataSize = 32;
 	memcpy(tile.Data, _videoRam + tileAddr, 32);
 
@@ -940,6 +1023,49 @@ void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
 		tile.PalKeySize = 2 + 16;
 		memcpy(tile.PalKey + 2, _paletteRam + cramBase, 16);
 	}
+}
+
+void SmsVdp::BuildSpriteTileKey(HdCapturedTile& tile, uint16_t tileAddr)
+{
+	tileAddr &= ~0x1F; //row offset -> canonical tile base
+
+	tile.DataSize = 32;
+	memcpy(tile.Data, _videoRam + tileAddr, 32);
+
+	tile.PalKey[0] = 0x01; //OBJ - sprites always use the upper CRAM half
+	tile.PalKey[1] = 0x10;
+	if(_model == SmsModel::GameGear) {
+		tile.PalKeySize = 2 + 32;
+		for(int i = 0; i < 16; i++) {
+			tile.PalKey[2 + i * 2] = _paletteRam[(0x10 + i) * 2 + 1];
+			tile.PalKey[3 + i * 2] = _paletteRam[(0x10 + i) * 2];
+		}
+	} else {
+		tile.PalKeySize = 2 + 16;
+		memcpy(tile.PalKey + 2, _paletteRam + 0x10, 16);
+	}
+}
+
+HdLoadedTile* SmsVdp::LookupBgHdTile(uint16_t tileIndex, bool useHighPalette)
+{
+	HdCapturedTile key = {};
+	BuildBgTileKey(key, tileIndex, useHighPalette);
+	return _hdPack->GetTile(key);
+}
+
+HdLoadedTile* SmsVdp::LookupSpriteHdTile(uint16_t tileAddr)
+{
+	HdCapturedTile key = {};
+	BuildSpriteTileKey(key, tileAddr);
+	return _hdPack->GetTile(key);
+}
+
+void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
+{
+	uint8_t cramBase = useHighPalette ? 0x10 : 0x00;
+
+	HdCapturedTile tile = {};
+	BuildBgTileKey(tile, tileIndex, useHighPalette);
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
@@ -959,24 +1085,8 @@ void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
 
 void SmsVdp::CaptureSpriteTile(uint16_t tileAddr)
 {
-	tileAddr &= ~0x1F; //row offset -> canonical tile base
-
 	HdCapturedTile tile = {};
-	tile.DataSize = 32;
-	memcpy(tile.Data, _videoRam + tileAddr, 32);
-
-	tile.PalKey[0] = 0x01; //OBJ - sprites always use the upper CRAM half
-	tile.PalKey[1] = 0x10;
-	if(_model == SmsModel::GameGear) {
-		tile.PalKeySize = 2 + 32;
-		for(int i = 0; i < 16; i++) {
-			tile.PalKey[2 + i * 2] = _paletteRam[(0x10 + i) * 2 + 1];
-			tile.PalKey[3 + i * 2] = _paletteRam[(0x10 + i) * 2];
-		}
-	} else {
-		tile.PalKeySize = 2 + 16;
-		memcpy(tile.PalKey + 2, _paletteRam + 0x10, 16);
-	}
+	BuildSpriteTileKey(tile, tileAddr);
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
@@ -1205,6 +1315,11 @@ bool SmsVdp::IsZoomedSpriteAllowed(int spriteIndex)
 
 uint16_t SmsVdp::GetPixelColor()
 {
+	if(_hdPack) {
+		_hdSpriteOnTop = false;
+		_hdSprTile = nullptr;
+	}
+
 	if(!_state.RenderingEnabled || _state.Cycle < SmsVdp::SmsVdpLeftBorder) {
 		return _internalPaletteRam[0x10 | _state.BackgroundColorIndex];
 	}
@@ -1235,6 +1350,11 @@ uint16_t SmsVdp::GetPixelColor()
 					} else {
 						spritePixelColor = sprColor;
 						spriteDrawn = true;
+						if(_hdPack) {
+							_hdSprTile = _spriteShifters[i].HdTile;
+							_hdSprRow = _spriteShifters[i].HdRow;
+							_hdSprCol = (uint8_t)((xPos - _spriteShifters[i].SpriteX) >> (uint8_t)IsZoomedSpriteAllowed(i));
+						}
 					}
 				}
 			} else {
@@ -1280,6 +1400,10 @@ uint16_t SmsVdp::GetPixelColor()
 	}
 
 	if(_state.UseMode4) {
+		if(_hdPack) {
+			_hdSpriteOnTop = true;
+			_hdBgColor555 = _internalPaletteRam[((_bgPalette & 0x800000) ? 0x10 : 0) + color];
+		}
 		return _internalPaletteRam[0x10 + spritePixelColor];
 	} else {
 		return _activeSgPalette[spritePixelColor];

@@ -93,3 +93,4 @@ When the user requests a durable behavior change, record it here or in the relev
 - PGOHelper/ — Profile-Guided Optimization helper
 - .github/ — GitHub workflows and CI/CD
 - docs/ — Documentation and roadmaps
+- scripts/ — Headless capture harness, test-ROM generators, and pack validators

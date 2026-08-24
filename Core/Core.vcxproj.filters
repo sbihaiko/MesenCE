@@ -1000,6 +1000,12 @@
     <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp">
       <Filter>Shared\HdPacks</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\HdPacks\HdTilePack.cpp">
+      <Filter>Shared\HdPacks</Filter>
+    </ClCompile>
+    <ClCompile Include="Shared\HdPacks\HdTileVideoFilter.cpp">
+      <Filter>Shared\HdPacks</Filter>
+    </ClCompile>
     <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
@@ -1016,6 +1022,12 @@
       <Filter>Shared\Audio</Filter>
     </ClInclude>
     <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h">
+      <Filter>Shared\HdPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\HdPacks\HdTilePack.h">
+      <Filter>Shared\HdPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\HdPacks\HdTileVideoFilter.h">
       <Filter>Shared\HdPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h">
@@ -2638,6 +2650,9 @@
       <Filter>SMS</Filter>
     </ClInclude>
     <ClInclude Include="SMS\SmsDefaultVideoFilter.h">
+      <Filter>SMS</Filter>
+    </ClInclude>
+    <ClInclude Include="SMS\SmsHdTileVideoFilter.h">
       <Filter>SMS</Filter>
     </ClInclude>
     <ClInclude Include="SMS\SmsControlManager.h">
