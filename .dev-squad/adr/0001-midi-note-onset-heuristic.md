@@ -1,6 +1,6 @@
 # ADR-0001: MIDI note-onset/offset heuristic is an explicit, documented decision
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

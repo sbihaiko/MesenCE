@@ -1,6 +1,6 @@
 # ADR-0006: MEI trust model — mandatory checksum verification, HTTPS-only, zip-traversal rejection, confirmation for non-default indexes
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

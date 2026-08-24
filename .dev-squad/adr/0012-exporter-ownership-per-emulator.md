@@ -1,6 +1,6 @@
 # ADR-0012: VGM/MIDI exporters are owned per-Emulator (WaveRecorder pattern), not process-global singletons
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

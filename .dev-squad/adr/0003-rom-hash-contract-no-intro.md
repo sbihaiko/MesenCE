@@ -1,6 +1,6 @@
 # ADR-0003: ROM hash contract — No-Intro byte range per console, string format pinned to observed utility output
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

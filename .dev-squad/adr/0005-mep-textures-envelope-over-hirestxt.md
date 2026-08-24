@@ -1,6 +1,6 @@
 # ADR-0005: MEP textures/ is an envelope over hires.txt delegating to HdPackLoader, with explicit precedence
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

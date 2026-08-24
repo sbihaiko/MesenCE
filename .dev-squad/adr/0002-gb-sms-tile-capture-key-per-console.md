@@ -1,6 +1,6 @@
 # ADR-0002: GB/SMS tile-capture identity key is a recorded per-console decision, not a 1:1 HdBuilderPpu port
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

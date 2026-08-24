@@ -1,6 +1,6 @@
 # ADR-0004: hires.txt extension spec is published as v1-draft pending community review, not final v1
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

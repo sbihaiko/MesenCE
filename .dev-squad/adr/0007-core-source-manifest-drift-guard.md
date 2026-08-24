@@ -1,6 +1,6 @@
 # ADR-0007: Guard against Core source-manifest drift between the makefile glob and Core.vcxproj
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context

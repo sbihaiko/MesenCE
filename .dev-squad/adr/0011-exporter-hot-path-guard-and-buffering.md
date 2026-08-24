@@ -1,6 +1,6 @@
 # ADR-0011: Exporter hot path — per-console cached flag when idle, buffered writes when recording
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-24
 
 ## Context
