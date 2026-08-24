@@ -88,8 +88,8 @@ private:
 	//MIDI's 16 channels without ever colliding with the percussion channel.
 	static constexpr uint32_t kDrumChannel = 9;
 	static constexpr uint32_t kNumMelodicVoices = 3 + EnhancedSynthEngine::MaxFmVoices; //Lead, Harmony, Bass, + up to MaxFmVoices FM voices
-	static constexpr uint8_t kDrumHiHatNote = 42;  //GM percussion: Closed Hi-Hat - NoiseBrightness >= 0.5 (bright LFSR top)
-	static constexpr uint8_t kDrumTomNote = 45;    //GM percussion: Low Tom - NoiseBrightness < 0.5 (slow LFSR body)
+	static constexpr uint8_t kDrumHiHatNote = 42; //GM percussion: Closed Hi-Hat - NoiseBrightness >= 0.5 (bright LFSR top)
+	static constexpr uint8_t kDrumTomNote = 45; //GM percussion: Low Tom - NoiseBrightness < 0.5 (slow LFSR body)
 
 	//SMF format-1 track layout: one shared tempo/conductor track, one track
 	//multiplexing every melodic voice's Note-On/Off/Program-Change events

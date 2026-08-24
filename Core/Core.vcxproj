@@ -769,6 +769,8 @@
     <ClInclude Include="Shared\Audio\SoundMixer.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h" />
+    <ClInclude Include="Shared\Audio\VgmExporter.h" />
+    <ClInclude Include="Shared\Audio\MidiExporter.h" />
     <ClInclude Include="Shared\Audio\SoundResampler.h" />
     <ClInclude Include="SNES\SnesState.h" />
     <ClInclude Include="SNES\Spc.h" />
@@ -1099,6 +1101,8 @@
     <ClCompile Include="Shared\Audio\SoundMixer.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthPreset.cpp" />
+    <ClCompile Include="Shared\Audio\VgmExporter.cpp" />
+    <ClCompile Include="Shared\Audio\MidiExporter.cpp" />
     <ClCompile Include="Shared\Audio\SoundResampler.cpp" />
     <ClCompile Include="SNES\Spc.cpp" />
     <ClCompile Include="SNES\Spc.Instructions.cpp" />

@@ -3,22 +3,46 @@
 
 safe_ptr<MidiExporter> MidiExporter::_instance;
 
-namespace {
-	void PutBe16(ofstream& s, uint16_t v) { s.put((char)(v >> 8)); s.put((char)v); }
-	void PutBe32(ofstream& s, uint32_t v) { s.put((char)(v >> 24)); s.put((char)(v >> 16)); s.put((char)(v >> 8)); s.put((char)v); }
+namespace
+{
+	void PutBe16(ofstream& s, uint16_t v)
+	{
+		s.put((char)(v >> 8));
+		s.put((char)v);
+	}
+	void PutBe32(ofstream& s, uint32_t v)
+	{
+		s.put((char)(v >> 24));
+		s.put((char)(v >> 16));
+		s.put((char)(v >> 8));
+		s.put((char)v);
+	}
 
 	//GM program per (preset, voice category) - Lead/Harmony/Bass/Fm columns
 	constexpr uint8_t kPrograms[5][4] = {
-		{ 80, 91, 38, 85 }, { 81, 92, 39, 86 }, { 82, 93, 33, 87 }, { 83, 94, 35, 88 }, { 84, 95, 36, 89 },
+		{ 80, 91, 38, 85 },
+		{ 81, 92, 39, 86 },
+		{ 82, 93, 33, 87 },
+		{ 83, 94, 35, 88 },
+		{ 84, 95, 36, 89 },
 	};
 }
 
-MidiExporter::MidiExporter(string outputFile) : _outputFile(outputFile) {}
-MidiExporter::~MidiExporter() { FlushActiveVoices(); WriteFile(); }
+MidiExporter::MidiExporter(string outputFile) : _outputFile(outputFile)
+{
+}
+MidiExporter::~MidiExporter()
+{
+	FlushActiveVoices();
+	WriteFile();
+}
 
-void MidiExporter::StartRecording(string outputFile) { _instance.reset(new MidiExporter(outputFile)); }
-void MidiExporter::StopRecording() { _instance.reset(); }
-bool MidiExporter::IsRecording() { return _instance != nullptr; }
+void MidiExporter::StartRecording(string outputFile)
+{ _instance.reset(new MidiExporter(outputFile)); }
+void MidiExporter::StopRecording()
+{ _instance.reset(); }
+bool MidiExporter::IsRecording()
+{ return _instance != nullptr; }
 
 void MidiExporter::LogFrame(const char* consoleTag, uint32_t presetId, const EnhancedSynthEngine::Input& in)
 {
@@ -126,7 +150,10 @@ void MidiExporter::AppendDelta(uint32_t track)
 	_trackLastTick[track] = _currentTick;
 }
 
-void MidiExporter::AppendBytes(uint32_t track, std::initializer_list<uint8_t> bytes) { for(uint8_t b : bytes) { _trackData[track].push_back(b); } }
+void MidiExporter::AppendBytes(uint32_t track, std::initializer_list<uint8_t> bytes)
+{
+	for(uint8_t b : bytes) { _trackData[track].push_back(b); }
+}
 
 void MidiExporter::EmitEvent(uint32_t track, uint8_t status, uint8_t data1, int data2)
 {
@@ -194,5 +221,7 @@ uint8_t MidiExporter::FreqToMidiNote(double freqHz)
 	return (uint8_t)std::clamp((int)std::lround(note), 0, 127);
 }
 
-uint8_t MidiExporter::MelodicChannel(uint32_t voiceIndex) { return (uint8_t)(voiceIndex < kDrumChannel ? voiceIndex : voiceIndex + 1); }
-uint8_t MidiExporter::VelocityFromVol(double vol) { return (uint8_t)std::clamp((int)std::lround(vol * 127.0), 1, 127); }
+uint8_t MidiExporter::MelodicChannel(uint32_t voiceIndex)
+{ return (uint8_t)(voiceIndex < kDrumChannel ? voiceIndex : voiceIndex + 1); }
+uint8_t MidiExporter::VelocityFromVol(double vol)
+{ return (uint8_t)std::clamp((int)std::lround(vol * 127.0), 1, 127); }

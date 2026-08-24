@@ -3,7 +3,8 @@
 
 safe_ptr<VgmExporter> VgmExporter::_instance;
 
-namespace {
+namespace
+{
 	void PutU32(vector<uint8_t>& buffer, uint32_t offset, uint32_t value)
 	{
 		memcpy(buffer.data() + offset, &value, sizeof(value));
@@ -74,11 +75,11 @@ void VgmExporter::WriteHeader()
 	PutU32(header, 0x0C, SmsPsgClockHz);
 	PutU32(header, 0x10, SmsYm2413ClockHz);
 	PutU32(header, 0x24, 60); //Rate (Hz), NTSC framerate reference only - the
-	                          //VGM command stream's own timebase is always a
-	                          //fixed 44100Hz regardless of this field
+									  //VGM command stream's own timebase is always a
+									  //fixed 44100Hz regardless of this field
 	PutU16(header, 0x28, 0x0009); //SN76489 feedback pattern (Sega PSG clone)
-	header[0x2A] = 16;            //SN76489 shift register width
-	header[0x2B] = 0;             //SN76489 flags - no quirks to signal
+	header[0x2A] = 16; //SN76489 shift register width
+	header[0x2B] = 0; //SN76489 flags - no quirks to signal
 	PutU32(header, 0x34, HeaderSize - 0x34); //VGM data offset, relative to 0x34
 	PutU32(header, 0x80, GameBoyClockHz);
 	PutU32(header, 0x84, NesApuClockHz);
@@ -118,17 +119,17 @@ void VgmExporter::WriteGd3Tag()
 	_stream.write((char*)&placeholderLength, sizeof(placeholderLength));
 
 	uint32_t fieldsStart = (uint32_t)_stream.tellp();
-	WriteUtf16String(_stream, "");                        //Track name (EN)
-	WriteUtf16String(_stream, "");                        //Track name (JP)
-	WriteUtf16String(_stream, "");                        //Game name (EN)
-	WriteUtf16String(_stream, "");                        //Game name (JP)
-	WriteUtf16String(_stream, "Mesen (Enhanced Audio)");  //System name (EN)
-	WriteUtf16String(_stream, "");                        //System name (JP)
-	WriteUtf16String(_stream, "");                        //Author name (EN)
-	WriteUtf16String(_stream, "");                        //Author name (JP)
-	WriteUtf16String(_stream, "");                        //Release date
-	WriteUtf16String(_stream, "MesenCE VgmExporter");     //Creator/ripper tool
-	WriteUtf16String(_stream, "");                        //Notes
+	WriteUtf16String(_stream, ""); //Track name (EN)
+	WriteUtf16String(_stream, ""); //Track name (JP)
+	WriteUtf16String(_stream, ""); //Game name (EN)
+	WriteUtf16String(_stream, ""); //Game name (JP)
+	WriteUtf16String(_stream, "Mesen (Enhanced Audio)"); //System name (EN)
+	WriteUtf16String(_stream, ""); //System name (JP)
+	WriteUtf16String(_stream, ""); //Author name (EN)
+	WriteUtf16String(_stream, ""); //Author name (JP)
+	WriteUtf16String(_stream, ""); //Release date
+	WriteUtf16String(_stream, "MesenCE VgmExporter"); //Creator/ripper tool
+	WriteUtf16String(_stream, ""); //Notes
 
 	uint32_t fieldsEnd = (uint32_t)_stream.tellp();
 	uint32_t length = fieldsEnd - fieldsStart;
