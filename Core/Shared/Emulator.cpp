@@ -444,7 +444,7 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 	//console's LoadRom runs: the consoles pull textures/synth/audio paths from
 	//the manager while loading their HD packs (F3 - ADR-0039/0040).
 	_mepPackManager->LoadForRom(romFile);
-		_mepPackManager->ApplyPatches(romFile);
+	_mepPackManager->ApplyPatches(romFile);
 
 	_soundMixer->StopAudio();
 

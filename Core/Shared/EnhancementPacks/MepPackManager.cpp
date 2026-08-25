@@ -316,7 +316,8 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 					sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 				}
 			}
-			string origin = pack.Origin == MepPackOrigin::Sibling ? "sibling folder" : pack.FromZip ? "zip" : "folder";
+			string origin = pack.Origin == MepPackOrigin::Sibling ? "sibling folder" : pack.FromZip ? "zip" :
+																																	"folder";
 			Log("pack '" + pack.Name + "' v" + pack.Version + (pack.Synthetic ? " [folder convention]" : "") + " matches ROM sha1 " + _romSha1 + " (" + origin + " '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
 		}
 	}
