@@ -1,6 +1,6 @@
 # Plano de execução — Fase 5: Bootstrap automático de packs (convenção sobre configuração)
 
-**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 segue `proposed` até a F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · F5.2–F5.5 pendentes ·
+**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 segue `proposed` até a F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · **F5.2 ✅** (setting `BootstrapEnhancementFolder`, default on: no load sem nenhum pack de texturas, exporta tiles da ROM + grava os tiles jogados com xBRZ 4× em `<Game>/auto/textures/` (+ `.bootstrap`); fallback `EnhancementPacks/<Game>/` quando a pasta da ROM é somente-leitura; segundo load já usa a camada; botão *Open Game Folder*; 18 checagens headless — GB, SMB3 CHR ROM 8275 tiles, Zelda CHR RAM, opt-in, pasta RO) · F5.3–F5.5 pendentes ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 5 (re-escopada) ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (ganha `patches[]` e a convenção de pasta irmã; `pack.json` passa a ser opcional) ·
 **Ordem:** proposta de antecipar a F5 à F4 (browser/MEI): sem packs bons e fáceis de produzir, um browser lista um catálogo vazio. A F4 fica intacta no PRD e entra depois.
@@ -113,6 +113,12 @@ Níveis 2–4 vivem em `auto/`; o 5 fora dela. Só isso.
    para render de áudio (PRD: IA/ferramentas pesadas nunca embutidas).
    (b) política de gravação em background: buffer limitado (ex.: 10 min de
    tiles únicos + MIDI), custo de CPU medido no harness.
+   **Decidido na F5.2:** (a) upscale **no core** — o HD Pack Builder já
+   aplica xBRZ/HQx/Scale2x por tile ao salvar, então o bootstrap é o builder
+   existente apontado para `auto/textures` com xBRZ 4×; (b) a gravação usa o
+   builder tal como está (dedup por chave, sem buffer extra) e só roda quando
+   **nenhum** pack de texturas se aplica — com a camada `auto/` presente o
+   segundo load não regrava (o builder troca o PPU e esconderia o pack).
 
 ## F5.1 — Descoberta pela pasta irmã + linter + host permissivo ✅
 
@@ -136,7 +142,7 @@ carrega; linter offline; `patches[]`.
 - Validação headless: Zelda com os três dumps do usuário → texturas nos três,
   patch só no trimmed; GB 1:1 com pack em pasta irmã; `mep-off` inalterado.
 
-## F5.2 — Bootstrap de imagem (nível 2)
+## F5.2 — Bootstrap de imagem (nível 2) ✅
 
 **Entrega:** jogar gera `auto/textures/` com tiles upscalados; setting on/off.
 

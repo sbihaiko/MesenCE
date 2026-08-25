@@ -282,6 +282,16 @@ extern "C"
 		StringUtilities::CopyToBuffer(_emu->GetEnhancementPackManager()->GetRomSha1(), outBuffer, maxLength);
 	}
 
+	DllExport void __stdcall GetMepSiblingFolder(char* outBuffer, uint32_t maxLength)
+	{
+		StringUtilities::CopyToBuffer(_emu->GetEnhancementPackManager()->GetSiblingFolder(), outBuffer, maxLength);
+	}
+
+	DllExport bool __stdcall IsMepBootstrapping()
+	{
+		return _emu->GetEnhancementPackManager()->IsBootstrapping();
+	}
+
 	DllExport void __stdcall SetMepPackEnabled(const char* containerName, bool enabled)
 	{
 		_emu->GetEnhancementPackManager()->SetPackEnabled(containerName ? containerName : "", enabled);

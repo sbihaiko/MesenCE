@@ -807,6 +807,10 @@ struct EnhancementPackConfig
 	//ADR-0044: apply a pack's patch even when no patches[]/<patch> hash matches
 	//the ROM (opt-in; wrong revisions may break the game)
 	bool ApplyPatchOnHashMismatch = false;
+	//F5.2 (ADR-0049): when no textures pack applies to the loaded ROM, record
+	//the played tiles (xBRZ 4x) into <rom dir>/<Game>/auto/textures/ so the
+	//next load already plays with the auto layer
+	bool BootstrapEnhancementFolder = true;
 };
 
 struct CvConfig

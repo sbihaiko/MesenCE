@@ -23,6 +23,8 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial string RejectedInfo { get; set; } = "";
 		[ObservableProperty] public partial bool HasRejected { get; set; }
 		[ObservableProperty] public partial bool HasPacks { get; set; }
+		[ObservableProperty] public partial string SiblingFolder { get; set; } = "";
+		[ObservableProperty] public partial bool HasSiblingFolder { get; set; }
 
 		public string PacksFolder => ConfigManager.EnhancementPackFolder;
 
@@ -35,6 +37,8 @@ namespace Mesen.ViewModels
 		public void Refresh()
 		{
 			RomSha1 = EmuApi.GetMepRomSha1();
+			SiblingFolder = EmuApi.GetMepSiblingFolder();
+			HasSiblingFolder = SiblingFolder.Length > 0;
 
 			var packs = new MesenList<MepPackEntry>();
 			var rejected = new System.Text.StringBuilder();
@@ -75,9 +79,27 @@ namespace Mesen.ViewModels
 			ConfigManager.Config.Save();
 		}
 
+		//<rom dir>/<Game>/ - the artist's workspace (ADR-0049); created on demand
+		public void OpenSiblingFolder()
+		{
+			if(SiblingFolder.Length == 0) {
+				return;
+			}
+			try {
+				Directory.CreateDirectory(Path.Combine(SiblingFolder, "textures"));
+				Directory.CreateDirectory(Path.Combine(SiblingFolder, "audio"));
+				Directory.CreateDirectory(Path.Combine(SiblingFolder, "synth"));
+			} catch { }
+			OpenFolder(SiblingFolder);
+		}
+
 		public void OpenFolder()
 		{
-			string folder = PacksFolder;
+			OpenFolder(PacksFolder);
+		}
+
+		private void OpenFolder(string folder)
+		{
 			if(Directory.Exists(folder)) {
 				System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo() {
 					FileName = folder + Path.DirectorySeparatorChar,
@@ -99,7 +121,12 @@ namespace Mesen.ViewModels
 
 			try {
 				using(ZipArchive zip = ZipFile.OpenRead(filename)) {
-					if(zip.GetEntry("pack.json") == null) {
+					//pack.json, or the folder convention (ADR-0049) - any layer file
+					bool hasLayer = zip.GetEntry("pack.json") != null;
+					foreach(string probe in new[] { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg" }) {
+						hasLayer |= zip.GetEntry(probe) != null || zip.GetEntry("auto/" + probe) != null;
+					}
+					if(!hasLayer) {
 						return "InstallMepPackInvalidPack";
 					}
 					foreach(ZipArchiveEntry entry in zip.Entries) {

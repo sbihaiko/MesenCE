@@ -949,6 +949,8 @@
 			<Control ID="chkEnableTextures">Textures</Control>
 			<Control ID="chkEnableAudio">Audio (OGG)</Control>
 			<Control ID="chkEnableSynth">Synth preset</Control>
+			<Control ID="chkBootstrapEnhancementFolder">Bootstrap an enhancement folder beside played ROMs (records the game's tiles upscaled into &lt;Game&gt;/auto/ when no pack applies yet)</Control>
+			<Control ID="btnOpenSiblingFolder">Open Game Folder</Control>
 			<Control ID="chkApplyPatchOnHashMismatch">Apply ROM patches even when the hash does not match (may break other revisions)</Control>
 			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A folder named like the ROM beside it ("sibling") always comes first, then a loose HD pack in HdPacks/, then installed packs. Files under a pack's auto/ folder are the machine layer; anything outside it overrides them. Changes apply on the next power cycle.</Control>
 			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Create a folder named like the ROM beside it, install a .zip, or drop a pack folder into the EnhancementPacks folder.</Control>

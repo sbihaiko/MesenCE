@@ -118,6 +118,7 @@ int main(int argc, char** argv)
 	bool screenshot = false;
 	bool dumpLog = false;
 	EnhancementPackConfig mep = {};
+	mep.BootstrapEnhancementFolder = false; //opt-in headless ("bootstrap" flag) - it writes beside the ROM
 	std::string mepDisable;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
@@ -136,6 +137,8 @@ int main(int argc, char** argv)
 			mep.EnableTextures = false;
 		} else if(strcmp(argv[i], "mep-nosynth") == 0) {
 			mep.EnableSynth = false;
+		} else if(strcmp(argv[i], "bootstrap") == 0) {
+			mep.BootstrapEnhancementFolder = true;
 		} else if(strcmp(argv[i], "mep-forcepatch") == 0) {
 			mep.ApplyPatchOnHashMismatch = true;
 		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {

@@ -21,6 +21,7 @@
 			<StackPanel Orientation="Horizontal">
 				<c:ButtonWithIcon Icon="Assets/Import.png" Click="Install_OnClick" Text="{l:Translate btnInstall}" />
 				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" />
+				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenSiblingFolder}" IsEnabled="{Binding HasSiblingFolder}" Text="{l:Translate btnOpenSiblingFolder}" />
 				<c:ButtonWithIcon Icon="Assets/Refresh.png" Command="{Binding Refresh}" Text="{l:Translate btnRefresh}" />
 			</StackPanel>
 		</DockPanel>
@@ -38,6 +39,7 @@
 					<CheckBox Content="{l:Translate chkEnableSynth}" IsChecked="{Binding Config.EnableSynth}" IsEnabled="{Binding Config.EnableMepPacks}" />
 				</WrapPanel>
 			</c:OptionSection>
+			<CheckBox Content="{l:Translate chkBootstrapEnhancementFolder}" IsChecked="{Binding Config.BootstrapEnhancementFolder}" IsEnabled="{Binding Config.EnableMepPacks}" />
 			<CheckBox Content="{l:Translate chkApplyPatchOnHashMismatch}" IsChecked="{Binding Config.ApplyPatchOnHashMismatch}" IsEnabled="{Binding Config.EnableMepPacks}" />
 			<TextBlock Text="{l:Translate lblPacksHelp}" TextWrapping="Wrap" Margin="0 3" />
 		</StackPanel>

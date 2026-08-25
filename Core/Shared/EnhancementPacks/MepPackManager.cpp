@@ -9,6 +9,8 @@
 #include "Utilities/StringUtilities.h"
 #include "Utilities/ZipReader.h"
 #include "Utilities/sha1.h"
+#include "Shared/Interfaces/IConsole.h"
+#include "Shared/Interfaces/INotificationListener.h"
 
 namespace fs = std::filesystem;
 
@@ -83,8 +85,86 @@ string MepPackManager::ComputeNoIntroSha1(VirtualFile& romFile)
 	return SHA1::GetHash(data.data() + offset, size - offset);
 }
 
+string MepPackManager::GetSiblingFolder() const
+{
+	if(_romFolder.empty() || _romName.empty()) {
+		return "";
+	}
+	return FolderUtilities::CombinePath(_romFolder, _romName);
+}
+
+void MepPackManager::StartBootstrapIfNeeded()
+{
+	_bootstrapping = false;
+	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
+	if(!cfg.EnableMepPacks || !cfg.BootstrapEnhancementFolder || _romName.empty()) {
+		return;
+	}
+
+	shared_ptr<IConsole> console = _emu->GetConsole();
+	if(!console) {
+		return;
+	}
+	ConsoleType type = console->GetConsoleType();
+	if(type != ConsoleType::Nes && type != ConsoleType::Gameboy && type != ConsoleType::Sms) {
+		return; //no HD pack builder for this system
+	}
+
+	//Something already dresses this ROM: the bootstrap is only a first draft
+	if(GetPackForSection(MepSectionType::Textures)) {
+		return;
+	}
+	std::error_code ec;
+	if(fs::exists(fs::u8path(FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), _romName), "hires.txt")), ec)) {
+		return;
+	}
+
+	//Sibling folder, or the central folder when the ROM's directory is read-only
+	string root = GetSiblingFolder();
+	string autoTextures = FolderUtilities::CombinePath(FolderUtilities::CombinePath(root, MepPack::AutoFolderName), MepPack::GetConventionPath(MepSectionType::Textures));
+	fs::create_directories(fs::u8path(autoTextures), ec);
+	if(ec || !fs::is_directory(fs::u8path(autoTextures), ec)) {
+		root = FolderUtilities::CombinePath(GetPacksFolder(), _romName);
+		autoTextures = FolderUtilities::CombinePath(FolderUtilities::CombinePath(root, MepPack::AutoFolderName), MepPack::GetConventionPath(MepSectionType::Textures));
+		ec.clear();
+		fs::create_directories(fs::u8path(autoTextures), ec);
+		if(ec) {
+			Log("bootstrap: cannot create '" + autoTextures + "' - skipped");
+			return;
+		}
+		Log("bootstrap: ROM folder is not writable - using '" + root + "' instead (matched by name on the next load)");
+	}
+
+	//Stamp: generator version + ROM identity (never touches anything outside auto/)
+	{
+		ofstream stamp(FolderUtilities::CombinePath(root, ".bootstrap"), std::ios::out | std::ios::binary);
+		stamp << "generator=mesence-bootstrap/1\nsha1=" << _romSha1 << "\nrom=" << _romName << "\nfilter=xBRZ\nscale=4\n";
+	}
+
+	_bootstrapSaveFolder = autoTextures;
+	HdPackBuilderOptions options = {};
+	options.SaveFolder = (char*)_bootstrapSaveFolder.c_str();
+	options.FilterType = ScaleFilterType::xBRZ;
+	options.Scale = 4;
+	options.ChrRamBankSize = 0x1000;
+	options.UseLargeSprites = false;
+	options.SortByUsageFrequency = true;
+	options.GroupBlankTiles = true;
+	options.IgnoreOverscan = true;
+
+	//Static pass first (ADR-0043; refused for CHR RAM games), then record what
+	//is actually drawn while playing - the builder merges both in the folder
+	ExecuteShortcutParams exportParams = { EmulatorShortcut::ExportRomTilesHdPack, 0, &options };
+	console->ProcessNotification(ConsoleNotificationType::ExecuteShortcut, &exportParams);
+	ExecuteShortcutParams recordParams = { EmulatorShortcut::StartRecordHdPack, 0, &options };
+	console->ProcessNotification(ConsoleNotificationType::ExecuteShortcut, &recordParams);
+	_bootstrapping = true;
+	Log("bootstrap: recording played tiles (xBRZ 4x) into '" + autoTextures + "' - the next load of this ROM plays with the auto layer");
+}
+
 void MepPackManager::Clear()
 {
+	_bootstrapping = false;
 	_romSha1.clear();
 	_romExtension.clear();
 	_romName.clear();

@@ -24,6 +24,8 @@ private:
 	string _romFolder; //folder holding the ROM (or its archive)
 	vector<MepPack> _packs; //matching packs, precedence order (first wins)
 	vector<string> _rejected; //"<container>: <reason>" for the UI/log
+	bool _bootstrapping = false;
+	string _bootstrapSaveFolder; //owns the char* handed to HdPackBuilderOptions
 
 	void ScanAndMatch();
 	void ScanSiblingFolder();
@@ -58,6 +60,16 @@ public:
 
 	//Sibling folder of a ROM: <dir>/<name>/ (ADR-0049)
 	static string GetSiblingFolder(VirtualFile& romFile);
+	//Sibling folder of the loaded ROM ("" when no ROM)
+	string GetSiblingFolder() const;
+
+	//F5.2: when BootstrapEnhancementFolder is on and no textures layer applies
+	//to this ROM (no sibling/MEP textures, no loose HdPacks/<rom>/), export
+	//the ROM tiles and start recording played tiles (xBRZ 4x) into
+	//<sibling>/auto/textures/ (fallback: EnhancementPacks/<Game>/ when the
+	//ROM's folder is not writable). Call once the console is initialised.
+	void StartBootstrapIfNeeded();
+	bool IsBootstrapping() const { return _bootstrapping; }
 	const string& GetRomName() const { return _romName; }
 	const string& GetRomFolder() const { return _romFolder; }
 

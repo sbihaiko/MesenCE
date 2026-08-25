@@ -522,6 +522,9 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 
 	_notificationManager->SendNotification(ConsoleNotificationType::AfterInitConsole);
 
+	//F5.2 (ADR-0049): first draft of the ROM's enhancement folder while playing
+	_mepPackManager->StartBootstrapIfNeeded();
+
 	_rewindManager->InitHistory();
 
 	if(debuggerActive || _settings->CheckFlag(EmulationFlags::ConsoleMode)) {
