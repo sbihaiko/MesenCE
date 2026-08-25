@@ -62,6 +62,11 @@ extern "C"
 		_emu->GetSettings()->SetSmsConfig(config);
 	}
 
+	DllExport void __stdcall SetEnhancementPackConfig(EnhancementPackConfig config)
+	{
+		_emu->GetSettings()->SetEnhancementPackConfig(config);
+	}
+
 	DllExport void __stdcall SetCvConfig(CvConfig config)
 	{
 		_emu->GetSettings()->SetCvConfig(config);

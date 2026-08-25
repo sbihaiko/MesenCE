@@ -91,6 +91,13 @@ namespace Mesen.Interop
 		[DllImport(DllPath, EntryPoint = "GetLog")] private static extern void GetLogWrapper(IntPtr outLog, Int32 maxLength);
 		public static string GetLog() { return Utf8Utilities.CallStringApi(GetLogWrapper, 100000); }
 
+		//MEP enhancement packs (F3) - list format: see MepPackManager::GetPackListText
+		[DllImport(DllPath, EntryPoint = "GetMepPackList")] private static extern void GetMepPackListWrapper(IntPtr outList, Int32 maxLength);
+		public static string GetMepPackList() { return Utf8Utilities.CallStringApi(GetMepPackListWrapper, 100000); }
+		[DllImport(DllPath, EntryPoint = "GetMepRomSha1")] private static extern void GetMepRomSha1Wrapper(IntPtr outSha1, Int32 maxLength);
+		public static string GetMepRomSha1() { return Utf8Utilities.CallStringApi(GetMepRomSha1Wrapper, 100); }
+		[DllImport(DllPath)] public static extern void SetMepPackEnabled([MarshalAs(UnmanagedType.LPUTF8Str)] string containerName, [MarshalAs(UnmanagedType.I1)] bool enabled);
+
 		[DllImport(DllPath)] public static extern void WriteLogEntry([MarshalAs(UnmanagedType.LPUTF8Str)] string message);
 		[DllImport(DllPath)] public static extern void DisplayMessage([MarshalAs(UnmanagedType.LPUTF8Str)] string title, [MarshalAs(UnmanagedType.LPUTF8Str)] string message, [MarshalAs(UnmanagedType.LPUTF8Str)] string? param1 = null);
 

@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>]
 //
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
@@ -18,6 +18,7 @@
 //With the "log" flag the core message log is dumped to stdout at the end
 //(used by the F3 MEP tests to check "[MEP] ..." matching/rejection lines;
 //the MEP folder is <home>/EnhancementPacks/ inside the scratch home).
+//The mep-* flags exercise EnhancementPackConfig / SetMepPackEnabled (F3.3).
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
@@ -59,6 +60,8 @@ extern "C"
 	void SetCvConfig(CvConfig config);
 	void SetNesConfig(NesConfig config);
 	void SetGameboyConfig(GameboyConfig config);
+	void SetEnhancementPackConfig(EnhancementPackConfig config);
+	void SetMepPackEnabled(const char* containerName, bool enabled);
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
 	void TakeScreenshot();
@@ -110,6 +113,8 @@ int main(int argc, char** argv)
 	bool hdPack = false;
 	bool screenshot = false;
 	bool dumpLog = false;
+	EnhancementPackConfig mep = {};
+	std::string mepDisable;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
@@ -119,6 +124,14 @@ int main(int argc, char** argv)
 			screenshot = true;
 		} else if(strcmp(argv[i], "log") == 0) {
 			dumpLog = true;
+		} else if(strcmp(argv[i], "mep-off") == 0) {
+			mep.EnableMepPacks = false;
+		} else if(strcmp(argv[i], "mep-notextures") == 0) {
+			mep.EnableTextures = false;
+		} else if(strcmp(argv[i], "mep-nosynth") == 0) {
+			mep.EnableSynth = false;
+		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {
+			mepDisable = argv[i] + 12;
 		}
 	}
 
@@ -177,6 +190,11 @@ int main(int argc, char** argv)
 	gameboy.GbcAdjustColors = false;
 	gameboy.BlendFrames = false;
 	SetGameboyConfig(gameboy);
+
+	SetEnhancementPackConfig(mep);
+	if(!mepDisable.empty()) {
+		SetMepPackEnabled(mepDisable.c_str(), false);
+	}
 
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
 		fprintf(stderr, "FALHA ao carregar ROM: %s\n", rom.c_str());

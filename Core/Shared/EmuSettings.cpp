@@ -286,6 +286,16 @@ SmsConfig& EmuSettings::GetSmsConfig()
 	return _sms;
 }
 
+void EmuSettings::SetEnhancementPackConfig(EnhancementPackConfig& config)
+{
+	_enhancementPacks = config;
+}
+
+EnhancementPackConfig& EmuSettings::GetEnhancementPackConfig()
+{
+	return _enhancementPacks;
+}
+
 void EmuSettings::SetCvConfig(CvConfig& config)
 {
 	_cv = config;

@@ -3,6 +3,7 @@
 #include "Shared/EnhancementPacks/MepPack.h"
 
 class VirtualFile;
+class Emulator;
 
 //Discovers MEP packs in <home>/EnhancementPacks/ (directories and zips),
 //matches them against the loaded ROM's No-Intro SHA-1 and exposes, per
@@ -13,7 +14,11 @@ class VirtualFile;
 class MepPackManager
 {
 private:
+	Emulator* _emu;
 	string _romSha1;
+	//Containers disabled by the user (UI/config), lower-cased; independent of
+	//the current scan so it can be pushed at any time
+	unordered_set<string> _disabledContainers;
 	string _romExtension;
 	vector<MepPack> _packs; //matching packs, precedence order (first wins)
 	vector<string> _rejected; //"<container>: <reason>" for the UI/log
@@ -24,6 +29,8 @@ private:
 	static bool ReadTextFile(const string& path, string& out);
 
 public:
+	MepPackManager(Emulator* emu);
+
 	static constexpr const char* FolderName = "EnhancementPacks";
 	static constexpr const char* CacheFolderName = ".cache";
 
@@ -42,9 +49,19 @@ public:
 	const vector<string>& GetRejected() const { return _rejected; }
 	bool HasPacks() const { return !_packs.empty(); }
 
-	//Winning pack for a section (first in precedence order that has it),
-	//nullptr when no matching pack provides the section
+	//Per-pack toggle (persisted by the UI); takes effect on the next load
+	void SetPackEnabled(const string& containerName, bool enabled);
+	bool IsPackEnabled(const string& containerName) const;
+
+	//Winning pack for a section: first *enabled* pack in precedence order
+	//that has it, honouring EnhancementPackConfig section toggles; nullptr
+	//when nothing applies
 	const MepPack* GetPackForSection(MepSectionType type) const;
+
+	//One line per matching pack, tab-separated:
+	//container\tname\tversion\tauthor\tlicense\tsections(comma)\tenabled(0/1)\tfromZip(0/1)
+	//followed by "!<container>: <reason>" lines for rejected containers
+	string GetPackListText() const;
 
 	//Absolute content path of the winning section, or "" when none:
 	//folder for textures/audio, file for synth

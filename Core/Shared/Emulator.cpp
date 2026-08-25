@@ -63,7 +63,7 @@ Emulator::Emulator()
 	  _cheatManager(new CheatManager(this)),
 	  _movieManager(new MovieManager(this)),
 	  _historyViewer(new HistoryViewer(this)),
-	  _mepPackManager(new MepPackManager()),
+	  _mepPackManager(new MepPackManager(this)),
 	  _gameServer(new GameServer(this)),
 	  _gameClient(new GameClient(this)),
 	  _rewindManager(new RewindManager(this)),

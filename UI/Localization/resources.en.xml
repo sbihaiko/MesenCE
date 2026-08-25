@@ -941,6 +941,28 @@
 			<Control ID="btnOK">Record</Control>
 			<Control ID="btnCancel">Cancel</Control>
 		</Form>
+		<Form ID="EnhancementPacksWindow">
+			<Control ID="wndTitle">Enhancement Packs</Control>
+			<Control ID="lblRomSha1">ROM No-Intro SHA-1:</Control>
+			<Control ID="grpSections">Layers</Control>
+			<Control ID="chkEnableMepPacks">Enable enhancement packs</Control>
+			<Control ID="chkEnableTextures">Textures</Control>
+			<Control ID="chkEnableAudio">Audio (OGG)</Control>
+			<Control ID="chkEnableSynth">Synth preset</Control>
+			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A loose HD pack in HdPacks/ always overrides the textures layer. Changes apply on the next power cycle.</Control>
+			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Install a .zip or drop a pack folder into the EnhancementPacks folder.</Control>
+			<Control ID="colName">Name</Control>
+			<Control ID="colVersion">Version</Control>
+			<Control ID="colSections">Layers</Control>
+			<Control ID="colContainer">Container</Control>
+			<Control ID="colSource">Source</Control>
+			<Control ID="btnInstall">Install .zip...</Control>
+			<Control ID="btnOpenFolder">Open Folder</Control>
+			<Control ID="btnRefresh">Refresh</Control>
+			<Control ID="btnOK">OK</Control>
+			<Control ID="btnCancel">Cancel</Control>
+		</Form>
+
 		<Form ID="HdPackBuilderWindow">
 			<Control ID="wndTitle">HD Pack Builder</Control>
 			
@@ -1850,7 +1872,11 @@ E
 		<Message ID="InstallHdPackInvalidPack">The selected file is not a valid HD Pack.</Message>
 		<Message ID="InstallHdPackInvalidZipFile">The selected file is not a valid ZIP file.</Message>
 		<Message ID="InstallHdPackConfirmOverwrite">The destination folder ({0}) already exists - are you sure you want to overwrite it?</Message>
-		<Message ID="InstallHdPackConfirmReset">The HD Pack has been installed successfully. Do you want to reset the game and load the HD Pack now?</Message>
+		<Message ID="InstallMepPackInvalidPack">The selected file is not a valid enhancement pack (no pack.json at the root of the zip, or unsafe paths).</Message>
+			<Message ID="InstallMepPackInvalidZipFile">The selected file is not a valid ZIP file or could not be copied.</Message>
+			<Message ID="InstallMepPackConfirmReset">The enhancement pack has been installed. Do you want to power cycle the console to apply it now?</Message>
+			<Message ID="EnhancementPacksConfirmReset">Enhancement pack settings apply on the next power cycle. Power cycle now?</Message>
+			<Message ID="InstallHdPackConfirmReset">The HD Pack has been installed successfully. Do you want to reset the game and load the HD Pack now?</Message>
 
 		<Message ID="Player">Player</Message>
 
@@ -3627,6 +3653,7 @@ E
 			<Value ID="HdPacks">HD Packs (NES)</Value>
 			<Value ID="InstallHdPack">Install HD Pack</Value>
 			<Value ID="HdPackBuilder">HD Pack Builder</Value>
+			<Value ID="EnhancementPacks">Enhancement Packs (MEP)...</Value>
 			<Value ID="TakeScreenshot">Take Screenshot</Value>
 			<Value ID="SaveSpcFile">Save .SPC File</Value>
 

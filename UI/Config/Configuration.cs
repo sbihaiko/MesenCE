@@ -33,6 +33,7 @@ namespace Mesen.Config
 		[ObservableProperty] public partial PcEngineConfig PcEngine { get; set; } = new();
 		[ObservableProperty] public partial SmsConfig Sms { get; set; } = new();
 		[ObservableProperty] public partial CvConfig Cv { get; set; } = new();
+		[ObservableProperty] public partial EnhancementPackConfig EnhancementPacks { get; set; } = new();
 		[ObservableProperty] public partial GbaConfig Gba { get; set; } = new();
 		[ObservableProperty] public partial WsConfig Ws { get; set; } = new();
 		[ObservableProperty] public partial PreferencesConfig Preferences { get; set; } = new();
@@ -89,6 +90,7 @@ namespace Mesen.Config
 			Nes.ApplyConfig();
 			Snes.ApplyConfig();
 			Sms.ApplyConfig();
+			EnhancementPacks.ApplyConfig();
 			Cv.ApplyConfig();
 			Ws.ApplyConfig();
 			Preferences.ApplyConfig();

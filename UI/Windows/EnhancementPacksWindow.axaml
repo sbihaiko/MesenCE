@@ -1,0 +1,60 @@
+<Window
+	xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:m="clr-namespace:Mesen"
+	xmlns:vm="using:Mesen.ViewModels"
+	xmlns:c="using:Mesen.Controls"
+	xmlns:l="using:Mesen.Localization"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="420"
+	x:Class="Mesen.Windows.EnhancementPacksWindow"
+	Width="620" Height="420"
+	x:DataType="vm:EnhancementPacksViewModel"
+	Title="{l:Translate wndTitle}"
+	Icon="/Assets/HdPack.png"
+>
+	<DockPanel Margin="5">
+		<DockPanel DockPanel.Dock="Bottom" Margin="0 5 0 0">
+			<Button DockPanel.Dock="Right" MinWidth="70" HorizontalContentAlignment="Center" Click="Cancel_OnClick" Content="{l:Translate btnCancel}" />
+			<Button DockPanel.Dock="Right" MinWidth="70" HorizontalContentAlignment="Center" Click="Ok_OnClick" Content="{l:Translate btnOK}" />
+			<StackPanel Orientation="Horizontal">
+				<c:ButtonWithIcon Icon="Assets/Import.png" Click="Install_OnClick" Text="{l:Translate btnInstall}" />
+				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" />
+				<c:ButtonWithIcon Icon="Assets/Refresh.png" Command="{Binding Refresh}" Text="{l:Translate btnRefresh}" />
+			</StackPanel>
+		</DockPanel>
+
+		<StackPanel DockPanel.Dock="Top">
+			<StackPanel Orientation="Horizontal">
+				<TextBlock Text="{l:Translate lblRomSha1}" VerticalAlignment="Center" />
+				<TextBox Text="{Binding RomSha1}" IsReadOnly="True" MinWidth="330" Margin="5 0" FontFamily="Consolas, Menlo, monospace" />
+			</StackPanel>
+			<c:OptionSection Header="{l:Translate grpSections}">
+				<WrapPanel>
+					<CheckBox Content="{l:Translate chkEnableMepPacks}" IsChecked="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
+					<CheckBox Content="{l:Translate chkEnableTextures}" IsChecked="{Binding Config.EnableTextures}" IsEnabled="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
+					<CheckBox Content="{l:Translate chkEnableAudio}" IsChecked="{Binding Config.EnableAudio}" IsEnabled="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
+					<CheckBox Content="{l:Translate chkEnableSynth}" IsChecked="{Binding Config.EnableSynth}" IsEnabled="{Binding Config.EnableMepPacks}" />
+				</WrapPanel>
+			</c:OptionSection>
+			<TextBlock Text="{l:Translate lblPacksHelp}" TextWrapping="Wrap" Margin="0 3" />
+		</StackPanel>
+
+		<TextBlock DockPanel.Dock="Bottom" Text="{Binding RejectedInfo}" IsVisible="{Binding HasRejected}" Foreground="DarkRed" TextWrapping="Wrap" Margin="0 3 0 0" />
+		<TextBlock DockPanel.Dock="Bottom" Text="{l:Translate lblNoPacks}" IsVisible="{Binding !HasPacks}" Margin="0 3 0 0" />
+
+		<Border BorderThickness="1" BorderBrush="{StaticResource MesenGrayBorderColor}" Margin="2">
+			<DataBox Items="{Binding Packs}" GridLinesVisibility="All" SortMode="None">
+				<DataBox.Columns>
+					<DataBoxCheckBoxColumn ColumnName="Enabled" Header="" Binding="{Binding Enabled, DataType={x:Type vm:MepPackEntry}}" InitialWidth="22" />
+					<DataBoxTextColumn ColumnName="Name" Header="{l:Translate colName}" Binding="{Binding Name, DataType={x:Type vm:MepPackEntry}}" CanUserResize="True" InitialWidth="200" />
+					<DataBoxTextColumn ColumnName="Version" Header="{l:Translate colVersion}" Binding="{Binding Version, DataType={x:Type vm:MepPackEntry}}" CanUserResize="True" InitialWidth="60" />
+					<DataBoxTextColumn ColumnName="Sections" Header="{l:Translate colSections}" Binding="{Binding Sections, DataType={x:Type vm:MepPackEntry}}" CanUserResize="True" InitialWidth="140" />
+					<DataBoxTextColumn ColumnName="Container" Header="{l:Translate colContainer}" Binding="{Binding Container, DataType={x:Type vm:MepPackEntry}}" CanUserResize="True" InitialWidth="120" />
+					<DataBoxTextColumn ColumnName="Source" Header="{l:Translate colSource}" Binding="{Binding Source, DataType={x:Type vm:MepPackEntry}}" CanUserResize="True" InitialWidth="50" />
+				</DataBox.Columns>
+			</DataBox>
+		</Border>
+	</DockPanel>
+</Window>

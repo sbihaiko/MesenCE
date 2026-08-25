@@ -2,6 +2,8 @@
 #include <filesystem>
 #include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Shared/MessageManager.h"
+#include "Shared/Emulator.h"
+#include "Shared/EmuSettings.h"
 #include "Utilities/VirtualFile.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/StringUtilities.h"
@@ -26,6 +28,11 @@ namespace
 		}
 		return false;
 	}
+}
+
+MepPackManager::MepPackManager(Emulator* emu)
+{
+	_emu = emu;
 }
 
 string MepPackManager::GetPacksFolder()
@@ -80,6 +87,10 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 
 	_romSha1 = ComputeNoIntroSha1(romFile);
 	_romExtension = StringUtilities::ToLower(romFile.GetFileExtension());
+	if(!_emu->GetSettings()->GetEnhancementPackConfig().EnableMepPacks) {
+		Log("enhancement packs disabled in settings - folder not scanned");
+		return;
+	}
 	ScanAndMatch();
 
 	if(!_packs.empty()) {
@@ -90,7 +101,7 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 					sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 				}
 			}
-			Log("pack '" + pack.Name + "' v" + pack.Version + " matches ROM sha1 " + _romSha1 + " (container '" + pack.ContainerName + "', sections: " + sections + ")");
+			Log("pack '" + pack.Name + "' v" + pack.Version + " matches ROM sha1 " + _romSha1 + " (container '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
 		}
 	}
 }
@@ -285,14 +296,53 @@ void MepPackManager::ScanAndMatch()
 	}
 }
 
+void MepPackManager::SetPackEnabled(const string& containerName, bool enabled)
+{
+	string key = StringUtilities::ToLower(containerName);
+	if(enabled) {
+		_disabledContainers.erase(key);
+	} else {
+		_disabledContainers.insert(key);
+	}
+}
+
+bool MepPackManager::IsPackEnabled(const string& containerName) const
+{
+	return _disabledContainers.find(StringUtilities::ToLower(containerName)) == _disabledContainers.end();
+}
+
 const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 {
+	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
+	bool sectionEnabled = cfg.EnableMepPacks && (type == MepSectionType::Textures ? cfg.EnableTextures : type == MepSectionType::Audio ? cfg.EnableAudio :
+																																													 cfg.EnableSynth);
+	if(!sectionEnabled) {
+		return nullptr;
+	}
 	for(const MepPack& pack : _packs) {
-		if(pack.HasSection(type)) {
+		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName)) {
 			return &pack;
 		}
 	}
 	return nullptr;
+}
+
+string MepPackManager::GetPackListText() const
+{
+	string out;
+	for(const MepPack& pack : _packs) {
+		string sections;
+		for(int i = 0; i < 3; i++) {
+			if(pack.Sections[i].Present) {
+				sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
+			}
+		}
+		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + (pack.FromZip ? "1" : "0") + "\n";
+	}
+	for(const string& rejected : _rejected) {
+		out += "!" + rejected + "\n";
+	}
+	return out;
 }
 
 string MepPackManager::GetSectionPath(MepSectionType type) const

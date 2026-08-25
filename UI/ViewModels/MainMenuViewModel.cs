@@ -788,6 +788,13 @@ namespace Mesen.ViewModels
 							OnClick = () => {
 								ApplicationHelper.GetOrCreateUniqueWindow(wnd, () => new HdPackBuilderWindow());
 							}
+						},
+						new ContextMenuSeparator(),
+						new MainMenuAction() {
+							ActionType = ActionType.EnhancementPacks,
+							OnClick = () => {
+								ApplicationHelper.GetOrCreateUniqueWindow(wnd, () => new EnhancementPacksWindow());
+							}
 						}
 					}
 				},

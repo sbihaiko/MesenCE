@@ -608,6 +608,8 @@ namespace Mesen.Debugger.Utilities
 		InstallHdPack,
 		[IconFile("HdPack")]
 		HdPackBuilder,
+		[IconFile("HdPack")]
+		EnhancementPacks,
 
 		[IconFile("LogWindow")]
 		LogWindow,

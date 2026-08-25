@@ -795,6 +795,17 @@ struct SmsConfig
 	bool EnableHdPacks = true;
 };
 
+//MEP enhancement packs (F3 - docs/specs/MEP-v1.md). Toggles apply on the
+//next ROM load / power cycle, like EnableHdPacks. Per-pack disabling is a
+//separate list pushed through SetMepPackEnabled (names, not a fixed struct).
+struct EnhancementPackConfig
+{
+	bool EnableMepPacks = true;
+	bool EnableTextures = true;
+	bool EnableAudio = true;
+	bool EnableSynth = true;
+};
+
 struct CvConfig
 {
 	ControllerConfig Port1;

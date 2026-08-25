@@ -29,6 +29,7 @@ private:
 	PcEngineConfig _pce;
 	SmsConfig _sms;
 	CvConfig _cv;
+	EnhancementPackConfig _enhancementPacks;
 	GbaConfig _gba;
 	WsConfig _ws;
 
@@ -89,6 +90,9 @@ public:
 
 	void SetSmsConfig(SmsConfig& config);
 	SmsConfig& GetSmsConfig();
+
+	void SetEnhancementPackConfig(EnhancementPackConfig& config);
+	EnhancementPackConfig& GetEnhancementPackConfig();
 
 	void SetCvConfig(CvConfig& config);
 	CvConfig& GetCvConfig();

@@ -12,6 +12,7 @@
 #include "Core/Shared/TimingInfo.h"
 #include "Core/Shared/CheatManager.h"
 #include "Core/Shared/DebuggerRequest.h"
+#include "Core/Shared/EnhancementPacks/MepPackManager.h"
 #include "Core/Netplay/GameClient.h"
 #include "Core/Netplay/GameServer.h"
 #include "Utilities/ArchiveReader.h"
@@ -268,6 +269,22 @@ extern "C"
 	DllExport void __stdcall GetLog(char* outBuffer, uint32_t maxLength)
 	{
 		StringUtilities::CopyToBuffer(MessageManager::GetLog(), outBuffer, maxLength);
+	}
+
+	//MEP enhancement packs (F3) - see MepPackManager::GetPackListText for the format
+	DllExport void __stdcall GetMepPackList(char* outBuffer, uint32_t maxLength)
+	{
+		StringUtilities::CopyToBuffer(_emu->GetEnhancementPackManager()->GetPackListText(), outBuffer, maxLength);
+	}
+
+	DllExport void __stdcall GetMepRomSha1(char* outBuffer, uint32_t maxLength)
+	{
+		StringUtilities::CopyToBuffer(_emu->GetEnhancementPackManager()->GetRomSha1(), outBuffer, maxLength);
+	}
+
+	DllExport void __stdcall SetMepPackEnabled(const char* containerName, bool enabled)
+	{
+		_emu->GetEnhancementPackManager()->SetPackEnabled(containerName ? containerName : "", enabled);
 	}
 
 	DllExport void __stdcall SetRendererSize(uint32_t width, uint32_t height)
