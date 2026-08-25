@@ -1,6 +1,6 @@
 # Plano de execução — Fase 5: Bootstrap automático de packs (convenção sobre configuração)
 
-**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 aceito na F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · **F5.2 ✅** (setting `BootstrapEnhancementFolder`, default on: no load sem nenhum pack de texturas, exporta tiles da ROM + grava os tiles jogados com xBRZ 4× em `<Game>/auto/textures/` (+ `.bootstrap`); fallback `EnhancementPacks/<Game>/` quando a pasta da ROM é somente-leitura; segundo load já usa a camada; botão *Open Game Folder*; 18 checagens headless — GB, SMB3 CHR ROM 8275 tiles, Zelda CHR RAM, opt-in, pasta RO) · **F5.3 ✅** (gravador de música no bootstrap NES: `NoteFrame` por frame a partir do estado do APU → `TrackSegmenter` (silêncio 60 frames fecha; ≥180 frames = `bgm`, senão `sfx`) → `auto/audio/fingerprints.json` + `midi/<id>.mid` (SMF/GM); `scripts/mep_render_audio.py` renderiza `bgm/<id>.ogg` (fluidsynth+SoundFont ou sintetizador interno numpy → ffmpeg libvorbis); no load, `NesAudioReplacer` carrega as camadas `auto/audio` → `audio` (id humano vence), reconhece a faixa pelos primeiros onsets (±3 frames, confirma em 8) e toca o OGG pelo `HdAudioDevice` silenciando pulse/triangle/noise; 90 frames de silêncio restauram o APU; 12 checagens headless com Zelda — grava, renderiza, segundo load `fingerprint match 'track01' … APU muted`, camada humana, aviso sem OGG) · **F5.4 em progresso** — reordenada pela evidência do `mep_compare.py` (ADR-0050): **F5.4a ✅ telas estáticas** (`auto/textures/backgrounds/screenNNN.png` de tela inteira sem sprites + 3 âncoras `tileAtPosition` + `<background>…,20`; não mesclada sob camada humana; 21 checagens headless em Zelda/Mega Man/Excitebike; bugs de serialização de `<background>`/`<condition>` corrigidos) · **F5.4a′ ✅ assets sem jogar**: export estático agora cobre jogos CHR RAM por varredura da PRG (alinhamento votado por banco + churn da silhueta; 87–91 % dos tiles do Zelda, 80–83 % Castlevania, 99 % Mega Man) e a rampa cinza é recolorida com a paleta real ao desenhar (antes um pack só-export renderizava o jogo em cinza); `*.orig.png` como referência sem filtro; 24 checagens headless (emenda da ADR-0043) · **F5.4f spike ✅ (ADR-0051, proposto)**: `scripts/spike_sound_driver` descobre o driver de som do jogo com o debugger (breakpoints de escrita no APU → tick; scan de `JSR` por endereço absoluto → entrada "tocar N" + registrador do id) e enumera as faixas chamando a entrada com cada id sobre um save state do título — Mega Man: `S=$9003`, `A=id`, ids 0–50 → 18 bgm + 22 sfx + 11 curtíssimos, 40 assinaturas distintas, sem jogar; com `SPIKE_BOOTSTRAP=1` o gravador F5.3 escreveu 50 faixas (18 bgm + 32 sfx) em `fingerprints.json` + 50 MIDI numa rodada de 5 min · F5.4b variantes de paleta, F5.4c `mep_build.py`, F5.4d cobertura na UI, F5.4e sheets/objetos pendentes · F5.5 pendente ·
+**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 aceito na F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · **F5.2 ✅** (setting `BootstrapEnhancementFolder`, default on: no load sem nenhum pack de texturas, exporta tiles da ROM + grava os tiles jogados com xBRZ 4× em `<Game>/auto/textures/` (+ `.bootstrap`); fallback `EnhancementPacks/<Game>/` quando a pasta da ROM é somente-leitura; segundo load já usa a camada; botão *Open Game Folder*; 18 checagens headless — GB, SMB3 CHR ROM 8275 tiles, Zelda CHR RAM, opt-in, pasta RO) · **F5.3 ✅** (gravador de música no bootstrap NES: `NoteFrame` por frame a partir do estado do APU → `TrackSegmenter` (silêncio 60 frames fecha; ≥180 frames = `bgm`, senão `sfx`) → `auto/audio/fingerprints.json` + `midi/<id>.mid` (SMF/GM); `scripts/mep_render_audio.py` renderiza `bgm/<id>.ogg` (fluidsynth+SoundFont ou sintetizador interno numpy → ffmpeg libvorbis); no load, `NesAudioReplacer` carrega as camadas `auto/audio` → `audio` (id humano vence), reconhece a faixa pelos primeiros onsets (±3 frames, confirma em 8) e toca o OGG pelo `HdAudioDevice` silenciando pulse/triangle/noise; 90 frames de silêncio restauram o APU; 12 checagens headless com Zelda — grava, renderiza, segundo load `fingerprint match 'track01' … APU muted`, camada humana, aviso sem OGG) · **F5.4 em progresso** — reordenada pela evidência do `mep_compare.py` (ADR-0050): **F5.4a ✅ telas estáticas** (`auto/textures/backgrounds/screenNNN.png` de tela inteira sem sprites + 3 âncoras `tileAtPosition` + `<background>…,20`; não mesclada sob camada humana; 21 checagens headless em Zelda/Mega Man/Excitebike; bugs de serialização de `<background>`/`<condition>` corrigidos) · **F5.4a′ ✅ assets sem jogar**: export estático agora cobre jogos CHR RAM por varredura da PRG (alinhamento votado por banco + churn da silhueta; 87–91 % dos tiles do Zelda, 80–83 % Castlevania, 99 % Mega Man) e a rampa cinza é recolorida com a paleta real ao desenhar (antes um pack só-export renderizava o jogo em cinza); `*.orig.png` como referência sem filtro; 24 checagens headless (emenda da ADR-0043) · **F5.4f spike ✅ (ADR-0051, proposto)**: `scripts/spike_sound_driver` descobre o driver de som do jogo com o debugger (breakpoints de escrita no APU → tick; scan de `JSR` por endereço absoluto → entrada "tocar N" + registrador do id) e enumera as faixas chamando a entrada com cada id sobre um save state do título — Mega Man: `S=$9003`, `A=id`, ids 0–50 → 18 bgm + 22 sfx + 11 curtíssimos, 40 assinaturas distintas, sem jogar; com `SPIKE_BOOTSTRAP=1` o gravador F5.3 escreveu 50 faixas (18 bgm + 32 sfx) em `fingerprints.json` + 50 MIDI numa rodada de 5 min · F5.4b variantes de paleta, F5.4c `mep_build.py`, F5.4d cobertura na UI, F5.4e sheets/objetos pendentes · **F5.4g proposta** (som nível 2: cover GM automático — papel por canal, SFX separados, arpejo→acorde, SoundFont em tempo real; ADR-0052) · F5.5 pendente ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 5 (re-escopada) ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (ganha `patches[]` e a convenção de pasta irmã; `pack.json` passa a ser opcional) ·
 **Ordem:** proposta de antecipar a F5 à F4 (browser/MEI): sem packs bons e fáceis de produzir, um browser lista um catálogo vazio. A F4 fica intacta no PRD e entra depois.
@@ -73,12 +73,18 @@ Imagem: 0 original · 1 filtro global (xBRZ runtime, sem pack) · **2 auto**
 (tiles agrupados em objetos, upscale por objeto, sheets) · **4 conditions
 inferidas** · **5 arte** (humano edita sheets).
 
-Som: 0 APU · **1** Enhanced Audio tempo real (F1) · **2** preset ESP do jogo
-(`synth/preset.cfg`) · **3 auto** (MIDI/VGM → soundfont → OGG em `auto/audio`)
-· **4 arranjo semi-auto** (MIDI reinstrumentado) · **5 arte** (músico substitui
-`audio/bgm/<faixa>.ogg` a partir de `midi/` e `stems/`).
+Som (revisada em 25/08, ver F5.4g): 0 APU · **1** Enhanced Audio tempo real
+(F1: papéis fixos pulse1=lead / pulse2=harmonia / triangle=baixo, timbres DSP)
+· **2 cover GM automático** (papel do canal por janela, SFX separados da música,
+arpejo→acorde, expressão do APU → instrumento GM via SoundFont em tempo real;
+ajuste humano opcional em `synth/preset.cfg`) · **3a faixas identificadas**
+(máquina: fingerprint + MIDI-semente em `auto/audio`, gravando enquanto se joga
+ou dirigindo o driver do jogo — F5.3/F5.4f; não muda o som por si) · **3b arte**
+(músico substitui `audio/bgm/<faixa>.ogg`; o host troca no momento certo).
 
-Níveis 2–4 vivem em `auto/`; o 5 fora dela. Só isso.
+O nível 2 é o que todo usuário ouve no primeiro load de qualquer ROM; 3a alimenta
+3b; 3b sobrepõe o 2 só nas faixas que existirem. Nível 3a vive em `auto/`; 3b fora
+dela. Só isso.
 
 ## Estado do terreno (verificado no código em 2026-08-25)
 
@@ -219,7 +225,37 @@ Castlevania (`JSR`), Zelda `$0600/$0602`, Punch-Out `$0722`, SMB3 `$04F5/$04F1`
 (caixa postal via trace) ✅; Ninja Gaiden ⚠️; 1943/Contra/Excitebike/Gauntlet/
 SMB1/Bomberman ❌ (pedido não acontece na janela título→Start). Decisão
 proposta (ADR-0051): entregar como ferramenta opt-in (*Extract audio*), não
-automática no load.
+automática no load — item 11 da F5.4g.
+
+### F5.4g — Som nível 2: cover GM automático (proposto, ADR-0052)
+
+Hoje o `EnhancedSynth` (F1) ressintetiza o APU com papéis fixos e timbres DSP:
+funciona em qualquer jogo, mas o pulo do Mario toca com timbre de lead e o baixo
+vira melodia quando o compositor troca os canais. O nível 2 é o teto do que dá
+para fazer **sem saber a música** — um cover GM decente, automático, com SFX
+intactos. Tudo em tempo de execução, sem `auto/`, sem passo humano.
+
+| # | Item | Automático | Como |
+|---|---|---|---|
+| 1 | Papel do canal por janela | ✅ | ~1 s: registro médio, densidade e duração de notas, intervalos com o triangle → lead/harmonia/baixo, com histerese + crossfade |
+| 2 | SFX × música | ✅ | rajada curta, glissando rápido, retriggers, canal "roubado e devolvido" → rota Dry/APU cru (também é o pré-requisito do SFX pass-through do 3b) |
+| 3 | Arpejo → acorde | ✅ | alternância periódica de 2–4 notas a 20–60 Hz vira acorde sustentado |
+| 4 | Expressão | ✅ | decay, vibrato, portamento extraídos do APU → escolha (pluck × sustentado × strings) e modulação da voz; hoje o `Input` só leva freq/vol/duty |
+| 5 | Timbres reais | ✅ | TinySoundFont (header-only, MIT) + mapa papel→programa GM; SoundFont embutido pequeno ou `.sf2` do sistema com fallback ao DSP atual (ADR-0052) |
+| 6 | Override humano | opcional | `synth/preset.cfg` (ESP) ganha papel/instrumento por canal |
+| 7 | Validação | — | harness headless comparando MIDI capturado antes/depois (Zelda, Mega Man, SMB3) + ouvido na GUI |
+
+Emendas ao 3a/3b (F5.3/F5.4f) que faltam para a substituição por OGG ser usável:
+**8** ponto de loop no fingerprint (`LoopPosition` hoje é 0); **9** SFX
+audíveis durante o OGG (hoje pulse/triangle/noise são mutados inteiros — depende
+do item 2); **10** transição direta música→música e fade (hoje só 90 frames de
+silêncio restauram o APU); **11** extração sem jogar como ferramenta opt-in
+(*Open Game Folder → Extract audio*), janela mais longa/estímulos para Contra/SMB1
+e gatilhos separados de música e SFX; **12** nomear/limpar ids enumerados; **13**
+`mep_build.py`/`pack` com `audio/`, lint de áudio e tutorial "do MIDI-semente ao OGG".
+
+Ordem: **Bloco A** 2→1→5→7 (muda o que todo usuário ouve) · **Bloco B** 3, 4, 6 ·
+**Bloco C** 8, 9, 10 · **Bloco D** 11, 12, 13. Cada bloco do porte da F5.3.
 
 ## F5.5 — Fechamento
 

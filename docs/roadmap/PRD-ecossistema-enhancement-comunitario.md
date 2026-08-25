@@ -158,6 +158,19 @@ Cada fase entrega valor sozinha e não depende da seguinte.
 - **Critério de sucesso:** do load do jogo ao pack-rascunho publicável em < 1h de
   trabalho humano.
 
+> **Adendo (25/08/2026).** A Fase 5 foi re-escopada em
+> `docs/roadmap/plano-execucao-F5.md` como *bootstrap por convenção* (pasta irmã da
+> ROM = pack, `auto/` = máquina, fora dela = humano; ADR-0049) — o "como" vive lá,
+> este PRD segue como "porquê". Em áudio a escada ficou: **nível 2 automático** =
+> cover GM em tempo real a partir do estado do APU (papel do canal por janela, SFX
+> separados, arpejo→acorde, SoundFont — F5.4g/ADR-0052), que é o que todo usuário
+> ouve no primeiro load de qualquer ROM; **3a** = faixas identificadas pela máquina
+> (fingerprint + MIDI-semente, jogando ou dirigindo o driver de som do jogo —
+> F5.3/F5.4f/ADR-0051), que só alimenta o **3b** = orquestração humana
+> (`audio/bgm/<faixa>.ogg`, trocada no momento certo pelo host). Os itens F5.1–F5.3
+> acima (ESRGAN, LLM para presets, samples) continuam válidos como ferramentas
+> externas opcionais sobre esse bootstrap.
+
 ## 6. Riscos e mitigações
 
 | Risco | Prob. | Mitigação |
