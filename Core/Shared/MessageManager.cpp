@@ -1,5 +1,8 @@
 ﻿#include "pch.h"
 #include "Shared/MessageManager.h"
+#include "Utilities/FolderUtilities.h"
+#include <chrono>
+#include <ctime>
 
 std::unordered_map<string, string> MessageManager::_enResources = {
 	{ "Cheats", u8"Cheats" },
@@ -90,6 +93,8 @@ SimpleLock MessageManager::_logLock;
 SimpleLock MessageManager::_messageLock;
 bool MessageManager::_osdEnabled = true;
 bool MessageManager::_outputToStdout = false;
+std::ofstream MessageManager::_logFile;
+bool MessageManager::_logFileTried = false;
 IMessageManager* MessageManager::_messageManager = nullptr;
 
 void MessageManager::RegisterMessageManager(IMessageManager* messageManager)
@@ -185,6 +190,30 @@ void MessageManager::Log(string message)
 
 	if(_outputToStdout) {
 		std::cout << message << std::endl;
+	}
+
+	//Persistent copy of the log in "<home>/mesen.log" (previous session kept
+	//as mesen.log.1) so a run can be inspected without the Log Window - e.g.
+	//"[EnhancedAudio] SoundFont loaded", "[MEP] ..." lines. Opened lazily on
+	//the first message after the home folder is known; never throws.
+	if(!_logFileTried && !FolderUtilities::GetHomeFolder().empty()) {
+		_logFileTried = true;
+		try {
+			string path = FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "mesen.log");
+			std::error_code ec;
+			std::filesystem::rename(path, path + ".1", ec);
+			_logFile.open(path, std::ios::out | std::ios::trunc);
+		} catch(...) {
+		}
+	}
+	if(_logFile.is_open()) {
+		auto now = std::chrono::system_clock::now();
+		std::time_t t = std::chrono::system_clock::to_time_t(now);
+		int ms = (int)(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000);
+		char stamp[32];
+		std::tm tmv = *std::localtime(&t);
+		std::strftime(stamp, sizeof(stamp), "%H:%M:%S", &tmv);
+		_logFile << stamp << "." << (ms < 100 ? (ms < 10 ? "00" : "0") : "") << ms << " " << message << std::endl;
 	}
 }
 

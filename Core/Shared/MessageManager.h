@@ -25,6 +25,8 @@ private:
 	static SimpleLock _logLock;
 	static SimpleLock _messageLock;
 	static std::list<string> _log;
+	static std::ofstream _logFile;
+	static bool _logFileTried;
 
 public:
 	static void SetOptions(bool osdEnabled, bool outputToStdout);
