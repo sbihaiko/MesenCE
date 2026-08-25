@@ -949,8 +949,9 @@
 			<Control ID="chkEnableTextures">Textures</Control>
 			<Control ID="chkEnableAudio">Audio (OGG)</Control>
 			<Control ID="chkEnableSynth">Synth preset</Control>
-			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A loose HD pack in HdPacks/ always overrides the textures layer. Changes apply on the next power cycle.</Control>
-			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Install a .zip or drop a pack folder into the EnhancementPacks folder.</Control>
+			<Control ID="chkApplyPatchOnHashMismatch">Apply ROM patches even when the hash does not match (may break other revisions)</Control>
+			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A folder named like the ROM beside it ("sibling") always comes first, then a loose HD pack in HdPacks/, then installed packs. Files under a pack's auto/ folder are the machine layer; anything outside it overrides them. Changes apply on the next power cycle.</Control>
+			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Create a folder named like the ROM beside it, install a .zip, or drop a pack folder into the EnhancementPacks folder.</Control>
 			<Control ID="colName">Name</Control>
 			<Control ID="colVersion">Version</Control>
 			<Control ID="colSections">Layers</Control>

@@ -38,6 +38,7 @@
 					<CheckBox Content="{l:Translate chkEnableSynth}" IsChecked="{Binding Config.EnableSynth}" IsEnabled="{Binding Config.EnableMepPacks}" />
 				</WrapPanel>
 			</c:OptionSection>
+			<CheckBox Content="{l:Translate chkApplyPatchOnHashMismatch}" IsChecked="{Binding Config.ApplyPatchOnHashMismatch}" IsEnabled="{Binding Config.EnableMepPacks}" />
 			<TextBlock Text="{l:Translate lblPacksHelp}" TextWrapping="Wrap" Margin="0 3" />
 		</StackPanel>
 

@@ -76,6 +76,11 @@ public:
 	//tile pixels round-trip unmodified - required to re-save an existing pack.
 	static bool LoadFromFolder(string packFolder, HdTilePack& outPack, bool rawPixels);
 
+	//F5 (ADR-0049): takes the tiles of a lower-precedence layer (auto/) whose
+	//keys this pack does not define. Requires the same <system>/<scale>;
+	//an empty pack simply adopts the layer. Returns false when incompatible.
+	bool MergeLowerLayer(HdTilePack& lower);
+
 	HdLoadedTile* GetTile(const HdCapturedTile& key)
 	{
 		auto result = _tilesByKey.find(key);

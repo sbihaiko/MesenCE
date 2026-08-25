@@ -1,17 +1,17 @@
 #include "pch.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
 
-void EnhancedSynthEngine::InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const string& packPresetPath)
+void EnhancedSynthEngine::InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const vector<string>& packPresetPaths)
 {
 	_builtInPresets = builtInPresets;
 	_sectionSuffix = sectionSuffix;
-	_packPresetPath = packPresetPath;
+	_packPresetPaths = packPresetPaths;
 	ReloadUserPresets();
 }
 
 void EnhancedSynthEngine::ReloadUserPresets()
 {
-	EnhancedSynthPresetLoader::Load(_userPresets, _builtInPresets, _sectionSuffix, _packPresetPath);
+	EnhancedSynthPresetLoader::Load(_userPresets, _builtInPresets, _sectionSuffix, _packPresetPaths);
 }
 
 const EnhancedSynthPreset& EnhancedSynthEngine::GetPreset(uint32_t presetId) const

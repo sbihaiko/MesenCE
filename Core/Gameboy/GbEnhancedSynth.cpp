@@ -81,7 +81,7 @@ GbEnhancedSynth::GbEnhancedSynth(Emulator* emu, Gameboy* console)
 	//other engines' - see EnhancedSynthPresetLoader::Load.
 	//MEP synth section (ADR-0042): the manager already resolved the packs
 	//for this ROM in Emulator::InternalLoadRom
-	_engine.InitPresets(_presets, ".Gb", _emu->GetEnhancementPackManager()->GetSectionPath(MepSectionType::Synth));
+	_engine.InitPresets(_presets, ".Gb", _emu->GetEnhancementPackManager()->GetSynthPresetPaths());
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 

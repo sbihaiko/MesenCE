@@ -1,6 +1,6 @@
 # ADR-0044: Permissive ROM targets — dump normalisation and per-hash patches
 
-- Status: proposed
+- Status: accepted (F5.1, 2026-08-25)
 - Date: 2026-08-25
 - Fase 5 (docs/roadmap/plano-execucao-F5.md), F5.1.
 

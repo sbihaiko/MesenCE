@@ -15,6 +15,7 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	[ObservableProperty] public partial bool EnableTextures { get; set; } = true;
 	[ObservableProperty] public partial bool EnableAudio { get; set; } = true;
 	[ObservableProperty] public partial bool EnableSynth { get; set; } = true;
+	[ObservableProperty] public partial bool ApplyPatchOnHashMismatch { get; set; } = false;
 
 	//Container names (folder / zip base name) of packs the user turned off
 	public List<string> DisabledPacks { get; set; } = new();
@@ -25,7 +26,8 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 			EnableMepPacks = EnableMepPacks,
 			EnableTextures = EnableTextures,
 			EnableAudio = EnableAudio,
-			EnableSynth = EnableSynth
+			EnableSynth = EnableSynth,
+			ApplyPatchOnHashMismatch = ApplyPatchOnHashMismatch
 		});
 
 		foreach(string container in DisabledPacks) {
@@ -50,4 +52,5 @@ public struct InteropEnhancementPackConfig
 	[MarshalAs(UnmanagedType.I1)] public bool EnableTextures;
 	[MarshalAs(UnmanagedType.I1)] public bool EnableAudio;
 	[MarshalAs(UnmanagedType.I1)] public bool EnableSynth;
+	[MarshalAs(UnmanagedType.I1)] public bool ApplyPatchOnHashMismatch;
 }

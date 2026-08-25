@@ -7,6 +7,10 @@
 namespace
 {
 	constexpr const char* kSectionNames[3] = { "textures", "audio", "synth" };
+	//Fixed layout of the folder convention (ADR-0049); textures/audio are
+	//folders holding a hires.txt, synth is the preset file itself
+	constexpr const char* kConventionPaths[3] = { "textures", "audio", "synth/preset.cfg" };
+	constexpr const char* kConventionProbe[3] = { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg" };
 	constexpr const char* kKnownSystems[] = { "nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes" };
 	constexpr int kSupportedMajor = 1;
 
@@ -39,6 +43,35 @@ namespace
 const char* MepPack::GetSectionName(MepSectionType type)
 {
 	return kSectionNames[(int)type];
+}
+
+const char* MepPack::GetConventionPath(MepSectionType type)
+{
+	return kConventionPaths[(int)type];
+}
+
+bool MepPack::DetectConventionLayout()
+{
+	bool any = false;
+	for(int i = 0; i < 3; i++) {
+		MepSection& section = Sections[i];
+		string humanProbe = FolderUtilities::CombinePath(RootFolder, kConventionProbe[i]);
+		string autoProbe = FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionProbe[i]);
+		bool human = (bool)ifstream(humanProbe);
+		bool automatic = (bool)ifstream(autoProbe);
+		if(human) {
+			section.HasHuman = true;
+			section.Path = kConventionPaths[i];
+		}
+		if(automatic) {
+			section.AutoPath = string(AutoFolderName) + "/" + kConventionPaths[i];
+		}
+		if(human || automatic) {
+			section.Present = true;
+			any = true;
+		}
+	}
+	return any;
 }
 
 bool MepPack::IsValidSemver(const string& text)
@@ -191,6 +224,34 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 		out.Targets.push_back(target);
 	}
 
+	//patches (optional, ADR-0044): [{sha1, file}]
+	const JsonValue* patches = root.Get("patches");
+	if(patches) {
+		if(!patches->IsArray()) {
+			error = "'patches' must be an array";
+			return false;
+		}
+		for(const JsonValue& entry : patches->GetArray()) {
+			MepPatch patch;
+			if(!entry.IsObject() || !RequireString(entry, "sha1", patch.Sha1, error) || !RequireString(entry, "file", patch.File, error)) {
+				error = "patches[]: entries need 'sha1' and 'file'";
+				return false;
+			}
+			if(!IsHexUpperOrLower(patch.Sha1, 40)) {
+				error = "patches[]: 'sha1' must be 40 hex digits";
+				return false;
+			}
+			string normalized;
+			if(!NormalizeRelativePath(patch.File, normalized) || normalized.empty()) {
+				error = "patches[]: unsafe path '" + patch.File + "'";
+				return false;
+			}
+			patch.Sha1 = StringUtilities::ToUpper(patch.Sha1);
+			patch.File = normalized;
+			out.Patches.push_back(patch);
+		}
+	}
+
 	//sections (MUST, >= 1 known section)
 	const JsonValue* sections = root.Get("sections");
 	if(!sections || !sections->IsObject()) {
@@ -228,6 +289,7 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 			return false;
 		}
 		out.Sections[index].Present = true;
+		out.Sections[index].HasHuman = true;
 		out.Sections[index].Path = normalized;
 		knownSections++;
 	}
@@ -258,11 +320,31 @@ bool MepPack::MatchesSha1(const string& sha1) const
 string MepPack::GetSectionPath(MepSectionType type) const
 {
 	const MepSection& section = Sections[(int)type];
-	if(!section.Present) {
+	if(!section.Present || !section.HasHuman) {
 		return "";
 	}
 	if(section.Path.empty()) {
 		return RootFolder;
 	}
 	return FolderUtilities::CombinePath(RootFolder, section.Path);
+}
+
+string MepPack::GetSectionAutoPath(MepSectionType type) const
+{
+	const MepSection& section = Sections[(int)type];
+	if(!section.Present || section.AutoPath.empty()) {
+		return "";
+	}
+	return FolderUtilities::CombinePath(RootFolder, section.AutoPath);
+}
+
+const MepPatch* MepPack::FindPatch(const string& sha1) const
+{
+	string upper = StringUtilities::ToUpper(sha1);
+	for(const MepPatch& patch : Patches) {
+		if(patch.Sha1 == upper) {
+			return &patch;
+		}
+	}
+	return nullptr;
 }

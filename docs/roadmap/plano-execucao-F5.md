@@ -1,6 +1,6 @@
 # Plano de execução — Fase 5: Bootstrap automático de packs (convenção sobre configuração)
 
-**Status:** proposto (2026-08-25) — nenhum código iniciado; ADR-0044, 0047 e **0049** em `.dev-squad/adr/` com status `proposed` (0045/0046/0048 superseded pelo 0049), a resolver na F5.0 antes de qualquer implementação ·
+**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 segue `proposed` até a F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · F5.2–F5.5 pendentes ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 5 (re-escopada) ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (ganha `patches[]` e a convenção de pasta irmã; `pack.json` passa a ser opcional) ·
 **Ordem:** proposta de antecipar a F5 à F4 (browser/MEI): sem packs bons e fáceis de produzir, um browser lista um catálogo vazio. A F4 fica intacta no PRD e entra depois.
@@ -114,7 +114,7 @@ Níveis 2–4 vivem em `auto/`; o 5 fora dela. Só isso.
    (b) política de gravação em background: buffer limitado (ex.: 10 min de
    tiles únicos + MIDI), custo de CPU medido no harness.
 
-## F5.1 — Descoberta pela pasta irmã + linter + host permissivo
+## F5.1 — Descoberta pela pasta irmã + linter + host permissivo ✅
 
 **Entrega:** uma pasta `<Game>/` criada à mão (só `textures/hires.txt`) já
 carrega; linter offline; `patches[]`.

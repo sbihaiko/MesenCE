@@ -76,7 +76,7 @@ public:
 	//engine keep its own tuning in the same file without colliding - e.g. the
 	//NES engine uses "" (section "[Studio]"), the SMS engine uses ".Sms"
 	//(section "[Studio.Sms]").
-	static void Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const string& packPresetPath = "");
+	static void Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const vector<string>& packPresetPaths = {});
 
 private:
 	static void ApplyFile(const string& path, EnhancedSynthPreset outPresets[5], const string& suffix);

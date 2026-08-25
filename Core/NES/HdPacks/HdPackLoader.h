@@ -12,6 +12,16 @@ public:
 	static bool LoadHdNesPack(string definitionFile, HdPackData& outData);
 	static bool LoadHdNesPack(VirtualFile& romFile, HdPackData& outData);
 
+	//True when HdPacks/<rom>/hires.txt exists (legacy loose pack)
+	static bool HasLoosePack(VirtualFile& romFile);
+
+	//F5 (ADR-0049): appends a lower-precedence layer (the pack's auto/
+	//hires.txt) under an already loaded one. Entries whose tile key already
+	//exists in "into" are dropped; everything else (tiles, backgrounds,
+	//conditions, bitmaps, audio tracks, patches) is moved over. Both layers
+	//must share the same <scale>; returns false (and merges nothing) otherwise.
+	static bool MergeLowerLayer(HdPackData& into, HdPackData& lower);
+
 private:
 	HdPackData* _data = nullptr;
 	bool _loadFromZip = false;

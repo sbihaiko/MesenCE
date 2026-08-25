@@ -55,7 +55,7 @@ namespace Mesen.ViewModels
 					License = parts[4],
 					Sections = parts[5].Replace(",", ", "),
 					Enabled = parts[6] == "1",
-					Source = parts[7] == "1" ? "zip" : "folder"
+					Source = parts[7] == "2" ? "sibling" : parts[7] == "1" ? "zip" : "folder"
 				});
 			}
 			Packs = packs;

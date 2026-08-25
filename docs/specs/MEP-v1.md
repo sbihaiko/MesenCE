@@ -1,6 +1,6 @@
 # MEP v1 — MesenCE Enhancement Pack
 
-**Status:** v1 (estável) ·
+**Status:** v1.1 (estável; 1.1 adiciona `patches[]`, a forma-pasta/pasta irmã e a camada `auto/` — tudo opcional e retrocompatível) ·
 **Licença desta spec:** CC0-1.0 (domínio público) ·
 **Versionamento:** semver — campo novo opcional = minor; mudança de semântica = major ·
 **Golden file:** [`golden/mep/pack.json`](golden/mep/pack.json) ·
@@ -30,6 +30,33 @@ distribuição; a responsabilidade pelo conteúdo é do autor do pack.
 4. Armazenamento local (não normativo, referência MesenCE): pasta central por
    ROM no diretório do emulador, espelhando o padrão dos HD Packs
    (`HdPacks/<nome-da-rom>/`).
+
+### 2.1 Forma-pasta e pasta irmã (convenção sobre configuração — v1.1)
+
+5. Um contêiner **sem** `pack.json` MAY ser aceito quando segue o layout fixo
+   abaixo; hosts que o aceitam MUST derivar a identidade da **localização/
+   nome**, não de um hash declarado:
+   - **pasta irmã**: para `<dir>/<Game>.<ext>`, o diretório `<dir>/<Game>/`;
+   - **contêiner nomeado**: `<Game>/` ou `<Game>.zip` no armazenamento central,
+     casando pelo nome do arquivo da ROM sem extensão (case-insensitive).
+6. Layout fixo (cada entrada opcional; ≥1 MUST existir):
+   ```
+   <Game>/
+     textures/hires.txt   audio/hires.txt   synth/preset.cfg     # camada humana
+     auto/textures/…      auto/audio/…      auto/synth/preset.cfg # camada gerada
+   ```
+   Tudo sob `auto/` é da máquina e MAY ser regenerado pelo host; tudo fora de
+   `auto/` é do autor e MUST NOT ser alterado por ferramentas automáticas.
+   Resolução por **entrada** (tile, background, faixa `<bgm>`/`<sfx>`, chave
+   ESP): a camada humana vence a camada `auto/`.
+7. Precedência entre origens (MUST, referência MesenCE): pasta irmã →
+   HD Pack solto legado (`HdPacks/<Game>/`) → contêineres do armazenamento
+   central (ordem de §5.1). A pasta ao lado da ROM sempre vence um zip
+   instalado do mesmo pack, para que o autor trabalhe nela sem desinstalar nada.
+8. Um `pack.json` presente na pasta irmã MAY ser lido para metadados,
+   `patches[]` e `sections` explícitas; seus `targets` não precisam casar
+   (localização é identidade). Ao publicar, ferramentas SHOULD gerar o
+   `pack.json` a partir da pasta (`mep pack`).
 
 ## 3. `pack.json`
 
@@ -61,6 +88,7 @@ distribuição; a responsabilidade pelo conteúdo é do autor do pack.
 | `author` | SHOULD | autor(es) |
 | `license` | MUST | identificador SPDX do conteúdo do pack (ex.: `CC0-1.0`, `CC-BY-4.0`) |
 | `targets` | MUST, ≥1 | ROMs às quais o pack se aplica (ver §4) |
+| `patches` | MAY (v1.1) | `[{ "sha1", "file" }]` — patch (IPS/BPS) por revisão de ROM. O host MUST aplicar apenas a entrada cujo `sha1` (No-Intro, §4) é o da ROM carregada; sem entrada casando, MUST carregar as demais seções e **pular** o patch com aviso. Um override explícito do usuário MAY aplicar um patch de outra revisão, sempre com aviso |
 | `sections` | MUST, ≥1 seção | conteúdo do pack (ver §5) |
 
 ### 3.2 Regras gerais
@@ -76,7 +104,7 @@ ROM, não o invólucro do arquivo.
 
 | `system` | Faixa hasheada |
 |---|---|
-| `nes` | arquivo **menos** o header iNES de 16 bytes e **menos** o trainer de 512 bytes quando presente (flags6 bit 2) |
+| `nes` | arquivo **menos** o header iNES de 16 bytes e **menos** o trainer de 512 bytes quando presente (flags6 bit 2); hosts SHOULD limitar a faixa ao tamanho PRG+CHR **declarado no header** (bytes 4/5, MSBs NES 2.0 no byte 9), de modo que dumps com lixo no fim casem com a entrada No-Intro limpa (v1.1) |
 | `gb`, `gbc`, `sms`, `gg`, `sg1000`, `coleco` | arquivo inteiro (formatos sem header de invólucro) |
 | `snes` | arquivo menos o copier header de 512 bytes quando presente (`tamanho % 1024 == 512`) |
 
@@ -111,9 +139,15 @@ formato subjacente permitir).
   (envelope, não parser próprio — ADR-0005).
 - **Precedência (MUST):** um HD Pack solto instalado no diretório
   convencional do host (ex.: `HdPacks/<rom>/`) **prevalece** sobre a seção
-  `textures` de um pack MEP instalado. Entre múltiplos packs MEP, o host MUST
-  definir uma ordem determinística e documentada (referência: ordem de
-  instalação, mais recente vence).
+  `textures` de um pack MEP instalado — exceto quando a seção vem da **pasta
+  irmã** da ROM (§2.1), que prevalece sobre ambos. Entre múltiplos packs MEP,
+  o host MUST definir uma ordem determinística e documentada (referência:
+  ordem de instalação, mais recente vence).
+- **Camada `auto/` (v1.1):** quando a seção tem as duas camadas (§2.1), o host
+  MUST carregar ambas e resolver por chave de tile: chave presente na camada
+  humana ignora a da `auto/`; as demais entradas da `auto/` são adicionadas.
+  As duas camadas MUST ter o mesmo `<scale>` (e `<system>`), senão a `auto/`
+  é ignorada com aviso.
 
 ### 5.2 `audio`
 

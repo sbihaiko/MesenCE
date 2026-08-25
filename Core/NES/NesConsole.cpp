@@ -254,64 +254,112 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 void NesConsole::LoadHdPack(VirtualFile& romFile)
 {
 	_hdData.reset();
-	if(GetNesConfig().EnableHdPacks) {
-		MepPackManager* mep = _emu->GetEnhancementPackManager();
-		string mepTextures = mep->GetSectionPath(MepSectionType::Textures);
-		string mepAudio = mep->GetSectionPath(MepSectionType::Audio);
+	if(!GetNesConfig().EnableHdPacks) {
+		return;
+	}
 
-		//1) Loose HdPacks/<rom>/ (or <rom>.zip) pack - always wins (MEP-v1 §5.1)
-		_hdData.reset(new HdPackData());
-		bool loaded = HdPackLoader::LoadHdNesPack(romFile, *_hdData.get());
-		if(loaded && !mepTextures.empty()) {
+	MepPackManager* mep = _emu->GetEnhancementPackManager();
+	string mepTextures = mep->GetSectionPath(MepSectionType::Textures);
+	string autoTextures = mep->GetSectionAutoPath(MepSectionType::Textures);
+	string mepAudio = mep->GetSectionPath(MepSectionType::Audio);
+	string autoAudio = mep->GetSectionAutoPath(MepSectionType::Audio);
+	bool anyMepTextures = !mepTextures.empty() || !autoTextures.empty();
+
+	_hdData.reset(new HdPackData());
+	bool loaded = false;
+
+	//1) Loose HdPacks/<rom>/ pack (MEP-v1 §5.1) - unless the ROM's sibling
+	//folder provides textures, which comes first (ADR-0049)
+	if(mep->IsSectionFromSibling(MepSectionType::Textures)) {
+		if(HdPackLoader::HasLoosePack(romFile)) {
+			MessageManager::Log("[MEP] sibling folder beside the ROM overrides the loose HdPacks/ pack");
+		}
+	} else {
+		loaded = HdPackLoader::LoadHdNesPack(romFile, *_hdData.get());
+		if(loaded && anyMepTextures) {
 			MessageManager::Log("[MEP] loose HD pack found for this ROM - it takes precedence over the pack's textures section");
 		}
+	}
 
-		//2) MEP textures section (envelope over hires.txt - ADR-0005/0040)
-		if(!loaded && !mepTextures.empty()) {
+	//2) MEP textures section: human layer, then auto/ layer underneath
+	if(!loaded && anyMepTextures) {
+		if(!mepTextures.empty()) {
 			loaded = HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(mepTextures, "hires.txt"), *_hdData.get());
 			MessageManager::Log(loaded ? "[MEP] textures: loaded NES HD pack from '" + mepTextures + "'" : "[MEP] textures section has no loadable hires.txt in " + mepTextures);
 		}
-
-		//3) MEP audio section: NES OGG via a hires.txt with <bgm>/<sfx> tags
-		//(ADR-0041). Merged into the texture pack's tables (audio wins), or
-		//used alone for an audio-only pack.
-		if(!mepAudio.empty()) {
-			unique_ptr<HdPackData> audioData(new HdPackData());
-			if(HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(mepAudio, "hires.txt"), *audioData)) {
+		if(!autoTextures.empty()) {
+			unique_ptr<HdPackData> autoData(new HdPackData());
+			if(HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(autoTextures, "hires.txt"), *autoData)) {
 				if(loaded) {
-					for(auto& bgm : audioData->BgmFilesById) {
-						_hdData->BgmFilesById[bgm.first] = bgm.second;
-					}
-					for(auto& sfx : audioData->SfxFilesById) {
-						_hdData->SfxFilesById[sfx.first] = sfx.second;
-					}
+					HdPackLoader::MergeLowerLayer(*_hdData.get(), *autoData);
 				} else {
-					_hdData.reset(audioData.release());
+					_hdData.reset(autoData.release());
 					loaded = true;
 				}
-				MessageManager::Log("[MEP] audio: " + std::to_string(_hdData->BgmFilesById.size()) + " BGM / " + std::to_string(_hdData->SfxFilesById.size()) + " SFX tracks from '" + mepAudio + "'");
+				MessageManager::Log("[MEP] textures: auto layer loaded from '" + autoTextures + "'");
 			} else {
-				MessageManager::Log("[MEP] audio section has no loadable hires.txt in " + mepAudio);
+				MessageManager::Log("[MEP] textures auto layer has no loadable hires.txt in " + autoTextures);
 			}
 		}
+	}
 
-		if(!loaded) {
-			_hdData.reset();
+	//3) MEP audio section: NES OGG via a hires.txt with <bgm>/<sfx> tags
+	//(ADR-0041). auto/ first, then the human layer, each overriding the
+	//tracks already present (human > auto > textures pack).
+	auto mergeAudio = [&](const string& folder, const char* label) {
+		unique_ptr<HdPackData> audioData(new HdPackData());
+		if(!HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(folder, "hires.txt"), *audioData)) {
+			MessageManager::Log(string("[MEP] ") + label + " has no loadable hires.txt in " + folder);
+			return;
+		}
+		if(loaded) {
+			for(auto& bgm : audioData->BgmFilesById) {
+				_hdData->BgmFilesById[bgm.first] = bgm.second;
+			}
+			for(auto& sfx : audioData->SfxFilesById) {
+				_hdData->SfxFilesById[sfx.first] = sfx.second;
+			}
 		} else {
-			auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());
-			if(result != _hdData->PatchesByHash.end()) {
-				VirtualFile patchFile = result->second;
-				romFile.ApplyPatch(patchFile);
-			}
-
-			shared_ptr<HdPackData> data = _hdData.lock();
-			if(data) {
-				thread asyncLoadData([data]() {
-					data->LoadAsync();
-				});
-				asyncLoadData.detach();
-			}
+			_hdData.reset(audioData.release());
+			loaded = true;
 		}
+		MessageManager::Log(string("[MEP] ") + label + ": " + std::to_string(_hdData->BgmFilesById.size()) + " BGM / " + std::to_string(_hdData->SfxFilesById.size()) + " SFX tracks after '" + folder + "'");
+	};
+	if(!autoAudio.empty()) {
+		mergeAudio(autoAudio, "audio auto layer");
+	}
+	if(!mepAudio.empty()) {
+		mergeAudio(mepAudio, "audio");
+	}
+
+	if(!loaded) {
+		_hdData.reset();
+		return;
+	}
+
+	//<patch> lines are keyed by the whole-file sha1 of the ROM they were made
+	//for; ADR-0044 adds an explicit override for other revisions
+	if(!_hdData->PatchesByHash.empty()) {
+		auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());
+		if(result != _hdData->PatchesByHash.end()) {
+			VirtualFile patchFile = result->second;
+			romFile.ApplyPatch(patchFile);
+		} else if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
+			VirtualFile patchFile = _hdData->PatchesByHash.begin()->second;
+			romFile.ApplyPatch(patchFile);
+			MessageManager::DisplayMessage("HDPack", "Applying patch made for another ROM revision (hash override enabled)");
+			MessageManager::Log("[HDPack] <patch> hash mismatch - applied '" + _hdData->PatchesByHash.begin()->second + "' anyway (ApplyPatchOnHashMismatch)");
+		} else {
+			MessageManager::Log("[HDPack] <patch> skipped: no entry for this ROM's sha1 " + romFile.GetSha1Hash() + " (enable 'apply patches on hash mismatch' to force it)");
+		}
+	}
+
+	shared_ptr<HdPackData> data = _hdData.lock();
+	if(data) {
+		thread asyncLoadData([data]() {
+			data->LoadAsync();
+		});
+		asyncLoadData.detach();
 	}
 }
 

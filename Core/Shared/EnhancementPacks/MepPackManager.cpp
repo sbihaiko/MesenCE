@@ -56,6 +56,19 @@ string MepPackManager::ComputeNoIntroSha1(VirtualFile& romFile)
 			if(data[6] & 0x04) {
 				offset += 512;
 			}
+			//ADR-0044: hash only the PRG+CHR the header declares, so a dump
+			//with trailing garbage still matches its clean No-Intro entry
+			size_t prgUnits = data[4];
+			size_t chrUnits = data[5];
+			if((data[7] & 0x0C) == 0x08 && (data[9] & 0x0F) != 0x0F && (data[9] >> 4) != 0x0F) {
+				//NES 2.0 size MSBs (exponent-multiplier form left alone)
+				prgUnits |= (size_t)(data[9] & 0x0F) << 8;
+				chrUnits |= (size_t)(data[9] >> 4) << 8;
+			}
+			size_t declared = offset + prgUnits * 0x4000 + chrUnits * 0x2000;
+			if(declared > offset && declared < size) {
+				size = declared;
+			}
 		}
 	} else if(HasExtension(ext, { ".sfc", ".smc", ".swc", ".fig", ".bs", ".st" })) {
 		//SNES copier header
@@ -74,8 +87,108 @@ void MepPackManager::Clear()
 {
 	_romSha1.clear();
 	_romExtension.clear();
+	_romName.clear();
+	_romFolder.clear();
 	_packs.clear();
 	_rejected.clear();
+}
+
+string MepPackManager::GetSiblingFolder(VirtualFile& romFile)
+{
+	string romPath = romFile.GetFilePath();
+	if(romPath.empty()) {
+		return "";
+	}
+	string name = FolderUtilities::GetFilename(romPath, false);
+	return FolderUtilities::CombinePath(FolderUtilities::GetFolderName(romPath), name);
+}
+
+string MepPackManager::SystemFromExtension(const string& lowerExt)
+{
+	if(lowerExt == ".nes" || lowerExt == ".fds" || lowerExt == ".unf" || lowerExt == ".unif" || lowerExt == ".nsf" || lowerExt == ".nsfe") {
+		return "nes";
+	} else if(lowerExt == ".gb") {
+		return "gb";
+	} else if(lowerExt == ".gbc" || lowerExt == ".gbx") {
+		return "gbc";
+	} else if(lowerExt == ".sms") {
+		return "sms";
+	} else if(lowerExt == ".gg") {
+		return "gg";
+	} else if(lowerExt == ".sg") {
+		return "sg1000";
+	} else if(lowerExt == ".col") {
+		return "coleco";
+	} else if(lowerExt == ".sfc" || lowerExt == ".smc" || lowerExt == ".swc" || lowerExt == ".fig" || lowerExt == ".bs" || lowerExt == ".st") {
+		return "snes";
+	}
+	return "";
+}
+
+bool MepPackManager::LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack)
+{
+	outPack = MepPack();
+	outPack.RootFolder = rootFolder;
+	outPack.ContainerName = containerName;
+	outPack.Origin = origin;
+	outPack.FromZip = origin == MepPackOrigin::Zip;
+	if(!outPack.DetectConventionLayout()) {
+		return false;
+	}
+	outPack.Synthetic = true;
+	outPack.SpecVersion = "1.1.0";
+	outPack.Name = _romName;
+	outPack.Version = "0.0.0";
+	outPack.License = "unspecified";
+	MepTarget target;
+	target.System = SystemFromExtension(_romExtension);
+	target.Sha1 = _romSha1;
+	target.Name = _romName;
+	outPack.Targets.push_back(target);
+	return true;
+}
+
+void MepPackManager::ScanSiblingFolder()
+{
+	if(_romFolder.empty() || _romName.empty()) {
+		return;
+	}
+	string sibling = FolderUtilities::CombinePath(_romFolder, _romName);
+	std::error_code ec;
+	if(!fs::is_directory(fs::u8path(sibling), ec)) {
+		return;
+	}
+
+	MepPack pack;
+	string error;
+	string json;
+	if(ReadTextFile(FolderUtilities::CombinePath(sibling, "pack.json"), json)) {
+		//Explicit metadata beside the ROM: parsed for name/author/license/
+		//patches, but location is identity - targets are not required to match
+		if(!MepPack::Parse(json, pack, error)) {
+			_rejected.push_back(_romName + "/ (sibling): " + error);
+			Log("rejected sibling folder '" + sibling + "': " + error);
+			return;
+		}
+		pack.RootFolder = sibling;
+		pack.ContainerName = _romName;
+		pack.Origin = MepPackOrigin::Sibling;
+		//auto/ layers still come from the convention
+		MepPack layout;
+		layout.RootFolder = sibling;
+		if(layout.DetectConventionLayout()) {
+			for(int i = 0; i < 3; i++) {
+				if(!layout.Sections[i].AutoPath.empty()) {
+					pack.Sections[i].Present = true;
+					pack.Sections[i].AutoPath = layout.Sections[i].AutoPath;
+				}
+			}
+		}
+	} else if(!LoadConventionPack(sibling, _romName, MepPackOrigin::Sibling, pack)) {
+		Log("sibling folder '" + sibling + "' has no textures/, audio/ or synth/ layer - ignored");
+		return;
+	}
+	_packs.push_back(std::move(pack));
 }
 
 void MepPackManager::LoadForRom(VirtualFile& romFile)
@@ -87,10 +200,15 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 
 	_romSha1 = ComputeNoIntroSha1(romFile);
 	_romExtension = StringUtilities::ToLower(romFile.GetFileExtension());
+	string romPath = romFile.GetFilePath();
+	_romName = FolderUtilities::GetFilename(romPath, false);
+	_romFolder = FolderUtilities::GetFolderName(romPath);
 	if(!_emu->GetSettings()->GetEnhancementPackConfig().EnableMepPacks) {
 		Log("enhancement packs disabled in settings - folder not scanned");
 		return;
 	}
+	//ADR-0049: the folder beside the ROM always comes first
+	ScanSiblingFolder();
 	ScanAndMatch();
 
 	if(!_packs.empty()) {
@@ -101,7 +219,8 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 					sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 				}
 			}
-			Log("pack '" + pack.Name + "' v" + pack.Version + " matches ROM sha1 " + _romSha1 + " (container '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
+			string origin = pack.Origin == MepPackOrigin::Sibling ? "sibling folder" : pack.FromZip ? "zip" : "folder";
+			Log("pack '" + pack.Name + "' v" + pack.Version + (pack.Synthetic ? " [folder convention]" : "") + " matches ROM sha1 " + _romSha1 + " (" + origin + " '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
 		}
 	}
 }
@@ -185,7 +304,7 @@ bool MepPackManager::PrepareZip(const string& zipPath, const string& cacheRoot, 
 		}
 		plan.emplace_back(entry, normalized);
 	}
-	if(!hasPackJson) {
+	if(!hasPackJson && StringUtilities::ToLower(name) != StringUtilities::ToLower(_romName)) {
 		error = "zip has no pack.json at its root";
 		return false;
 	}
@@ -233,6 +352,7 @@ bool MepPackManager::LoadContainer(const string& rootFolder, const string& conta
 	outPack.ContainerName = containerName;
 	outPack.RootFolder = rootFolder;
 	outPack.FromZip = fromZip;
+	outPack.Origin = fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder;
 	return true;
 }
 
@@ -269,7 +389,16 @@ void MepPackManager::ScanAndMatch()
 
 		MepPack pack;
 		if(!LoadContainer(rootFolder, name, fromZip, pack, error)) {
-			if(error != "no pack.json" || fromZip) {
+			if(error == "no pack.json") {
+				//ADR-0049: a container named like the ROM is "the folder, zipped"
+				//(or the fallback location when the ROM's folder is read-only)
+				if(StringUtilities::ToLower(name) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, pack)) {
+					candidates.emplace_back(StringUtilities::ToLower(name), std::move(pack));
+				} else if(fromZip) {
+					_rejected.push_back(name + ": " + error);
+					Log("rejected '" + name + "': " + error);
+				}
+			} else {
 				_rejected.push_back(name + ": " + error);
 				Log("rejected '" + name + "': " + error);
 			}
@@ -337,7 +466,7 @@ string MepPackManager::GetPackListText() const
 				sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 			}
 		}
-		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + (pack.FromZip ? "1" : "0") + "\n";
+		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + std::to_string((int)pack.Origin) + "\n";
 	}
 	for(const string& rejected : _rejected) {
 		out += "!" + rejected + "\n";
@@ -349,4 +478,64 @@ string MepPackManager::GetSectionPath(MepSectionType type) const
 {
 	const MepPack* pack = GetPackForSection(type);
 	return pack ? pack->GetSectionPath(type) : "";
+}
+
+string MepPackManager::GetSectionAutoPath(MepSectionType type) const
+{
+	const MepPack* pack = GetPackForSection(type);
+	return pack ? pack->GetSectionAutoPath(type) : "";
+}
+
+vector<string> MepPackManager::GetSynthPresetPaths() const
+{
+	vector<string> paths;
+	string autoPath = GetSectionAutoPath(MepSectionType::Synth);
+	string humanPath = GetSectionPath(MepSectionType::Synth);
+	if(!autoPath.empty()) {
+		paths.push_back(autoPath);
+	}
+	if(!humanPath.empty()) {
+		paths.push_back(humanPath);
+	}
+	return paths;
+}
+
+bool MepPackManager::IsSectionFromSibling(MepSectionType type) const
+{
+	const MepPack* pack = GetPackForSection(type);
+	return pack && pack->Origin == MepPackOrigin::Sibling;
+}
+
+bool MepPackManager::ApplyPatches(VirtualFile& romFile)
+{
+	if(!_emu->GetSettings()->GetEnhancementPackConfig().EnableMepPacks) {
+		return false;
+	}
+	for(const MepPack& pack : _packs) {
+		if(pack.Patches.empty() || !IsPackEnabled(pack.ContainerName)) {
+			continue;
+		}
+		const MepPatch* patch = pack.FindPatch(_romSha1);
+		if(!patch) {
+			if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
+				patch = &pack.Patches[0];
+				MessageManager::DisplayMessage("MEP", "Applying patch made for another ROM revision (hash override enabled)");
+				Log("pack '" + pack.Name + "': no patch for sha1 " + _romSha1 + " - applying '" + patch->File + "' anyway (ApplyPatchOnHashMismatch)");
+			} else {
+				Log("pack '" + pack.Name + "': patch skipped - none of its " + std::to_string(pack.Patches.size()) + " patches[] entries matches sha1 " + _romSha1);
+				continue;
+			}
+		}
+		VirtualFile patchFile(FolderUtilities::CombinePath(pack.RootFolder, patch->File));
+		if(!patchFile.IsValid()) {
+			Log("pack '" + pack.Name + "': patch file not found: " + patch->File);
+			continue;
+		}
+		if(romFile.ApplyPatch(patchFile)) {
+			Log("pack '" + pack.Name + "': applied patch '" + patch->File + "'");
+			return true;
+		}
+		Log("pack '" + pack.Name + "': failed to apply patch '" + patch->File + "'");
+	}
+	return false;
 }

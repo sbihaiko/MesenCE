@@ -26,6 +26,28 @@ struct MepSection
 	//Relative to the container root, '/' separators, no leading "./", no
 	//trailing '/'; "" means the root itself
 	string Path;
+	//F5 (ADR-0049): machine-generated layer of the same section, below the
+	//human layer at Path. Empty when the pack has no auto/ folder for it.
+	//"HasHuman" tells whether Path itself exists (a pack may be auto-only).
+	bool HasHuman = false;
+	string AutoPath;
+};
+
+//pack.json "patches": [{ "sha1": "...", "file": "rel/path.ips" }] (ADR-0044).
+//Applied only to the ROM whose No-Intro sha1 matches; other targets load
+//everything else and skip the patch.
+struct MepPatch
+{
+	string Sha1;
+	string File;
+};
+
+//Where the pack was found (ADR-0040 containers, ADR-0049 sibling folder)
+enum class MepPackOrigin : uint8_t
+{
+	Folder = 0,
+	Zip = 1,
+	Sibling = 2
 };
 
 class MepPack
@@ -38,12 +60,16 @@ public:
 	string Author;
 	string License;
 	vector<MepTarget> Targets;
+	vector<MepPatch> Patches;
 	MepSection Sections[3];
 
 	//Filled by the manager
 	string ContainerName; //folder name or zip base name (precedence key, ADR-0040)
 	string RootFolder; //absolute folder holding pack.json (extracted cache for zips)
 	bool FromZip = false;
+	MepPackOrigin Origin = MepPackOrigin::Folder;
+	//True for a pack described by the folder convention alone (no pack.json)
+	bool Synthetic = false;
 
 	//Parses/validates pack.json text. Returns false with a human-readable
 	//reason when any MUST rule of MEP-v1 §2.3/§3.1/§4 is violated or the
@@ -59,9 +85,23 @@ public:
 	const MepSection& GetSection(MepSectionType type) const { return Sections[(int)type]; }
 	bool HasSection(MepSectionType type) const { return Sections[(int)type].Present; }
 
-	//Absolute path of a section's content (folder for textures/audio, file for
-	//synth); empty when the section is absent
+	//Absolute path of a section's human layer (folder for textures/audio, file
+	//for synth); empty when the section has no human layer
 	string GetSectionPath(MepSectionType type) const;
+	//Absolute path of the section's auto/ layer; empty when none (ADR-0049)
+	string GetSectionAutoPath(MepSectionType type) const;
+
+	//The patch that applies to this ROM hash, nullptr when none
+	const MepPatch* FindPatch(const string& sha1) const;
+
+	//Fills the sections from the fixed folder layout (ADR-0049):
+	//textures/hires.txt, audio/hires.txt, synth/preset.cfg and the same
+	//three under auto/. Returns true when at least one layer exists.
+	bool DetectConventionLayout();
+
+	//Section/layer relative paths of the convention
+	static const char* GetConventionPath(MepSectionType type);
+	static constexpr const char* AutoFolderName = "auto";
 
 	static const char* GetSectionName(MepSectionType type);
 

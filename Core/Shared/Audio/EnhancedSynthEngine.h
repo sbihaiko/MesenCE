@@ -76,7 +76,7 @@ private:
 	const EnhancedSynthPreset* _builtInPresets = nullptr;
 	const char* _sectionSuffix = "";
 	//ESP file from the active MEP pack's synth section ("" = none) - ADR-0042
-	string _packPresetPath;
+	vector<string> _packPresetPaths;
 
 	static double PolyBlep(double t, double dt);
 	static double BlepSaw(double phase, double inc);
@@ -87,7 +87,7 @@ public:
 	//Stores the wrapper's built-in preset table + its EnhancedAudioPresets.cfg
 	//section suffix (see EnhancedSynthPresetLoader::Load) and loads the user
 	//overrides once. Call from the wrapper's constructor.
-	void InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const string& packPresetPath = "");
+	void InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const vector<string>& packPresetPaths = {});
 
 	//Re-reads EnhancedAudioPresets.cfg (file I/O + parsing). Must only be
 	//called from outside the audio mix path - e.g. on console reset, on the
@@ -95,7 +95,7 @@ public:
 	void ReloadUserPresets();
 	//Path of the MEP synth preset applied between built-ins and the user's
 	//file (takes effect on the next ReloadUserPresets)
-	void SetPackPresetPath(const string& path) { _packPresetPath = path; }
+	void SetPackPresetPaths(const vector<string>& paths) { _packPresetPaths = paths; }
 
 	const EnhancedSynthPreset& GetPreset(uint32_t presetId) const;
 

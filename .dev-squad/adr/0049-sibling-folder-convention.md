@@ -1,6 +1,6 @@
 # ADR-0049: Convention over configuration — the sibling folder is the pack
 
-- Status: proposed
+- Status: accepted (F5.1, 2026-08-25)
 - Date: 2026-08-25
 - Fase 5 (docs/roadmap/plano-execucao-F5.md). Supersedes the manifest-heavy
   drafts of ADR-0045/0046/0048 (kept as `superseded`, see each file).

@@ -91,13 +91,14 @@ namespace
 //above and _presetNames for the section names). Blank lines and lines
 //starting with '#' or ';' are ignored. Malformed lines/values are skipped
 //silently.
-void EnhancedSynthPresetLoader::Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const string& packPresetPath)
+void EnhancedSynthPresetLoader::Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const vector<string>& packPresetPaths)
 {
 	std::copy(defaults, defaults + 5, outPresets);
 
 	string suffix = sectionSuffix ? sectionSuffix : "";
-	if(!packPresetPath.empty()) {
-		//MEP synth section: above the built-ins, below the user's file
+	for(const string& packPresetPath : packPresetPaths) {
+		//MEP synth section: above the built-ins, below the user's file; the
+		//pack's auto/ layer comes first so the human layer overrides it
 		if(std::ifstream(packPresetPath)) {
 			ApplyFile(packPresetPath, outPresets, suffix);
 			MessageManager::Log("[MEP] synth: applied ESP overrides from '" + packPresetPath + "' (sections '<Preset>" + suffix + "')");

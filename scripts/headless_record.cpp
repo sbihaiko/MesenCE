@@ -136,6 +136,8 @@ int main(int argc, char** argv)
 			mep.EnableTextures = false;
 		} else if(strcmp(argv[i], "mep-nosynth") == 0) {
 			mep.EnableSynth = false;
+		} else if(strcmp(argv[i], "mep-forcepatch") == 0) {
+			mep.ApplyPatchOnHashMismatch = true;
 		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {
 			mepDisable = argv[i] + 12;
 		}

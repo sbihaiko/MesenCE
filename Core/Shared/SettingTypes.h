@@ -804,6 +804,9 @@ struct EnhancementPackConfig
 	bool EnableTextures = true;
 	bool EnableAudio = true;
 	bool EnableSynth = true;
+	//ADR-0044: apply a pack's patch even when no patches[]/<patch> hash matches
+	//the ROM (opt-in; wrong revisions may break the game)
+	bool ApplyPatchOnHashMismatch = false;
 };
 
 struct CvConfig

@@ -85,7 +85,7 @@ SmsEnhancedSynth::SmsEnhancedSynth(Emulator* emu, SmsConsole* console)
 	//engine's ("[Studio]") without colliding.
 	//MEP synth section (ADR-0042): the manager already resolved the packs
 	//for this ROM in Emulator::InternalLoadRom
-	_engine.InitPresets(_presets, ".Sms", _emu->GetEnhancementPackManager()->GetSectionPath(MepSectionType::Synth));
+	_engine.InitPresets(_presets, ".Sms", _emu->GetEnhancementPackManager()->GetSynthPresetPaths());
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 

@@ -52,6 +52,90 @@ bool HdPackLoader::LoadHdNesPack(string definitionFile, HdPackData& outData)
 	return false;
 }
 
+bool HdPackLoader::HasLoosePack(VirtualFile& romFile)
+{
+	string romName = FolderUtilities::GetFilename(romFile.GetFileName(), false);
+	string path = FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), FolderUtilities::CombinePath(romName, "hires.txt"));
+	return (bool)ifstream(path);
+}
+
+bool HdPackLoader::MergeLowerLayer(HdPackData& into, HdPackData& lower)
+{
+	if(into.Scale != lower.Scale) {
+		MessageManager::Log("[HDPack] auto layer <scale> " + std::to_string(lower.Scale) + " differs from the human layer's " + std::to_string(into.Scale) + " - auto layer ignored");
+		return false;
+	}
+
+	into.Version = std::max(into.Version, lower.Version);
+	into.OptionFlags |= lower.OptionFlags;
+	if(into.Palette.empty()) {
+		into.Palette = lower.Palette;
+	}
+	if(!into.HasOverscanConfig && lower.HasOverscanConfig) {
+		into.HasOverscanConfig = true;
+		into.Overscan = lower.Overscan;
+	}
+
+	//Bitmaps and conditions are referenced by raw pointer from tiles and
+	//backgrounds: moving the owning unique_ptrs keeps every pointer valid
+	for(auto& bitmap : lower.ImageFileData) {
+		into.ImageFileData.push_back(std::move(bitmap));
+	}
+	for(auto& bitmap : lower.BackgroundFileData) {
+		into.BackgroundFileData.push_back(std::move(bitmap));
+	}
+	for(auto& condition : lower.Conditions) {
+		into.Conditions.push_back(std::move(condition));
+	}
+	lower.ImageFileData.clear();
+	lower.BackgroundFileData.clear();
+	lower.Conditions.clear();
+
+	uint32_t added = 0;
+	uint32_t skipped = 0;
+	for(auto& tile : lower.Tiles) {
+		HdTileKey key = tile->GetKey(false);
+		auto existing = into.TileByKey.find(key);
+		if(existing != into.TileByKey.end() && !existing->second.empty()) {
+			skipped++;
+			continue;
+		}
+		into.TileByKey[key].push_back(tile.get());
+		if(tile->DefaultTile) {
+			into.TileByKey[tile->GetKey(true)].push_back(tile.get());
+		}
+		into.Tiles.push_back(std::move(tile));
+		added++;
+	}
+	lower.Tiles.clear();
+
+	for(int i = 0; i < HdPackData::BgLayerCount; i++) {
+		for(HdBackgroundInfo& bg : lower.BackgroundsByPriority[i]) {
+			into.BackgroundsByPriority[i].push_back(bg);
+		}
+		lower.BackgroundsByPriority[i].clear();
+	}
+	for(HdPackAdditionalSpriteInfo& info : lower.AdditionalSprites) {
+		into.AdditionalSprites.push_back(info);
+	}
+	for(FallbackTileInfo& info : lower.FallbackTiles) {
+		into.FallbackTiles.push_back(info);
+	}
+	into.WatchedMemoryAddresses.insert(lower.WatchedMemoryAddresses.begin(), lower.WatchedMemoryAddresses.end());
+	for(auto& bgm : lower.BgmFilesById) {
+		into.BgmFilesById.emplace(bgm.first, bgm.second);
+	}
+	for(auto& sfx : lower.SfxFilesById) {
+		into.SfxFilesById.emplace(sfx.first, sfx.second);
+	}
+	for(auto& patch : lower.PatchesByHash) {
+		into.PatchesByHash.emplace(patch.first, patch.second);
+	}
+
+	MessageManager::Log("[HDPack] auto layer merged: " + std::to_string(added) + " tiles added, " + std::to_string(skipped) + " overridden by the human layer");
+	return true;
+}
+
 bool HdPackLoader::LoadHdNesPack(VirtualFile& romFile, HdPackData& outData)
 {
 	HdPackLoader loader;

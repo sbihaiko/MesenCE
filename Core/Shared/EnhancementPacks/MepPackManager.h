@@ -20,11 +20,18 @@ private:
 	//the current scan so it can be pushed at any time
 	unordered_set<string> _disabledContainers;
 	string _romExtension;
+	string _romName; //file name without extension (convention key, ADR-0049)
+	string _romFolder; //folder holding the ROM (or its archive)
 	vector<MepPack> _packs; //matching packs, precedence order (first wins)
 	vector<string> _rejected; //"<container>: <reason>" for the UI/log
 
 	void ScanAndMatch();
+	void ScanSiblingFolder();
 	bool LoadContainer(const string& rootFolder, const string& containerName, bool fromZip, MepPack& outPack, string& error);
+	//Folder-convention pack (no pack.json): sections detected from the fixed
+	//layout, target = the current ROM. False when the folder has no layer.
+	bool LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack);
+	static string SystemFromExtension(const string& lowerExt);
 	bool PrepareZip(const string& zipPath, const string& cacheRoot, string& outFolder, string& error);
 	static bool ReadTextFile(const string& path, string& out);
 
@@ -43,6 +50,16 @@ public:
 	//Rescans the packs folder and keeps only the packs matching this ROM
 	void LoadForRom(VirtualFile& romFile);
 	void Clear();
+
+	//Applies the winning pack's patches[] entry for this ROM (ADR-0044),
+	//in place, before the console reads the ROM. Honours the
+	//ApplyPatchOnHashMismatch override. Returns true when a patch was applied.
+	bool ApplyPatches(VirtualFile& romFile);
+
+	//Sibling folder of a ROM: <dir>/<name>/ (ADR-0049)
+	static string GetSiblingFolder(VirtualFile& romFile);
+	const string& GetRomName() const { return _romName; }
+	const string& GetRomFolder() const { return _romFolder; }
 
 	const string& GetRomSha1() const { return _romSha1; }
 	const vector<MepPack>& GetPacks() const { return _packs; }
@@ -63,7 +80,15 @@ public:
 	//followed by "!<container>: <reason>" lines for rejected containers
 	string GetPackListText() const;
 
-	//Absolute content path of the winning section, or "" when none:
-	//folder for textures/audio, file for synth
+	//Absolute content path of the winning section's human layer, or "" when
+	//none: folder for textures/audio, file for synth
 	string GetSectionPath(MepSectionType type) const;
+	//Absolute path of the winning section's auto/ layer, or "" (ADR-0049)
+	string GetSectionAutoPath(MepSectionType type) const;
+	//ESP files of the winning synth section in apply order: auto/ layer first,
+	//human layer last (each may be absent)
+	vector<string> GetSynthPresetPaths() const;
+	//True when the winning pack for the section is the ROM's sibling folder -
+	//it then also overrides the legacy loose HdPacks/<rom>/ pack
+	bool IsSectionFromSibling(MepSectionType type) const;
 };

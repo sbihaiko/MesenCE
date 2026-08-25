@@ -51,26 +51,97 @@ bool HdTilePack::LoadForRom(VirtualFile& romFile, string system, MepPackManager*
 	string romName = FolderUtilities::GetFilename(romFile.GetFileName(), false);
 	string loosePath = FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), romName), "hires.txt");
 	string mepFolder = mepManager ? mepManager->GetSectionPath(MepSectionType::Textures) : "";
+	string autoFolder = mepManager ? mepManager->GetSectionAutoPath(MepSectionType::Textures) : "";
+	bool fromSibling = mepManager && mepManager->IsSectionFromSibling(MepSectionType::Textures);
 
 	if(ifstream(loosePath)) {
-		if(!mepFolder.empty()) {
-			MessageManager::Log("[MEP] loose HD pack found in HdPacks/" + romName + "/ - it takes precedence over the pack's textures section");
+		if(fromSibling) {
+			MessageManager::Log("[MEP] sibling folder beside the ROM overrides the loose HdPacks/" + romName + "/ pack");
+		} else {
+			if(!mepFolder.empty() || !autoFolder.empty()) {
+				MessageManager::Log("[MEP] loose HD pack found in HdPacks/" + romName + "/ - it takes precedence over the pack's textures section");
+			}
+			return Load(romFile, system, outPack);
 		}
-		return Load(romFile, system, outPack);
 	}
 
-	if(mepFolder.empty()) {
+	if(mepFolder.empty() && autoFolder.empty()) {
 		return false;
 	}
-	if(!LoadFromFolder(mepFolder, outPack, false)) {
-		MessageManager::Log("[MEP] textures section has no loadable hires.txt in " + mepFolder);
+
+	auto loadLayer = [&](const string& folder, HdTilePack& pack, const char* label) {
+		if(!LoadFromFolder(folder, pack, false)) {
+			MessageManager::Log(string("[MEP] ") + label + " has no loadable hires.txt in " + folder);
+			return false;
+		}
+		if(pack._system != system) {
+			MessageManager::Log(string("[MEP] ") + label + " hires.txt <system> is '" + pack._system + "' but the current mode needs '" + system + "' - not applied");
+			return false;
+		}
+		return true;
+	};
+
+	bool loaded = !mepFolder.empty() && loadLayer(mepFolder, outPack, "textures section");
+	if(!loaded) {
+		outPack = HdTilePack();
+	}
+	if(!autoFolder.empty()) {
+		HdTilePack autoPack;
+		if(loadLayer(autoFolder, autoPack, "textures auto layer")) {
+			if(outPack.MergeLowerLayer(autoPack)) {
+				loaded = true;
+			}
+		}
+	}
+	if(!loaded) {
 		return false;
 	}
-	if(outPack._system != system) {
-		MessageManager::Log("[MEP] textures hires.txt <system> is '" + outPack._system + "' but the current mode needs '" + system + "' - section not applied");
+	MessageManager::Log("[MEP] textures: loaded " + system + " pack from '" + (mepFolder.empty() ? autoFolder : mepFolder) + "': " + std::to_string(outPack._tiles.size()) + " tiles (scale " + std::to_string(outPack._scale) + ")");
+	return true;
+}
+
+bool HdTilePack::MergeLowerLayer(HdTilePack& lower)
+{
+	if(_tiles.empty()) {
+		std::swap(_scale, lower._scale);
+		std::swap(_system, lower._system);
+		std::swap(_rawPixels, lower._rawPixels);
+		std::swap(_tiles, lower._tiles);
+		std::swap(_tilesByKey, lower._tilesByKey);
+		std::swap(_defaultTilesByKey, lower._defaultTilesByKey);
+		return true;
+	}
+	if(lower._scale != _scale || lower._system != _system) {
+		MessageManager::Log("[HDPack] auto layer <scale>/<system> differ from the human layer - auto layer ignored");
 		return false;
 	}
-	MessageManager::Log("[MEP] textures: loaded " + system + " pack from '" + mepFolder + "': " + std::to_string(outPack._tiles.size()) + " tiles (scale " + std::to_string(outPack._scale) + ")");
+
+	uint32_t added = 0;
+	uint32_t skipped = 0;
+	for(auto& tile : lower._tiles) {
+		if(tile->DefaultTile) {
+			HdCapturedTile wildcard = tile->Key;
+			wildcard.PalKeySize = 1;
+			memset(wildcard.PalKey + 1, 0, HdCapturedTile::MaxPalKeySize - 1);
+			if(_defaultTilesByKey.find(wildcard) != _defaultTilesByKey.end()) {
+				skipped++;
+				continue;
+			}
+			_defaultTilesByKey[wildcard] = tile.get();
+		} else {
+			if(_tilesByKey.find(tile->Key) != _tilesByKey.end()) {
+				skipped++;
+				continue;
+			}
+			_tilesByKey[tile->Key] = tile.get();
+		}
+		_tiles.push_back(std::move(tile));
+		added++;
+	}
+	lower._tiles.clear();
+	lower._tilesByKey.clear();
+	lower._defaultTilesByKey.clear();
+	MessageManager::Log("[HDPack] auto layer merged: " + std::to_string(added) + " tiles added, " + std::to_string(skipped) + " overridden by the human layer");
 	return true;
 }
 
