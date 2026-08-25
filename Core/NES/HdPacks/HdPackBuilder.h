@@ -38,6 +38,12 @@ public:
 	void ProcessTile(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, BaseMapper* mapper, bool isSprite, uint32_t chrBankHash, bool transparencyRequired);
 	void SaveHdPack();
 
+	//Static export (no gameplay needed): every 16-byte tile of CHR ROM becomes
+	//a palette-agnostic defaultTile entry drawn with a neutral gray ramp.
+	//Tiles already present in the pack (recorded or previously exported) are
+	//kept. Returns the number of tiles added.
+	uint32_t AddRomTiles(uint8_t* chrRom, uint32_t chrRomSize);
+
 	//static void GetChrBankList(uint32_t *banks);
 	//static void GetBankPreview(uint32_t bankNumber, uint32_t pageNumber, uint32_t *rgbBuffer);
 };

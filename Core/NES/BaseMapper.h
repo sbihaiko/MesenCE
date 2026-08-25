@@ -286,6 +286,7 @@ public:
 	bool HasChrRam();
 	bool HasChrRom();
 	uint32_t GetChrRomSize() { return _chrRomSize; }
+	uint8_t* GetChrRomData() { return _chrRom; }
 
 	CartridgeState GetState();
 

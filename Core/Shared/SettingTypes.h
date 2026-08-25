@@ -1122,6 +1122,7 @@ enum class EmulatorShortcut
 	VsInsertCoin4,
 	StartRecordHdPack,
 	StopRecordHdPack,
+	ExportRomTilesHdPack,
 
 	ShortcutCount,
 };

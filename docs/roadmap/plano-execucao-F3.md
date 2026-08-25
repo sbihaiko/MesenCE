@@ -162,3 +162,12 @@ Toggles em runtime seguem a regra do `EnableHdPacks` (próximo power cycle);
 1. **Sessão A:** F3.0 (ADRs 0038–0042) + F3.1 (núcleo headless-validado).
 2. **Sessão B:** F3.2 (delegações + validação de precedência).
 3. **Sessão C:** F3.3 (config/interop/UI) + F3.4 (fecho, E2E, README).
+
+## Adendo (2026-08-25) — Export ROM Tiles (fora do escopo F3, pedido do usuário)
+
+Botão **Export ROM Tiles** no HD Pack Builder (`ExportRomTilesHdPack`): NES
+dumpa o CHR ROM inteiro como `defaultTile` (8192 tiles no Mega Man 3; Zelda
+recusado por usar CHR RAM); GB/SMS varrem a ROM por tiles não comprimidos
+(cobertura parcial; F1 Test Tone: 12 bitmaps, nenhum dos 26 exibidos — são
+gerados em runtime). Regravar por cima faz merge preservando os defaults
+(GB 24→102, NES 8192→8300). Harness: flag `romtiles`. ADR-0043.

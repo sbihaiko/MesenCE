@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles]
 //
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
@@ -19,9 +19,12 @@
 //(used by the F3 MEP tests to check "[MEP] ..." matching/rejection lines;
 //the MEP folder is <home>/EnhancementPacks/ inside the scratch home).
 //The mep-* flags exercise EnhancementPackConfig / SetMepPackEnabled (F3.3).
+//"romtiles" runs the static ROM tile export (ExportRomTilesHdPack) into
+//<output_prefix>-hdpack/ instead of recording.
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -111,6 +114,7 @@ int main(int argc, char** argv)
 	std::string prefix = argv[3];
 	bool pal = false;
 	bool hdPack = false;
+	bool romTiles = false;
 	bool screenshot = false;
 	bool dumpLog = false;
 	EnhancementPackConfig mep = {};
@@ -120,6 +124,8 @@ int main(int argc, char** argv)
 			pal = true;
 		} else if(strcmp(argv[i], "hdpack") == 0) {
 			hdPack = true;
+		} else if(strcmp(argv[i], "romtiles") == 0) {
+			romTiles = true;
 		} else if(strcmp(argv[i], "screenshot") == 0) {
 			screenshot = true;
 		} else if(strcmp(argv[i], "log") == 0) {
@@ -206,7 +212,17 @@ int main(int argc, char** argv)
 
 	std::string mid = prefix + ".mid", vgm = prefix + ".vgm";
 	std::string packFolder = std::filesystem::absolute(prefix + "-hdpack").string();
-	if(hdPack) {
+	if(romTiles) {
+		HdPackBuilderOptions options = {};
+		options.SaveFolder = (char*)packFolder.c_str();
+		options.FilterType = ScaleFilterType::Prescale;
+		options.Scale = 1;
+		options.ChrRamBankSize = 0x1000;
+		ExecuteShortcut({ EmulatorShortcut::ExportRomTilesHdPack, 0, &options });
+		printf("export estatico de tiles: hdpack=%s\n", packFolder.c_str());
+		//short grace period so the emulation thread is fully up before Stop()
+		seconds = std::min(seconds, 0.5);
+	} else if(hdPack) {
 		HdPackBuilderOptions options = {};
 		options.SaveFolder = (char*)packFolder.c_str();
 		options.FilterType = ScaleFilterType::Prescale;

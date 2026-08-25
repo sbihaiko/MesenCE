@@ -101,6 +101,7 @@ public:
 	void ProcessNotification(ConsoleNotificationType type, void* parameter) override;
 	void StartRecordingHdPack(HdPackBuilderOptions options);
 	void StopRecordingHdPack();
+	void ExportRomTilesHdPack(HdPackBuilderOptions options);
 
 	void Serialize(Serializer& s) override;
 };

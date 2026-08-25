@@ -981,6 +981,8 @@
 			<Message ID="lblUseLargeSpritesHelp">When enabled, this option will alter the display order of CHR banks&#xA;that contain only sprites to make the sprites easier to edit in the PNG file.</Message>
 			<Message ID="lblIgnoreOverscanHelp">When enabled, this will make the builder ignore any pixels in the overscan area.&#xA;This is useful in games that contain glitches on the outer edge of the screen.&#xA;Incorrect palette combinations due to these glitches will be ignored and won't be shown in the PNG files.</Message>
 
+			<Control ID="btnExportRomTiles">Export ROM Tiles</Control>
+			<Message ID="lblExportRomTilesHelp">Writes every tile found in the ROM to the pack as palette-agnostic "defaultTile" entries, without playing.&#xA;NES: the whole CHR ROM (CHR RAM games must be recorded instead).&#xA;GB/SMS: heuristic scan for uncompressed tiles - compressed graphics are not found; record to fill the gaps (re-recording merges into the same pack).</Message>
 			<Control ID="btnStartRecording">Start Recording</Control>
 			<Control ID="btnStopRecording">Stop Recording</Control>
 			<Control ID="btnOpenFolder">Open Save Folder</Control>

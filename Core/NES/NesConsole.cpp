@@ -766,8 +766,30 @@ void NesConsole::ProcessNotification(ConsoleNotificationType type, void* paramet
 			default: break;
 			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;
+			case EmulatorShortcut::ExportRomTilesHdPack: ExportRomTilesHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 		}
 	}
+}
+
+//Static export of CHR ROM as defaultTile entries (no gameplay needed). CHR
+//RAM games have no tile data in the ROM - only recording works for them.
+void NesConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
+{
+	auto lock = _emu->AcquireLock();
+	if(!_mapper->HasChrRom() || _mapper->GetChrRomSize() == 0) {
+		MessageManager::Log("[HDPack] ROM tile export: this game uses CHR RAM - tiles are generated at run time, use recording instead");
+		MessageManager::DisplayMessage("HdPack", "HdPackExportNoChrRom");
+		return;
+	}
+
+	uint32_t added;
+	{
+		HdPackBuilder builder(_emu, _ppu->GetPpuModel(), false, options);
+		added = builder.AddRomTiles(_mapper->GetChrRomData(), _mapper->GetChrRomSize());
+	} //destructor writes the pack
+
+	MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries from " + std::to_string(_mapper->GetChrRomSize() / 16) + " CHR ROM tiles");
+	MessageManager::DisplayMessage("HdPack", "HdPackExportDone", std::to_string(added));
 }
 
 void NesConsole::StartRecordingHdPack(HdPackBuilderOptions options)

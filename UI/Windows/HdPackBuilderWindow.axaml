@@ -9,9 +9,9 @@
 	xmlns:vm="using:Mesen.ViewModels"
 	xmlns:l="using:Mesen.Localization"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="230"
+	mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="230"
 	x:Class="Mesen.Windows.HdPackBuilderWindow"
-	Width="450" Height="230"
+	Width="520" Height="230"
 	CanResize="False"
 	x:DataType="vm:HdPackBuilderViewModel"
 	Title="{l:Translate wndTitle}"
@@ -19,7 +19,10 @@
 >
 	<DockPanel Margin="5">
 		<Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto">
-			<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" IsEnabled="{Binding IsOpenFolderEnabled}" />
+			<StackPanel Orientation="Horizontal">
+				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" IsEnabled="{Binding IsOpenFolderEnabled}" />
+				<c:ButtonWithIcon Icon="Assets/Export.png" Command="{Binding ExportRomTiles}" Text="{l:Translate btnExportRomTiles}" IsEnabled="{Binding !IsRecording}" ToolTip.Tip="{l:Translate lblExportRomTilesHelp}" />
+			</StackPanel>
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Grid.Column="2">
 				<c:ButtonWithIcon Icon="Assets/Record.png" Command="{Binding StartRecording}" Text="{l:Translate btnStartRecording}" IsVisible="{Binding !IsRecording}" />
 				<c:ButtonWithIcon Icon="Assets/MediaStop.png" Command="{Binding StopRecording}" Text="{l:Translate btnStopRecording}" IsVisible="{Binding IsRecording}" />

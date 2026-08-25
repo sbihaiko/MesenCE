@@ -20,6 +20,8 @@
 #include "Shared/FirmwareHelper.h"
 #include "Shared/MessageManager.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Utilities/VirtualFile.h"
+#include "Shared/RomInfo.h"
 #include "Shared/HdPacks/HdTilePack.h"
 #include "Shared/EnhancementPacks/MepPackManager.h"
 #include "SMS/SmsHdTileVideoFilter.h"
@@ -389,8 +391,31 @@ void SmsConsole::ProcessNotification(ConsoleNotificationType type, void* paramet
 			default: break;
 			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;
+			case EmulatorShortcut::ExportRomTilesHdPack: ExportRomTilesHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 		}
 	}
+}
+
+//Static export: scan the ROM file for uncompressed tiles and write them as
+//defaultTile entries (partial coverage by nature - see HdTilePackBuilder::AddRomTiles)
+void SmsConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
+{
+	auto lock = _emu->AcquireLock();
+	VirtualFile romFile = _emu->GetRomInfo().RomFile;
+	vector<uint8_t> rom;
+	if(!romFile.IsValid() || !romFile.ReadFile(rom)) {
+		MessageManager::Log("[HDPack] ROM tile export: could not read the ROM file");
+		return;
+	}
+
+	uint32_t added;
+	{
+		HdTilePackBuilder builder(_emu, _model == SmsModel::GameGear ? "gg" : "sms", options);
+		added = builder.AddRomTiles(rom);
+		builder.SaveHdPack();
+	}
+	MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries (BG+OBJ) from a " + std::to_string(rom.size() / 1024) + " KB ROM scan - compressed graphics are not detected, record to fill the gaps");
+	MessageManager::DisplayMessage("HdPack", "HdPackExportDone", std::to_string(added));
 }
 
 void SmsConsole::StartRecordingHdPack(HdPackBuilderOptions options)

@@ -109,6 +109,36 @@ namespace Mesen.ViewModels
 			});
 		}
 
+		//Static export of the ROM's tiles as defaultTile entries (NES CHR ROM;
+		//GB/SMS heuristic scan of uncompressed tiles) - no gameplay needed
+		public void ExportRomTiles()
+		{
+			if(IsRecording) {
+				return;
+			}
+
+			Task.Run(() => {
+				HdPackBuilderOptions options = Config.ToInterop(SaveFolder);
+				options.ChrRamBankSize = 0x1000;
+
+				IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
+				try {
+					Marshal.StructureToPtr(options, optionsPtr, false);
+					EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
+						Shortcut = EmulatorShortcut.ExportRomTilesHdPack,
+						ParamPtr = optionsPtr
+					});
+				} finally {
+					Marshal.FreeHGlobal(optionsPtr);
+				}
+
+				Dispatcher.UIThread.Post(() => {
+					IsOpenFolderEnabled = true;
+					UpdateFilterDropdown();
+				});
+			});
+		}
+
 		public void StopRecording()
 		{
 			if(!IsRecording) {

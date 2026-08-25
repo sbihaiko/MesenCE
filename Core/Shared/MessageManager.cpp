@@ -22,6 +22,8 @@ std::unordered_map<string, string> MessageManager::_enResources = {
 	{ "VideoRecorder", u8"Video Recorder" },
 
 	{ "ApplyingPatch", u8"Applying patch: %1" },
+	{ "HdPackExportDone", u8"HD pack: %1 ROM tiles exported as defaultTile entries" },
+	{ "HdPackExportNoChrRom", u8"HD pack: this game uses CHR RAM - record tiles during gameplay instead" },
 	{ "PatchFailed", u8"Failed to apply patch: %1" },
 	{ "CheatApplied", u8"1 cheat applied." },
 	{ "CheatsApplied", u8"%1 cheats applied." },

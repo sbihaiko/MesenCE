@@ -86,6 +86,69 @@ void HdTilePackBuilder::ProcessTile(const HdCapturedTile& tile, const uint32_t* 
 	}
 }
 
+uint32_t HdTilePackBuilder::AddRomTiles(const vector<uint8_t>& rom)
+{
+	bool fourBpp = _system == "sms" || _system == "gg";
+	uint32_t tileSize = fourBpp ? 32 : 16;
+	uint32_t levels = fourBpp ? 16 : 4;
+
+	uint32_t added = 0;
+	for(size_t offset = 0; offset + tileSize <= rom.size(); offset += tileSize) {
+		const uint8_t* data = rom.data() + offset;
+
+		//Decode pixel indexes + flatness test
+		uint8_t pixels[64];
+		bool flat = true;
+		for(int row = 0; row < 8; row++) {
+			for(int x = 0; x < 8; x++) {
+				uint8_t value = 0;
+				if(fourBpp) {
+					for(int plane = 0; plane < 4; plane++) {
+						value |= ((data[row * 4 + plane] >> (7 - x)) & 0x01) << plane;
+					}
+				} else {
+					value = ((data[row * 2] >> (7 - x)) & 0x01) | (((data[row * 2 + 1] >> (7 - x)) & 0x01) << 1);
+				}
+				pixels[row * 8 + x] = value;
+				if(value != pixels[0]) {
+					flat = false;
+				}
+			}
+		}
+		if(flat) {
+			continue;
+		}
+
+		//Neutral gray ramp: index 0 = white .. max = black (GB convention)
+		uint32_t rgba[64];
+		for(int i = 0; i < 64; i++) {
+			uint8_t gray = (uint8_t)(255 - (pixels[i] * 255) / (levels - 1));
+			rgba[i] = 0xFF000000 | (gray << 16) | (gray << 8) | gray;
+		}
+
+		for(uint8_t type = 0; type < 2; type++) {
+			HdCapturedTile key = {};
+			memcpy(key.Data, data, tileSize);
+			key.DataSize = (uint8_t)tileSize;
+			key.PalKeySize = 1; //defaultTile wildcard key: type only (see HdTilePack::GetTile)
+			key.PalKey[0] = type;
+			key.BankId = (uint32_t)(offset / 0x4000);
+
+			if(_tiles.find(key) != _tiles.end()) {
+				continue;
+			}
+			TileEntry& entry = _tiles[key];
+			entry.Key = key;
+			entry.UsageCount = 0;
+			entry.Order = _nextOrder++;
+			entry.DefaultTile = true;
+			memcpy(entry.Rgba, rgba, sizeof(entry.Rgba));
+			added++;
+		}
+	}
+	return added;
+}
+
 vector<uint32_t> HdTilePackBuilder::ScaleTile(const uint32_t* rgba)
 {
 	vector<uint32_t> originalTile(rgba, rgba + 64);

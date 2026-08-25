@@ -146,6 +146,44 @@ void HdPackBuilder::ProcessTile(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpu
 	}
 }
 
+uint32_t HdPackBuilder::AddRomTiles(uint8_t* chrRom, uint32_t chrRomSize)
+{
+	//Neutral ramp (color 0..3 = black, dark gray, light gray, white); the
+	//loader ignores PaletteColors for defaultTile entries, this only decides
+	//how the tile looks in the PNG the artist edits. Byte order: see ToRgb.
+	constexpr uint32_t neutralPalette = 0x0F001030;
+
+	uint32_t added = 0;
+	uint32_t tileCount = chrRomSize / 16;
+	for(uint32_t i = 0; i < tileCount; i++) {
+		HdTileKey key = {};
+		memcpy(key.TileData, chrRom + i * 16, 16);
+		key.PaletteColors = neutralPalette;
+		key.TileIndex = i; //absolute CHR ROM tile index (CHR ROM keys are index-based; AddTile pages by % 256)
+		key.IsChrRamTile = false;
+
+		if(_tilesByKey.find(key.GetKey(false)) != _tilesByKey.end() || _tilesByKey.find(key.GetKey(true)) != _tilesByKey.end()) {
+			continue;
+		}
+
+		HdPackTileInfo* hdTile = new HdPackTileInfo();
+		hdTile->PaletteColors = neutralPalette;
+		hdTile->TileIndex = key.TileIndex;
+		hdTile->DefaultTile = true;
+		hdTile->IsChrRamTile = false;
+		hdTile->Brightness = 255;
+		hdTile->ChrBankId = i / 256;
+		hdTile->TransparencyRequired = false;
+		memcpy(hdTile->TileData, key.TileData, 16);
+
+		_hdData.Tiles.push_back(unique_ptr<HdPackTileInfo>(hdTile));
+		AddTile(hdTile, 0);
+		_tilesByKey[hdTile->GetKey(true)] = hdTile;
+		added++;
+	}
+	return added;
+}
+
 void HdPackBuilder::GenerateHdTile(HdPackTileInfo* tile)
 {
 	uint32_t hdScale = _hdData.Scale;

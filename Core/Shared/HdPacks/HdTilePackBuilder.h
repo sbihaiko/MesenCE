@@ -95,5 +95,14 @@ public:
 	~HdTilePackBuilder();
 
 	void ProcessTile(const HdCapturedTile& tile, const uint32_t* rgba);
+
+	//Static export: scans the ROM for tile-sized blocks (16 bytes 2bpp for
+	//gb/gbc, 32 bytes 4bpp planar for sms/gg) and adds each as a
+	//palette-agnostic defaultTile (one BG and one OBJ entry) drawn with a
+	//neutral gray ramp. Heuristic: only aligned blocks; flat blocks and
+	//blocks reusing an existing key are skipped. Compressed graphics are
+	//invisible to this scan - partial coverage is expected, recording fills
+	//the gaps (merge on re-record). Returns the number of entries added.
+	uint32_t AddRomTiles(const vector<uint8_t>& rom);
 	void SaveHdPack();
 };
