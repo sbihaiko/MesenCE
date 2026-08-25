@@ -104,10 +104,14 @@ namespace
 	using Clock = std::chrono::steady_clock;
 
 	void SleepMs(int ms)
-	{ std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+	}
 
 	double Seconds(Clock::time_point t0)
-	{ return std::chrono::duration<double>(Clock::now() - t0).count(); }
+	{
+		return std::chrono::duration<double>(Clock::now() - t0).count();
+	}
 
 	BreakpointAbi MakeBp(BreakpointTypeFlags type, int32_t start, int32_t end, uint32_t id)
 	{
@@ -177,7 +181,9 @@ namespace
 	}
 
 	double EnvVolume(const ApuEnvelopeState& env)
-	{ return (env.ConstantVolume ? env.Volume : env.Counter) / 15.0; }
+	{
+		return (env.ConstantVolume ? env.Volume : env.Counter) / 15.0;
+	}
 
 	Note Snapshot()
 	{
