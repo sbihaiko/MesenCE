@@ -1,5 +1,156 @@
 #include "pch.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
+#include "Shared/MessageManager.h"
+#include "Utilities/FolderUtilities.h"
+
+//TinySoundFont (MIT, Utilities/Audio/tsf.h) - the single implementation unit
+#define TSF_IMPLEMENTATION
+#define TSF_NO_STDIO
+#include "Utilities/Audio/tsf.h"
+
+EnhancedSynthEngine::~EnhancedSynthEngine()
+{
+	if(_sf) {
+		tsf_close(_sf);
+		_sf = nullptr;
+	}
+}
+
+bool EnhancedSynthEngine::LoadSoundFont(const string& path)
+{
+	if(_sf && path == _sfPath) {
+		return true;
+	}
+	if(_sf) {
+		tsf_close(_sf);
+		_sf = nullptr;
+	}
+	_sfPath = path;
+	_sfRate = 0;
+	for(SfNote& n : _sfNotes) {
+		n = {};
+	}
+	for(int& prog : _sfPrograms) {
+		prog = -1;
+	}
+	if(path.empty()) {
+		return false;
+	}
+
+	//Read the whole file ourselves (TSF_NO_STDIO) so the path handling
+	//matches the rest of the emulator; a SoundFont is a few MB to ~200 MB.
+	std::ifstream file(path, std::ios::binary);
+	if(!file) {
+		MessageManager::Log("[EnhancedAudio] SoundFont not found: " + path);
+		return false;
+	}
+	std::vector<char> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	if(data.empty()) {
+		MessageManager::Log("[EnhancedAudio] SoundFont is empty: " + path);
+		return false;
+	}
+	_sf = tsf_load_memory(data.data(), (int)data.size());
+	if(!_sf) {
+		MessageManager::Log("[EnhancedAudio] SoundFont could not be parsed (not an .sf2?): " + path);
+		return false;
+	}
+	tsf_set_max_voices(_sf, 48);
+	MessageManager::Log("[EnhancedAudio] SoundFont loaded: " + path + " (" + std::to_string(tsf_get_presetcount(_sf)) + " presets)");
+	return true;
+}
+
+string EnhancedSynthEngine::ResolveSoundFontPath(const char* configuredPath)
+{
+	if(configuredPath && configuredPath[0]) {
+		return configuredPath;
+	}
+	string def = FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "EnhancedAudio.sf2");
+	return std::ifstream(def) ? def : "";
+}
+
+void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const RawChannel* raw, uint32_t count, double dt)
+{
+	ChannelRoleClassifier::Channel ch[ChannelRoleClassifier::MaxChannels];
+	count = std::min(count, ChannelRoleClassifier::MaxChannels);
+	for(uint32_t i = 0; i < count; i++) {
+		ch[i].Freq = raw[i].Freq;
+		ch[i].Vol = raw[i].Vol;
+		ch[i].HwSweep = raw[i].HwSweep;
+	}
+	roles.Update(ch, dt);
+
+	in.LeadVol = in.HarmVol = in.BassVol = 0;
+	in.SfxCount = 0;
+	bool slotUsed[3] = {};
+	for(uint32_t i = 0; i < count; i++) {
+		if(raw[i].Vol <= 0.0 && !roles.IsSfx(i)) {
+			//silent channel: keep its frequency in its slot only if the
+			//slot stays free, so a released note does not zero the pitch
+			//while the voice's release tail is still fading
+			int slot = (int)roles.Role(i);
+			if(!slotUsed[slot]) {
+				if(slot == 0) { in.LeadFreq = raw[i].Freq; in.LeadWidth = raw[i].Width; }
+				else if(slot == 1) { in.HarmFreq = raw[i].Freq; in.HarmWidth = raw[i].Width; }
+				else { in.BassFreq = raw[i].Freq; }
+			}
+			continue;
+		}
+		if(roles.IsSfx(i)) {
+			if(in.SfxCount < MaxSfxVoices) {
+				Input::SfxVoice& v = in.Sfx[in.SfxCount++];
+				v.Freq = raw[i].Freq;
+				v.Vol = raw[i].Vol;
+				v.Width = raw[i].Width;
+			}
+			continue;
+		}
+		int slot = (int)roles.Role(i);
+		if(slotUsed[slot]) {
+			//two channels with the same role (only with >3 melodic channels):
+			//the extra one takes the first free slot
+			slot = !slotUsed[1] ? 1 : !slotUsed[0] ? 0 : !slotUsed[2] ? 2 : -1;
+			if(slot < 0) {
+				continue;
+			}
+		}
+		slotUsed[slot] = true;
+		if(slot == 0) { in.LeadFreq = raw[i].Freq; in.LeadVol = raw[i].Vol; in.LeadWidth = raw[i].Width; }
+		else if(slot == 1) { in.HarmFreq = raw[i].Freq; in.HarmVol = raw[i].Vol; in.HarmWidth = raw[i].Width; }
+		else { in.BassFreq = raw[i].Freq; in.BassVol = raw[i].Vol; }
+	}
+}
+
+void EnhancedSynthEngine::SfUpdateVoice(int channel, SfNote& note, double freq, double vol, double gain)
+{
+	double n = freq > 1.0 ? 69.0 + 12.0 * std::log2(freq / 440.0) : -1.0;
+	if(vol <= 0.001 || n < 0.0 || n > 127.0) {
+		if(note.Key >= 0) {
+			tsf_channel_note_off(_sf, channel, note.Key);
+			note.Key = -1;
+		}
+		return;
+	}
+	int key = (int)std::lround(n);
+	if(note.Key < 0 || std::abs(n - note.Key) > 0.6) {
+		//New note (attack out of silence, or a pitch move too large for a
+		//bend - same rule as MidiExporter's onset detection)
+		if(note.Key >= 0) {
+			tsf_channel_note_off(_sf, channel, note.Key);
+		}
+		note.Key = key;
+		note.OnVol = std::max(vol, 0.05);
+		tsf_channel_set_volume(_sf, channel, (float)std::clamp(gain, 0.0, 2.0));
+		tsf_channel_set_pitchwheel(_sf, channel, 8192);
+		tsf_channel_note_on(_sf, channel, key, (float)std::clamp(std::sqrt(vol), 0.1, 1.0));
+	}
+	//Pitch inside the note follows the chip exactly (vibrato, small slides)
+	//through the wheel, range +/-24 semitones set at load time
+	double bend = (n - note.Key) / 24.0;
+	tsf_channel_set_pitchwheel(_sf, channel, (int)std::clamp(8192.0 + bend * 8192.0, 0.0, 16383.0));
+	//Envelope shape (decays, tremolo) follows the chip through the channel
+	//volume relative to the level the note was struck at
+	tsf_channel_set_volume(_sf, channel, (float)std::clamp(gain * vol / note.OnVol, 0.0, 2.0));
+}
 
 void EnhancedSynthEngine::InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const vector<string>& packPresetPaths)
 {
@@ -31,6 +182,16 @@ void EnhancedSynthEngine::Reset()
 		v = {};
 	}
 	_fmLp = 0;
+	for(Voice& v : _sfx) {
+		v = {};
+	}
+	if(_sf) {
+		tsf_reset(_sf);
+		for(SfNote& n : _sfNotes) {
+			n = {};
+		}
+		_sfRate = 0;
+	}
 	_noiseVol = 0;
 	_drumLpLow = _drumLpHigh = _drumLpTop = 0;
 	_thumpGate = 0;
@@ -94,7 +255,8 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	//noise), so sustained noise (wind, engines) does not turn into a hum - the
 	//thump then decays on its own. The wrapper decides what "slow enough"
 	//means for its chip (ThumpEligible).
-	if(in.ThumpEligible && in.NoiseVol >= 0.65 && in.NoiseVol > _lastNoisePollVol + 0.08) {
+	double prevNoisePollVol = _lastNoisePollVol;
+	if(in.ThumpEligible && in.NoiseVol >= 0.65 && in.NoiseVol > prevNoisePollVol + 0.08) {
 		_thumpGate = 1.0;
 		_thumpPhase = 0;
 	}
@@ -131,6 +293,65 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	}
 	double fmLpCoeff = 1.0 - std::exp(-pi2 * p.LeadLpHz / sampleRate);
 	constexpr double kFmVoiceGain = 0.6;
+
+	//Dry SFX voices: fast envelopes so hits stay percussive
+	uint32_t sfxCount = std::min(in.SfxCount, MaxSfxVoices);
+	double sfxInc[MaxSfxVoices];
+	for(uint32_t ch = 0; ch < sfxCount; ch++) {
+		Retrigger(_sfx[ch], in.Sfx[ch].Vol);
+		sfxInc[ch] = in.Sfx[ch].Freq / sampleRate;
+	}
+	double sfxAttackCoeff = 1.0 - std::exp(-1.0 / (sampleRate * 0.0005));
+	double sfxReleaseCoeff = 1.0 - std::exp(-1.0 / (sampleRate * 0.002));
+
+	//SoundFont block: drive the GM channels from the slot state, render the
+	//flush into _sfBuf; the DSP music voices are skipped below when it ran
+	bool useSf = _sf != nullptr;
+	bool sfDrums = useSf && p.GmDrums;
+	constexpr double kSfGain = 1.6;
+	if(useSf) {
+		if(_sfRate != sampleRate) {
+			tsf_set_output(_sf, TSF_STEREO_INTERLEAVED, (int)sampleRate, 0.0f);
+			_sfRate = sampleRate;
+			for(int ch = 0; ch < 3; ch++) {
+				tsf_channel_set_pitchrange(_sf, ch, 24.0f);
+			}
+			tsf_channel_set_pan(_sf, 0, 0.5f);
+			tsf_channel_set_pan(_sf, 1, 0.38f);
+			tsf_channel_set_pan(_sf, 2, 0.5f);
+			tsf_channel_set_pan(_sf, 9, 0.5f);
+			tsf_channel_set_presetnumber(_sf, 9, 0, 1);
+		}
+		int programs[3] = { (int)p.GmLeadProgram, (int)p.GmHarmProgram, (int)p.GmBassProgram };
+		for(int ch = 0; ch < 3; ch++) {
+			if(_sfPrograms[ch] != programs[ch]) {
+				if(_sfNotes[ch].Key >= 0) {
+					tsf_channel_note_off(_sf, ch, _sfNotes[ch].Key);
+					_sfNotes[ch].Key = -1;
+				}
+				if(!tsf_channel_set_presetnumber(_sf, ch, std::clamp(programs[ch], 0, 127), 0)) {
+					tsf_channel_set_presetindex(_sf, ch, 0);
+				}
+				_sfPrograms[ch] = programs[ch];
+			}
+		}
+		SfUpdateVoice(0, _sfNotes[0], in.LeadFreq, in.LeadVol, p.LeadGain);
+		SfUpdateVoice(1, _sfNotes[1], in.HarmFreq, in.HarmVol, p.HarmGain);
+		SfUpdateVoice(2, _sfNotes[2], in.BassFreq, in.BassVol, p.BassGain);
+		if(sfDrums) {
+			//One percussion hit per noise attack: bright LFSR = closed hi-hat,
+			//slow + loud = kick, slow = low tom (same mapping as MidiExporter)
+			if(in.NoiseVol >= 0.2 && in.NoiseVol > prevNoisePollVol + 0.08) {
+				int key = in.NoiseBrightness >= 0.5 ? 42 : (in.ThumpEligible && in.NoiseVol >= 0.65 ? 36 : 45);
+				tsf_channel_set_volume(_sf, 9, (float)std::clamp(p.DrumGain, 0.0, 2.0));
+				tsf_channel_note_on(_sf, 9, key, (float)std::clamp(in.NoiseVol, 0.2, 1.0));
+			}
+		}
+		if(_sfBuf.size() < sampleCount * 2) {
+			_sfBuf.resize(sampleCount * 2);
+		}
+		tsf_render_float(_sf, _sfBuf.data(), (int)sampleCount, 0);
+	}
 
 	//Delay lines: lead echo + 83/127/173ms feedforward reverb taps
 	uint32_t echoSize = (uint32_t)_echoBuf.size();
@@ -178,9 +399,14 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		smooth(_noiseVol, in.NoiseVol);
 		_thumpGate *= thumpDecay;
 
+		double lead = 0, harm = 0, bass = 0;
+		double sfL = 0, sfR = 0;
+		if(useSf) {
+			sfL = _sfBuf[i * 2] * kSfGain;
+			sfR = _sfBuf[i * 2 + 1] * kSfGain;
+		} else {
 		//Lead: detuned pulse pair + octave-up saw shimmer, or (Studio) a fixed
 		//detuned-saw stack that ignores the pulse width entirely
-		double lead;
 		if(p.LeadAlwaysSaw) {
 			lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune)) + 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune)) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
 		} else {
@@ -191,19 +417,21 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		lead = _lead.Lp * _lead.SmoothedVol;
 
 		//Harmony: softer detuned pulse pair
-		double harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
+		harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
 		_harmony.Lp += (harm - _harmony.Lp) * harmLpCoeff;
 		harm = _harmony.Lp * _harmony.SmoothedVol;
 
 		//Bass: sine + saw + half-frequency sub sine, mildly driven
 		step(_bass.Phase, bassInc);
 		step(_bass.SubPhase, bassInc * 0.5);
-		double bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
+		bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
 		bass = softClip(bass * p.BassDrive);
 		_bass.Lp += (bass - _bass.Lp) * bassLpCoeff;
 		bass = _bass.Lp * _bass.SmoothedVol;
+		}
 
 		//Drums: bandpassed body vs highpassed top blended by LFSR rate + thump
+		//(skipped when the SoundFont's percussion kit plays them)
 		double n = NextNoise();
 		_drumLpLow += (n - _drumLpLow) * drumLowCoeff;
 		_drumLpHigh += (n - _drumLpHigh) * drumHighCoeff;
@@ -211,7 +439,19 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		double body = (_drumLpHigh - _drumLpLow) * p.DrumBodyGain;
 		double top = n - _drumLpTop;
 		step(_thumpPhase, thumpInc);
-		double drum = (in.NoiseBrightness * top + (1.0 - in.NoiseBrightness) * body) * _noiseVol + p.ThumpGain * std::sin(pi2 * _thumpPhase) * _thumpGate * _noiseVol;
+		double drum = sfDrums ? 0.0 : (in.NoiseBrightness * top + (1.0 - in.NoiseBrightness) * body) * _noiseVol + p.ThumpGain * std::sin(pi2 * _thumpPhase) * _thumpGate * _noiseVol;
+
+		//Dry SFX: plain pulses at the chip's duty, no filter, no sends
+		double sfx = 0;
+		for(uint32_t ch = 0; ch < sfxCount; ch++) {
+			Voice& v = _sfx[ch];
+			double target = in.Sfx[ch].Vol;
+			v.SmoothedVol += (target - v.SmoothedVol) * (target > v.SmoothedVol ? sfxAttackCoeff : sfxReleaseCoeff);
+			if(v.SmoothedVol > 0.0005) {
+				sfx += 0.5 * pulse(step(v.Phase, sfxInc[ch]), sfxInc[ch], in.Sfx[ch].Width) * v.SmoothedVol;
+			}
+		}
+		sfx *= p.LeadGain;
 
 		//FM bus (skipped entirely on consoles with no FM voices)
 		double fmBus = 0;
@@ -231,12 +471,12 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		//Lead echo (single tap)
 		uint32_t echoRead = (_echoPos + echoSize - echoDelay) % echoSize;
 		double echo = _echoBuf[echoRead];
-		_echoBuf[_echoPos] = (float)lead;
+		_echoBuf[_echoPos] = (float)(useSf ? 0.5 * (sfL + sfR) * 0.6 : lead);
 		_echoPos = (_echoPos + 1) % echoSize;
 
 		//Stereo image: harmony left, lead echo right, FM centered
-		double left = p.LeadGain * lead + p.EchoGainL * echo + 1.25 * p.HarmGain * harm + p.BassGain * bass + p.DrumGain * drum + p.LeadGain * fmBus;
-		double right = p.LeadGain * lead + p.EchoGainR * echo + 0.80 * p.HarmGain * harm + p.BassGain * bass + p.DrumGain * drum + p.LeadGain * fmBus;
+		double left = p.LeadGain * lead + p.EchoGainL * echo + 1.25 * p.HarmGain * harm + p.BassGain * bass + p.DrumGain * drum + p.LeadGain * fmBus + sfL;
+		double right = p.LeadGain * lead + p.EchoGainR * echo + 0.80 * p.HarmGain * harm + p.BassGain * bass + p.DrumGain * drum + p.LeadGain * fmBus + sfR;
 
 		//Light feedforward reverb (3 taps)
 		_revBufL[_revPos] = (float)left;
@@ -247,6 +487,10 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		left += p.ReverbWet * (0.35 * _revBufL[t1] + 0.28 * _revBufL[t2] + 0.22 * _revBufL[t3]);
 		right += p.ReverbWet * (0.35 * _revBufR[t1] + 0.28 * _revBufR[t2] + 0.22 * _revBufR[t3]);
 		_revPos = (_revPos + 1) % revSize;
+
+		//SFX join after the sends: dry, centered
+		left += sfx;
+		right += sfx;
 
 		if(compEnabled) {
 			//Feedforward soft-knee compressor: linked stereo (one envelope

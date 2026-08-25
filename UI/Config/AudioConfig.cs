@@ -65,6 +65,9 @@ namespace Mesen.Config
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioVolume { get; set; } = 100;
 		[ObservableProperty][MinMax(0, 100)] public partial UInt32 EnhancedAudioApuMix { get; set; } = 0;
 		[ObservableProperty] public partial EnhancedAudioPreset EnhancedAudioPreset { get; set; } = EnhancedAudioPreset.Studio;
+		[ObservableProperty] public partial bool EnhancedAudioAutoRoles { get; set; } = true;
+		[ObservableProperty] public partial bool EnhancedAudioSfxSeparation { get; set; } = true;
+		[ObservableProperty] public partial string EnhancedAudioSoundFontPath { get; set; } = "";
 
 		public void ApplyConfig()
 		{
@@ -118,7 +121,10 @@ namespace Mesen.Config
 				EnableEnhancedAudio = EnableEnhancedAudio,
 				EnhancedAudioVolume = EnhancedAudioVolume,
 				EnhancedAudioApuMix = EnhancedAudioApuMix,
-				EnhancedAudioPreset = EnhancedAudioPreset
+				EnhancedAudioPreset = EnhancedAudioPreset,
+				EnhancedAudioAutoRoles = EnhancedAudioAutoRoles,
+				EnhancedAudioSfxSeparation = EnhancedAudioSfxSeparation,
+				EnhancedAudioSoundFontPath = EnhancedAudioSoundFontPath
 			});
 		}
 	}
@@ -177,6 +183,9 @@ namespace Mesen.Config
 		public UInt32 EnhancedAudioVolume;
 		public UInt32 EnhancedAudioApuMix;
 		public EnhancedAudioPreset EnhancedAudioPreset;
+		[MarshalAs(UnmanagedType.I1)] public bool EnhancedAudioAutoRoles;
+		[MarshalAs(UnmanagedType.I1)] public bool EnhancedAudioSfxSeparation;
+		[MarshalAs(UnmanagedType.LPStr)] public string EnhancedAudioSoundFontPath;
 	}
 
 	public enum EnhancedAudioPreset

@@ -61,6 +61,14 @@ struct EnhancedSynthPreset
 	double CompAttackMs;
 	double CompReleaseMs;
 	double CompMakeup;
+
+	//General MIDI programs (0-based Program Change numbers) used when a
+	//SoundFont is loaded (ADR-0052, level 2): one per role. GmDrums routes
+	//the noise channel to the GM percussion kit instead of the DSP drums.
+	double GmLeadProgram;
+	double GmHarmProgram;
+	double GmBassProgram;
+	bool GmDrums;
 };
 
 //Loads EnhancedAudioPresets.cfg overrides (shared file, all engines) on top of

@@ -100,6 +100,12 @@
 								<TextBlock Text="{l:Translate lblEnhancedAudioApuMix}" Margin="10 0 0 0" />
 								<c:MesenNumericUpDown Minimum="0" Maximum="100" Value="{Binding Config.EnhancedAudioApuMix}" />
 							</StackPanel>
+							<CheckBox IsChecked="{Binding Config.EnhancedAudioAutoRoles}" IsEnabled="{Binding Config.EnableEnhancedAudio}" Content="{l:Translate chkEnhancedAudioAutoRoles}" />
+							<CheckBox IsChecked="{Binding Config.EnhancedAudioSfxSeparation}" IsEnabled="{Binding Config.EnableEnhancedAudio}" Content="{l:Translate chkEnhancedAudioSfxSeparation}" />
+							<StackPanel Orientation="Horizontal" IsEnabled="{Binding Config.EnableEnhancedAudio}">
+								<TextBlock Text="{l:Translate lblEnhancedAudioSoundFont}" />
+								<TextBox Text="{Binding Config.EnhancedAudioSoundFontPath}" MinWidth="320" PlaceholderText="{l:Translate lblEnhancedAudioSoundFontHint}" />
+							</StackPanel>
 						</StackPanel>
 					</c:OptionSection>
 

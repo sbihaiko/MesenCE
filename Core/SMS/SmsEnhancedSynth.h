@@ -28,6 +28,7 @@ private:
 	Emulator* _emu = nullptr;
 	SmsConsole* _console = nullptr;
 	EnhancedSynthEngine _engine;
+	ChannelRoleClassifier _roles;
 	bool _wasActive = false;
 
 public:

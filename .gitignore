@@ -212,3 +212,4 @@ graphify-out/
 # <<< dev-squad shared team assets (managed) <<<
 scripts/headless_record
 scripts/spike_sound_driver
+scripts/roles_probe

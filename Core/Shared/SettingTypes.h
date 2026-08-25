@@ -195,6 +195,13 @@ struct AudioConfig
 	uint32_t EnhancedAudioVolume = 100;
 	uint32_t EnhancedAudioApuMix = 0;
 	uint32_t EnhancedAudioPreset = 4; //Studio
+	//Level 2 (ADR-0052): automatic channel roles, SFX kept dry, and an
+	//optional SoundFont for the GM timbres (empty = <home>/EnhancedAudio.sf2
+	//if present, else the DSP voices). The SoundFont is (re)loaded on console
+	//reset / ROM load, never in the mix path.
+	bool EnhancedAudioAutoRoles = true;
+	bool EnhancedAudioSfxSeparation = true;
+	const char* EnhancedAudioSoundFontPath = nullptr;
 };
 
 enum class ControllerType

@@ -55,10 +55,14 @@ namespace
 		{ "CompAttackMs", &EnhancedSynthPreset::CompAttackMs },
 		{ "CompReleaseMs", &EnhancedSynthPreset::CompReleaseMs },
 		{ "CompMakeup", &EnhancedSynthPreset::CompMakeup },
+		{ "GmLeadProgram", &EnhancedSynthPreset::GmLeadProgram },
+		{ "GmHarmProgram", &EnhancedSynthPreset::GmHarmProgram },
+		{ "GmBassProgram", &EnhancedSynthPreset::GmBassProgram },
 	};
 	static constexpr PresetBoolField _presetBoolFields[] = {
 		{ "FollowDuty", &EnhancedSynthPreset::FollowDuty },
 		{ "LeadAlwaysSaw", &EnhancedSynthPreset::LeadAlwaysSaw },
+		{ "GmDrums", &EnhancedSynthPreset::GmDrums },
 	};
 	static constexpr const char* _presetNames[5] = { "Synthwave", "ChipDeluxe", "OrchestralLite", "Dry", "Studio" };
 

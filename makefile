@@ -216,6 +216,12 @@ ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
+#F5.4g level-2 validation harness (channel roles / SFX classifier) - see scripts/roles_probe.cpp
+roles-probe: core
+	$(CXX) -std=c++17 -O2 -w -I . -I Core -Wl,-headerpad_max_install_names scripts/roles_probe.cpp Core/Shared/Audio/ChannelRoleClassifier.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/roles_probe
+	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/roles_probe 2>/dev/null || true
+	codesign -f -s - scripts/roles_probe 2>/dev/null || true
+
 #Headless MIDI/VGM capture harness (F1 regression tool) - see scripts/headless_record.cpp
 capture-tool: core
 	$(CXX) -std=c++17 -O2 -I . -I Core -Wl,-headerpad_max_install_names scripts/headless_record.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/headless_record

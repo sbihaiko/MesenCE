@@ -26,7 +26,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		4, 4,
 		0.24, 0.45, 0.65, 0.16,
 		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		81, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Chip deluxe: stays close to the PSG character - pure-ish pulses,
 	//round bass, crisp drums, just a touch of space
@@ -37,7 +38,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		2, 3,
 		0.12, 0.25, 0.35, 0.08,
 		1.0, 0.6, 0.8, 0.85,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Orchestral lite: slow-attack string-like leads, low string bass,
 	//timpani-weight drums, larger room
@@ -48,7 +50,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		35, 80,
 		0.30, 0.30, 0.45, 0.30,
 		0.95, 0.65, 0.9, 0.6,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		73, 48, 43, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Dry: Synthwave voices with no echo/reverb tail - SFX stay tight
 	{
@@ -58,7 +61,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		3, 4,
 		0.05, 0.0, 0.0, 0.0,
 		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Studio: fixed detuned-saw stack lead (the SN76489 has no duty register to
 	//ignore, but the always-saw lead still gives it a fuller, less "chip"
@@ -71,7 +75,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		4, 4,
 		0.24, 0.45, 0.65, 0.18,
 		1.0, 0.56, 0.85, 0.75,
-		0.55, 3.0, 8, 140, 1.18
+		0.55, 3.0, 8, 140, 1.18,
+		81, 4, 33, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 };
 // clang-format on
@@ -86,6 +91,9 @@ SmsEnhancedSynth::SmsEnhancedSynth(Emulator* emu, SmsConsole* console)
 	//MEP synth section (ADR-0042): the manager already resolved the packs
 	//for this ROM in Emulator::InternalLoadRom
 	_engine.InitPresets(_presets, ".Sms", _emu->GetEnhancementPackManager()->GetSynthPresetPaths());
+	static constexpr ChannelRoleClassifier::ChannelRole defaultRoles[3] = { ChannelRoleClassifier::ChannelRole::Lead, ChannelRoleClassifier::ChannelRole::Harmony, ChannelRoleClassifier::ChannelRole::Bass };
+	_roles.Init(3, defaultRoles);
+	_engine.LoadSoundFont(EnhancedSynthEngine::ResolveSoundFontPath(_emu->GetSettings()->GetAudioConfig().EnhancedAudioSoundFontPath));
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 
@@ -133,6 +141,7 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 	};
 
 	EnhancedSynthEngine::Input in;
+	EnhancedSynthEngine::RawChannel raw[3];
 
 	//Games that switch to the YM2413 mute the PSG through the audio control
 	//port ($F2) - when they do, don't re-interpret the (now-silent) PSG
@@ -143,19 +152,22 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 		//apply to the synth voices too, so muting a chip channel also mutes
 		//its enhanced voice - same indexing as SmsPsg::Run()
 		uint32_t* chVol = _console->GetModel() == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().ChannelVolumes : _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
-		in.LeadFreq = toneFreq(psg.Tone[0].ReloadValue);
-		in.LeadVol = toneVol(psg.Tone[0].Volume) * chVol[0] / 100.0;
-		in.HarmFreq = toneFreq(psg.Tone[1].ReloadValue);
-		in.HarmVol = toneVol(psg.Tone[1].Volume) * chVol[1] / 100.0;
-		in.BassFreq = toneFreq(psg.Tone[2].ReloadValue);
-		in.BassVol = toneVol(psg.Tone[2].Volume) * chVol[2] / 100.0;
+		for(int i = 0; i < 3; i++) {
+			raw[i].Freq = toneFreq(psg.Tone[i].ReloadValue);
+			raw[i].Vol = toneVol(psg.Tone[i].Volume) * chVol[i] / 100.0;
+		}
 		in.NoiseVol = toneVol(psg.Noise.Volume) * chVol[3] / 100.0;
 	}
-
 	//The SN76489 has no duty register - the lead/harmony pulse width is
 	//always the preset's FixedWidth (or ignored entirely when LeadAlwaysSaw).
-	in.LeadWidth = p.FixedWidth;
-	in.HarmWidth = p.FixedWidth;
+	for(int i = 0; i < 3; i++) {
+		raw[i].Width = p.FixedWidth;
+	}
+	//Tone order (0,1,2) is the traditional lead/harmony/bass; the classifier
+	//re-assigns roles and flags sound effects per second (ADR-0052)
+	_roles.SetAutoRoles(cfg.EnhancedAudioAutoRoles);
+	_roles.SetSfxSeparation(cfg.EnhancedAudioSfxSeparation);
+	EnhancedSynthEngine::Route(in, _roles, raw, 3, (double)sampleCount / sampleRate);
 
 	//Map the noise LFSR shift rate (same reload-based clocking as the tone
 	//channels; mode 3 reuses Tone[2]'s reload) to drum timbre: fast = bright

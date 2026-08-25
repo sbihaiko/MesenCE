@@ -26,6 +26,7 @@ private:
 	Emulator* _emu = nullptr;
 	Gameboy* _console = nullptr;
 	EnhancedSynthEngine _engine;
+	ChannelRoleClassifier _roles;
 	bool _wasActive = false;
 
 public:

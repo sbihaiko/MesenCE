@@ -21,7 +21,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		4, 4,
 		0.24, 0.45, 0.65, 0.16,
 		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		81, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Chip deluxe: stays close to the 2A03 character - pure-ish pulses,
 	//round bass, crisp drums, just a touch of space
@@ -32,7 +33,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		2, 3,
 		0.12, 0.25, 0.35, 0.08,
 		1.0, 0.6, 0.8, 0.85,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Orchestral lite: slow-attack string-like leads, low string bass,
 	//timpani-weight drums, larger room
@@ -43,7 +45,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		35, 80,
 		0.30, 0.30, 0.45, 0.30,
 		0.95, 0.65, 0.9, 0.6,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		73, 48, 43, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Dry: Synthwave voices with no echo/reverb tail - SFX stay tight
 	{
@@ -53,7 +56,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		3, 4,
 		0.05, 0.0, 0.0, 0.0,
 		1.0, 0.56, 0.85, 0.75,
-		0, 0, 0, 0, 0
+		0, 0, 0, 0, 0,
+		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 	//Studio: verbatim port of the offline remaster mix - always-saw fat lead
 	//(duty ignored), same tuned pan/bass/drum values as Synthwave (already
@@ -66,7 +70,8 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		4, 4,
 		0.24, 0.45, 0.65, 0.18,
 		1.0, 0.56, 0.85, 0.75,
-		0.55, 3.0, 8, 140, 1.18
+		0.55, 3.0, 8, 140, 1.18,
+		81, 4, 33, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
 	},
 };
 // clang-format on
@@ -81,6 +86,9 @@ EnhancedSynth::EnhancedSynth(Emulator* emu, NesConsole* console)
 	//MEP synth section (ADR-0042): the manager already resolved the packs
 	//for this ROM in Emulator::InternalLoadRom
 	_engine.InitPresets(_presets, "", _emu->GetEnhancementPackManager()->GetSynthPresetPaths());
+	static constexpr ChannelRoleClassifier::ChannelRole defaultRoles[3] = { ChannelRoleClassifier::ChannelRole::Lead, ChannelRoleClassifier::ChannelRole::Harmony, ChannelRoleClassifier::ChannelRole::Bass };
+	_roles.Init(3, defaultRoles);
+	_engine.LoadSoundFont(EnhancedSynthEngine::ResolveSoundFontPath(_emu->GetSettings()->GetAudioConfig().EnhancedAudioSoundFontPath));
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 
@@ -93,6 +101,8 @@ void EnhancedSynth::Reset()
 {
 	_engine.Reset();
 	_engine.ReloadUserPresets();
+	_engine.LoadSoundFont(EnhancedSynthEngine::ResolveSoundFontPath(_emu->GetSettings()->GetAudioConfig().EnhancedAudioSoundFontPath));
+	_roles.Reset();
 	_wasActive = false;
 }
 
@@ -123,37 +133,45 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 		return (env.ConstantVolume ? env.Volume : env.Counter) / 15.0;
 	};
 
-	EnhancedSynthEngine::Input in;
-	in.LeadFreq = apu.Square1.Frequency;
+	//Raw melodic channels in chip order (pulse1, pulse2, triangle); the
+	//classifier decides which one is lead/harmony/bass this second and which
+	//is momentarily a sound effect (ADR-0052 items 1-2), then Route() fills
+	//the engine slots. The duty cycle is part of the arrangement (12.5% leads
+	//vs 50% pads), so it travels with the channel as the pulse width; duty 3
+	//(75%) sounds identical to 25% on the NES and maps back to 0.25.
+	static constexpr double dutyWidth[4] = { 0.125, 0.25, 0.5, 0.25 };
+	NesConfig& nesCfg = _console->GetNesConfig();
+	EnhancedSynthEngine::RawChannel raw[3];
+	raw[0].Freq = apu.Square1.Frequency;
 	if(apu.Square1.Enabled && apu.Square1.LengthCounter.Counter > 0 && apu.Square1.Period >= 8) {
-		in.LeadVol = envVolume(apu.Square1.Envelope);
+		raw[0].Vol = envVolume(apu.Square1.Envelope);
 	}
-	in.HarmFreq = apu.Square2.Frequency;
+	raw[0].Width = p.FollowDuty ? dutyWidth[apu.Square1.Duty & 0x03] : p.FixedWidth;
+	raw[0].HwSweep = apu.Square1.SweepEnabled && apu.Square1.SweepShift > 0;
+	raw[1].Freq = apu.Square2.Frequency;
 	if(apu.Square2.Enabled && apu.Square2.LengthCounter.Counter > 0 && apu.Square2.Period >= 8) {
-		in.HarmVol = envVolume(apu.Square2.Envelope);
+		raw[1].Vol = envVolume(apu.Square2.Envelope);
 	}
-	in.BassFreq = apu.Triangle.Frequency;
+	raw[1].Width = p.FollowDuty ? dutyWidth[apu.Square2.Duty & 0x03] : p.FixedWidth;
+	raw[1].HwSweep = apu.Square2.SweepEnabled && apu.Square2.SweepShift > 0;
+	raw[2].Freq = apu.Triangle.Frequency;
 	if(apu.Triangle.Enabled && apu.Triangle.LengthCounter.Counter > 0 && apu.Triangle.LinearCounter > 0 && apu.Triangle.Period >= 2) {
-		in.BassVol = 1.0;
+		raw[2].Vol = 1.0;
 	}
-	if(apu.Noise.Enabled && apu.Noise.LengthCounter.Counter > 0) {
-		in.NoiseVol = envVolume(apu.Noise.Envelope);
-	}
-
 	//Per-channel volume settings (Settings > NES > Audio) apply to the synth
 	//voices too, so muting a chip channel also mutes its enhanced voice
-	NesConfig& nesCfg = _console->GetNesConfig();
-	in.LeadVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square1] / 100.0;
-	in.HarmVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square2] / 100.0;
-	in.BassVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Triangle] / 100.0;
-	in.NoiseVol *= nesCfg.ChannelVolumes[(int)AudioChannel::Noise] / 100.0;
+	raw[0].Vol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square1] / 100.0;
+	raw[1].Vol *= nesCfg.ChannelVolumes[(int)AudioChannel::Square2] / 100.0;
+	raw[2].Vol *= nesCfg.ChannelVolumes[(int)AudioChannel::Triangle] / 100.0;
 
-	//The duty cycle is part of the arrangement (12.5% leads vs 50% pads);
-	//map it to the synth's pulse width so that character survives.
-	//Duty 3 (75%) sounds identical to 25% on the NES, so it maps back to 0.25.
-	static constexpr double dutyWidth[4] = { 0.125, 0.25, 0.5, 0.25 };
-	in.LeadWidth = p.FollowDuty ? dutyWidth[apu.Square1.Duty & 0x03] : p.FixedWidth;
-	in.HarmWidth = p.FollowDuty ? dutyWidth[apu.Square2.Duty & 0x03] : p.FixedWidth;
+	EnhancedSynthEngine::Input in;
+	_roles.SetAutoRoles(cfg.EnhancedAudioAutoRoles);
+	_roles.SetSfxSeparation(cfg.EnhancedAudioSfxSeparation);
+	EnhancedSynthEngine::Route(in, _roles, raw, 3, (double)sampleCount / sampleRate);
+
+	if(apu.Noise.Enabled && apu.Noise.LengthCounter.Counter > 0) {
+		in.NoiseVol = envVolume(apu.Noise.Envelope) * nesCfg.ChannelVolumes[(int)AudioChannel::Noise] / 100.0;
+	}
 
 	//Map the noise shift rate to drum timbre: fast LFSR = bright hi-hat top,
 	//slow = snare/tom body; only a slow LFSR qualifies as a kick/tom attack

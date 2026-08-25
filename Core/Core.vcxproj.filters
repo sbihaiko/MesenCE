@@ -1003,6 +1003,9 @@
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp">
       <Filter>Shared\Audio</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\Audio\ChannelRoleClassifier.cpp">
+      <Filter>Shared\Audio</Filter>
+    </ClCompile>
     <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp">
       <Filter>Shared\HdPacks</Filter>
     </ClCompile>
@@ -1034,6 +1037,9 @@
       <Filter>Shared\Audio</Filter>
     </ClCompile>
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h">
+      <Filter>Shared\Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\Audio\ChannelRoleClassifier.h">
       <Filter>Shared\Audio</Filter>
     </ClInclude>
     <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h">

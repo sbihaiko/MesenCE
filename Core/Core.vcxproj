@@ -776,6 +776,7 @@
     <ClInclude Include="Shared\HdPacks\HdTilePack.h" />
     <ClInclude Include="Shared\HdPacks\HdTileVideoFilter.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
+    <ClInclude Include="Shared\Audio\ChannelRoleClassifier.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthPreset.h" />
     <ClInclude Include="Shared\Audio\VgmExporter.h" />
     <ClInclude Include="Shared\Audio\MidiExporter.h" />
@@ -1113,6 +1114,7 @@
     <ClCompile Include="SNES\Input\SnesController.cpp" />
     <ClCompile Include="Shared\Audio\SoundMixer.cpp" />
     <ClCompile Include="Shared\Audio\EnhancedSynthEngine.cpp" />
+    <ClCompile Include="Shared\Audio\ChannelRoleClassifier.cpp" />
     <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp" />
     <ClCompile Include="Shared\HdPacks\HdTilePack.cpp" />
     <ClCompile Include="Shared\HdPacks\HdTileVideoFilter.cpp" />

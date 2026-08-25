@@ -32,6 +32,10 @@
 			<Control ID="lblEnhancedAudioPreset">Style: </Control>
 			<Control ID="lblEnhancedAudioVolume">Synth volume: </Control>
 			<Control ID="lblEnhancedAudioApuMix">Original chip mix: </Control>
+			<Control ID="chkEnhancedAudioAutoRoles">Detect which channel plays the melody, harmony and bass</Control>
+			<Control ID="chkEnhancedAudioSfxSeparation">Keep sound effects dry (only the music gets the instrument sounds)</Control>
+			<Control ID="lblEnhancedAudioSoundFont">SoundFont (.sf2): </Control>
+			<Control ID="lblEnhancedAudioSoundFontHint">Optional - default: EnhancedAudio.sf2 in the Mesen folder; applied on the next reset</Control>
 
 			<Control ID="lblAudioPlayerSettings">Audio Player Settings</Control>
 			<Control ID="lblAudioPlayerHint">When a track has an unknown duration:</Control>

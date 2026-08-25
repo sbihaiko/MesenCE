@@ -199,6 +199,7 @@ void EmuSettings::SetAudioConfig(AudioConfig& config)
 {
 	_audio = config;
 	ProcessString(_audioDevice, &_audio.AudioDevice);
+	ProcessString(_soundFontPath, &_audio.EnhancedAudioSoundFontPath);
 }
 
 AudioConfig& EmuSettings::GetAudioConfig()
