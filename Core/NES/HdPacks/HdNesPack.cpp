@@ -196,6 +196,56 @@ void HdNesPack<scale>::DrawTile(HdPpuTileInfo& tileInfo, HdPackTileInfo& hdPackT
 		bitmapLargeInc = (tileInfo.HorizontalMirroring ? (int32_t)scale : -(int32_t)scale) - (int32_t)tileWidth;
 	}
 
+	if(hdPackTileInfo.DefaultTile) {
+		if(hdPackTileInfo.NeutralRamp < 0) {
+			//Decide once: all pixels gray & opaque = the bootstrap's palette-agnostic ramp
+			bool gray = true;
+			for(uint32_t px : hdPackTileInfo.HdTileData) {
+				uint8_t r = (px >> 16) & 0xFF, g = (px >> 8) & 0xFF, b = px & 0xFF;
+				if((px >> 24) != 0xFF || std::abs((int)r - (int)g) > 2 || std::abs((int)g - (int)b) > 2) {
+					gray = false;
+					break;
+				}
+			}
+			hdPackTileInfo.NeutralRamp = gray ? 1 : 0;
+		}
+		if(hdPackTileInfo.NeutralRamp == 1) {
+			//Ramp levels (black, 0x00 gray, 0x10 gray, white) -> the tile's 4 palette colors.
+			//For sprites the darkest level is color 0 = transparent.
+			bool isSprite = tileInfo.IsSpriteTile();
+			uint32_t colors[4];
+			for(int k = 0; k < 4; k++) {
+				colors[k] = _palette[(tileInfo.PaletteColors >> ((3 - k) * 8)) & 0x3F];
+			}
+			constexpr int levels[4] = { 0, 0x66, 0xAD, 0xFF };
+			for(uint32_t y = 0; y < scale; y++) {
+				for(uint32_t x = 0; x < scale; x++) {
+					int g = bitmapData[bitmapOffset] & 0xFF;
+					if(!(isSprite && g < 0x33)) {
+						int seg = g <= levels[1] ? 0 : (g <= levels[2] ? 1 : 2);
+						int span = levels[seg + 1] - levels[seg];
+						int t = ((g - levels[seg]) * 256) / span; //0..256
+						if(isSprite && seg == 0) {
+							t = 256; //no color 0 to blend with: snap to color 1
+						}
+						uint8_t* a = (uint8_t*)&colors[seg];
+						uint8_t* b = (uint8_t*)&colors[seg + 1];
+						uint32_t out = 0xFF000000;
+						for(int c = 0; c < 3; c++) {
+							((uint8_t*)&out)[c] = (uint8_t)((a[c] * (256 - t) + b[c] * t) >> 8);
+						}
+						*outputBuffer = out;
+					}
+					outputBuffer++;
+					bitmapOffset += bitmapSmallInc;
+				}
+				bitmapOffset += bitmapLargeInc;
+				outputBuffer += screenWidth - scale;
+			}
+			return;
+		}
+	}
+
 	uint32_t rgbValue;
 	if(hdPackTileInfo.HasTransparentPixels || hdPackTileInfo.Brightness != 255) {
 		for(uint32_t y = 0; y < scale; y++) {

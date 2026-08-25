@@ -39,6 +39,8 @@ private:
 		HdPpuTileInfo Tile;
 	};
 	bool _captureScreens = false;
+	bool _writeReferences = false; //*.orig.png next to each sheet/screen: pixel-exact, no filter
+	vector<uint32_t> _origBuffer;
 	vector<uint32_t> _frameBg;
 	vector<ScreenRun> _frameRuns;
 	HdTileKey _lastRunKey = {};
@@ -86,6 +88,13 @@ public:
 	//Tiles already present in the pack (recorded or previously exported) are
 	//kept. Returns the number of tiles added.
 	uint32_t AddRomTiles(uint8_t* chrRom, uint32_t chrRomSize);
+
+	//CHR RAM games keep their tiles inside PRG ROM and copy them by code: scan
+	//the PRG for runs of 16-byte blocks that look like tiles (rows change
+	//little from one to the next, not flat) and export them like AddRomTiles.
+	//Heuristic - a few false positives (tables that look like graphics) are
+	//harmless defaultTile entries nobody ever draws. Returns the number added.
+	uint32_t AddPrgScanTiles(uint8_t* prgRom, uint32_t prgRomSize);
 
 	//static void GetChrBankList(uint32_t *banks);
 	//static void GetBankPreview(uint32_t bankNumber, uint32_t pageNumber, uint32_t *rgbBuffer);

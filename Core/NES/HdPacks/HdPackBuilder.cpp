@@ -186,6 +186,124 @@ uint32_t HdPackBuilder::AddRomTiles(uint8_t* chrRom, uint32_t chrRomSize)
 	return added;
 }
 
+namespace
+{
+	bool IsFlatBlock(const uint8_t* block)
+	{
+		for(int i = 1; i < 16; i++) {
+			if(block[i] != block[0]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//Silhouette churn: bits that change between consecutive rows of the union of
+	//both planes (0..56). Real tiles have smooth silhouettes; code/tables don't,
+	//and - unlike per-plane churn - a block misaligned by 8 bytes (plane 1 of one
+	//tile + plane 0 of the next) scores clearly worse, so it also decides alignment.
+	uint32_t SilhouetteChurn(const uint8_t* block)
+	{
+		uint32_t churn = 0;
+		for(int i = 0; i < 7; i++) {
+			uint8_t a = block[i] | block[i + 8];
+			uint8_t b = block[i + 1] | block[i + 9];
+			churn += __builtin_popcount((uint32_t)(a ^ b));
+		}
+		return churn;
+	}
+}
+
+uint32_t HdPackBuilder::AddPrgScanTiles(uint8_t* prgRom, uint32_t prgRomSize)
+{
+	constexpr uint32_t neutralPalette = 0x0F001030;
+	constexpr uint32_t bankSize = 0x1000;  //alignment is voted per 4 KB (graphics blocks are bank-sized)
+	constexpr uint32_t maxChurn = 18;      //calibrated on Zelda/Castlevania/Mega Man: ~90% of drawn tiles, few false positives
+	constexpr uint32_t minRun = 4;         //tiles come in sets (fonts, sprites, metatiles)
+
+	uint32_t added = 0;
+	auto addBlock = [&](const uint8_t* block) {
+		HdTileKey key = {};
+		memcpy(key.TileData, block, 16);
+		key.PaletteColors = neutralPalette;
+		key.TileIndex = 0;
+		key.IsChrRamTile = true;
+		if(_tilesByKey.find(key.GetKey(false)) != _tilesByKey.end() || _tilesByKey.find(key.GetKey(true)) != _tilesByKey.end()) {
+			return;
+		}
+		HdPackTileInfo* hdTile = new HdPackTileInfo();
+		hdTile->PaletteColors = neutralPalette;
+		//Synthetic "PRG" banks of 256 tiles: SaveHdPack lays tiles out by bank/index
+		hdTile->TileIndex = added % 256;
+		hdTile->DefaultTile = true;
+		hdTile->IsChrRamTile = true;
+		hdTile->Brightness = 255;
+		hdTile->ChrBankId = 0x50524700 + added / 256;
+		hdTile->TransparencyRequired = false;
+		memcpy(hdTile->TileData, key.TileData, 16);
+		_hdData.Tiles.push_back(unique_ptr<HdPackTileInfo>(hdTile));
+		AddTile(hdTile, 0);
+		_tilesByKey[hdTile->GetKey(true)] = hdTile;
+		added++;
+	};
+
+	for(uint32_t bankStart = 0; bankStart < prgRomSize; bankStart += bankSize) {
+		uint32_t bankEnd = std::min(prgRomSize, bankStart + bankSize);
+
+		//1) alignment: the offset whose non-flat blocks have the smoothest silhouettes
+		int bestOffset = -1;
+		double bestScore = 0;
+		for(uint32_t offset = 0; offset < 16; offset++) {
+			uint32_t sum = 0, count = 0;
+			for(uint32_t pos = bankStart + offset; pos + 16 <= bankEnd; pos += 16) {
+				if(!IsFlatBlock(prgRom + pos)) {
+					sum += SilhouetteChurn(prgRom + pos);
+					count++;
+				}
+			}
+			if(count == 0) {
+				continue;
+			}
+			double score = (double)sum / count;
+			if(bestOffset < 0 || score < bestScore) {
+				bestOffset = (int)offset;
+				bestScore = score;
+			}
+		}
+		if(bestOffset < 0) {
+			continue;
+		}
+
+		//2) runs of plausible tiles at that alignment (flat blocks may sit inside a run)
+		vector<const uint8_t*> run;
+		uint32_t runNonFlat = 0;
+		auto flush = [&]() {
+			if(runNonFlat >= minRun) {
+				for(const uint8_t* block : run) {
+					if(!IsFlatBlock(block)) {
+						addBlock(block);
+					}
+				}
+			}
+			run.clear();
+			runNonFlat = 0;
+		};
+		for(uint32_t pos = bankStart + bestOffset; pos + 16 <= bankEnd; pos += 16) {
+			const uint8_t* block = prgRom + pos;
+			if(IsFlatBlock(block)) {
+				run.push_back(block);
+			} else if(SilhouetteChurn(block) <= maxChurn) {
+				run.push_back(block);
+				runNonFlat++;
+			} else {
+				flush();
+			}
+		}
+		flush();
+	}
+	return added;
+}
+
 void HdPackBuilder::GenerateHdTile(HdPackTileInfo* tile)
 {
 	uint32_t hdScale = _hdData.Scale;
@@ -267,11 +385,26 @@ void HdPackBuilder::DrawTile(HdPackTileInfo* tile, int tileNumber, uint32_t* png
 		}
 		pngPos += pngWidth - tileDimension;
 	}
+
+	if(_writeReferences) {
+		//Unfiltered twin (nearest neighbour) for the artist's reference sheet
+		if(_origBuffer.size() != (size_t)pngWidth * pngWidth) {
+			_origBuffer.assign((size_t)pngWidth * pngWidth, 0xFFFF00FF);
+		}
+		vector<uint32_t> rgb = tile->ToRgb(_palette);
+		uint32_t s = _hdData.Scale;
+		for(int i = 0; i < tileDimension; i++) {
+			for(int j = 0; j < tileDimension; j++) {
+				_origBuffer[(size_t)(y + i) * pngWidth + x + j] = rgb[(i / s) * 8 + j / s];
+			}
+		}
+	}
 }
 
 void HdPackBuilder::EnableScreenCapture()
 {
 	_captureScreens = true;
+	_writeReferences = true;
 	_frameBg.assign(256 * 240, 0);
 	_frameRuns.reserve(4096);
 	//Screens already in the pack (previous session) keep their numbering
@@ -327,6 +460,15 @@ void HdPackBuilder::CaptureScreen()
 	FolderUtilities::CreateFolder(FolderUtilities::CombinePath(_saveFolder, "backgrounds"));
 	if(!PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, relPath), hd.data(), 256 * scale, 240 * scale, 32)) {
 		return;
+	}
+	if(_writeReferences) {
+		vector<uint32_t> orig(256 * 240 * scale * scale, 0);
+		for(uint32_t y = 0; y < 240 * scale; y++) {
+			for(uint32_t x = 0; x < 256 * scale; x++) {
+				orig[y * 256 * scale + x] = _frameBg[(y / scale) * 256 + x / scale];
+			}
+		}
+		PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, "backgrounds/" + baseName + ".orig.png"), orig.data(), 256 * scale, 240 * scale, 32);
 	}
 
 	//Anchors: the rarest non-flat tiles on screen, spread apart (3 tileAtPosition
@@ -448,6 +590,10 @@ void HdPackBuilder::SaveHdPack()
 
 			ss << "<img>" << pngName << std::endl;
 			PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, pngName), pngBuffer, pngDimension, pngDimension, 32);
+			if(_writeReferences && !_origBuffer.empty()) {
+				PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, pngName.substr(0, pngName.size() - 4) + ".orig.png"), _origBuffer.data(), pngDimension, pngDimension, 32);
+				std::fill(_origBuffer.begin(), _origBuffer.end(), 0xFFFF00FF);
+			}
 			pngNumber++;
 			pngIndex++;
 

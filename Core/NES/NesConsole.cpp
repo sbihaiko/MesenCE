@@ -892,19 +892,24 @@ void NesConsole::ProcessNotification(ConsoleNotificationType type, void* paramet
 void NesConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
 {
 	auto lock = _emu->AcquireLock();
-	if(!_mapper->HasChrRom() || _mapper->GetChrRomSize() == 0) {
-		MessageManager::Log("[HDPack] ROM tile export: this game uses CHR RAM - tiles are generated at run time, use recording instead");
-		MessageManager::DisplayMessage("HdPack", "HdPackExportNoChrRom");
-		return;
-	}
+	bool chrRam = !_mapper->HasChrRom() || _mapper->GetChrRomSize() == 0;
 
 	uint32_t added;
 	{
-		HdPackBuilder builder(_emu, _ppu->GetPpuModel(), false, options);
-		added = builder.AddRomTiles(_mapper->GetChrRomData(), _mapper->GetChrRomSize());
+		HdPackBuilder builder(_emu, _ppu->GetPpuModel(), chrRam, options);
+		if(chrRam) {
+			//Tiles live somewhere in PRG ROM (copied to CHR RAM by code): heuristic scan
+			added = builder.AddPrgScanTiles(_mapper->GetPrgRomData(), _mapper->GetPrgRomSize());
+		} else {
+			added = builder.AddRomTiles(_mapper->GetChrRomData(), _mapper->GetChrRomSize());
+		}
 	} //destructor writes the pack
 
-	MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries from " + std::to_string(_mapper->GetChrRomSize() / 16) + " CHR ROM tiles");
+	if(chrRam) {
+		MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries found by scanning " + std::to_string(_mapper->GetPrgRomSize() / 1024) + " KB of PRG ROM (CHR RAM game - heuristic, palettes only known at run time)");
+	} else {
+		MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries from " + std::to_string(_mapper->GetChrRomSize() / 16) + " CHR ROM tiles");
+	}
 	MessageManager::DisplayMessage("HdPack", "HdPackExportDone", std::to_string(added));
 }
 

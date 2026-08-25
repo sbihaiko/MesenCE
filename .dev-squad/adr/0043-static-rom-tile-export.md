@@ -40,6 +40,23 @@ ExportRomTilesHdPack`, same `HdPackBuilderOptions` as recording):
 - The neutral gray sheets are the natural input for the F5 upscaling
   pipeline.
 
+## Amendment (2026-08-25, F5.4 — "assets without playing")
+- **CHR RAM games are no longer refused.** Their tiles sit verbatim inside PRG
+  ROM (99 % of the tiles drawn in Zelda/Castlevania/Mega Man were found there)
+  but at arbitrary 16-byte alignments. `HdPackBuilder::AddPrgScanTiles` votes
+  the alignment per 4 KB bank and keeps runs of ≥ 4 blocks with a *silhouette
+  churn* (row-to-row bit changes of plane0|plane1) ≤ 18 — the union metric,
+  unlike per-plane churn, tells offset *o* from *o+8*. Calibrated: 87–91 % of
+  the tiles Zelda actually draws / the Remastered pack covers, 80–83 % for
+  Castlevania, 99 % for Mega Man; false positives are gray defaults nobody draws.
+- **The neutral ramp is recolored at draw time.** A `defaultTile` whose pixels
+  are all gray is treated as the palette-agnostic ramp and mapped to the tile's
+  live 4-color palette in `HdNesPack::DrawTile` (black → color 0, transparent
+  for sprites). Before this an export-only pack rendered the game in gray.
+  A tile the artist paints in color is rendered as painted.
+- `*.orig.png` twins (pixel-exact, nearest-neighbour) are written next to each
+  sheet and captured screen during bootstrap, as the artist's reference.
+
 ## Alternatives
 - Emulate to fill VRAM then dump VRAM: still needs gameplay/time and misses
   unused banks. Rejected as the *static* option (recording covers it).

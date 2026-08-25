@@ -276,6 +276,9 @@ public:
 	bool HasTransparentPixels;
 	bool TransparencyRequired;
 	bool IsFullyTransparent;
+	//-1 unknown, 0 no, 1 yes: a defaultTile whose pixels are all gray (the
+	//bootstrap's neutral ramp) is recolored with the real palette when drawn
+	int8_t NeutralRamp = -1;
 	vector<uint32_t> HdTileData;
 	uint32_t ChrBankId;
 
