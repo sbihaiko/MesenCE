@@ -315,6 +315,10 @@ struct HdPackTileAtPositionCondition : public HdPackBaseTileCondition
 
 	bool InternalCheckCondition(int x, int y, HdPpuTileInfo* tile) override
 	{
+		if(PixelOffset < 0 || PixelOffset >= NesConstants::ScreenPixelCount) {
+			//x/y outside the screen in the pack definition (not validated at load)
+			return false;
+		}
 		HdPpuTileInfo& target = _screenInfo->ScreenTiles[PixelOffset].Tile;
 		if(TileIndex >= 0) {
 			return (target.PaletteColors == PaletteColors || IgnorePalette) && (target.TileIndex == TileIndex || _hdPack->GetFallbackTile(target.TileIndex) == TileIndex);
@@ -336,6 +340,9 @@ struct HdPackSpriteAtPositionCondition : public HdPackBaseTileCondition
 
 	bool InternalCheckCondition(int x, int y, HdPpuTileInfo* tile) override
 	{
+		if(PixelOffset < 0 || PixelOffset >= NesConstants::ScreenPixelCount) {
+			return false;
+		}
 		for(int i = 0, len = _screenInfo->ScreenTiles[PixelOffset].SpriteCount; i < len; i++) {
 			HdPpuTileInfo& target = _screenInfo->ScreenTiles[PixelOffset].Sprite[i];
 			if(TileIndex >= 0) {
@@ -362,7 +369,7 @@ struct HdPackTileNearbyCondition : public HdPackBaseTileCondition
 	bool InternalCheckCondition(int x, int y, HdPpuTileInfo* tile) override
 	{
 		int pixelIndex = PixelOffset + (y * 256) + x;
-		if(pixelIndex < 0 || pixelIndex > NesConstants::ScreenPixelCount) {
+		if(pixelIndex < 0 || pixelIndex >= NesConstants::ScreenPixelCount) {
 			return false;
 		}
 
@@ -390,7 +397,7 @@ struct HdPackSpriteNearbyCondition : public HdPackBaseTileCondition
 		int ySign = tile && tile->VerticalMirroring ? -1 : 1;
 		int pixelIndex = ((y + TileY * ySign) * 256) + x + (TileX * xSign);
 
-		if(pixelIndex < 0 || pixelIndex > NesConstants::ScreenPixelCount) {
+		if(pixelIndex < 0 || pixelIndex >= NesConstants::ScreenPixelCount) {
 			return false;
 		}
 
