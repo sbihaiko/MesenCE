@@ -222,6 +222,12 @@ capture-tool: core
 	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/headless_record 2>/dev/null || true
 	codesign -f -s - scripts/headless_record 2>/dev/null || true
 
+#F5.4f spike (ADR-0051): discover the NES sound driver and enumerate music/SFX without playing
+spike-sound-driver: core
+	$(CXX) -std=c++17 -O2 -w -I . -I Core -Wl,-headerpad_max_install_names scripts/spike_sound_driver.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/spike_sound_driver
+	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/spike_sound_driver 2>/dev/null || true
+	codesign -f -s - scripts/spike_sound_driver 2>/dev/null || true
+
 pgohelper: InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p PGOHelper/$(OBJFOLDER) && cd PGOHelper/$(OBJFOLDER) && $(CXX) $(CXXFLAGS) $(LINKCHECKUNRESOLVED) -o pgohelper ../PGOHelper.cpp ../../bin/pgohelperlib.so -pthread $(FSLIB) $(SDL2LIB) $(LIBEVDEVLIB) $(X11LIB)
 

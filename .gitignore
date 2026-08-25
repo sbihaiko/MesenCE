@@ -211,3 +211,4 @@ graphify-out/
 !.dev-squad/memory/
 # <<< dev-squad shared team assets (managed) <<<
 scripts/headless_record
+scripts/spike_sound_driver
