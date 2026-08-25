@@ -355,6 +355,13 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 				anyFingerprints = true;
 			}
 		}
+		bool humanFingerprints = !mepAudio.empty() && ifstream(FolderUtilities::CombinePath(mepAudio, "fingerprints.json")).good();
+		if(anyFingerprints && !humanFingerprints && loaded && !_hdData->BgmFilesById.empty()) {
+			//The artist's pack already replaces music the HDNes way (<bgm> + patched $41xx writes):
+			//the machine-generated fingerprints would play a second OGG on top of it
+			MessageManager::Log("[MEP] audio: pack already ships <bgm> tracks - auto/ fingerprints not used (add audio/fingerprints.json to opt in)");
+			anyFingerprints = false;
+		}
 		if(anyFingerprints) {
 			if(!loaded) {
 				_hdData.reset(new HdPackData());
@@ -381,6 +388,7 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		if(result != _hdData->PatchesByHash.end()) {
 			VirtualFile patchFile = result->second;
 			romFile.ApplyPatch(patchFile);
+			MessageManager::Log("[HDPack] <patch> applied: '" + result->second + "' (ROM sha1 " + result->first + "; the running ROM's hash is now the patched one)");
 		} else if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
 			VirtualFile patchFile = _hdData->PatchesByHash.begin()->second;
 			romFile.ApplyPatch(patchFile);

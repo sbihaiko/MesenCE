@@ -1873,6 +1873,7 @@ E
 		<Message ID="ConfirmExit">Are you sure you want to exit?</Message>
 
 		<Message ID="InstallHdPackWrongRom">The selected HD Pack is not compatible with the currently running game and cannot be installed.</Message>
+		<Message ID="InstallHdPackWrongRomConfirm">The selected HD Pack does not list the currently running game's hash as supported.&#xA;&#xA;This also happens when the game was just patched by an already-loaded pack, or with a different ROM revision.&#xA;&#xA;Install it anyway?</Message>
 		<Message ID="InstallHdPackError">An error occurred while trying to install the HD Pack: &#xA;&#xA;{0}</Message>
 		<Message ID="InstallHdPackInvalidPack">The selected file is not a valid HD Pack.</Message>
 		<Message ID="InstallHdPackInvalidZipFile">The selected file is not a valid ZIP file.</Message>

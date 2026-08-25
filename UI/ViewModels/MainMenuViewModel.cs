@@ -1295,8 +1295,11 @@ namespace Mesen.ViewModels
 					Match match = supportedRomRegex.Match(hiresData);
 					if(match.Success) {
 						if(!match.Groups[1].Value.ToUpper().Contains(EmuApi.GetRomHash(HashType.Sha1).ToUpper())) {
-							await MesenMsgBox.Show(wnd, "InstallHdPackWrongRom", MessageBoxButtons.OK, MessageBoxIcon.Error);
-							return;
+							//Not a hard stop (ADR-0044): the hash also differs when the ROM was just patched by an
+							//already-loaded pack (<patch>), or for a clean dump of another revision
+							if(await MesenMsgBox.Show(wnd, "InstallHdPackWrongRomConfirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) {
+								return;
+							}
 						}
 					}
 
