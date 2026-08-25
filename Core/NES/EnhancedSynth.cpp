@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "NES/EnhancedSynth.h"
 #include "NES/NesConsole.h"
 #include "NES/APU/NesApu.h"
@@ -77,7 +78,9 @@ EnhancedSynth::EnhancedSynth(Emulator* emu, NesConsole* console)
 	//NES uses an empty EnhancedAudioPresets.cfg section suffix ("[Studio]",
 	//etc), matching the file format that predates the loader being shared
 	//with other consoles - see EnhancedSynthPresetLoader::Load.
-	_engine.InitPresets(_presets, "");
+	//MEP synth section (ADR-0042): the manager already resolved the packs
+	//for this ROM in Emulator::InternalLoadRom
+	_engine.InitPresets(_presets, "", _emu->GetEnhancementPackManager()->GetSectionPath(MepSectionType::Synth));
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 

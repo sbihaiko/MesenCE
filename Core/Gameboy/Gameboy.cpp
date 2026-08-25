@@ -26,6 +26,7 @@
 #include "Shared/FirmwareHelper.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Shared/HdPacks/HdTilePack.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Shared/HdPacks/HdTileVideoFilter.h"
 #include "Shared/Video/VideoDecoder.h"
 #include "Utilities/VirtualFile.h"
@@ -517,7 +518,7 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 				//model run the CGB path; everything else runs the DMG path.
 				bool cgbMode = IsCgb() && ((int)header.CgbFlag & 0x80);
 				_hdPack.reset(new HdTilePack());
-				if(HdTilePack::Load(romFile, cgbMode ? "gbc" : "gb", *_hdPack)) {
+				if(HdTilePack::LoadForRom(romFile, cgbMode ? "gbc" : "gb", _emu->GetEnhancementPackManager(), *_hdPack)) {
 					//Init() (and its PowerOn call) already ran above, so the
 					//PPU has to be wired up here, not just in PowerOn
 					_ppu->SetHdPack(_hdPack.get());

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Shared/Audio/EnhancedSynthPreset.h"
 #include "Utilities/FolderUtilities.h"
+#include "Shared/MessageManager.h"
 
 //Field names accepted in EnhancedAudioPresets.cfg, mapped to the struct
 //members they override. Keeping this table next to the struct means adding a
@@ -90,17 +91,30 @@ namespace
 //above and _presetNames for the section names). Blank lines and lines
 //starting with '#' or ';' are ignored. Malformed lines/values are skipped
 //silently.
-void EnhancedSynthPresetLoader::Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix)
+void EnhancedSynthPresetLoader::Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const string& packPresetPath)
 {
 	std::copy(defaults, defaults + 5, outPresets);
 
-	string home = FolderUtilities::GetHomeFolder();
-	std::ifstream file(FolderUtilities::CombinePath(home, "EnhancedAudioPresets.cfg"));
+	string suffix = sectionSuffix ? sectionSuffix : "";
+	if(!packPresetPath.empty()) {
+		//MEP synth section: above the built-ins, below the user's file
+		if(std::ifstream(packPresetPath)) {
+			ApplyFile(packPresetPath, outPresets, suffix);
+			MessageManager::Log("[MEP] synth: applied ESP overrides from '" + packPresetPath + "' (sections '<Preset>" + suffix + "')");
+		} else {
+			MessageManager::Log("[MEP] synth section file not found: " + packPresetPath);
+		}
+	}
+	ApplyFile(FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "EnhancedAudioPresets.cfg"), outPresets, suffix);
+}
+
+void EnhancedSynthPresetLoader::ApplyFile(const string& path, EnhancedSynthPreset outPresets[5], const string& suffix)
+{
+	std::ifstream file(path);
 	if(!file) {
 		return;
 	}
 
-	string suffix = sectionSuffix ? sectionSuffix : "";
 	int presetIndex = -1;
 	string line;
 	while(std::getline(file, line)) {

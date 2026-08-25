@@ -17,6 +17,9 @@
 #include "NES/HdPacks/HdPackBuilder.h"
 #include "NES/HdPacks/HdBuilderPpu.h"
 #include "NES/HdPacks/HdVideoFilter.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
+#include "Shared/MessageManager.h"
+#include "Utilities/FolderUtilities.h"
 #include "NES/NesDefaultVideoFilter.h"
 #include "NES/NesNtscFilter.h"
 #include "NES/BisqwitNtscFilter.h"
@@ -252,8 +255,47 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 {
 	_hdData.reset();
 	if(GetNesConfig().EnableHdPacks) {
+		MepPackManager* mep = _emu->GetEnhancementPackManager();
+		string mepTextures = mep->GetSectionPath(MepSectionType::Textures);
+		string mepAudio = mep->GetSectionPath(MepSectionType::Audio);
+
+		//1) Loose HdPacks/<rom>/ (or <rom>.zip) pack - always wins (MEP-v1 §5.1)
 		_hdData.reset(new HdPackData());
-		if(!HdPackLoader::LoadHdNesPack(romFile, *_hdData.get())) {
+		bool loaded = HdPackLoader::LoadHdNesPack(romFile, *_hdData.get());
+		if(loaded && !mepTextures.empty()) {
+			MessageManager::Log("[MEP] loose HD pack found for this ROM - it takes precedence over the pack's textures section");
+		}
+
+		//2) MEP textures section (envelope over hires.txt - ADR-0005/0040)
+		if(!loaded && !mepTextures.empty()) {
+			loaded = HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(mepTextures, "hires.txt"), *_hdData.get());
+			MessageManager::Log(loaded ? "[MEP] textures: loaded NES HD pack from '" + mepTextures + "'" : "[MEP] textures section has no loadable hires.txt in " + mepTextures);
+		}
+
+		//3) MEP audio section: NES OGG via a hires.txt with <bgm>/<sfx> tags
+		//(ADR-0041). Merged into the texture pack's tables (audio wins), or
+		//used alone for an audio-only pack.
+		if(!mepAudio.empty()) {
+			unique_ptr<HdPackData> audioData(new HdPackData());
+			if(HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(mepAudio, "hires.txt"), *audioData)) {
+				if(loaded) {
+					for(auto& bgm : audioData->BgmFilesById) {
+						_hdData->BgmFilesById[bgm.first] = bgm.second;
+					}
+					for(auto& sfx : audioData->SfxFilesById) {
+						_hdData->SfxFilesById[sfx.first] = sfx.second;
+					}
+				} else {
+					_hdData.reset(audioData.release());
+					loaded = true;
+				}
+				MessageManager::Log("[MEP] audio: " + std::to_string(_hdData->BgmFilesById.size()) + " BGM / " + std::to_string(_hdData->SfxFilesById.size()) + " SFX tracks from '" + mepAudio + "'");
+			} else {
+				MessageManager::Log("[MEP] audio section has no loadable hires.txt in " + mepAudio);
+			}
+		}
+
+		if(!loaded) {
 			_hdData.reset();
 		} else {
 			auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "SMS/SmsEnhancedSynth.h"
 #include "SMS/SmsConsole.h"
 #include "SMS/SmsPsg.h"
@@ -82,7 +83,9 @@ SmsEnhancedSynth::SmsEnhancedSynth(Emulator* emu, SmsConsole* console)
 	//This engine reads EnhancedAudioPresets.cfg sections suffixed ".Sms"
 	//(e.g. "[Studio.Sms]") so its tuning can live in the same file as the NES
 	//engine's ("[Studio]") without colliding.
-	_engine.InitPresets(_presets, ".Sms");
+	//MEP synth section (ADR-0042): the manager already resolved the packs
+	//for this ROM in Emulator::InternalLoadRom
+	_engine.InitPresets(_presets, ".Sms", _emu->GetEnhancementPackManager()->GetSectionPath(MepSectionType::Synth));
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 

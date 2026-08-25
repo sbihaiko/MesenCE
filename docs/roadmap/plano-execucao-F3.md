@@ -1,6 +1,6 @@
 # Plano de execução — Fase 3: Formato de pack unificado (MEP v1)
 
-**Status:** em execução — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 a seguir ·
+**Status:** em execução — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 a seguir ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 3 ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (publicada) ·
 **Processo:** resolver os ADRs da fase (F3.0) antes de qualquer código, como nas fases 1 e 2.
@@ -87,7 +87,7 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
   core (`[MEP] ...`, novo flag `log` do harness) mostra matches e rejeições.
   Nota: o export `GetLog` já existia; F3.3 adiciona `GetMepPackList`.
 
-## F3.2 — Delegação de seções (textures + synth + audio-NES)
+## F3.2 — Delegação de seções (textures + synth + audio-NES) ✅
 
 **Entrega:** o conteúdo do pack chega aos subsistemas existentes.
 
@@ -103,6 +103,12 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
   (reusa o harness `screenshot`); pack com preset ESP → capturar MIDI e
   verificar mudança de programa GM vs default; precedência: HdPacks solto +
   MEP simultâneos → o solto vence.
+  **Feito** (2026-08-24): `gen_mep_test_pack.py ... dir --textures=<rec-hdpack>`
+  + `headless_record ... screenshot log`; PNG idêntico byte a byte ao
+  baseline com e sem pack solto. O ESP do pack não muda notas/programas MIDI
+  (só DSP), então a verificação é pelo log `[MEP] synth: applied ESP
+  overrides` — F3.3 pode expor o preset efetivo via interop se necessário.
+  SMS não testado (sem ROM de teste), mas usa o mesmo `HdTilePack::LoadForRom`.
 
 ## F3.3 — Toggles granulares + UI (F3.2 do PRD)
 

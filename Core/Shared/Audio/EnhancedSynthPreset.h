@@ -69,10 +69,15 @@ class EnhancedSynthPresetLoader
 {
 public:
 	//Copies "defaults" into "outPresets" (5 entries each), then applies any
-	//matching "[<PresetName><sectionSuffix>]" section from
-	//EnhancedAudioPresets.cfg on top. sectionSuffix lets each engine keep its
-	//own tuning in the same file without colliding - e.g. the NES engine uses
-	//"" (section "[Studio]"), the SMS engine uses ".Sms" (section
-	//"[Studio.Sms]").
-	static void Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix);
+	//matching "[<PresetName><sectionSuffix>]" section from, in order, the
+	//MEP pack's synth file (packPresetPath, ESP v1 - empty when no pack is
+	//active) and EnhancedAudioPresets.cfg on top - the user's file always
+	//wins, field by field (MEP-v1 §5.3, ADR-0042). sectionSuffix lets each
+	//engine keep its own tuning in the same file without colliding - e.g. the
+	//NES engine uses "" (section "[Studio]"), the SMS engine uses ".Sms"
+	//(section "[Studio.Sms]").
+	static void Load(EnhancedSynthPreset outPresets[5], const EnhancedSynthPreset defaults[5], const char* sectionSuffix, const string& packPresetPath = "");
+
+private:
+	static void ApplyFile(const string& path, EnhancedSynthPreset outPresets[5], const string& suffix);
 };

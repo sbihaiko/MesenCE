@@ -21,6 +21,7 @@
 #include "Shared/MessageManager.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Shared/HdPacks/HdTilePack.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "SMS/SmsHdTileVideoFilter.h"
 #include "Shared/Video/VideoDecoder.h"
 #include "Utilities/Serializer.h"
@@ -89,7 +90,7 @@ LoadRomResult SmsConsole::LoadRom(VirtualFile& romFile)
 		//HD pack replacement only covers VDP mode 4 (ADR-0037)
 		if(_emu->GetSettings()->GetSmsConfig().EnableHdPacks && (_model == SmsModel::Sms || _model == SmsModel::GameGear)) {
 			_hdPack.reset(new HdTilePack());
-			if(HdTilePack::Load(romFile, _model == SmsModel::GameGear ? "gg" : "sms", *_hdPack)) {
+			if(HdTilePack::LoadForRom(romFile, _model == SmsModel::GameGear ? "gg" : "sms", _emu->GetEnhancementPackManager(), *_hdPack)) {
 				_vdp->SetHdPack(_hdPack.get());
 			} else {
 				_hdPack.reset();

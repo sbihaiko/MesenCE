@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 class VirtualFile;
+class MepPackManager;
 
 //A <tile> replacement loaded from a hires.txt <ver>2xx pack
 //(docs/specs/hires-gbsms-v1-draft.md; identity keys: ADR-0036/ADR-0037)
@@ -64,6 +65,12 @@ public:
 	//Finds the pack for the ROM (HdPacks/<romname>/hires.txt) and loads it
 	//when its <system> matches. Returns false when there is no (valid) pack.
 	static bool Load(VirtualFile& romFile, string system, HdTilePack& outPack);
+
+	//F3: loose HdPacks/<rom>/ pack first (it always wins - MEP-v1 §5.1,
+	//ADR-0040), then the textures section of the winning MEP pack for this
+	//ROM, still requiring a matching <system>. Returns false when neither
+	//yields a usable pack.
+	static bool LoadForRom(VirtualFile& romFile, string system, MepPackManager* mepManager, HdTilePack& outPack);
 
 	//Loads <packFolder>/hires.txt directly (any system). With rawPixels the
 	//tile pixels round-trip unmodified - required to re-save an existing pack.

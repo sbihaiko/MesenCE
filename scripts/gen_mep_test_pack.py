@@ -13,8 +13,10 @@ EnhancementPacks/ indicada, os contêineres pedidos:
   major     pack com "mep": "2.0.0" (major desconhecido — rejeitado)
 
 Uso:
-  python3 scripts/gen_mep_test_pack.py <rom> <EnhancementPacks-dir> [kinds...]
-  (sem kinds: gera dir e zip)
+  python3 scripts/gen_mep_test_pack.py <rom> <EnhancementPacks-dir> [kinds...] [--textures=<pasta>]
+  (sem kinds: gera dir e zip; --textures copia uma pasta de HD pack real —
+  ex. a saída de `headless_record ... hdpack` — para textures/ em vez do
+  hires.txt vazio, permitindo o screenshot 1:1 da F3.2)
 
 Imprime o SHA-1 No-Intro calculado na saída padrão (para comparar com o
 "[MEP] ... matches ROM sha1 ..." do log do core).
@@ -69,15 +71,22 @@ CONTENT = {
 }
 
 
+TEXTURES_SRC = None  # pasta de HD pack real a copiar para textures/
+
+
 def write_dir(root: Path, meta: dict, content=CONTENT):
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
     (root / "pack.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     for rel, text in content.items():
+        if TEXTURES_SRC and rel.startswith("textures/"):
+            continue
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
+    if TEXTURES_SRC:
+        shutil.copytree(TEXTURES_SRC, root / "textures")
 
 
 def write_zip(path: Path, meta, content=CONTENT, extra_entries=()):
@@ -86,7 +95,13 @@ def write_zip(path: Path, meta, content=CONTENT, extra_entries=()):
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("pack.json", meta if isinstance(meta, str) else json.dumps(meta, indent=2))
         for rel, text in content.items():
+            if TEXTURES_SRC and rel.startswith("textures/"):
+                continue
             z.writestr(rel, text)
+        if TEXTURES_SRC:
+            for f in sorted(Path(TEXTURES_SRC).rglob("*")):
+                if f.is_file():
+                    z.write(f, "textures/" + f.relative_to(TEXTURES_SRC).as_posix())
         for rel, text in extra_entries:
             z.writestr(rel, text)
 
@@ -95,9 +110,14 @@ def main() -> int:
     if len(sys.argv) < 3:
         print(__doc__)
         return 1
-    rom = Path(sys.argv[1])
-    out = Path(sys.argv[2])
-    kinds = sys.argv[3:] or ["dir", "zip"]
+    global TEXTURES_SRC
+    args = [a for a in sys.argv[1:] if not a.startswith("--textures=")]
+    for a in sys.argv[1:]:
+        if a.startswith("--textures="):
+            TEXTURES_SRC = Path(a.split("=", 1)[1])
+    rom = Path(args[0])
+    out = Path(args[1])
+    kinds = args[2:] or ["dir", "zip"]
     out.mkdir(parents=True, exist_ok=True)
 
     sha1 = no_intro_sha1(rom)

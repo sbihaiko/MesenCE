@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <sstream>
 #include "Shared/HdPacks/HdTilePack.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/PNGHelper.h"
@@ -42,6 +43,34 @@ bool HdTilePack::Load(VirtualFile& romFile, string system, HdTilePack& outPack)
 	}
 
 	MessageManager::Log("[HDPack] Loaded " + system + " pack: " + std::to_string(outPack._tiles.size()) + " tiles (scale " + std::to_string(outPack._scale) + ")");
+	return true;
+}
+
+bool HdTilePack::LoadForRom(VirtualFile& romFile, string system, MepPackManager* mepManager, HdTilePack& outPack)
+{
+	string romName = FolderUtilities::GetFilename(romFile.GetFileName(), false);
+	string loosePath = FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), romName), "hires.txt");
+	string mepFolder = mepManager ? mepManager->GetSectionPath(MepSectionType::Textures) : "";
+
+	if(ifstream(loosePath)) {
+		if(!mepFolder.empty()) {
+			MessageManager::Log("[MEP] loose HD pack found in HdPacks/" + romName + "/ - it takes precedence over the pack's textures section");
+		}
+		return Load(romFile, system, outPack);
+	}
+
+	if(mepFolder.empty()) {
+		return false;
+	}
+	if(!LoadFromFolder(mepFolder, outPack, false)) {
+		MessageManager::Log("[MEP] textures section has no loadable hires.txt in " + mepFolder);
+		return false;
+	}
+	if(outPack._system != system) {
+		MessageManager::Log("[MEP] textures hires.txt <system> is '" + outPack._system + "' but the current mode needs '" + system + "' - section not applied");
+		return false;
+	}
+	MessageManager::Log("[MEP] textures: loaded " + system + " pack from '" + mepFolder + "': " + std::to_string(outPack._tiles.size()) + " tiles (scale " + std::to_string(outPack._scale) + ")");
 	return true;
 }
 

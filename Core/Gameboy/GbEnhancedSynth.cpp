@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Gameboy/GbEnhancedSynth.h"
 #include "Gameboy/Gameboy.h"
 #include "Gameboy/APU/GbApu.h"
@@ -78,7 +79,9 @@ GbEnhancedSynth::GbEnhancedSynth(Emulator* emu, Gameboy* console)
 	//This engine reads EnhancedAudioPresets.cfg sections suffixed ".Gb"
 	//(e.g. "[Studio.Gb]") so its tuning can live in the same file as the
 	//other engines' - see EnhancedSynthPresetLoader::Load.
-	_engine.InitPresets(_presets, ".Gb");
+	//MEP synth section (ADR-0042): the manager already resolved the packs
+	//for this ROM in Emulator::InternalLoadRom
+	_engine.InitPresets(_presets, ".Gb", _emu->GetEnhancementPackManager()->GetSectionPath(MepSectionType::Synth));
 	_emu->GetSoundMixer()->RegisterAudioProvider(this);
 }
 
