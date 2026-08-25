@@ -96,7 +96,7 @@ namespace Mesen.Interop
 		public static string GetMepPackList() { return Utf8Utilities.CallStringApi(GetMepPackListWrapper, 100000); }
 		[DllImport(DllPath, EntryPoint = "GetMepSiblingFolder")] private static extern void GetMepSiblingFolderWrapper(IntPtr outBuffer, Int32 maxLength);
 		public static string GetMepSiblingFolder() { return Utf8Utilities.CallStringApi(GetMepSiblingFolderWrapper, 4096); }
-		[DllImport(DllPath)] [return: MarshalAs(UnmanagedType.I1)] public static extern bool IsMepBootstrapping();
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool IsMepBootstrapping();
 		[DllImport(DllPath, EntryPoint = "GetMepRomSha1")] private static extern void GetMepRomSha1Wrapper(IntPtr outSha1, Int32 maxLength);
 		public static string GetMepRomSha1() { return Utf8Utilities.CallStringApi(GetMepRomSha1Wrapper, 100); }
 		[DllImport(DllPath)] public static extern void SetMepPackEnabled([MarshalAs(UnmanagedType.LPUTF8Str)] string containerName, [MarshalAs(UnmanagedType.I1)] bool enabled);
