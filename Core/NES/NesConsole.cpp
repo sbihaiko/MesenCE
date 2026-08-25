@@ -387,7 +387,9 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 
 	//<patch> lines are keyed by the whole-file sha1 of the ROM they were made
 	//for; ADR-0044 adds an explicit override for other revisions
-	if(!_hdData->PatchesByHash.empty()) {
+	if(!_hdData->PatchesByHash.empty() && !_emu->GetSettings()->GetEnhancementPackConfig().EnablePatches) {
+		MessageManager::Log("[HDPack] <patch> skipped: 'ROM patch' layer disabled in Tools > Enhancement Packs");
+	} else if(!_hdData->PatchesByHash.empty()) {
 		auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());
 		if(result != _hdData->PatchesByHash.end()) {
 			VirtualFile patchFile = result->second;

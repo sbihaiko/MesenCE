@@ -258,6 +258,14 @@ Ordem: **Bloco A** 2→1→5→7 ✅ (muda o que todo usuário ouve) · **Bloco 
 (+ "canal roubado e devolvido", papel fixo por canal no ESP) · **Bloco C** 8, 9, 10 ·
 **Bloco D** 11, 12, 13. Cada bloco do porte da F5.3.
 
+Validação na GUI (25/08): packs "remastered" que trocam a música por OGG (Zelda
+HD: `ZeldaHD.ips` + `<bgm>`) escondem o nível 2 — o toggle do Enhanced Audio
+parece não fazer nada. Resposta: o primeiro OGG de pack mostra um aviso no OSD;
+*Audio (OGG)* em *Enhancement Packs* passa a gatear **todo** OGG de pack (HDNes
+`<bgm>/<sfx>` e substituição por fingerprint), ao vivo; nova camada **ROM patch**
+(`EnablePatches`) permite desligar o IPS mantendo as texturas, porque o patch é o
+que emudece a música original. Tudo vai para `<home>/mesen.log` (com `.1`).
+
 Lições do Bloco A: o sweep de hardware **não** é sinal seguro de SFX (o driver do
 Zelda o usa para slides musicais de 2 st); distância percorrida separa melhor que
 velocidade (slides musicais ficam ≤ 6 st, efeitos passam de 8); um pad de ataque

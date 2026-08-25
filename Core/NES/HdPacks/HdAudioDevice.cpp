@@ -97,7 +97,7 @@ bool HdAudioDevice::PlayBgmTrack(int trackId, uint32_t startOffset)
 				//Tell the player where the music comes from - otherwise the
 				//Enhanced Audio toggle seems to do nothing while a pack's OGG plays
 				_noticeShown = true;
-				MessageManager::DisplayMessage("HDPack", "Pack music is replacing the game's music (Tools > Enhancement Packs > Audio (OGG) to turn it off)");
+				MessageManager::DisplayMessage("HDPack", "Pack music is replacing the game's music - Tools > Enhancement Packs: turn off 'Audio (OGG)' (and 'ROM patch' if the game then goes silent)");
 				MessageManager::Log("[HDPack] pack OGG replacing the game's music: " + result->second.Filename);
 			}
 			return true;

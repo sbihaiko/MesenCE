@@ -15,6 +15,7 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	[ObservableProperty] public partial bool EnableTextures { get; set; } = true;
 	[ObservableProperty] public partial bool EnableAudio { get; set; } = true;
 	[ObservableProperty] public partial bool EnableSynth { get; set; } = true;
+	[ObservableProperty] public partial bool EnablePatches { get; set; } = true;
 	[ObservableProperty] public partial bool ApplyPatchOnHashMismatch { get; set; } = false;
 	[ObservableProperty] public partial bool BootstrapEnhancementFolder { get; set; } = true;
 
@@ -28,6 +29,7 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 			EnableTextures = EnableTextures,
 			EnableAudio = EnableAudio,
 			EnableSynth = EnableSynth,
+			EnablePatches = EnablePatches,
 			ApplyPatchOnHashMismatch = ApplyPatchOnHashMismatch,
 			BootstrapEnhancementFolder = BootstrapEnhancementFolder
 		});
@@ -54,6 +56,7 @@ public struct InteropEnhancementPackConfig
 	[MarshalAs(UnmanagedType.I1)] public bool EnableTextures;
 	[MarshalAs(UnmanagedType.I1)] public bool EnableAudio;
 	[MarshalAs(UnmanagedType.I1)] public bool EnableSynth;
+	[MarshalAs(UnmanagedType.I1)] public bool EnablePatches;
 	[MarshalAs(UnmanagedType.I1)] public bool ApplyPatchOnHashMismatch;
 	[MarshalAs(UnmanagedType.I1)] public bool BootstrapEnhancementFolder;
 }

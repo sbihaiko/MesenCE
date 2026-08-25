@@ -811,6 +811,10 @@ struct EnhancementPackConfig
 	bool EnableTextures = true;
 	bool EnableAudio = true;
 	bool EnableSynth = true;
+	//Pack <patch>/patches[] (IPS) - off lets a "remastered" pack that swaps the
+	//music for OGG keep its textures while the game's own music (and the
+	//Enhanced Audio synth over it) plays again
+	bool EnablePatches = true;
 	//ADR-0044: apply a pack's patch even when no patches[]/<patch> hash matches
 	//the ROM (opt-in; wrong revisions may break the game)
 	bool ApplyPatchOnHashMismatch = false;

@@ -36,7 +36,8 @@
 					<CheckBox Content="{l:Translate chkEnableMepPacks}" IsChecked="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
 					<CheckBox Content="{l:Translate chkEnableTextures}" IsChecked="{Binding Config.EnableTextures}" IsEnabled="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
 					<CheckBox Content="{l:Translate chkEnableAudio}" IsChecked="{Binding Config.EnableAudio}" IsEnabled="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
-					<CheckBox Content="{l:Translate chkEnableSynth}" IsChecked="{Binding Config.EnableSynth}" IsEnabled="{Binding Config.EnableMepPacks}" />
+					<CheckBox Content="{l:Translate chkEnableSynth}" IsChecked="{Binding Config.EnableSynth}" IsEnabled="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />
+					<CheckBox Content="{l:Translate chkEnablePatches}" IsChecked="{Binding Config.EnablePatches}" IsEnabled="{Binding Config.EnableMepPacks}" ToolTip.Tip="{l:Translate tipEnablePatches}" />
 				</WrapPanel>
 			</c:OptionSection>
 			<CheckBox Content="{l:Translate chkBootstrapEnhancementFolder}" IsChecked="{Binding Config.BootstrapEnhancementFolder}" IsEnabled="{Binding Config.EnableMepPacks}" />

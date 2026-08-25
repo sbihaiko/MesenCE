@@ -619,7 +619,8 @@ bool MepPackManager::IsSectionFromSibling(MepSectionType type) const
 
 bool MepPackManager::ApplyPatches(VirtualFile& romFile)
 {
-	if(!_emu->GetSettings()->GetEnhancementPackConfig().EnableMepPacks) {
+	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
+	if(!cfg.EnableMepPacks || !cfg.EnablePatches) {
 		return false;
 	}
 	for(const MepPack& pack : _packs) {
