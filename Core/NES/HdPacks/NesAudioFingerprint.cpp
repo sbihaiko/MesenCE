@@ -122,11 +122,21 @@ uint32_t NesAudioReplacer::Load(const vector<string>& audioLayers, HdPackData& h
 
 void NesAudioReplacer::OnFrame(const ApuState& apu)
 {
+	HdAudioDevice* device = _console->GetHdAudioDevice();
+	if(device && !device->IsPackAudioEnabled()) {
+		//Pack audio turned off (Tools > Enhancement Packs > Audio (OGG)): the
+		//device stops its OGG; give the APU back and forget the match
+		if(_matcher.GetPlaying() >= 0) {
+			_console->GetSoundMixer()->SetReplacementMute(false);
+			_matcher.SetPlaying(-1);
+			MessageManager::Log("[MEP] audio: pack audio disabled - APU restored");
+		}
+		return;
+	}
 	int result = _matcher.Feed(NesAudioFingerprint::FromApu(apu));
 	if(result == -1) {
 		return;
 	}
-	HdAudioDevice* device = _console->GetHdAudioDevice();
 	if(result == -2) {
 		if(device) {
 			device->StopReplacementBgm();

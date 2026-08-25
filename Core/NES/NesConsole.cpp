@@ -479,6 +479,10 @@ void NesConsole::InternalRunFrame()
 		_hdPackBuilder->OnFrameEnd();
 	}
 
+	if(_hdAudioDevice) {
+		_hdAudioDevice->ProcessFrame();
+	}
+
 	if(_audioReplacer || _audioBootstrap) {
 		ApuState apu = _apu->GetState();
 		if(_audioReplacer) {

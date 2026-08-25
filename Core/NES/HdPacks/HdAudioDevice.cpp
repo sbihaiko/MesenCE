@@ -5,6 +5,7 @@
 #include "NES/NesConsole.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Emulator.h"
+#include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
 #include "Utilities/Serializer.h"
 
@@ -62,12 +63,43 @@ void HdAudioDevice::Serialize(Serializer& s)
 	}
 }
 
+bool HdAudioDevice::IsPackAudioEnabled()
+{
+	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
+	return cfg.EnableMepPacks && cfg.EnableAudio;
+}
+
+bool HdAudioDevice::IsPlaying()
+{
+	return _oggMixer->IsBgmPlaying() || _oggMixer->IsSfxPlaying();
+}
+
+void HdAudioDevice::ProcessFrame()
+{
+	if(!IsPackAudioEnabled() && IsPlaying()) {
+		_oggMixer->StopBgm();
+		_oggMixer->StopSfx();
+		_lastBgmTrack = -1;
+		MessageManager::Log("[HDPack] pack audio disabled in settings - OGG playback stopped");
+	}
+}
+
 bool HdAudioDevice::PlayBgmTrack(int trackId, uint32_t startOffset)
 {
+	if(!IsPackAudioEnabled()) {
+		return false;
+	}
 	auto result = _hdData->BgmFilesById.find(trackId);
 	if(result != _hdData->BgmFilesById.end()) {
 		if(_oggMixer->Play(result->second.Filename, false, startOffset, result->second.LoopPosition)) {
 			_lastBgmTrack = trackId;
+			if(!_noticeShown) {
+				//Tell the player where the music comes from - otherwise the
+				//Enhanced Audio toggle seems to do nothing while a pack's OGG plays
+				_noticeShown = true;
+				MessageManager::DisplayMessage("HDPack", "Pack music is replacing the game's music (Tools > Enhancement Packs > Audio (OGG) to turn it off)");
+				MessageManager::Log("[HDPack] pack OGG replacing the game's music: " + result->second.Filename);
+			}
 			return true;
 		}
 	} else {
@@ -95,6 +127,9 @@ void HdAudioDevice::StopReplacementBgm()
 
 bool HdAudioDevice::PlaySfx(uint8_t sfxNumber)
 {
+	if(!IsPackAudioEnabled()) {
+		return false;
+	}
 	auto result = _hdData->SfxFilesById.find(_album * 256 + sfxNumber);
 	if(result != _hdData->SfxFilesById.end()) {
 		return !_oggMixer->Play(result->second, true, 0, 0);
