@@ -536,6 +536,8 @@
     <ClInclude Include="NES\NesNtscFilter.h" />
     <ClInclude Include="NES\NsfPpu.h" />
     <ClInclude Include="Shared\Audio\AudioPlayerTypes.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepPack.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepPackManager.h" />
     <ClInclude Include="Shared\BaseControlManager.h" />
     <ClInclude Include="Shared\BaseState.h" />
     <ClInclude Include="Gameboy\GbControlManager.h" />
@@ -993,6 +995,8 @@
     <ClCompile Include="SNES\BaseCartridge.cpp" />
     <ClCompile Include="Shared\BaseControlDevice.cpp" />
     <ClCompile Include="Shared\Audio\BaseSoundManager.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepPack.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp" />
     <ClCompile Include="Shared\Video\BaseVideoFilter.cpp" />
     <ClCompile Include="Shared\BatteryManager.cpp" />
     <ClCompile Include="Debugger\Breakpoint.cpp" />

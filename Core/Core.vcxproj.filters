@@ -1000,6 +1000,12 @@
     <ClCompile Include="Shared\HdPacks\HdTilePackBuilder.cpp">
       <Filter>Shared\HdPacks</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\EnhancementPacks\MepPack.cpp">
+      <Filter>Shared\EnhancementPacks</Filter>
+    </ClCompile>
+    <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp">
+      <Filter>Shared\EnhancementPacks</Filter>
+    </ClCompile>
     <ClCompile Include="Shared\HdPacks\HdTilePack.cpp">
       <Filter>Shared\HdPacks</Filter>
     </ClCompile>
@@ -1023,6 +1029,12 @@
     </ClInclude>
     <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h">
       <Filter>Shared\HdPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\EnhancementPacks\MepPack.h">
+      <Filter>Shared\EnhancementPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\EnhancementPacks\MepPackManager.h">
+      <Filter>Shared\EnhancementPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\HdPacks\HdTilePack.h">
       <Filter>Shared\HdPacks</Filter>
@@ -1569,6 +1581,9 @@
     </Filter>
     <Filter Include="Shared\Movies">
       <UniqueIdentifier>4673d59f-75b6-4514-a387-d573403dc058</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shared\EnhancementPacks">
+      <UniqueIdentifier>{b7e1d2f3-4a5b-4c6d-8e9f-1a2b3c4d5e6f}</UniqueIdentifier>
     </Filter>
     <Filter Include="Shared\HdPacks">
       <UniqueIdentifier>{a1f2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d}</UniqueIdentifier>

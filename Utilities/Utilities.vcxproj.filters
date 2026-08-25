@@ -148,6 +148,7 @@
     <ClInclude Include="miniz.h" />
     <ClInclude Include="SZReader.h" />
     <ClInclude Include="ZipReader.h" />
+    <ClInclude Include="JsonReader.h" />
     <ClInclude Include="ZipWriter.h" />
     <ClInclude Include="AutoResetEvent.h" />
     <ClInclude Include="Base64.h" />
@@ -318,6 +319,7 @@
     <ClCompile Include="miniz.cpp" />
     <ClCompile Include="SZReader.cpp" />
     <ClCompile Include="ZipReader.cpp" />
+    <ClCompile Include="JsonReader.cpp" />
     <ClCompile Include="ZipWriter.cpp" />
     <ClCompile Include="AutoResetEvent.cpp" />
     <ClCompile Include="FolderUtilities.cpp" />

@@ -46,6 +46,7 @@
 #include "Utilities/VirtualFile.h"
 #include "Utilities/PlatformUtilities.h"
 #include "Utilities/FolderUtilities.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Shared/MemoryOperationType.h"
 #include "Shared/EventType.h"
 
@@ -62,6 +63,7 @@ Emulator::Emulator()
 	  _cheatManager(new CheatManager(this)),
 	  _movieManager(new MovieManager(this)),
 	  _historyViewer(new HistoryViewer(this)),
+	  _mepPackManager(new MepPackManager()),
 	  _gameServer(new GameServer(this)),
 	  _gameClient(new GameClient(this)),
 	  _rewindManager(new RewindManager(this)),
@@ -437,6 +439,11 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 		//Make sure the battery is saved to disk before we load another game (or reload the same game)
 		SaveBattery();
 	}
+
+	//Resolve the MEP enhancement packs for this (patched) ROM before the
+	//console's LoadRom runs: the consoles pull textures/synth/audio paths from
+	//the manager while loading their HD packs (F3 - ADR-0039/0040).
+	_mepPackManager->LoadForRom(romFile);
 
 	_soundMixer->StopAudio();
 

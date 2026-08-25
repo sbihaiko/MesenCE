@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log]
 //
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
@@ -15,6 +15,9 @@
 //With the "screenshot" flag it runs N seconds and saves the final frame to
 //<home>/Screenshots/ - installing a recorded pack into <home>/HdPacks/<rom>/
 //between two runs gives a with/without-replacement pair to diff (F2.3).
+//With the "log" flag the core message log is dumped to stdout at the end
+//(used by the F3 MEP tests to check "[MEP] ..." matching/rejection lines;
+//the MEP folder is <home>/EnhancementPacks/ inside the scratch home).
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
@@ -66,6 +69,7 @@ extern "C"
 	void VgmStop();
 	bool VgmIsRecording();
 	bool IsRunning();
+	void GetLog(char* outBuffer, uint32_t maxLength);
 	void Stop();
 	void Release();
 }
@@ -105,6 +109,7 @@ int main(int argc, char** argv)
 	bool pal = false;
 	bool hdPack = false;
 	bool screenshot = false;
+	bool dumpLog = false;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
@@ -112,6 +117,8 @@ int main(int argc, char** argv)
 			hdPack = true;
 		} else if(strcmp(argv[i], "screenshot") == 0) {
 			screenshot = true;
+		} else if(strcmp(argv[i], "log") == 0) {
+			dumpLog = true;
 		}
 	}
 
@@ -218,6 +225,12 @@ int main(int argc, char** argv)
 		VgmStop();
 	}
 	printf("captura encerrada (%.1fs)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+	if(dumpLog) {
+		std::string log(65536, '\0');
+		GetLog(log.data(), (uint32_t)log.size());
+		log.resize(strlen(log.c_str()));
+		printf("--- core log ---\n%s--- end log ---\n", log.c_str());
+	}
 	Stop();
 	Release();
 	return 0;
