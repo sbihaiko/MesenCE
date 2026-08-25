@@ -311,6 +311,10 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 	//tracks already present (human > auto > textures pack).
 	auto mergeAudio = [&](const string& folder, const char* label) {
 		unique_ptr<HdPackData> audioData(new HdPackData());
+		if(!ifstream(FolderUtilities::CombinePath(folder, "hires.txt"))) {
+			//Fingerprint-only layer (F5.3) - handled in step 4, nothing to say here
+			return;
+		}
 		if(!HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(folder, "hires.txt"), *audioData)) {
 			MessageManager::Log(string("[MEP] ") + label + " has no loadable hires.txt in " + folder);
 			return;
