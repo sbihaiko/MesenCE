@@ -59,6 +59,11 @@ bool MepPack::DetectConventionLayout()
 		string autoProbe = FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionProbe[i]);
 		bool human = (bool)ifstream(humanProbe);
 		bool automatic = (bool)ifstream(autoProbe);
+		if(i == (int)MepSectionType::Audio) {
+			//audio/ may hold fingerprints.json (ADR-0047) instead of a hires.txt
+			human = human || (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, kConventionPaths[i]), "fingerprints.json"));
+			automatic = automatic || (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionPaths[i]), "fingerprints.json"));
+		}
 		if(human) {
 			section.HasHuman = true;
 			section.Path = kConventionPaths[i];

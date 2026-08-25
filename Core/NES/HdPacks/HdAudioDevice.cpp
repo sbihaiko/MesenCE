@@ -76,6 +76,23 @@ bool HdAudioDevice::PlayBgmTrack(int trackId, uint32_t startOffset)
 	return false;
 }
 
+bool HdAudioDevice::PlayReplacementBgm(int trackId, bool loop)
+{
+	_oggMixer->SetPlaybackOptions(loop ? (_playbackOptions | 0x01) : _playbackOptions);
+	if(_bgmVolume == 0) {
+		//Games that never wrote the HD registers leave the volume at 0
+		_oggMixer->SetBgmVolume(255);
+	}
+	return PlayBgmTrack(trackId, 0);
+}
+
+void HdAudioDevice::StopReplacementBgm()
+{
+	_oggMixer->StopBgm();
+	_oggMixer->SetPlaybackOptions(_playbackOptions);
+	_lastBgmTrack = -1;
+}
+
 bool HdAudioDevice::PlaySfx(uint8_t sfxNumber)
 {
 	auto result = _hdData->SfxFilesById.find(_album * 256 + sfxNumber);

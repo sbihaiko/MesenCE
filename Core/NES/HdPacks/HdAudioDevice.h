@@ -31,6 +31,12 @@ public:
 	HdAudioDevice(Emulator* emu, HdPackData* hdData);
 	~HdAudioDevice();
 
+	//F5.3 (ADR-0047): playback driven by the fingerprint matcher instead of
+	//game writes to $41xx. Loop is forced on for BGM; stop restores the
+	//game's own playback options.
+	bool PlayReplacementBgm(int trackId, bool loop);
+	void StopReplacementBgm();
+
 	void GetMemoryRanges(MemoryRanges& ranges) override;
 	void WriteRam(uint16_t addr, uint8_t value) override;
 	uint8_t ReadRam(uint16_t addr) override;

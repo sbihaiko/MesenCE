@@ -171,6 +171,9 @@ void NesSoundMixer::UpdateRates(bool forceUpdate)
 
 double NesSoundMixer::GetChannelOutput(AudioChannel channel, bool forRightChannel)
 {
+	if(_replacementMute && (int)channel <= (int)AudioChannel::Noise) {
+		return 0;
+	}
 	if(forRightChannel) {
 		return _currentOutput[(int)channel] * _volumes[(int)channel] * _panning[(int)channel];
 	} else {

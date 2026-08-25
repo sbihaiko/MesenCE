@@ -471,6 +471,7 @@
     <ClInclude Include="NES\Debugger\NesTraceLogger.h" />
     <ClInclude Include="NES\DefaultNesPpu.h" />
     <ClInclude Include="NES\HdPacks\HdAudioDevice.h" />
+    <ClInclude Include="NES\HdPacks\NesAudioFingerprint.h" />
     <ClInclude Include="NES\HdPacks\HdData.h" />
     <ClInclude Include="NES\HdPacks\HdNesPack.h" />
     <ClInclude Include="NES\HdPacks\HdNesPpu.h" />
@@ -538,6 +539,7 @@
     <ClInclude Include="Shared\Audio\AudioPlayerTypes.h" />
     <ClInclude Include="Shared\EnhancementPacks\MepPack.h" />
     <ClInclude Include="Shared\EnhancementPacks\MepPackManager.h" />
+    <ClInclude Include="Shared\EnhancementPacks\AudioFingerprint.h" />
     <ClInclude Include="Shared\BaseControlManager.h" />
     <ClInclude Include="Shared\BaseState.h" />
     <ClInclude Include="Gameboy\GbControlManager.h" />
@@ -885,6 +887,7 @@
     <ClCompile Include="NES\Debugger\NesTraceLogger.cpp" />
     <ClCompile Include="NES\Epsm.cpp" />
     <ClCompile Include="NES\HdPacks\HdAudioDevice.cpp" />
+    <ClCompile Include="NES\HdPacks\NesAudioFingerprint.cpp" />
     <ClCompile Include="NES\HdPacks\HdNesPack.cpp" />
     <ClCompile Include="NES\HdPacks\HdNesPpu.cpp" />
     <ClCompile Include="NES\HdPacks\HdPackBuilder.cpp" />
@@ -997,6 +1000,7 @@
     <ClCompile Include="Shared\Audio\BaseSoundManager.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepPack.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\AudioFingerprint.cpp" />
     <ClCompile Include="Shared\Video\BaseVideoFilter.cpp" />
     <ClCompile Include="Shared\BatteryManager.cpp" />
     <ClCompile Include="Debugger\Breakpoint.cpp" />

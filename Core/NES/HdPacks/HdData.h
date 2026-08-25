@@ -488,6 +488,21 @@ public:
 	HdPackData() {}
 	~HdPackData() {}
 
+	//False for audio-only data (MEP audio section / fingerprints): the HD PPU
+	//is then not needed
+	bool HasVideoContent() const
+	{
+		if(!Tiles.empty() || !AdditionalSprites.empty() || !FallbackTiles.empty() || !Palette.empty() || HasOverscanConfig) {
+			return true;
+		}
+		for(int i = 0; i < BgLayerCount; i++) {
+			if(!BackgroundsByPriority[i].empty()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	HdPackData(const HdPackData&) = delete;
 	HdPackData& operator=(const HdPackData&) = delete;
 

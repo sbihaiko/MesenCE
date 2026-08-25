@@ -1,6 +1,6 @@
 # Plano de execução — Fase 5: Bootstrap automático de packs (convenção sobre configuração)
 
-**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 segue `proposed` até a F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · **F5.2 ✅** (setting `BootstrapEnhancementFolder`, default on: no load sem nenhum pack de texturas, exporta tiles da ROM + grava os tiles jogados com xBRZ 4× em `<Game>/auto/textures/` (+ `.bootstrap`); fallback `EnhancementPacks/<Game>/` quando a pasta da ROM é somente-leitura; segundo load já usa a camada; botão *Open Game Folder*; 18 checagens headless — GB, SMB3 CHR ROM 8275 tiles, Zelda CHR RAM, opt-in, pasta RO) · F5.3–F5.5 pendentes ·
+**Status:** em execução (2026-08-25) — F5.0 ✅ parcial (ADR-0044 e ADR-0049 aceitos; ADR-0047 aceito na F5.3; 0045/0046/0048 superseded), **F5.1 ✅** (pasta irmã > `HdPacks/` > `EnhancementPacks/`; zip/pasta nomeados como a ROM sem `pack.json`; merge humano > `auto/` nos loaders NES/GB/SMS/ESP; `patches[]` + normalização do hash iNES + override `ApplyPatchOnHashMismatch` na UI; `scripts/mep_lint.py`; 28 checagens headless — GB 1:1 em 5 cenários, Zelda com 3 dumps, patch skip/apply; dotnet 0 warnings) · **F5.2 ✅** (setting `BootstrapEnhancementFolder`, default on: no load sem nenhum pack de texturas, exporta tiles da ROM + grava os tiles jogados com xBRZ 4× em `<Game>/auto/textures/` (+ `.bootstrap`); fallback `EnhancementPacks/<Game>/` quando a pasta da ROM é somente-leitura; segundo load já usa a camada; botão *Open Game Folder*; 18 checagens headless — GB, SMB3 CHR ROM 8275 tiles, Zelda CHR RAM, opt-in, pasta RO) · **F5.3 ✅** (gravador de música no bootstrap NES: `NoteFrame` por frame a partir do estado do APU → `TrackSegmenter` (silêncio 60 frames fecha; ≥180 frames = `bgm`, senão `sfx`) → `auto/audio/fingerprints.json` + `midi/<id>.mid` (SMF/GM); `scripts/mep_render_audio.py` renderiza `bgm/<id>.ogg` (fluidsynth+SoundFont ou sintetizador interno numpy → ffmpeg libvorbis); no load, `NesAudioReplacer` carrega as camadas `auto/audio` → `audio` (id humano vence), reconhece a faixa pelos primeiros onsets (±3 frames, confirma em 8) e toca o OGG pelo `HdAudioDevice` silenciando pulse/triangle/noise; 90 frames de silêncio restauram o APU; 12 checagens headless com Zelda — grava, renderiza, segundo load `fingerprint match 'track01' … APU muted`, camada humana, aviso sem OGG) · F5.4–F5.5 pendentes ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 5 (re-escopada) ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (ganha `patches[]` e a convenção de pasta irmã; `pack.json` passa a ser opcional) ·
 **Ordem:** proposta de antecipar a F5 à F4 (browser/MEI): sem packs bons e fáceis de produzir, um browser lista um catálogo vazio. A F4 fica intacta no PRD e entra depois.
@@ -172,6 +172,16 @@ carrega; linter offline; `patches[]`.
   (humano) vence `auto/audio/bgm/<faixa>.ogg`.
 - Validação headless: MM3 título → `[MEP] audio: fingerprint match 'title'` em
   < 30 frames; APU silencia; zero falso positivo em 60 s.
+
+**Como ficou (✅):** o gravador vive no core (`NesAudioBootstrap`, alimentado
+após `_apu->EndFrame()`), não no exportador F1 — sem GUI e sem depender do
+Enhanced Synth estar ligado. Faixas recebem ids `track01…`/`sfx01…` (o artista
+renomeia no `fingerprints.json` humano). O render em OGG fica fora do emulador
+(`mep_render_audio.py`; sem fluidsynth usa um chip-synth interno como
+placeholder). MM3 e SMB3 não tocam música nos primeiros segundos sem input, por
+isso a validação usa Zelda (título com música desde o frame ~60). Latência de
+reconhecimento = 8 onsets (~1 s no tema do Zelda) — o começo da faixa sai do
+APU, o OGG entra a partir daí; ADR-0047 registra a troca.
 
 ## F5.4 — Sheets, objetos e conditions inferidas (níveis 3–4)
 

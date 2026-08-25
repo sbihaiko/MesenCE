@@ -20,6 +20,8 @@ class EnhancedSynth;
 class BaseVideoFilter;
 class BaseControlManager;
 class HdAudioDevice;
+class NesAudioBootstrap;
+class NesAudioReplacer;
 class HdPackBuilder;
 class Epsm;
 struct HdPackData;
@@ -51,6 +53,10 @@ private:
 
 	safe_ptr<HdPackData> _hdData;
 	unique_ptr<HdAudioDevice> _hdAudioDevice;
+	//F5.3 (ADR-0047): audio fingerprints - recorder during the bootstrap,
+	//replacer when a pack ships fingerprints.json
+	unique_ptr<NesAudioBootstrap> _audioBootstrap;
+	unique_ptr<NesAudioReplacer> _audioReplacer;
 	unique_ptr<HdPackBuilder> _hdPackBuilder;
 
 	ConsoleRegion _region = ConsoleRegion::Auto;
@@ -86,6 +92,11 @@ public:
 	NesMemoryManager* GetMemoryManager() { return _memoryManager.get(); }
 	BaseMapper* GetMapper() { return _mapper.get(); }
 	NesSoundMixer* GetSoundMixer() { return _mixer.get(); }
+	HdAudioDevice* GetHdAudioDevice() { return _hdAudioDevice.get(); }
+
+	//F5.3: start recording the played music into <audioFolder> (fingerprints +
+	//MIDI, written when the console is destroyed or the bootstrap stops)
+	void StartAudioBootstrap(const string& audioFolder);
 
 	//Emulator-level (shared) SoundMixer, cached at construction: the APU
 	//channels' VGM tap reads it on every register write, so this stays an

@@ -155,6 +155,14 @@ formato subjacente permitir).
   suportado pelo sistema alvo: OGG por HD pack (NES, e GB/SMS via a extensão
   draft) ou MSU-1 (`.msu` + `.pcm`, SNES).
 - O host MUST delegar ao mecanismo nativo correspondente (OggMixer, MSU-1).
+- Na forma-pasta (§2.1), `audio/fingerprints.json` (e `auto/audio/fingerprints.json`)
+  MAY descrever faixas por assinatura de notas — `{ "version": 1, "tracks": [
+  { "id", "kind": "bgm"|"sfx", "frames", "midi": "midi/<id>.mid", "events":
+  [[voice, pitchRel, frame], …] }] }`. Um host que implemente ADR-0047 SHOULD
+  reconhecer a faixa pelos `events` e tocar `<camada>/bgm/<id>.ogg` sem patch
+  na ROM; ids da camada humana vencem os de `auto/`. Hosts sem suporte MUST
+  ignorar o arquivo. Gerado pelo bootstrap (F5.3) e renderizado por
+  `scripts/mep_render_audio.py`.
 
 ### 5.3 `synth`
 

@@ -18,6 +18,7 @@
 #include "NES/HdPacks/HdBuilderPpu.h"
 #include "NES/HdPacks/HdVideoFilter.h"
 #include "Shared/EnhancementPacks/MepPackManager.h"
+#include "NES/HdPacks/NesAudioFingerprint.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
 #include "NES/NesDefaultVideoFilter.h"
@@ -211,7 +212,7 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 			_controlManager.reset(new NesControlManager(this));
 		}
 
-		if(_hdData) {
+		if(_hdData && _hdData->HasVideoContent()) {
 			_ppu.reset(new HdNesPpu(this, _hdData.get()));
 		} else if(dynamic_cast<NsfMapper*>(_mapper.get())) {
 			//Disable most of the PPU for NSFs
@@ -235,7 +236,9 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 			_memoryManager->RegisterIODevice(_hdAudioDevice.get());
 		} else {
 			_hdAudioDevice.reset();
+			_audioReplacer.reset();
 		}
+		_audioBootstrap.reset();
 
 		UpdateRegion();
 
@@ -332,6 +335,36 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		mergeAudio(mepAudio, "audio");
 	}
 
+	//4) Fingerprint-triggered OGG (ADR-0047): auto/ layer first, human last
+	_audioReplacer.reset();
+	{
+		vector<string> layers;
+		if(!autoAudio.empty()) {
+			layers.push_back(autoAudio);
+		}
+		if(!mepAudio.empty()) {
+			layers.push_back(mepAudio);
+		}
+		bool anyFingerprints = false;
+		for(const string& layer : layers) {
+			if(ifstream(FolderUtilities::CombinePath(layer, "fingerprints.json"))) {
+				anyFingerprints = true;
+			}
+		}
+		if(anyFingerprints) {
+			if(!loaded) {
+				_hdData.reset(new HdPackData());
+				loaded = true;
+			}
+			unique_ptr<NesAudioReplacer> replacer(new NesAudioReplacer(this));
+			if(replacer->Load(layers, *_hdData.get()) > 0) {
+				_audioReplacer = std::move(replacer);
+			} else {
+				MessageManager::Log("[MEP] audio: fingerprints present but no bgm/<id>.ogg to play - run scripts/mep_render_audio.py on the pack folder");
+			}
+		}
+	}
+
 	if(!loaded) {
 		_hdData.reset();
 		return;
@@ -361,6 +394,11 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		});
 		asyncLoadData.detach();
 	}
+}
+
+void NesConsole::StartAudioBootstrap(const string& audioFolder)
+{
+	_audioBootstrap.reset(new NesAudioBootstrap(audioFolder));
 }
 
 void NesConsole::UpdateRegion(bool forceUpdate)
@@ -420,6 +458,16 @@ void NesConsole::InternalRunFrame()
 
 	_mapper->EndFrame();
 	_apu->EndFrame();
+
+	if(_audioReplacer || _audioBootstrap) {
+		ApuState apu = _apu->GetState();
+		if(_audioReplacer) {
+			_audioReplacer->OnFrame(apu);
+		}
+		if(_audioBootstrap) {
+			_audioBootstrap->OnFrame(apu);
+		}
+	}
 
 	if(!_nextFrameOverclockDisabled) {
 		//Re-update timings to allow overclocking

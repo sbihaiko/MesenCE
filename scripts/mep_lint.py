@@ -30,6 +30,7 @@ from pathlib import Path, PurePosixPath
 
 SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg"}
 PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg"}
+AUDIO_ALT_PROBE = "audio/fingerprints.json"
 KNOWN_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
 NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condition", "bgm", "sfx", "patch", "overscan", "options", "addition", "fallback"}
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
@@ -457,6 +458,46 @@ def lint_hires(src: Source, rel: str, rep: Report):
         lint_nes_hires(src, rel, rep)
 
 
+def lint_fingerprints(src: Source, rel: str, rep: Report):
+    folder = str(PurePosixPath(rel).parent)
+    folder = "" if folder == "." else folder + "/"
+    try:
+        root = json.loads(src.text(rel))
+    except Exception as exc:  # noqa: BLE001
+        rep.error(rel, f"JSON inválido: {exc}")
+        return
+    tracks = root.get("tracks") if isinstance(root, dict) else None
+    if not isinstance(tracks, list):
+        rep.error(rel, "'tracks' deve ser array")
+        return
+    ids = set()
+    playable = 0
+    for i, t in enumerate(tracks):
+        if not isinstance(t, dict) or not isinstance(t.get("id"), str):
+            rep.error(rel, f"tracks[{i}] precisa de 'id'")
+            continue
+        tid = t["id"]
+        if tid in ids:
+            rep.error(rel, f"id duplicado: {tid}")
+        ids.add(tid)
+        kind = t.get("kind", "bgm")
+        if kind not in ("bgm", "sfx"):
+            rep.error(rel, f"{tid}: kind inválido '{kind}'")
+        ev = t.get("events")
+        if not isinstance(ev, list) or not ev:
+            rep.error(rel, f"{tid}: 'events' vazio")
+        elif len(ev) < 4 and kind == "bgm":
+            rep.warning(rel, f"{tid}: só {len(ev)} onset(s) — fingerprint curto demais para ser confiável")
+        if t.get("midi") and not src.exists(folder + t["midi"]):
+            rep.warning(rel, f"{tid}: MIDI referenciado não existe: {t['midi']}")
+        ogg = f"{folder}{kind}/{tid}.ogg"
+        if src.exists(ogg):
+            playable += 1
+    rep.info(rel, f"fingerprints: {len(tracks)} faixa(s), {playable} com OGG na mesma camada")
+    if playable == 0 and tracks:
+        rep.info(rel, "nenhum OGG ao lado — rode scripts/mep_render_audio.py para gerar bgm/*.ogg")
+
+
 def lint_esp(src: Source, rel: str, rep: Report):
     section = None
     for n, raw in enumerate(src.text(rel).splitlines(), 1):
@@ -493,9 +534,11 @@ def main(argv):
     # camadas da convenção (também valem para packs com pack.json)
     for name, probe in PROBES.items():
         for layer, prefix in (("humana", ""), ("auto", "auto/")):
-            if src.exists(prefix + probe):
+            if src.exists(prefix + probe) or (name == "audio" and src.exists(prefix + AUDIO_ALT_PROBE)):
                 rep.info(prefix + probe, f"camada {layer} de '{name}' presente")
                 sections.setdefault(f"{prefix}{name}", prefix + SECTION_PATHS[name])
+            if name == "audio" and src.exists(prefix + AUDIO_ALT_PROBE):
+                lint_fingerprints(src, prefix + AUDIO_ALT_PROBE, rep)
     if src.exists("hires.txt"):
         # HD pack HDNes solto (HdPacks/<rom>/): o hires.txt fica na raiz
         rep.info("hires.txt", "HD pack legado (hires.txt na raiz) — carregável como HdPacks/<rom>/ ou como seção textures com path \"\"")

@@ -811,7 +811,13 @@
     <ClCompile Include="NES\HdPacks\HdAudioDevice.cpp">
       <Filter>NES\HdPacks</Filter>
     </ClCompile>
+    <ClCompile Include="NES\HdPacks\NesAudioFingerprint.cpp">
+      <Filter>NES\HdPacks</Filter>
+    </ClCompile>
     <ClInclude Include="NES\HdPacks\HdAudioDevice.h">
+      <Filter>NES\HdPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="NES\HdPacks\NesAudioFingerprint.h">
       <Filter>NES\HdPacks</Filter>
     </ClInclude>
     <ClInclude Include="NES\HdPacks\HdData.h">
@@ -1006,6 +1012,9 @@
     <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp">
       <Filter>Shared\EnhancementPacks</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\EnhancementPacks\AudioFingerprint.cpp">
+      <Filter>Shared\EnhancementPacks</Filter>
+    </ClCompile>
     <ClCompile Include="Shared\HdPacks\HdTilePack.cpp">
       <Filter>Shared\HdPacks</Filter>
     </ClCompile>
@@ -1034,6 +1043,9 @@
       <Filter>Shared\EnhancementPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\EnhancementPacks\MepPackManager.h">
+      <Filter>Shared\EnhancementPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\EnhancementPacks\AudioFingerprint.h">
       <Filter>Shared\EnhancementPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\HdPacks\HdTilePack.h">

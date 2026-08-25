@@ -1,6 +1,6 @@
 # ADR-0047: BGM/SFX trigger without ROM patch — APU register fingerprints
 
-- Status: proposed
+- Status: accepted (2026-08-25, F5.3 — `Core/Shared/EnhancementPacks/AudioFingerprint.*`, `Core/NES/HdPacks/NesAudioFingerprint.*`; fingerprint = primeiros ≤32 onsets `[voice, pitch relativo, frame]`, tolerância ±3 frames, confirmação após 8 onsets, 90 frames de silêncio param o OGG e restauram o APU)
 - Date: 2026-08-25
 - Fase 5, F5.3. Sits beside the HDNes `$41xx` mechanism, does not replace it.
 

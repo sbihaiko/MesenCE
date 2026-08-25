@@ -23,7 +23,7 @@ HD Pack solto em `HdPacks/<rom>/` vence a seção `textures` (§5.1), salvo a
 pasta irmã da ROM (`<dir>/<Game>/`, §2.1 — F5.1/ADR-0049), que vence tudo.
 `patches[]` e o hash normalizado ao tamanho do header iNES (ADR-0044) estão
 implementados; o override "aplicar patch com hash divergente" fica em
-*Enhancement Packs*. Linter offline: `python3 scripts/mep_lint.py <pasta|zip>`. Bootstrap (F5.2, comportamento de host, não da spec): com a opção ligada e nenhum pack de texturas aplicável, jogar grava os tiles em `<Game>/auto/textures/` (xBRZ 4×) ao lado da ROM.
+*Enhancement Packs*. Linter offline: `python3 scripts/mep_lint.py <pasta|zip>`. Bootstrap (F5.2, comportamento de host, não da spec): com a opção ligada e nenhum pack de texturas aplicável, jogar grava os tiles em `<Game>/auto/textures/` (xBRZ 4×) ao lado da ROM e, no NES, a música em `<Game>/auto/audio/` (`fingerprints.json` + `midi/`; F5.3/ADR-0047 — `scripts/mep_render_audio.py` gera os `bgm/<id>.ogg`, tocados por reconhecimento das notas, sem patch).
 
 Mudanças via issue/PR neste repositório; breaking change = bump de versão
 maior da spec afetada.

@@ -11,6 +11,7 @@
 #include "Utilities/sha1.h"
 #include "Shared/Interfaces/IConsole.h"
 #include "Shared/Interfaces/INotificationListener.h"
+#include "NES/NesConsole.h"
 
 namespace fs = std::filesystem;
 
@@ -111,11 +112,14 @@ void MepPackManager::StartBootstrapIfNeeded()
 	}
 
 	//Something already dresses this ROM: the bootstrap is only a first draft
-	if(GetPackForSection(MepSectionType::Textures)) {
-		return;
-	}
+	bool needTextures = !GetPackForSection(MepSectionType::Textures);
 	std::error_code ec;
 	if(fs::exists(fs::u8path(FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), _romName), "hires.txt")), ec)) {
+		needTextures = false;
+	}
+	//Audio fingerprints (ADR-0047) are NES-only for now (ADR-0041 scope)
+	bool needAudio = type == ConsoleType::Nes && !GetPackForSection(MepSectionType::Audio);
+	if(!needTextures && !needAudio) {
 		return;
 	}
 
@@ -139,6 +143,19 @@ void MepPackManager::StartBootstrapIfNeeded()
 	{
 		ofstream stamp(FolderUtilities::CombinePath(root, ".bootstrap"), std::ios::out | std::ios::binary);
 		stamp << "generator=mesence-bootstrap/1\nsha1=" << _romSha1 << "\nrom=" << _romName << "\nfilter=xBRZ\nscale=4\n";
+	}
+
+	if(needAudio) {
+		string autoAudio = FolderUtilities::CombinePath(FolderUtilities::CombinePath(root, MepPack::AutoFolderName), MepPack::GetConventionPath(MepSectionType::Audio));
+		fs::create_directories(fs::u8path(autoAudio), ec);
+		if(NesConsole* nes = dynamic_cast<NesConsole*>(console.get())) {
+			nes->StartAudioBootstrap(autoAudio);
+			_bootstrapping = true;
+			Log("bootstrap: recording music fingerprints + MIDI into '" + autoAudio + "'");
+		}
+	}
+	if(!needTextures) {
+		return;
 	}
 
 	_bootstrapSaveFolder = autoTextures;
