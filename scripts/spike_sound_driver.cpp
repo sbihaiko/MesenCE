@@ -103,9 +103,11 @@ namespace
 {
 	using Clock = std::chrono::steady_clock;
 
-	void SleepMs(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+	void SleepMs(int ms)
+	{ std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
-	double Seconds(Clock::time_point t0) { return std::chrono::duration<double>(Clock::now() - t0).count(); }
+	double Seconds(Clock::time_point t0)
+	{ return std::chrono::duration<double>(Clock::now() - t0).count(); }
 
 	BreakpointAbi MakeBp(BreakpointTypeFlags type, int32_t start, int32_t end, uint32_t id)
 	{
@@ -123,14 +125,16 @@ namespace
 		return bp;
 	}
 
-	std::atomic<uint32_t> g_breaks{0};
+	std::atomic<uint32_t> g_breaks { 0 };
 	uint32_t g_seen = 0;
 	BreakEvent g_lastBreak = {};
 
 	void OnNotification(int type, void* param)
 	{
 		if(type == (int)ConsoleNotificationType::CodeBreak) {
-			if(param) g_lastBreak = *(BreakEvent*)param;
+			if(param) {
+				g_lastBreak = *(BreakEvent*)param;
+			}
 			g_breaks++;
 		}
 	}
@@ -149,12 +153,19 @@ namespace
 		}
 		g_seen = g_breaks.load();
 		//the emu thread sets _executionStopped right before sending the notification; make sure it is parked
-		while(!IsExecutionStopped()) SleepMs(1);
+		while(!IsExecutionStopped()) {
+			SleepMs(1);
+		}
 		return true;
 	}
 
 	//Per-frame note snapshot (same audibility rules as NesAudioFingerprint::FromApu)
-	struct Note { int8_t Sq1 = -1, Sq2 = -1, Tri = -1; bool Noise = false; bool Silent() const { return Sq1 < 0 && Sq2 < 0 && Tri < 0 && !Noise; } };
+	struct Note
+	{
+		int8_t Sq1 = -1, Sq2 = -1, Tri = -1;
+		bool Noise = false;
+		bool Silent() const { return Sq1 < 0 && Sq2 < 0 && Tri < 0 && !Noise; }
+	};
 
 	int8_t FreqToNote(double f)
 	{
@@ -165,7 +176,8 @@ namespace
 		return (n < 0 || n > 127) ? -1 : (int8_t)n;
 	}
 
-	double EnvVolume(const ApuEnvelopeState& env) { return (env.ConstantVolume ? env.Volume : env.Counter) / 15.0; }
+	double EnvVolume(const ApuEnvelopeState& env)
+	{ return (env.ConstantVolume ? env.Volume : env.Counter) / 15.0; }
 
 	Note Snapshot()
 	{
@@ -217,9 +229,15 @@ namespace
 				s.LastAudible = s.Frames;
 			}
 			if(s.Onsets.size() < 48) {
-				if(n.Sq1 >= 0 && n.Sq1 != prev.Sq1) s.Onsets.push_back((int16_t)(0x000 | n.Sq1));
-				if(n.Sq2 >= 0 && n.Sq2 != prev.Sq2) s.Onsets.push_back((int16_t)(0x100 | n.Sq2));
-				if(n.Tri >= 0 && n.Tri != prev.Tri) s.Onsets.push_back((int16_t)(0x200 | n.Tri));
+				if(n.Sq1 >= 0 && n.Sq1 != prev.Sq1) {
+					s.Onsets.push_back((int16_t)(0x000 | n.Sq1));
+				}
+				if(n.Sq2 >= 0 && n.Sq2 != prev.Sq2) {
+					s.Onsets.push_back((int16_t)(0x100 | n.Sq2));
+				}
+				if(n.Tri >= 0 && n.Tri != prev.Tri) {
+					s.Onsets.push_back((int16_t)(0x200 | n.Tri));
+				}
 			}
 			prev = n;
 			SleepMs(16);
@@ -287,7 +305,9 @@ int main(int argc, char** argv)
 	//Same as scripts/headless_record.cpp: the GUI normally pushes every config at startup
 	{
 		NesConfig nes = GetNesConfig();
-		for(int i = 0; i < 11; i++) nes.ChannelVolumes[i] = 100;
+		for(int i = 0; i < 11; i++) {
+			nes.ChannelVolumes[i] = 100;
+		}
 		nes.Port1.Type = ControllerType::NesController; //debugger input overrides need a controller to write into
 		SetNesConfig(nes);
 	}
@@ -296,7 +316,9 @@ int main(int argc, char** argv)
 		return 2;
 	}
 	RegisterNotificationCallback(OnNotification);
-	if(!getenv("SPIKE_NODEBUG")) InitializeDebugger();
+	if(!getenv("SPIKE_NODEBUG")) {
+		InitializeDebugger();
+	}
 	if(!getenv("SPIKE_NOPOWER")) {
 		ExecuteShortcut({ EmulatorShortcut::PowerCycle, 0, nullptr });
 		SleepMs(300);
@@ -307,7 +329,9 @@ int main(int argc, char** argv)
 	for(;;) {
 		NesState st = {};
 		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
-		if(st.Ppu.FrameCount >= startFrame) break;
+		if(st.Ppu.FrameCount >= startFrame) {
+			break;
+		}
 		SleepMs(20);
 	}
 	{
@@ -318,7 +342,10 @@ int main(int argc, char** argv)
 	}
 	SaveStateFile((char*)titleState.c_str());
 	SleepMs(100);
-	if(getenv("SPIKE_NODEBUG")) { Stop(); return 0; }
+	if(getenv("SPIKE_NODEBUG")) {
+		Stop();
+		return 0;
+	}
 
 	//---------------------------------------------------------------- A) driver tick
 	printf("== A) quem escreve nos registradores do APU?\n");
@@ -326,8 +353,8 @@ int main(int argc, char** argv)
 		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Write, 0x4000, 0x4017, 1);
 		SetBreakpoints(&bp, 1);
 	}
-	std::map<uint32_t, uint32_t> writerPcs;         //PC -> hits
-	std::map<uint32_t, uint32_t> outerFrameVotes;   //callstack target -> votes (all frames)
+	std::map<uint32_t, uint32_t> writerPcs; //PC -> hits
+	std::map<uint32_t, uint32_t> outerFrameVotes; //callstack target -> votes (all frames)
 	std::vector<std::vector<uint32_t>> stacks;
 	Clock::time_point tA = Clock::now();
 	int hits = 0;
@@ -383,12 +410,16 @@ int main(int argc, char** argv)
 	printf("   região do driver ~ $%04X-$%04X; tick P = $%04X (%u/%d pilhas)\n", driverLo, driverHi, P, pBest, hits);
 	{
 		printf("   callstack típica: ");
-		for(uint32_t t : stacks[stacks.size() / 2]) printf("$%04X ", t);
+		for(uint32_t t : stacks[stacks.size() / 2]) {
+			printf("$%04X ", t);
+		}
 		printf("\n");
 	}
 	SetBreakpoints(nullptr, 0);
 	SleepMs(50);
-	if(IsExecutionStopped()) ResumeExecution();
+	if(IsExecutionStopped()) {
+		ResumeExecution();
+	}
 	SleepMs(100);
 
 	//---------------------------------------------------------------- B) song routine
@@ -407,15 +438,30 @@ int main(int argc, char** argv)
 	{
 		FILE* f = fopen(rom.c_str(), "rb");
 		std::vector<uint8_t> file;
-		if(f) { uint8_t buf[65536]; size_t n; while((n = fread(buf, 1, sizeof(buf), f)) > 0) file.insert(file.end(), buf, buf + n); fclose(f); }
+		if(f) {
+			uint8_t buf[65536];
+			size_t n;
+			while((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+				file.insert(file.end(), buf, buf + n);
+			}
+			fclose(f);
+		}
 		size_t off = 16 + ((file.size() > 6 && (file[6] & 4)) ? 512 : 0);
 		size_t prgSize = file.size() > 4 ? file[4] * 16384 : 0;
-		if(off + prgSize <= file.size()) prg.assign(file.begin() + off, file.begin() + off + prgSize);
+		if(off + prgSize <= file.size()) {
+			prg.assign(file.begin() + off, file.begin() + off + prgSize);
+		}
 	}
-	struct JsrSite { uint32_t Abs; uint32_t Target; };
+	struct JsrSite
+	{
+		uint32_t Abs;
+		uint32_t Target;
+	};
 	vector<JsrSite> sites;
 	for(size_t a = 0; a + 2 < prg.size(); a++) {
-		if(prg[a] != 0x20) continue;
+		if(prg[a] != 0x20) {
+			continue;
+		}
 		uint32_t target = prg[a + 1] | (prg[a + 2] << 8);
 		bool inDriverBank = (int32_t)a >= absDriverLo && (int32_t)a <= absDriverHi;
 		if(!inDriverBank && target >= driverLo && target <= driverHi) {
@@ -423,9 +469,13 @@ int main(int argc, char** argv)
 		}
 	}
 	std::map<uint32_t, int> targetSites;
-	for(JsrSite& j : sites) targetSites[j.Target]++;
+	for(JsrSite& j : sites) {
+		targetSites[j.Target]++;
+	}
 	printf("   %zu JSRs (fora do banco do driver) para dentro dele, %zu alvos:", sites.size(), targetSites.size());
-	for(auto& kv : targetSites) printf(" $%04X(x%d)", kv.first, kv.second);
+	for(auto& kv : targetSites) {
+		printf(" $%04X(x%d)", kv.first, kv.second);
+	}
 	printf("\n");
 	std::vector<BreakpointAbi> bps;
 	for(size_t i = 0; i < sites.size() && i < 400; i++) {
@@ -436,7 +486,17 @@ int main(int argc, char** argv)
 	SetBreakpoints(bps.data(), (uint32_t)bps.size());
 	SleepMs(100);
 
-	struct Candidate { uint32_t Target; uint32_t Tramp; uint8_t A, X, Y; uint32_t Site; uint32_t Hits; bool AfterStart; double FirstAfterStart; std::set<uint8_t> As, Xs, Ys; };
+	struct Candidate
+	{
+		uint32_t Target;
+		uint32_t Tramp;
+		uint8_t A, X, Y;
+		uint32_t Site;
+		uint32_t Hits;
+		bool AfterStart;
+		double FirstAfterStart;
+		std::set<uint8_t> As, Xs, Ys;
+	};
 	std::map<uint32_t, Candidate> candidates; //keyed by JSR site (CPU address)
 	Clock::time_point tB = Clock::now();
 	std::thread presser;
@@ -459,7 +519,10 @@ int main(int argc, char** argv)
 			continue;
 		}
 		uint32_t target = GetMemoryValue(MemoryType::NesMemory, pc + 1) | (GetMemoryValue(MemoryType::NesMemory, pc + 2) << 8);
-		if(target < driverLo || target > driverHi) { ResumeExecution(); continue; }
+		if(target < driverLo || target > driverHi) {
+			ResumeExecution();
+			continue;
+		}
 		NesCpuState cpu = {};
 		GetCpuState(cpu, CpuType::Nes);
 		StackFrameInfo frames[64];
@@ -467,14 +530,35 @@ int main(int argc, char** argv)
 		GetCallstack(CpuType::Nes, frames, count);
 		uint32_t tramp = count > 0 && count <= 64 ? frames[count - 1].Target : 0;
 		Candidate& c = candidates[pc];
-		if(c.Hits == 0) { c.Target = target; c.Tramp = tramp; c.Site = pc; c.A = cpu.A; c.X = cpu.X; c.Y = cpu.Y; c.AfterStart = pressed; c.FirstAfterStart = pressed ? Seconds(tB) : -1; }
+		if(c.Hits == 0) {
+			c.Target = target;
+			c.Tramp = tramp;
+			c.Site = pc;
+			c.A = cpu.A;
+			c.X = cpu.X;
+			c.Y = cpu.Y;
+			c.AfterStart = pressed;
+			c.FirstAfterStart = pressed ? Seconds(tB) : -1;
+		}
 		c.Hits++;
-		c.As.insert(cpu.A); c.Xs.insert(cpu.X); c.Ys.insert(cpu.Y);
-		if(pressed && !c.AfterStart) { c.AfterStart = true; c.FirstAfterStart = Seconds(tB); c.A = cpu.A; c.X = cpu.X; c.Y = cpu.Y; }
-		if(target != P) printf("     t=%.2fs JSR $%04X em $%04X  A=%02X X=%02X Y=%02X\n", Seconds(tB), target, pc, cpu.A, cpu.X, cpu.Y);
+		c.As.insert(cpu.A);
+		c.Xs.insert(cpu.X);
+		c.Ys.insert(cpu.Y);
+		if(pressed && !c.AfterStart) {
+			c.AfterStart = true;
+			c.FirstAfterStart = Seconds(tB);
+			c.A = cpu.A;
+			c.X = cpu.X;
+			c.Y = cpu.Y;
+		}
+		if(target != P) {
+			printf("     t=%.2fs JSR $%04X em $%04X  A=%02X X=%02X Y=%02X\n", Seconds(tB), target, pc, cpu.A, cpu.X, cpu.Y);
+		}
 		ResumeExecution();
 	}
-	if(presser.joinable()) presser.join();
+	if(presser.joinable()) {
+		presser.join();
+	}
 	SetBreakpoints(nullptr, 0);
 	SleepMs(50);
 	printf("   %d paradas; sítios de chamada (fora do banco do driver):\n", stops);
@@ -484,7 +568,9 @@ int main(int argc, char** argv)
 	for(auto& kv : candidates) {
 		Candidate& c = kv.second;
 		printf("     JSR $%04X em $%04X (função $%04X)  hits=%u  A∈%zu X∈%zu Y∈%zu valores %s\n", c.Target, c.Site, c.Tramp, c.Hits, c.As.size(), c.Xs.size(), c.Ys.size(), c.AfterStart ? "(após Start)" : "");
-		if(c.Target == P) continue; //the per-frame tick
+		if(c.Target == P) {
+			continue; //the per-frame tick
+		}
 		if(c.AfterStart && c.FirstAfterStart >= 0 && c.FirstAfterStart < bestT) {
 			bestT = c.FirstAfterStart;
 			S = c.Target;
@@ -501,7 +587,14 @@ int main(int argc, char** argv)
 
 	//---------------------------------------------------------------- C) enumerate
 	printf("== C) chamando S=$%04X com %c=id para id 0..%d (%.0fs cada)\n", S, regConv, maxIds - 1, secondsPerId);
-	struct Result { int Id; std::string Kind; uint32_t Audible, LastAudible, Frames; uint32_t Hash; std::string FirstNotes; };
+	struct Result
+	{
+		int Id;
+		std::string Kind;
+		uint32_t Audible, LastAudible, Frames;
+		uint32_t Hash;
+		std::string FirstNotes;
+	};
 	std::vector<Result> results;
 	std::set<uint32_t> seenHashes;
 	for(int id = 0; id < maxIds; id++) {
@@ -532,7 +625,13 @@ int main(int argc, char** argv)
 		SetMemoryValue(MemoryType::NesMemory, 0x0100 + cpu.SP, (uint8_t)(ret & 0xFF));
 		cpu.SP--;
 		cpu.PC = (uint16_t)S;
-		if(regConv == 'A') cpu.A = (uint8_t)id; else if(regConv == 'X') cpu.X = (uint8_t)id; else cpu.Y = (uint8_t)id;
+		if(regConv == 'A') {
+			cpu.A = (uint8_t)id;
+		} else if(regConv == 'X') {
+			cpu.X = (uint8_t)id;
+		} else {
+			cpu.Y = (uint8_t)id;
+		}
 		SetCpuState(cpu, CpuType::Nes);
 		ResumeExecution();
 		SleepMs(120); //let the driver react (and the old song stop)
@@ -564,10 +663,16 @@ int main(int argc, char** argv)
 	int bgm = 0, sfx = 0, silent = 0;
 	std::set<uint32_t> uniq;
 	for(Result& r : results) {
-		if(r.Kind == "bgm") bgm++;
-		else if(r.Kind == "sfx") sfx++;
-		else silent++;
-		if(r.Kind != "silent") uniq.insert(r.Hash);
+		if(r.Kind == "bgm") {
+			bgm++;
+		} else if(r.Kind == "sfx") {
+			sfx++;
+		} else {
+			silent++;
+		}
+		if(r.Kind != "silent") {
+			uniq.insert(r.Hash);
+		}
 	}
 	printf("== resumo: %d bgm, %d sfx, %d silenciosos, %zu assinaturas distintas em %d ids\n", bgm, sfx, silent, uniq.size(), maxIds);
 	Stop();

@@ -202,13 +202,22 @@ namespace
 	//both planes (0..56). Real tiles have smooth silhouettes; code/tables don't,
 	//and - unlike per-plane churn - a block misaligned by 8 bytes (plane 1 of one
 	//tile + plane 0 of the next) scores clearly worse, so it also decides alignment.
+	uint32_t BitCount(uint32_t v)
+	{
+		uint32_t n = 0;
+		for(; v; v &= v - 1) {
+			n++;
+		}
+		return n;
+	}
+
 	uint32_t SilhouetteChurn(const uint8_t* block)
 	{
 		uint32_t churn = 0;
 		for(int i = 0; i < 7; i++) {
 			uint8_t a = block[i] | block[i + 8];
 			uint8_t b = block[i + 1] | block[i + 9];
-			churn += __builtin_popcount((uint32_t)(a ^ b));
+			churn += BitCount((uint32_t)(a ^ b));
 		}
 		return churn;
 	}
@@ -217,9 +226,9 @@ namespace
 uint32_t HdPackBuilder::AddPrgScanTiles(uint8_t* prgRom, uint32_t prgRomSize)
 {
 	constexpr uint32_t neutralPalette = 0x0F001030;
-	constexpr uint32_t bankSize = 0x1000;  //alignment is voted per 4 KB (graphics blocks are bank-sized)
-	constexpr uint32_t maxChurn = 18;      //calibrated on Zelda/Castlevania/Mega Man: ~90% of drawn tiles, few false positives
-	constexpr uint32_t minRun = 4;         //tiles come in sets (fonts, sprites, metatiles)
+	constexpr uint32_t bankSize = 0x1000; //alignment is voted per 4 KB (graphics blocks are bank-sized)
+	constexpr uint32_t maxChurn = 18; //calibrated on Zelda/Castlevania/Mega Man: ~90% of drawn tiles, few false positives
+	constexpr uint32_t minRun = 4; //tiles come in sets (fonts, sprites, metatiles)
 
 	uint32_t added = 0;
 	auto addBlock = [&](const uint8_t* block) {
