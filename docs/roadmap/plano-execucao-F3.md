@@ -1,6 +1,6 @@
 # Plano de execução — Fase 3: Formato de pack unificado (MEP v1)
 
-**Status:** em execução — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 a seguir ·
+**Status:** concluída (2026-08-24; validação GUI manual da janela pendente do usuário) — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 ✅ (EnhancementPackConfig + espelho C#, exports GetMepPackList/GetMepRomSha1/SetMepPackEnabled, janela "Enhancement Packs" no menu HD Packs; toggles validados headless via flags `mep-*` do harness; dotnet build 0 warnings), F3.4 ✅ (golden tree, E2E zip NES textures+bgm+synth, regressões F1/F2, README) ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 3 ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (publicada) ·
 **Processo:** resolver os ADRs da fase (F3.0) antes de qualquer código, como nas fases 1 e 2.
@@ -110,7 +110,7 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
   overrides` — F3.3 pode expor o preset efetivo via interop se necessário.
   SMS não testado (sem ROM de teste), mas usa o mesmo `HdTilePack::LoadForRom`.
 
-## F3.3 — Toggles granulares + UI (F3.2 do PRD)
+## F3.3 — Toggles granulares + UI (F3.2 do PRD) ✅
 
 **Entrega:** cada seção desligável na UI; packs visíveis e gerenciáveis.
 
@@ -127,7 +127,7 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
 - **Validação:** dotnet build 0 warnings; toggles refletidos headless via
   config (harness pode setar EnhancementPackConfig pelo struct real).
 
-## F3.4 — Fecho da fase
+## F3.4 — Fecho da fase ✅
 
 - Golden/exemplo: pack MEP de demonstração em `docs/specs/golden/mep/`
   completo (já existe o pack.json; adicionar árvore de exemplo mínima).
@@ -135,6 +135,17 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
   para um jogo NES, cada seção desligável — validado headless + GUI manual.
 - Regressões F1/F2 (suite headless existente), clang-format, DOX pass,
   README (Fase 3 ✅), atualização da memória de projeto.
+
+**Feito (2026-08-24):** `docs/specs/golden/mep/` ganhou `textures/` (pack GB
+neutro gravado da F1 Test Tone), `synth/preset.cfg` (cópia do golden ESP) e
+`audio/README.md` (GB fora do host v1 — ADR-0041); o golden carrega no host
+(log `[MEP] textures ... 78 tiles` + `[MEP] synth`). E2E do critério: zip NES
+com textures + hires.txt `<bgm>`/`<sfx>` + preset ESP → as três seções
+aplicadas e cada uma desligável (`mep-notextures`, `mep-nosynth`,
+`mep-disable=`). Regressão: MIDI/VGM GB e NES sem packs OK. **Pendente do
+usuário:** abrir a janela na GUI (`! open -a ...`) e conferir a lista/Install.
+Toggles em runtime seguem a regra do `EnableHdPacks` (próximo power cycle);
+`ForceFilterUpdate` para texturas ficou fora (v1).
 
 ## Riscos e mitigações
 
