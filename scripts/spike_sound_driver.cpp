@@ -3,12 +3,14 @@
 //
 //  A) write breakpoints on the APU registers + callstacks -> the driver's per-frame
 //     "tick" routine P and the code region it lives in
-//  B) execute breakpoints on the CDL function entries of that region while a
-//     scripted Start press changes the music -> candidate "play song" routine S
-//     (called from outside the driver, with the song id in a register)
-//  C) for id = 0..N: reload the title save state, hijack the CPU into S with A=id,
-//     return into a JMP-self stub in RAM (NMIs keep ticking the driver), sample the
-//     APU for a few seconds -> kind (bgm/sfx/silent), length, note fingerprint
+//  B) execute breakpoints (absolute PRG addresses) on the JSRs that enter that region
+//     from outside the driver's bank while Start is pulsed -> candidate "play id"
+//     routines; each candidate is VALIDATED by calling it with a few ids over the title
+//     save state and checking the APU output differs from the title's baseline
+//  B') fallback when the game never JSRs into its driver: trace ~3 s and find the RAM
+//     mailbox (written by the game outside the tick, read by the tick), validated the same way
+//  C) for id = 0..N: reload the title save state, fire the trigger at the tick (hijack the
+//     CPU into S with the id, or write the mailbox), sample the APU -> kind, length, fingerprint
 //
 //Build: `make spike-sound-driver` (or, from repo root after `make core`):
 //  c++ -std=c++17 -O2 -I . -I Core -Wl,-headerpad_max_install_names scripts/spike_sound_driver.cpp InteropDLL/obj.osx-arm64/MesenCore.dylib -o scripts/spike_sound_driver
@@ -208,10 +210,10 @@ namespace
 
 	struct Sample
 	{
-		uint32_t Frames = 0;
+		uint32_t Frames = 0; //samples taken (~4 per emulated frame)
 		uint32_t Audible = 0;
 		uint32_t LastAudible = 0;
-		std::vector<int16_t> Onsets; //(voice<<8 | note) at note changes, first 48
+		std::vector<int16_t> Onsets; //(voice<<8 | note) at note changes
 		uint32_t Hash() const
 		{
 			uint32_t h = 2166136261u;
@@ -220,9 +222,29 @@ namespace
 			}
 			return h;
 		}
+		//Only the onsets whose (voice,note) never occurs in the background tune: what the trigger added
+		std::vector<int16_t> Novel(const std::set<int16_t>& background) const
+		{
+			std::vector<int16_t> v;
+			for(int16_t o : Onsets) {
+				if(!background.count(o)) {
+					v.push_back(o);
+				}
+			}
+			return v;
+		}
+		uint32_t NovelHash(const std::set<int16_t>& background) const
+		{
+			uint32_t h = 2166136261u;
+			for(int16_t o : Novel(background)) {
+				h = (h ^ (uint16_t)o) * 16777619u;
+			}
+			return h;
+		}
 	};
 
-	Sample SampleApu(double seconds)
+	//Sample ~4x per frame so no note change of >= 1 frame is missed (a 60 Hz poll drifts against the emu)
+	Sample SampleApu(double seconds, size_t maxOnsets = 64)
 	{
 		Sample s;
 		Note prev;
@@ -234,7 +256,7 @@ namespace
 				s.Audible++;
 				s.LastAudible = s.Frames;
 			}
-			if(s.Onsets.size() < 48) {
+			if(s.Onsets.size() < maxOnsets) {
 				if(n.Sq1 >= 0 && n.Sq1 != prev.Sq1) {
 					s.Onsets.push_back((int16_t)(0x000 | n.Sq1));
 				}
@@ -246,7 +268,7 @@ namespace
 				}
 			}
 			prev = n;
-			SleepMs(16);
+			SleepMs(4);
 		}
 		return s;
 	}
@@ -348,25 +370,108 @@ int main(int argc, char** argv)
 	}
 	SaveStateFile((char*)titleState.c_str());
 	SleepMs(100);
+	//a second title state 45 frames later: a real "play id" gives the same track from either
+	//state, corrupting a driver variable gives phase-dependent garbage
+	std::string titleState2 = (work / "title2.mss").string();
+	for(;;) {
+		NesState st = {};
+		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
+		if(st.Ppu.FrameCount >= startFrame + 45 + 60) {
+			break;
+		}
+		SleepMs(20);
+	}
+	SaveStateFile((char*)titleState2.c_str());
+	SleepMs(100);
 	if(getenv("SPIKE_NODEBUG")) {
 		Stop();
 		return 0;
 	}
 
-	//---------------------------------------------------------------- A) driver tick
-	printf("== A) quem escreve nos registradores do APU?\n");
+	//---------------------------------------------------------------- helpers over the title state
+	//A "trigger" is how the game asks its driver for a sound: a routine called with the id in a
+	//register, or a RAM mailbox the per-frame tick polls.
+	struct Trigger
 	{
-		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Write, 0x4000, 0x4017, 1);
+		bool Mailbox = false;
+		uint32_t Addr = 0;
+		char Reg = 'A';
+	};
+	uint32_t P = 0;
+	const int gapMs = bootstrap ? 1300 : 80; //the F5.3 segmenter closes a track after 60 silent frames
+
+	//Reload the title, stop at the tick and fire the trigger with `id`, then sample the APU
+	auto playFrom = [&](const std::string& state, const Trigger& t, int id, double seconds, bool* ok) -> Sample {
+		LoadStateFile((char*)state.c_str());
+		SleepMs(gapMs);
+		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Execute, P, P, 500);
 		SetBreakpoints(&bp, 1);
+		if(!WaitForBreak(2.0)) {
+			SetBreakpoints(nullptr, 0);
+			*ok = false;
+			return Sample();
+		}
+		SetBreakpoints(nullptr, 0);
+		if(t.Mailbox) {
+			SetMemoryValue(MemoryType::NesMemory, t.Addr, (uint8_t)id);
+		} else {
+			//We are stopped at the first instruction of the tick, inside the NMI handler, with the
+			//driver's bank mapped. Redirect the CPU into S with the id in the convention register and
+			//make S return into a JMP-self stub in RAM: the game logic never runs again, but NMIs keep
+			//firing and ticking the driver, so whatever S started keeps playing.
+			NesCpuState cpu = {};
+			GetCpuState(cpu, CpuType::Nes);
+			SetMemoryValue(MemoryType::NesMemory, 0x0780, 0x4C);
+			SetMemoryValue(MemoryType::NesMemory, 0x0781, 0x80);
+			SetMemoryValue(MemoryType::NesMemory, 0x0782, 0x07);
+			uint16_t ret = 0x077F;
+			SetMemoryValue(MemoryType::NesMemory, 0x0100 + cpu.SP, (uint8_t)(ret >> 8));
+			cpu.SP--;
+			SetMemoryValue(MemoryType::NesMemory, 0x0100 + cpu.SP, (uint8_t)(ret & 0xFF));
+			cpu.SP--;
+			cpu.PC = (uint16_t)t.Addr;
+			if(t.Reg == 'A') {
+				cpu.A = (uint8_t)id;
+			} else if(t.Reg == 'X') {
+				cpu.X = (uint8_t)id;
+			} else {
+				cpu.Y = (uint8_t)id;
+			}
+			SetCpuState(cpu, CpuType::Nes);
+		}
+		ResumeExecution();
+		SleepMs(120);
+		*ok = true;
+		return SampleApu(seconds);
+	};
+	auto playId = [&](const Trigger& t, int id, double seconds, bool* ok) -> Sample { return playFrom(titleState, t, id, seconds, ok); };
+
+	//---------------------------------------------------------------- A) driver tick
+	printf("== A) quem escreve nos registradores de som do APU?\n");
+	{
+		//$4014 (OAM DMA) and $4016/$4017 (controllers) are not sound: they would drag the NMI/input code in
+		BreakpointAbi bps[2] = { MakeBp(BreakpointTypeFlags::Write, 0x4000, 0x4013, 1), MakeBp(BreakpointTypeFlags::Write, 0x4015, 0x4015, 2) };
+		SetBreakpoints(bps, 2);
 	}
-	std::map<uint32_t, uint32_t> writerPcs; //PC -> hits
-	std::map<uint32_t, uint32_t> outerFrameVotes; //callstack target -> votes (all frames)
+	std::map<uint32_t, uint32_t> writerPcs;
 	std::vector<std::vector<uint32_t>> stacks;
 	Clock::time_point tA = Clock::now();
 	int hits = 0;
-	while(hits < 600 && Seconds(tA) < 8.0) {
-		if(!WaitForBreak(2.0)) {
-			break;
+	std::thread presserA;
+	bool pressedA = false;
+	while(hits < 600 && Seconds(tA) < 12.0) {
+		if(!WaitForBreak(1.5)) {
+			if(!pressedA) {
+				//silent title with no SFX (Castlevania): provoke sound by leaving the title
+				pressedA = true;
+				presserA = std::thread([]() { PulseStart(4.0); });
+				printf("   título mudo: pulsando Start para provocar som\n");
+				continue;
+			}
+			if(Seconds(tA) > 8.0) {
+				break;
+			}
+			continue;
 		}
 		uint32_t pc = GetProgramCounter(CpuType::Nes, true);
 		writerPcs[pc]++;
@@ -376,70 +481,128 @@ int main(int argc, char** argv)
 		std::vector<uint32_t> targets;
 		for(uint32_t i = 0; i < count && i < 64; i++) {
 			targets.push_back(frames[i].Target);
-			outerFrameVotes[frames[i].Target]++;
 		}
 		stacks.push_back(targets);
 		hits++;
 		ResumeExecution();
 	}
+	if(presserA.joinable()) {
+		presserA.join();
+	}
+	SetBreakpoints(nullptr, 0);
+	SleepMs(50);
 	if(hits == 0) {
-		fprintf(stderr, "nenhuma escrita no APU observada\n");
+		fprintf(stderr, "nenhuma escrita de som no APU observada (título mudo e sem SFX?)\n");
+		Stop();
 		return 3;
 	}
-	uint32_t regionLo = 0xFFFF, regionHi = 0;
-	for(auto& kv : writerPcs) {
-		regionLo = std::min(regionLo, kv.first);
-		regionHi = std::max(regionHi, kv.first);
-	}
-	printf("   %d escritas, %zu PCs distintos em $%04X-$%04X\n", hits, writerPcs.size(), regionLo, regionHi);
-	//Driver region: writer PCs +- 1 KB, clipped to the same 8 KB bank
-	uint32_t bankLo = regionLo & 0xE000;
-	uint32_t driverLo = std::max<int32_t>((int32_t)bankLo, (int32_t)regionLo - 0x800);
-	uint32_t driverHi = std::min<uint32_t>(bankLo + 0x1FFF, regionHi + 0x800);
-	//P = the outermost callstack frame (closest to the interrupt) that lands inside the region, majority vote
+	auto nearWriter = [&](uint32_t addr) {
+		for(auto& kv : writerPcs) {
+			if((addr > kv.first ? addr - kv.first : kv.first - addr) <= 0x1000) {
+				return true;
+			}
+		}
+		return false;
+	};
+	//P = the outermost callstack frame (closest to the interrupt) within 4 KB of a writer, majority vote
 	std::map<uint32_t, uint32_t> pVotes;
 	for(auto& st : stacks) {
-		for(uint32_t t : st) { //callstack is ordered from oldest to newest frame
-			if(t >= driverLo && t <= driverHi) {
+		for(uint32_t t : st) {
+			if(t >= 0x8000 && nearWriter(t)) {
 				pVotes[t]++;
 				break;
 			}
 		}
 	}
-	uint32_t P = 0, pBest = 0;
+	uint32_t pBest = 0;
 	for(auto& kv : pVotes) {
 		if(kv.second > pBest) {
 			P = kv.first;
 			pBest = kv.second;
 		}
 	}
-	printf("   região do driver ~ $%04X-$%04X; tick P = $%04X (%u/%d pilhas)\n", driverLo, driverHi, P, pBest, hits);
+	if(P == 0) {
+		fprintf(stderr, "não achei a rotina de tick do driver\n");
+		Stop();
+		return 3;
+	}
+	uint32_t driverLo = P, driverHi = P;
+	for(auto& kv : writerPcs) {
+		if(nearWriter(P) && (kv.first > P ? kv.first - P : P - kv.first) <= 0x1000) {
+			driverLo = std::min(driverLo, kv.first);
+			driverHi = std::max(driverHi, kv.first);
+		}
+	}
+	driverLo = std::max<int32_t>(0x8000, (int32_t)driverLo - 0x400);
+	driverHi = std::min<uint32_t>(0xFFFF, driverHi + 0x400);
+	printf("   %d escritas, %zu PCs distintos; tick P = $%04X (%u/%d pilhas); região do driver ~ $%04X-$%04X\n", hits, writerPcs.size(), P, pBest, hits, driverLo, driverHi);
 	{
-		printf("   callstack típica: ");
+		printf("   PCs escritores:");
+		for(auto& kv : writerPcs) {
+			printf(" $%04X(x%u)", kv.first, kv.second);
+		}
+		printf("\n   callstack típica:");
 		for(uint32_t t : stacks[stacks.size() / 2]) {
-			printf("$%04X ", t);
+			printf(" $%04X", t);
 		}
 		printf("\n");
 	}
-	SetBreakpoints(nullptr, 0);
-	SleepMs(50);
-	if(IsExecutionStopped()) {
-		ResumeExecution();
-	}
-	SleepMs(100);
 
-	//---------------------------------------------------------------- B) song routine
+	//Baseline: what the title state sounds like when we do nothing
+	LoadStateFile((char*)titleState.c_str());
+	SleepMs(gapMs + 120);
+	Sample baseline = SampleApu(3.0, 400);
+	LoadStateFile((char*)titleState2.c_str());
+	SleepMs(gapMs + 120);
+	Sample baseline2 = SampleApu(3.0, 400);
+	std::set<int16_t> background(baseline.Onsets.begin(), baseline.Onsets.end());
+	background.insert(baseline2.Onsets.begin(), baseline2.Onsets.end());
+	printf("   linha de base do título: audible=%u/%u, %zu (voz,nota) de fundo\n", baseline.Audible, baseline.Frames, background.size());
+
+	//Try a trigger on a few ids: how many distinct, audible results that differ from the baseline?
+	//tickClears: the tick itself writes the address (a request slot it consumes) - then a
+	//background tune at a different phase may legitimately break the determinism check (SFX masks)
+	auto validate = [&](const Trigger& t, const std::vector<int>& ids, const char* label, bool tickClears) -> int {
+		std::set<uint32_t> distinct;
+		int deterministic = 0, checked = 0;
+		printf("   testando %s:", label);
+		for(int id : ids) {
+			bool ok = false;
+			Sample s = playId(t, id, 1.5, &ok);
+			if(!ok) {
+				printf(" id%d=sem-tick", id);
+				continue;
+			}
+			size_t novel = s.Novel(background).size();
+			bool sounds = s.Audible >= 8 && novel >= 2;
+			printf(" id%d=%s(%u,%zu novos,%08X)", id, sounds ? "som" : "-", s.Audible, novel, s.NovelHash(background));
+			if(sounds) {
+				distinct.insert(s.NovelHash(background));
+				if(checked < 2) {
+					checked++;
+					bool ok2 = false;
+					Sample s2 = playFrom(titleState2, t, id, 1.5, &ok2);
+					bool same = ok2 && s2.NovelHash(background) == s.NovelHash(background);
+					printf("%s", same ? "=" : "≠");
+					if(same) {
+						deterministic++;
+					}
+				}
+			}
+		}
+		//tickClears is informative only: the novelty-based hashes already make SFX masks (Zelda $0600)
+		//reproducible, and the exemption let driver state variables through (Bomberman $00BE/$00C0)
+		bool accepted = distinct.size() >= 3 && deterministic >= 1;
+		printf(" -> %zu distintos, %d/%d reprodutíveis%s -> %s\n", distinct.size(), deterministic, checked, tickClears ? ", limpo pelo tick" : "", accepted ? "ACEITO" : "rejeitado");
+		return accepted ? (int)distinct.size() : 0;
+	};
+
+	//---------------------------------------------------------------- B) call-style trigger
 	printf("== B) quem chama o driver quando a música muda?\n");
-	//Title save state for phase C (before any input)
-
-	//B1) Where does code OUTSIDE the driver's bank JSR into the driver? Scan the whole PRG ROM
-	//(file bytes) for JSR opcodes whose target lands in the driver's CPU region, skipping sites that
-	//live in the driver's own bank, and break on them by ABSOLUTE address (NesPrgRom) so bank
-	//aliasing cannot fool us. The function containing the hit is the game-facing trampoline T.
 	AddressInfo absP = GetAbsoluteAddress({ (int32_t)P, MemoryType::NesMemory });
 	int32_t absDriverLo = absP.Address - (int32_t)(P - driverLo);
 	int32_t absDriverHi = absP.Address + (int32_t)(driverHi - P);
-	printf("   P=$%04X está em PRG $%05X; banco do driver (abs) ~ $%05X-$%05X\n", P, absP.Address, absDriverLo, absDriverHi);
+	printf("   P=$%04X está em PRG $%05X; driver (abs) ~ $%05X-$%05X\n", P, absP.Address, absDriverLo, absDriverHi);
 	std::vector<uint8_t> prg;
 	{
 		FILE* f = fopen(rom.c_str(), "rb");
@@ -478,32 +641,36 @@ int main(int argc, char** argv)
 	for(JsrSite& j : sites) {
 		targetSites[j.Target]++;
 	}
-	printf("   %zu JSRs (fora do banco do driver) para dentro dele, %zu alvos:", sites.size(), targetSites.size());
-	for(auto& kv : targetSites) {
-		printf(" $%04X(x%d)", kv.first, kv.second);
-	}
-	printf("\n");
+	printf("   %zu JSRs (fora do banco do driver) para dentro dele, %zu alvos\n", sites.size(), targetSites.size());
 	std::vector<BreakpointAbi> bps;
 	for(size_t i = 0; i < sites.size() && i < 400; i++) {
 		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Execute, sites[i].Abs, sites[i].Abs, (uint32_t)(10 + i));
 		bp.Memory = MemoryType::NesPrgRom;
 		bps.push_back(bp);
 	}
-	SetBreakpoints(bps.data(), (uint32_t)bps.size());
+	LoadStateFile((char*)titleState.c_str());
 	SleepMs(100);
+	uint32_t frame0 = 0;
+	{
+		NesState st = {};
+		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
+		frame0 = st.Ppu.FrameCount;
+	}
+	SetBreakpoints(bps.data(), (uint32_t)bps.size());
 
 	struct Candidate
 	{
 		uint32_t Target;
-		uint32_t Tramp;
-		uint8_t A, X, Y;
-		uint32_t Site;
-		uint32_t Hits;
-		bool AfterStart;
-		double FirstAfterStart;
+		uint32_t Hits = 0;
+		std::set<uint32_t> Sites;
 		std::set<uint8_t> As, Xs, Ys;
+		bool AfterStart = false;
+		double FirstAfterStart = -1;
+		bool Pruned = false;
+		bool PerFrame = false;
+		size_t Variance() const { return std::max(As.size(), std::max(Xs.size(), Ys.size())); }
 	};
-	std::map<uint32_t, Candidate> candidates; //keyed by JSR site (CPU address)
+	std::map<uint32_t, Candidate> candidates; //keyed by target
 	Clock::time_point tB = Clock::now();
 	std::thread presser;
 	bool pressed = false;
@@ -525,40 +692,36 @@ int main(int argc, char** argv)
 			continue;
 		}
 		uint32_t target = GetMemoryValue(MemoryType::NesMemory, pc + 1) | (GetMemoryValue(MemoryType::NesMemory, pc + 2) << 8);
-		if(target < driverLo || target > driverHi) {
+		if(target < driverLo || target > driverHi || target == P) {
 			ResumeExecution();
 			continue;
 		}
 		NesCpuState cpu = {};
 		GetCpuState(cpu, CpuType::Nes);
-		StackFrameInfo frames[64];
-		uint32_t count = 0;
-		GetCallstack(CpuType::Nes, frames, count);
-		uint32_t tramp = count > 0 && count <= 64 ? frames[count - 1].Target : 0;
-		Candidate& c = candidates[pc];
-		if(c.Hits == 0) {
-			c.Target = target;
-			c.Tramp = tramp;
-			c.Site = pc;
-			c.A = cpu.A;
-			c.X = cpu.X;
-			c.Y = cpu.Y;
-			c.AfterStart = pressed;
-			c.FirstAfterStart = pressed ? Seconds(tB) : -1;
-		}
+		Candidate& c = candidates[target];
+		c.Target = target;
 		c.Hits++;
+		c.Sites.insert(pc);
 		c.As.insert(cpu.A);
 		c.Xs.insert(cpu.X);
 		c.Ys.insert(cpu.Y);
 		if(pressed && !c.AfterStart) {
 			c.AfterStart = true;
 			c.FirstAfterStart = Seconds(tB);
-			c.A = cpu.A;
-			c.X = cpu.X;
-			c.Y = cpu.Y;
 		}
-		if(target != P) {
-			printf("     t=%.2fs JSR $%04X em $%04X  A=%02X X=%02X Y=%02X\n", Seconds(tB), target, pc, cpu.A, cpu.X, cpu.Y);
+		if(c.Hits == 60) {
+			//hot routine (called several times per frame): we know enough, stop paying for its breaks
+			std::vector<BreakpointAbi> keep;
+			for(BreakpointAbi& b : bps) {
+				uint32_t i = b.Id - 10;
+				if(i < sites.size() && sites[i].Target == target) {
+					continue;
+				}
+				keep.push_back(b);
+			}
+			bps = keep;
+			SetBreakpoints(bps.data(), (uint32_t)bps.size());
+			c.Pruned = true;
 		}
 		ResumeExecution();
 	}
@@ -567,32 +730,365 @@ int main(int argc, char** argv)
 	}
 	SetBreakpoints(nullptr, 0);
 	SleepMs(50);
-	printf("   %d paradas; sítios de chamada (fora do banco do driver):\n", stops);
-	uint32_t S = 0;
-	double bestT = 1e9;
-	char regConv = 'A';
+	uint32_t framesB = 0;
+	{
+		NesState st = {};
+		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
+		framesB = st.Ppu.FrameCount - frame0;
+	}
+	printf("   %d paradas em %u frames; alvos chamados de fora do driver:\n", stops, framesB);
+	std::vector<Candidate*> ranked;
 	for(auto& kv : candidates) {
 		Candidate& c = kv.second;
-		printf("     JSR $%04X em $%04X (função $%04X)  hits=%u  A∈%zu X∈%zu Y∈%zu valores %s\n", c.Target, c.Site, c.Tramp, c.Hits, c.As.size(), c.Xs.size(), c.Ys.size(), c.AfterStart ? "(após Start)" : "");
-		if(c.Target == P) {
-			continue; //the per-frame tick
-		}
-		if(c.AfterStart && c.FirstAfterStart >= 0 && c.FirstAfterStart < bestT) {
-			bestT = c.FirstAfterStart;
-			S = c.Target;
-			//the register that varies across calls carries the id
-			regConv = c.As.size() >= c.Xs.size() && c.As.size() >= c.Ys.size() ? 'A' : (c.Xs.size() >= c.Ys.size() ? 'X' : 'Y'); //ties -> A (6502 convention)
+		//called (almost) every frame: usually an update routine - but Konami-style drivers take the
+		//request register every NMI, so per-frame callers with a varying register stay in the race
+		c.PerFrame = c.Pruned || c.Hits * 4 >= framesB;
+		printf("     $%04X  hits=%u sítios=%zu A∈%zu X∈%zu Y∈%zu %s%s\n", c.Target, c.Hits, c.Sites.size(), c.As.size(), c.Xs.size(), c.Ys.size(), c.AfterStart ? "(após Start) " : "", c.PerFrame ? "[por frame]" : "");
+		if(!c.PerFrame || c.Variance() > 1) {
+			ranked.push_back(&c);
 		}
 	}
-	if(S == 0) {
-		fprintf(stderr, "nenhuma chamada ao driver fora do tick observada\n");
+	std::sort(ranked.begin(), ranked.end(), [](Candidate* a, Candidate* b) {
+		if(a->PerFrame != b->PerFrame) {
+			return !a->PerFrame;
+		}
+		if(a->PerFrame) {
+			return a->Variance() > b->Variance();
+		}
+		if(a->AfterStart != b->AfterStart) {
+			return a->AfterStart;
+		}
+		if(a->Sites.size() != b->Sites.size()) {
+			return a->Sites.size() > b->Sites.size();
+		}
+		return a->Hits < b->Hits;
+	});
+
+	Trigger best;
+	int bestScore = 0;
+	std::vector<Trigger> triggers; //every validated way to request a sound (music and SFX often differ)
+	auto idsFor = [](const std::set<uint8_t>& seen) {
+		std::vector<int> ids;
+		for(uint8_t v : seen) {
+			if(v < 0x80 && ids.size() < 2) {
+				ids.push_back(v);
+			}
+		}
+		for(int v : { 1, 2, 3, 4, 5 }) {
+			if(ids.size() >= 5) {
+				break;
+			}
+			if(std::find(ids.begin(), ids.end(), v) == ids.end()) {
+				ids.push_back(v);
+			}
+		}
+		return ids;
+	};
+	for(size_t i = 0; i < ranked.size() && i < 10 && bestScore < 3; i++) {
+		Candidate& c = *ranked[i];
+		//register order: the one that varies most first, ties A, X, Y
+		std::vector<std::pair<char, const std::set<uint8_t>*>> regs = { { 'A', &c.As }, { 'X', &c.Xs }, { 'Y', &c.Ys } };
+		std::stable_sort(regs.begin(), regs.end(), [](auto& a, auto& b) { return a.second->size() > b.second->size(); });
+		for(size_t r = 0; r < 2 && bestScore < 3; r++) {
+			Trigger t;
+			t.Addr = c.Target;
+			t.Reg = regs[r].first;
+			char label[64];
+			snprintf(label, sizeof(label), "JSR $%04X com %c=id", t.Addr, t.Reg);
+			int score = validate(t, idsFor(*regs[r].second), label, false);
+			if(score > bestScore) {
+				bestScore = score;
+				best = t;
+			}
+		}
+	}
+
+	//---------------------------------------------------------------- B') mailbox fallback
+	if(bestScore < 3) {
+		printf("== B') nenhuma chamada convincente: procurando caixa postal em RAM (trace)\n");
+		//Trace ~3 s around a pulsed Start and cross "RAM written outside the tick" with "RAM read
+		//inside the tick". The tick region is delimited by the JSR site that calls P and its return.
+		uint32_t tickSite = 0;
+		for(JsrSite& j : sites) {
+			if(j.Target == P) {
+				tickSite = prg[j.Abs] == 0x20 ? 0 : 0;
+			}
+		}
+		//CPU address of the tick call site: from the callstack seen in phase A (frame whose Target == P)
+		{
+			BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Execute, P, P, 501);
+			LoadStateFile((char*)titleState.c_str());
+			SleepMs(gapMs);
+			SetBreakpoints(&bp, 1);
+			if(WaitForBreak(2.0)) {
+				StackFrameInfo frames[64];
+				uint32_t count = 0;
+				GetCallstack(CpuType::Nes, frames, count);
+				for(uint32_t i = 0; i < count && i < 64; i++) {
+					if(frames[i].Target == P) {
+						tickSite = frames[i].Source;
+					}
+				}
+				SetBreakpoints(nullptr, 0);
+				ResumeExecution();
+			}
+			SetBreakpoints(nullptr, 0);
+		}
+		printf("   tick chamado em $%04X\n", tickSite);
+		std::string tracePath = (work / "trace.txt").string();
+		LoadStateFile((char*)titleState.c_str());
+		SleepMs(100);
+		TraceLoggerOptions opt = {};
+		opt.Enabled = true;
+		snprintf(opt.Format, sizeof(opt.Format), "%s", "[ByteCode,11] [EffectiveAddress] A:[A,2h] X:[X,2h] Y:[Y,2h] F:[FrameCount]");
+		SetTraceOptions(CpuType::Nes, opt);
+		StartLogTraceToFile(tracePath.c_str());
+		SleepMs(200);
+		PulseStart(2.5);
+		SleepMs(500);
+		StopLogTraceToFile();
+		opt.Enabled = false;
+		SetTraceOptions(CpuType::Nes, opt);
+		SleepMs(100);
+
+		struct WriteEv
+		{
+			uint32_t Frame;
+			uint8_t Value;
+			uint32_t Pc;
+		};
+		std::map<uint32_t, std::vector<WriteEv>> writesOutside;
+		std::map<uint32_t, uint32_t> readsInTick, writesInTick;
+		uint32_t lines = 0;
+		{
+			FILE* f = fopen(tracePath.c_str(), "r");
+			char line[600];
+			bool inTick = false;
+			while(f && fgets(line, sizeof(line), f)) {
+				lines++;
+				uint32_t pc = (uint32_t)strtoul(line, nullptr, 16);
+				unsigned b0 = 0, b1 = 0, b2 = 0;
+				int nb = sscanf(line + 6, "%2x %2x %2x", &b0, &b1, &b2);
+				const char* eff = strstr(line, "[$");
+				const char* fa = strstr(line, "F:");
+				const char* aa = strstr(line, "A:");
+				uint32_t frame = fa ? (uint32_t)atoi(fa + 2) : 0;
+				uint8_t regA = aa ? (uint8_t)strtoul(aa + 2, nullptr, 16) : 0;
+				if(tickSite && pc == tickSite) {
+					inTick = true;
+				} else if(tickSite && pc == tickSite + 3) {
+					inTick = false;
+				} else if(!tickSite) {
+					inTick = pc >= driverLo && pc <= driverHi;
+				}
+				int32_t addr = -1;
+				if(eff) {
+					addr = (int32_t)strtoul(eff + 2, nullptr, 16);
+				} else if(nb == 3) {
+					addr = b1 | (b2 << 8);
+				} else if(nb == 2) {
+					addr = b1;
+				}
+				if(addr < 0 || addr >= 0x800) {
+					continue;
+				}
+				bool isStore = false, isLoad = false;
+				switch(b0) {
+					case 0x85:
+					case 0x95:
+					case 0x8D:
+					case 0x9D:
+					case 0x99:
+					case 0x81:
+					case 0x91:
+					case 0x86:
+					case 0x96:
+					case 0x8E:
+					case 0x84:
+					case 0x94:
+					case 0x8C:
+						isStore = true;
+						break;
+					case 0xE6:
+					case 0xF6:
+					case 0xEE:
+					case 0xFE:
+					case 0xC6:
+					case 0xD6:
+					case 0xCE:
+					case 0xDE:
+						isStore = true;
+						isLoad = true;
+						break;
+					case 0xA5:
+					case 0xB5:
+					case 0xAD:
+					case 0xBD:
+					case 0xB9:
+					case 0xA1:
+					case 0xB1:
+					case 0xA6:
+					case 0xB6:
+					case 0xAE:
+					case 0xBE:
+					case 0xA4:
+					case 0xB4:
+					case 0xAC:
+					case 0xBC:
+					case 0xC5:
+					case 0xD5:
+					case 0xCD:
+					case 0xDD:
+					case 0xD9:
+					case 0xC1:
+					case 0xD1:
+					case 0x24:
+					case 0x2C:
+					case 0xE4:
+					case 0xEC:
+					case 0xC4:
+					case 0xCC:
+					case 0x05:
+					case 0x15:
+					case 0x0D:
+					case 0x1D:
+					case 0x19:
+					case 0x01:
+					case 0x11:
+					case 0x25:
+					case 0x35:
+					case 0x2D:
+					case 0x3D:
+					case 0x39:
+					case 0x21:
+					case 0x31:
+					case 0x45:
+					case 0x55:
+					case 0x4D:
+					case 0x5D:
+					case 0x59:
+					case 0x41:
+					case 0x51:
+					case 0x65:
+					case 0x75:
+					case 0x6D:
+					case 0x7D:
+					case 0x79:
+					case 0x61:
+					case 0x71:
+					case 0xE5:
+					case 0xF5:
+					case 0xED:
+					case 0xFD:
+					case 0xF9:
+					case 0xE1:
+					case 0xF1:
+						isLoad = true;
+						break;
+					default: break;
+				}
+				if(inTick) {
+					if(isLoad) {
+						readsInTick[addr]++;
+					}
+					if(isStore) {
+						writesInTick[addr]++;
+					}
+				} else if(isStore) {
+					uint8_t v = regA;
+					if(b0 == 0x86 || b0 == 0x96 || b0 == 0x8E) {
+						const char* xx = strstr(line, "X:");
+						v = xx ? (uint8_t)strtoul(xx + 2, nullptr, 16) : 0;
+					}
+					if(b0 == 0x84 || b0 == 0x94 || b0 == 0x8C) {
+						const char* yy = strstr(line, "Y:");
+						v = yy ? (uint8_t)strtoul(yy + 2, nullptr, 16) : 0;
+					}
+					writesOutside[addr].push_back({ frame, v, pc });
+				}
+			}
+			if(f) {
+				fclose(f);
+			}
+		}
+		struct Mailbox
+		{
+			uint32_t Addr;
+			size_t OutsideWrites;
+			uint32_t TickReads;
+			uint32_t TickWrites;
+			std::vector<WriteEv> Events;
+		};
+		std::vector<Mailbox> mailboxes;
+		for(auto& kv : readsInTick) {
+			auto o = writesOutside.find(kv.first);
+			size_t outside = o == writesOutside.end() ? 0 : o->second.size();
+			if(outside > 60) {
+				continue; //written every frame by the game: state, not a request
+			}
+			auto w = writesInTick.find(kv.first);
+			mailboxes.push_back({ kv.first, outside, kv.second, w == writesInTick.end() ? 0u : w->second, o == writesOutside.end() ? std::vector<WriteEv>() : o->second });
+		}
+		//a request slot is read by the tick every frame, written by the game rarely (maybe not in our
+		//window at all) and usually cleared by the tick - every address the tick reads is a candidate
+		std::sort(mailboxes.begin(), mailboxes.end(), [](const Mailbox& a, const Mailbox& b) {
+			int sa = (a.OutsideWrites > 0 ? 2 : 0) + (a.TickWrites > 0 ? 1 : 0);
+			int sb = (b.OutsideWrites > 0 ? 2 : 0) + (b.TickWrites > 0 ? 1 : 0);
+			if(sa != sb) {
+				return sa > sb;
+			}
+			if(a.TickReads != b.TickReads) {
+				return a.TickReads > b.TickReads;
+			}
+			return a.Addr < b.Addr;
+		});
+		printf("   trace: %u linhas; %zu endereços lidos no tick, %zu escritos fora; candidatas:\n", lines, readsInTick.size(), writesOutside.size());
+		for(size_t i = 0; i < mailboxes.size() && i < 40; i++) {
+			Mailbox& m = mailboxes[i];
+			printf("     $%04X  escritas fora=%zu  leituras tick=%u  escritas tick=%u  eventos:", m.Addr, m.OutsideWrites, m.TickReads, m.TickWrites);
+			for(size_t j = 0; j < m.Events.size() && j < 6; j++) {
+				printf(" f%u:%02X@$%04X", m.Events[j].Frame, m.Events[j].Value, m.Events[j].Pc);
+			}
+			printf("\n");
+		}
+		for(size_t i = 0; i < mailboxes.size() && i < 40 && triggers.size() < 3; i++) {
+			Trigger t;
+			t.Mailbox = true;
+			t.Addr = mailboxes[i].Addr;
+			std::set<uint8_t> seen;
+			for(WriteEv& e : mailboxes[i].Events) {
+				if(e.Value) {
+					seen.insert(e.Value);
+				}
+			}
+			char label[64];
+			snprintf(label, sizeof(label), "caixa postal $%04X", t.Addr);
+			int score = validate(t, idsFor(seen), label, mailboxes[i].TickWrites > 0 && mailboxes[i].TickWrites * 2 < mailboxes[i].TickReads);
+			if(score > bestScore) {
+				bestScore = score;
+				best = t;
+			}
+			if(score >= 3) {
+				triggers.push_back(t);
+			}
+		}
+	} else {
+		triggers.push_back(best);
+	}
+	if(bestScore < 3) {
+		fprintf(stderr, "nenhum gatilho validado (melhor pontuação %d)\n", bestScore);
 		Stop();
 		return 4;
 	}
-	printf("   S = $%04X, id passado em %c (primeira chamada %.2fs após o início da fase)\n", S, regConv, bestT);
+	for(Trigger& t : triggers) {
+		if(t.Mailbox) {
+			printf("   gatilho: escrever id em $%04X na entrada do tick\n", t.Addr);
+		} else {
+			printf("   gatilho: JSR $%04X com %c=id\n", t.Addr, t.Reg);
+		}
+	}
 
 	//---------------------------------------------------------------- C) enumerate
-	printf("== C) chamando S=$%04X com %c=id para id 0..%d (%.0fs cada)\n", S, regConv, maxIds - 1, secondsPerId);
 	struct Result
 	{
 		int Id;
@@ -603,84 +1099,64 @@ int main(int argc, char** argv)
 	};
 	std::vector<Result> results;
 	std::set<uint32_t> seenHashes;
-	for(int id = 0; id < maxIds; id++) {
-		LoadStateFile((char*)titleState.c_str());
-		//the F5.3 segmenter closes a track after 60 silent frames: leave a gap between ids
-		SleepMs(bootstrap ? 1300 : 60);
-		//Stop at the next driver tick (inside the NMI handler), then hijack
-		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Execute, P, P, 500);
-		SetBreakpoints(&bp, 1);
-		if(!WaitForBreak(2.0)) {
-			printf("   id %2d: sem tick - abortado\n", id);
-			SetBreakpoints(nullptr, 0);
-			continue;
-		}
-		SetBreakpoints(nullptr, 0);
-		//Hijack: we are stopped at the first instruction of the tick, inside the NMI handler.
-		//Redirect the CPU into S with the id in the convention register and make S return into a
-		//JMP-self stub in RAM: the game logic never runs again, but NMIs keep firing and ticking
-		//the driver, so whatever S started keeps playing.
-		NesCpuState cpu = {};
-		GetCpuState(cpu, CpuType::Nes);
-		SetMemoryValue(MemoryType::NesMemory, 0x0780, 0x4C);
-		SetMemoryValue(MemoryType::NesMemory, 0x0781, 0x80);
-		SetMemoryValue(MemoryType::NesMemory, 0x0782, 0x07);
-		uint16_t ret = 0x077F;
-		SetMemoryValue(MemoryType::NesMemory, 0x0100 + cpu.SP, (uint8_t)(ret >> 8));
-		cpu.SP--;
-		SetMemoryValue(MemoryType::NesMemory, 0x0100 + cpu.SP, (uint8_t)(ret & 0xFF));
-		cpu.SP--;
-		cpu.PC = (uint16_t)S;
-		if(regConv == 'A') {
-			cpu.A = (uint8_t)id;
-		} else if(regConv == 'X') {
-			cpu.X = (uint8_t)id;
+	for(Trigger& trig : triggers) {
+		if(trig.Mailbox) {
+			printf("== C) enumerando id 0..%d em $%04X (%.0fs cada)\n", maxIds - 1, trig.Addr, secondsPerId);
 		} else {
-			cpu.Y = (uint8_t)id;
+			printf("== C) enumerando id 0..%d via JSR $%04X %c=id (%.0fs cada)\n", maxIds - 1, trig.Addr, trig.Reg, secondsPerId);
 		}
-		SetCpuState(cpu, CpuType::Nes);
-		ResumeExecution();
-		SleepMs(120); //let the driver react (and the old song stop)
-		Sample s = SampleApu(secondsPerId);
-		Result r;
-		r.Id = id;
-		r.Frames = s.Frames;
-		r.Audible = s.Audible;
-		r.LastAudible = s.LastAudible;
-		r.Hash = s.Hash();
-		if(s.Audible < 6) {
-			r.Kind = "silent";
-		} else if(s.LastAudible < s.Frames - 30 && s.LastAudible < 180) {
-			r.Kind = "sfx";
-		} else {
-			r.Kind = "bgm";
+		for(int id = 0; id < maxIds; id++) {
+			bool ok = false;
+			Sample s = playId(trig, id, secondsPerId, &ok);
+			if(!ok) {
+				printf("   id %2d: sem tick - abortado\n", id);
+				continue;
+			}
+			Result r;
+			r.Id = id;
+			r.Frames = s.Frames;
+			r.Audible = s.Audible;
+			r.LastAudible = s.LastAudible;
+			r.Hash = s.Hash();
+			size_t novel = s.Novel(background).size();
+			bool sameAsTitle = baseline.Audible >= 8 && novel < 2;
+			r.Hash = s.NovelHash(background);
+			if(s.Audible < 24 || sameAsTitle) {
+				r.Kind = sameAsTitle ? "title" : "short";
+			} else if(s.LastAudible < s.Frames - 120 && s.LastAudible < 720) {
+				r.Kind = "sfx";
+			} else {
+				r.Kind = "bgm";
+			}
+			char buf[256] = {};
+			size_t pos = 0;
+			for(size_t i = 0; i < s.Onsets.size() && i < 12 && pos < 200; i++) {
+				pos += snprintf(buf + pos, sizeof(buf) - pos, "%c%d ", "stTn"[(s.Onsets[i] >> 8) & 3], s.Onsets[i] & 0xFF);
+			}
+			r.FirstNotes = buf;
+			bool dup = (r.Kind == "bgm" || r.Kind == "sfx") && seenHashes.count(r.Hash) > 0;
+			seenHashes.insert(r.Hash);
+			printf("   id %2d: %-5s audible=%3u/%3u last=%3u hash=%08X %s%s\n", id, r.Kind.c_str(), r.Audible, r.Frames, r.LastAudible, r.Hash, r.FirstNotes.c_str(), dup ? " (repetida)" : "");
+			results.push_back(r);
 		}
-		char buf[256] = {};
-		size_t pos = 0;
-		for(size_t i = 0; i < s.Onsets.size() && i < 12 && pos < 200; i++) {
-			pos += snprintf(buf + pos, sizeof(buf) - pos, "%c%d ", "stTn"[(s.Onsets[i] >> 8) & 3], s.Onsets[i] & 0xFF);
-		}
-		r.FirstNotes = buf;
-		bool dup = r.Kind != "silent" && seenHashes.count(r.Hash) > 0;
-		seenHashes.insert(r.Hash);
-		printf("   id %2d: %-6s audible=%3u/%3u last=%3u hash=%08X %s%s\n", id, r.Kind.c_str(), r.Audible, r.Frames, r.LastAudible, r.Hash, r.FirstNotes.c_str(), dup ? " (repetida)" : "");
-		results.push_back(r);
 	}
-	int bgm = 0, sfx = 0, silent = 0;
+	int bgm = 0, sfx = 0, shortN = 0, title = 0;
 	std::set<uint32_t> uniq;
 	for(Result& r : results) {
 		if(r.Kind == "bgm") {
 			bgm++;
 		} else if(r.Kind == "sfx") {
 			sfx++;
+		} else if(r.Kind == "title") {
+			title++;
 		} else {
-			silent++;
+			shortN++;
 		}
-		if(r.Kind != "silent") {
+		if(r.Kind == "bgm" || r.Kind == "sfx") {
 			uniq.insert(r.Hash);
 		}
 	}
-	printf("== resumo: %d bgm, %d sfx, %d silenciosos, %zu assinaturas distintas em %d ids\n", bgm, sfx, silent, uniq.size(), maxIds);
+	printf("== resumo: %d bgm, %d sfx, %d curtos, %d = título, %zu assinaturas distintas em %d ids x %zu gatilho(s)\n", bgm, sfx, shortN, title, uniq.size(), maxIds, triggers.size());
 	Stop();
 	return 0;
 }

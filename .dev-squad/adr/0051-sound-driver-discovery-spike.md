@@ -1,6 +1,6 @@
 # ADR-0051: Enumerating a game's music and SFX without playing it (sound-driver discovery)
 
-- Status: proposed (spike validated on Mega Man, 2026-08-25; generalisation pending)
+- Status: proposed (spike run on 12 ROMs, 2026-08-25: 5–6 with a validated trigger)
 - Date: 2026-08-25
 - Fase 5, F5.4f. Complements ADR-0047 (fingerprint trigger) and F5.3 (bootstrap recorder).
 
@@ -48,6 +48,32 @@ the run happens on a private copy of the ROM with the MEP bootstrap on and a
 silent frames): the recorder wrote `auto/audio/fingerprints.json` with **50
 tracks (18 bgm + 32 sfx) and 50 MIDI files** in one 5-minute run.
 
+## Generalisation (12 ROMs, 24 ids × 3 s, same binary, no per-game knowledge)
+The first version trusted whatever call fired after the Start press; on Zelda,
+Excitebike and Castlevania that picked per-channel update routines and produced
+garbage. The second version **validates** every candidate trigger: ≥ 3 ids must
+give distinct results, and the same id must reproduce the same *novel* onsets
+(those absent from the title's background tune, measured on two save states 45
+frames apart). Candidates come from JSR sites into the driver (any register), then
+from every RAM address the tick reads (trace-based mailbox fallback).
+
+| Game | Tick | Trigger | Verdict |
+|---|---|---|---|
+| Mega Man (Capcom) | `$9000` bank 4 | `JSR $9003`, `A=id`, 2/2 reproducible | ✅ ids 0–50: 18 bgm + sfx |
+| Castlevania (Konami) | `$838A` bank 6 | `JSR $8187`, `A=id`, 2/2 | ✅ 15 sfx/jingles (music entry may differ) |
+| Zelda (Nintendo) | `$9825` | mailboxes `$0600` (SFX mask) + `$0602` (music), 2/2 | ✅ |
+| Punch-Out!! | `$8000` | mailbox `$0722`, 2/2 | ✅ 19 signatures |
+| SMB3 | `$F795` | mailboxes `$04F5`, `$04F1`, 2/2 (its real sound queue) | ✅ |
+| Ninja Gaiden (Tecmo) | `$8000` | `$0600`, 1/2 | ⚠️ plausible |
+| Bomberman | `$E4C7` | `$00BE/$00C0` only through a "tick clears it" exemption, 0/2 | ❌ state corruption (exemption removed) |
+| 1943, Contra, Excitebike, Gauntlet, SMB1 | found | nothing validated | ❌ |
+
+Failure mode where it fails: the request never happens inside the observation
+window — silent title and Start alone does not change the music (Contra, SMB1
+need to actually enter the stage; 1943/Gauntlet likewise). Next levers: a longer
+window with more stimuli (Start, A, directions), and splitting "music" from
+"SFX" triggers when both exist.
+
 ## Pitfalls found (worth keeping)
 - `IsExecutionStopped()` is also true while the emu thread is paused by *our
   own* API calls (`WaitForLock`) → phantom stops. Use the `CodeBreak`
@@ -63,16 +89,13 @@ tracks (18 bgm + 32 sfx) and 50 MIDI files** in one 5-minute run.
   mailboxes when a game never `JSR`s into its driver.
 
 ## Decision (proposed)
-Promote the spike to **F5.4f — audio bootstrap without playing**: at first
-load of a NES ROM (or from *Open Game Folder → Extract audio*), run phases A–C
-headless in the background on a private copy of the ROM and feed the tracks to
-the F5.3 recorder. Conditions before accepting: repeat on 3 other drivers
-(Konami — Castlevania; Nintendo — Zelda/Excitebike; Sunsoft or Rare) to see
-which of these fail: (1) driver in a bank without a fixed-bank trampoline,
-(2) request through a RAM mailbox with no `JSR` (fallback: trace-based mailbox
-discovery, prototyped and removed from the spike), (3) id in a table index
-rather than a register, (4) two entries (music vs SFX). Titles with music
-need no Start press: the entry is found from the boot sequence alone.
+Ship F5.4f as an **opt-in tool**, not an automatic step at ROM load: with a
+~50 % hit rate and several minutes per ROM it belongs behind *Open Game Folder →
+Extract audio* (and `scripts/spike_sound_driver … SPIKE_BOOTSTRAP=1`), writing
+into the sibling folder's `auto/audio/` through the F5.3 recorder, with the
+enumeration log kept next to it so a human can see which trigger was used and
+prune garbage ids. Automatic-at-load can be revisited once the window/stimuli
+levers above push the hit rate up.
 
 ## Consequences
 - `+` Complete `auto/audio` for the whole game at first load; the F5.3 OGG

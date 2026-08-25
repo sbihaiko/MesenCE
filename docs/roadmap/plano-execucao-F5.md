@@ -212,9 +212,14 @@ de fora do banco do driver para dentro dele, quebrados por endereço absoluto
 durante um Start pulsado → entrada `S` e registrador do id; (C) para cada id,
 recarrega o save state do título, para em `P`, `PC=S`, `A=id`, retorno para um
 `JMP` em RAM, e amostra o APU por 4 s. Mega Man: 18 bgm, 22 sfx, 11 curtíssimos
-nos 51 ids válidos; o gravador F5.3 produziu 50 faixas + MIDI na mesma rodada. Pendente: repetir em Castlevania/Zelda/Excitebike, tratar caixa
-postal em RAM sem `JSR` (protótipo via trace), integrar ao bootstrap (rodar em
-segundo plano numa cópia da ROM no primeiro load / botão em *Open Game Folder*).
+nos 51 ids válidos; o gravador F5.3 produziu 50 faixas + MIDI na mesma rodada.
+Generalização (12 ROMs da biblioteca, validação empírica: ≥3 ids distintos e
+mesmo id reprodutível em dois save states, por onsets *novos*): Mega Man,
+Castlevania (`JSR`), Zelda `$0600/$0602`, Punch-Out `$0722`, SMB3 `$04F5/$04F1`
+(caixa postal via trace) ✅; Ninja Gaiden ⚠️; 1943/Contra/Excitebike/Gauntlet/
+SMB1/Bomberman ❌ (pedido não acontece na janela título→Start). Decisão
+proposta (ADR-0051): entregar como ferramenta opt-in (*Extract audio*), não
+automática no load.
 
 ## F5.5 — Fechamento
 
