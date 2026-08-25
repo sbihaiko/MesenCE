@@ -97,6 +97,7 @@ public:
 	//F5.3: start recording the played music into <audioFolder> (fingerprints +
 	//MIDI, written when the console is destroyed or the bootstrap stops)
 	void StartAudioBootstrap(const string& audioFolder);
+	void EnableBootstrapScreenCapture();
 
 	//Emulator-level (shared) SoundMixer, cached at construction: the APU
 	//channels' VGM tap reads it on every register write, so this stays an

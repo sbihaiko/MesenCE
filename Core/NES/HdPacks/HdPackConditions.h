@@ -43,6 +43,7 @@ struct HdPackBaseTileCondition : public HdPackCondition
 			for(int i = 0; i < 16; i++) {
 				out << HexUtilities::ToHex(TileData[i]);
 			}
+			out << ","; //tileData and palette are separate fields (the loader splits on ',')
 		}
 		out << HexUtilities::ToHex(PaletteColors, true);
 

@@ -20,7 +20,7 @@ public:
 	//exists in "into" are dropped; everything else (tiles, backgrounds,
 	//conditions, bitmaps, audio tracks, patches) is moved over. Both layers
 	//must share the same <scale>; returns false (and merges nothing) otherwise.
-	static bool MergeLowerLayer(HdPackData& into, HdPackData& lower);
+	static bool MergeLowerLayer(HdPackData& into, HdPackData& lower, bool includeBackgrounds = true);
 
 private:
 	HdPackData* _data = nullptr;

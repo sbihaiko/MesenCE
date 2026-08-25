@@ -124,16 +124,20 @@ void MepPackManager::StartBootstrapIfNeeded()
 	}
 
 	//Sibling folder, or the central folder when the ROM's directory is read-only
+	//Only the sections that will be generated get a folder (an empty auto/textures
+	//next to an artist's pack would just confuse)
 	string root = GetSiblingFolder();
-	string autoTextures = FolderUtilities::CombinePath(FolderUtilities::CombinePath(root, MepPack::AutoFolderName), MepPack::GetConventionPath(MepSectionType::Textures));
-	fs::create_directories(fs::u8path(autoTextures), ec);
-	if(ec || !fs::is_directory(fs::u8path(autoTextures), ec)) {
+	string autoRoot = FolderUtilities::CombinePath(root, MepPack::AutoFolderName);
+	string autoTextures = FolderUtilities::CombinePath(autoRoot, MepPack::GetConventionPath(MepSectionType::Textures));
+	fs::create_directories(fs::u8path(autoRoot), ec);
+	if(ec || !fs::is_directory(fs::u8path(autoRoot), ec)) {
 		root = FolderUtilities::CombinePath(GetPacksFolder(), _romName);
-		autoTextures = FolderUtilities::CombinePath(FolderUtilities::CombinePath(root, MepPack::AutoFolderName), MepPack::GetConventionPath(MepSectionType::Textures));
+		autoRoot = FolderUtilities::CombinePath(root, MepPack::AutoFolderName);
+		autoTextures = FolderUtilities::CombinePath(autoRoot, MepPack::GetConventionPath(MepSectionType::Textures));
 		ec.clear();
-		fs::create_directories(fs::u8path(autoTextures), ec);
+		fs::create_directories(fs::u8path(autoRoot), ec);
 		if(ec) {
-			Log("bootstrap: cannot create '" + autoTextures + "' - skipped");
+			Log("bootstrap: cannot create '" + autoRoot + "' - skipped");
 			return;
 		}
 		Log("bootstrap: ROM folder is not writable - using '" + root + "' instead (matched by name on the next load)");
@@ -158,6 +162,11 @@ void MepPackManager::StartBootstrapIfNeeded()
 		return;
 	}
 
+	fs::create_directories(fs::u8path(autoTextures), ec);
+	if(ec) {
+		Log("bootstrap: cannot create '" + autoTextures + "' - skipped");
+		return;
+	}
 	_bootstrapSaveFolder = autoTextures;
 	HdPackBuilderOptions options = {};
 	options.SaveFolder = (char*)_bootstrapSaveFolder.c_str();
@@ -175,6 +184,10 @@ void MepPackManager::StartBootstrapIfNeeded()
 	console->ProcessNotification(ConsoleNotificationType::ExecuteShortcut, &exportParams);
 	ExecuteShortcutParams recordParams = { EmulatorShortcut::StartRecordHdPack, 0, &options };
 	console->ProcessNotification(ConsoleNotificationType::ExecuteShortcut, &recordParams);
+	if(NesConsole* nes = dynamic_cast<NesConsole*>(console.get())) {
+		//Static screens as whole-frame <background> PNGs with tileAtPosition anchors (F5.4)
+		nes->EnableBootstrapScreenCapture();
+	}
 	_bootstrapping = true;
 	Log("bootstrap: recording played tiles (xBRZ 4x) into '" + autoTextures + "' - the next load of this ROM plays with the auto layer");
 }

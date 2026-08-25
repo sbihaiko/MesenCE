@@ -59,7 +59,7 @@ bool HdPackLoader::HasLoosePack(VirtualFile& romFile)
 	return (bool)ifstream(path);
 }
 
-bool HdPackLoader::MergeLowerLayer(HdPackData& into, HdPackData& lower)
+bool HdPackLoader::MergeLowerLayer(HdPackData& into, HdPackData& lower, bool includeBackgrounds)
 {
 	if(into.Scale != lower.Scale) {
 		MessageManager::Log("[HDPack] auto layer <scale> " + std::to_string(lower.Scale) + " differs from the human layer's " + std::to_string(into.Scale) + " - auto layer ignored");
@@ -81,8 +81,10 @@ bool HdPackLoader::MergeLowerLayer(HdPackData& into, HdPackData& lower)
 	for(auto& bitmap : lower.ImageFileData) {
 		into.ImageFileData.push_back(std::move(bitmap));
 	}
-	for(auto& bitmap : lower.BackgroundFileData) {
-		into.BackgroundFileData.push_back(std::move(bitmap));
+	if(includeBackgrounds) {
+		for(auto& bitmap : lower.BackgroundFileData) {
+			into.BackgroundFileData.push_back(std::move(bitmap));
+		}
 	}
 	for(auto& condition : lower.Conditions) {
 		into.Conditions.push_back(std::move(condition));
@@ -111,7 +113,9 @@ bool HdPackLoader::MergeLowerLayer(HdPackData& into, HdPackData& lower)
 
 	for(int i = 0; i < HdPackData::BgLayerCount; i++) {
 		for(HdBackgroundInfo& bg : lower.BackgroundsByPriority[i]) {
-			into.BackgroundsByPriority[i].push_back(bg);
+			if(includeBackgrounds) {
+				into.BackgroundsByPriority[i].push_back(bg);
+			}
 		}
 		lower.BackgroundsByPriority[i].clear();
 	}

@@ -6,6 +6,8 @@
 #include "NES/BaseNesPpu.h"
 #include "NES/NesConstants.h"
 #include "NES/HdPacks/HdPackLoader.h"
+#include "NES/HdPacks/HdPackConditions.h"
+#include "Shared/MessageManager.h"
 #include "NES/NesDefaultVideoFilter.h"
 #include "Utilities/xBRZ/xbrz.h"
 #include "Utilities/HQX/hqx.h"
@@ -265,6 +267,139 @@ void HdPackBuilder::DrawTile(HdPackTileInfo* tile, int tileNumber, uint32_t* png
 		}
 		pngPos += pngWidth - tileDimension;
 	}
+}
+
+void HdPackBuilder::EnableScreenCapture()
+{
+	_captureScreens = true;
+	_frameBg.assign(256 * 240, 0);
+	_frameRuns.reserve(4096);
+	//Screens already in the pack (previous session) keep their numbering
+	_screensSeen.clear();
+}
+
+void HdPackBuilder::OnFrameEnd()
+{
+	if(!_captureScreens) {
+		return;
+	}
+	//A screen worth keeping is mostly drawn and holds still for a while
+	bool candidate = _bgPixels >= 256 * 240 / 2 && _frameRuns.size() >= 60;
+	if(candidate && _frameHash == _prevFrameHash) {
+		_stableFrames++;
+		if(_stableFrames == StableFramesNeeded && _screensSeen.find(_frameHash) == _screensSeen.end()) {
+			_screensSeen.insert(_frameHash);
+			if(_hdData.BackgroundFileData.size() < MaxScreensPerSession) {
+				CaptureScreen();
+			}
+		}
+	} else {
+		_stableFrames = 0;
+	}
+	_prevFrameHash = candidate ? _frameHash : 0;
+	_frameHash = 0;
+	_bgPixels = 0;
+	_frameRuns.clear();
+	_lastRunY = -1;
+	std::fill(_frameBg.begin(), _frameBg.end(), 0);
+}
+
+void HdPackBuilder::CaptureScreen()
+{
+	uint32_t scale = _hdData.Scale;
+	uint32_t number = (uint32_t)_hdData.BackgroundFileData.size() + 1;
+	char buf[32];
+	snprintf(buf, sizeof(buf), "screen%03u", number);
+	string baseName = buf;
+	string relPath = "backgrounds/" + baseName + ".png";
+
+	//Whole-frame upscale: better seams than the per-tile result
+	vector<uint32_t> hd(256 * 240 * scale * scale, 0);
+	if(_options.FilterType == ScaleFilterType::xBRZ && scale >= 2 && scale <= 6) {
+		xbrz::scale(scale, _frameBg.data(), hd.data(), 256, 240, xbrz::ColorFormat::ARGB);
+	} else {
+		for(uint32_t y = 0; y < 240 * scale; y++) {
+			for(uint32_t x = 0; x < 256 * scale; x++) {
+				hd[y * 256 * scale + x] = _frameBg[(y / scale) * 256 + x / scale];
+			}
+		}
+	}
+	FolderUtilities::CreateFolder(FolderUtilities::CombinePath(_saveFolder, "backgrounds"));
+	if(!PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, relPath), hd.data(), 256 * scale, 240 * scale, 32)) {
+		return;
+	}
+
+	//Anchors: the rarest non-flat tiles on screen, spread apart (3 tileAtPosition
+	//conditions make a false match on another screen very unlikely)
+	auto isFlat = [](HdTileKey& k) {
+		for(int i = 1; i < 16; i++) {
+			if(k.TileData[i] != k.TileData[0]) {
+				return false;
+			}
+		}
+		return true;
+	};
+	vector<ScreenRun*> ranked;
+	for(ScreenRun& run : _frameRuns) {
+		if(!isFlat(run.Tile)) {
+			ranked.push_back(&run);
+		}
+	}
+	std::stable_sort(ranked.begin(), ranked.end(), [this](ScreenRun* a, ScreenRun* b) {
+		auto ua = _tileUsageCount.find(a->Tile.GetKey(false));
+		auto ub = _tileUsageCount.find(b->Tile.GetKey(false));
+		uint32_t ca = ua == _tileUsageCount.end() ? 0 : ua->second;
+		uint32_t cb = ub == _tileUsageCount.end() ? 0 : ub->second;
+		return ca < cb;
+	});
+	vector<ScreenRun*> anchors;
+	for(ScreenRun* run : ranked) {
+		bool farEnough = true;
+		for(ScreenRun* a : anchors) {
+			if(std::abs((int)a->X - (int)run->X) + std::abs((int)a->Y - (int)run->Y) < 64) {
+				farEnough = false;
+				break;
+			}
+		}
+		if(farEnough) {
+			anchors.push_back(run);
+		}
+		if(anchors.size() == 3) {
+			break;
+		}
+	}
+	if(anchors.empty()) {
+		return;
+	}
+
+	unique_ptr<HdPackBitmapInfo> bitmap(new HdPackBitmapInfo());
+	bitmap->PngName = relPath;
+	HdBackgroundInfo bg = {};
+	bg.Data = bitmap.get();
+	bg.Brightness = 255;
+	bg.HorizontalScrollRatio = 0;
+	bg.VerticalScrollRatio = 0;
+	bg.Priority = 20; //BehindFgSpritesPriority: covers the tiles, stays under the sprites
+	bg.Left = 0;
+	bg.Top = 0;
+	bg.BlendMode = HdPackBlendMode::Alpha;
+	const char* suffix = "ABC";
+	for(size_t i = 0; i < anchors.size(); i++) {
+		HdPackTileAtPositionCondition* cond = new HdPackTileAtPositionCondition();
+		cond->Name = baseName + "_" + suffix[i];
+		string tileData;
+		if(_isChrRam) {
+			for(int j = 0; j < 16; j++) {
+				tileData += HexUtilities::ToHex(anchors[i]->Tile.TileData[j]);
+			}
+		}
+		cond->Initialize(anchors[i]->X, anchors[i]->Y, anchors[i]->Tile.PaletteColors, anchors[i]->Tile.TileIndex, tileData, false);
+		bg.Conditions.push_back(cond);
+		_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
+	}
+	_hdData.BackgroundFileData.push_back(std::move(bitmap));
+	_hdData.BackgroundsByPriority[bg.Priority].push_back(bg);
+	MessageManager::Log("[HDPack] bootstrap: static screen captured -> " + relPath + " (" + std::to_string(anchors.size()) + " anchor tile(s))");
 }
 
 void HdPackBuilder::SaveHdPack()

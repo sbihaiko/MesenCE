@@ -294,7 +294,11 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 			unique_ptr<HdPackData> autoData(new HdPackData());
 			if(HdPackLoader::LoadHdNesPack(FolderUtilities::CombinePath(autoTextures, "hires.txt"), *autoData)) {
 				if(loaded) {
-					HdPackLoader::MergeLowerLayer(*_hdData.get(), *autoData);
+					//auto/ screens would cover the artist's tiles: only the tiles merge under a human layer
+					if(!autoData->BackgroundFileData.empty()) {
+						MessageManager::Log("[MEP] textures: auto layer has " + std::to_string(autoData->BackgroundFileData.size()) + " captured screen(s) - not used under the human layer (copy the <background> lines you want into textures/hires.txt)");
+					}
+					HdPackLoader::MergeLowerLayer(*_hdData.get(), *autoData, false);
 				} else {
 					_hdData.reset(autoData.release());
 					loaded = true;
@@ -470,6 +474,10 @@ void NesConsole::InternalRunFrame()
 
 	_mapper->EndFrame();
 	_apu->EndFrame();
+
+	if(_hdPackBuilder) {
+		_hdPackBuilder->OnFrameEnd();
+	}
 
 	if(_audioReplacer || _audioBootstrap) {
 		ApuState apu = _apu->GetState();
@@ -920,6 +928,13 @@ void NesConsole::StartRecordingHdPack(HdPackBuilderOptions options)
 	_emu->GetSoundMixer()->StopAudio();
 
 	_emu->GetVideoDecoder()->ForceFilterUpdate();
+}
+
+void NesConsole::EnableBootstrapScreenCapture()
+{
+	if(_hdPackBuilder) {
+		_hdPackBuilder->EnableScreenCapture();
+	}
 }
 
 void NesConsole::StopRecordingHdPack()

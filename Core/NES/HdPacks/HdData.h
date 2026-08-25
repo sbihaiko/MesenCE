@@ -429,6 +429,13 @@ struct HdBackgroundInfo
 		out << "<background>";
 		out << Data->PngName << ",";
 		out << (Brightness / 255.0);
+		if(HorizontalScrollRatio != 0 || VerticalScrollRatio != 0 || Priority != 10 || Left != 0 || Top != 0) {
+			//Optional fields (v101+/v102+/v105+): without them a reload would fall back to priority 10
+			out << "," << HorizontalScrollRatio << "," << VerticalScrollRatio << "," << (int)Priority;
+			if(Left != 0 || Top != 0) {
+				out << "," << Left << "," << Top;
+			}
+		}
 
 		return out.str();
 	}
