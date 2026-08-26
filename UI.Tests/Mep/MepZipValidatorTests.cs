@@ -10,7 +10,8 @@ namespace Mesen.Tests.Mep
 {
 	//Fase 1 (docs/roadmap/plano-testes-unitarios.md): exercises UI/Logic/MepZipValidator.cs
 	//entirely in-memory - no filesystem zip, no host, no Avalonia/EmuApi.
-	public class MepZipValidatorTests
+	//Partial: continues in MepZipValidatorFallbackTests.cs, sharing BuildZip/FindRepoRoot.
+	public partial class MepZipValidatorTests
 	{
 		//Every convention-layout probe MepPack::DetectConventionLayout recognizes
 		//(Core/Shared/EnhancementPacks/MepPack.cpp kConventionProbe), plus the

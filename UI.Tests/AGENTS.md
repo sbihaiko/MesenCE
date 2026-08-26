@@ -45,6 +45,11 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
 
 - Add new test files under a subfolder matching the `UI/Logic/` area they
   cover (e.g. `UI.Tests/Mep/` for `UI/Logic/Mep*.cs`).
+- When a growing test file would cross the repo's per-file line-count limit,
+  split it into a same-named-area sibling (e.g.
+  `MepZipValidatorTests.cs` / `MepZipValidatorFallbackTests.cs`) declared as
+  `partial class` of the original — this shares private helpers (`BuildZip`,
+  `FindRepoRoot`, ...) across both files instead of duplicating them.
 - Never add a `PackageReference` to Avalonia, or a `ProjectReference` to
   `UI/UI.csproj` — that reintroduces the native/SDL2 dependency this project
   is built to avoid.
