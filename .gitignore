@@ -7,10 +7,6 @@
 *.sln.docstates
 .vs/*
 
-# Python bytecode cache (scripts/, scripts/checks/)
-__pycache__/
-*.pyc
-
 # Build results
 
 [Dd]ebug/
