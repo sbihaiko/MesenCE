@@ -24,8 +24,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   verify their `#include` list has no further undeclared link dependency
   before adding a makefile target for it.
 - Compiled binaries (`core_unit_tests`, `roles_probe`, `headless_record`,
-  `spike_sound_driver`) are build output, not source - keep them out of git
-  (`.gitignore` at the repo root lists each by name).
+  `spike_sound_driver`) are build output, not source - never `git add` them.
+  `.gitignore` at the repo root lists `roles_probe`, `headless_record`, and
+  `spike_sound_driver` by name; `core_unit_tests` has no entry yet, so after
+  `make core-unit-tests` it shows as untracked in `git status` and must be
+  excluded by hand (or removed with `rm -f scripts/core_unit_tests`) before
+  staging.
 
 ## Work Guidance
 
