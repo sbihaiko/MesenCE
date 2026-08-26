@@ -27,6 +27,15 @@
       "scoutMs": null,
       "classification": "new-feature",
       "diverged": false
+    },
+    {
+      "sid": "5ca1637e1671",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "chore",
+      "diverged": false
     }
   ]
 }

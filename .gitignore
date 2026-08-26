@@ -202,6 +202,10 @@ graphify-out/
 # git worktrees (dev-squad task branches)
 .worktrees/
 
+scripts/headless_record
+scripts/spike_sound_driver
+scripts/roles_probe
+
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
 !.claude/guardrails/
@@ -210,6 +214,3 @@ graphify-out/
 !.dev-squad/adr/
 !.dev-squad/memory/
 # <<< dev-squad shared team assets (managed) <<<
-scripts/headless_record
-scripts/spike_sound_driver
-scripts/roles_probe
