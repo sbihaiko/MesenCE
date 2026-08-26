@@ -21,10 +21,15 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 - Core reduction + fork default branch: `docs/roadmap/plano-reducao-cores.md`.
 - Host gamepad tester (Settings → Input → Test): `docs/roadmap/plano-host-input-tester.md`.
 - Roadmap local contract (product consoles after the core cut): `docs/roadmap/AGENTS.md`.
+- `hd-pack-authoring.md` - human-facing guide for community HD/MEP pack
+  submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
+  summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.
+  "Inválido" triage outcomes and cites `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6.
 
 ## Verification
 
 - Specs: `python3 scripts/validate-specs.py` from the repo root.
+- `hd-pack-authoring.md`: `./scripts/checks/verify_hd_pack_authoring_doc.sh`.
 - Plans have no automated check.
 
 ## Child DOX Index

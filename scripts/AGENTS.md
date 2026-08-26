@@ -68,7 +68,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   guards `CLAUDE.md` (AC-10): the pre-existing "Rastreamento de bugs (GitHub
   Project)" section must stay byte-for-byte untouched (checked as an exact
   file prefix) while a new "Triagem de Community HD/MEP Packs (GitHub
-  Project)" section is appended after it.
+  Project)" section is appended after it. `verify_community_pack_issue_template.py`
+  parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
+  the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
+  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_submitted_workflow.py`,
+  `verify_community_pack_drift_check_workflow.py`, and
+  `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
+  Actions workflows and their GH Project field-provenance assumptions.
 
 ## Verification
 
@@ -80,9 +87,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
+- `python3 scripts/checks/verify_community_pack_issue_template.py` and
+  `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
 
 ## Child DOX Index
 
-- `checks/` - dev-squad acceptance-criteria verifier scripts; no dedicated
-  AGENTS.md yet (covered by this Work Guidance entry above), promote to a
-  child AGENTS.md if the folder grows its own distinct rules.
+- `checks/` - dev-squad/community-pack acceptance-criteria verifier scripts;
+  no dedicated AGENTS.md yet (a flat collection of independent per-AC
+  verifiers with no domain contract of its own beyond what's listed in the
+  Work Guidance entry above), promote to a child AGENTS.md if the folder
+  grows its own distinct rules.
