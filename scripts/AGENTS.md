@@ -56,8 +56,11 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   in `Core/NES/HdPacks/HdPackBuilder.h`). Needs `make core`/a real ROM, unlike
   the fixture-only validators above.
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
-  `verify-ui-logic-firewall.sh` - repo-hygiene shell checks run from `make`
-  or CI.
+  `verify-ui-logic-firewall.sh`, `check-f5-4b-doc.sh` - repo-hygiene shell
+  checks run from `make` or CI. `check-f5-4b-doc.sh` guards the F5.4b clause
+  in `docs/roadmap/plano-execucao-F5.md`'s header Status line: a done (✅)
+  marker paired with `F5.4b` and no leftover instance of the pre-fix pending
+  phrasing.
 
 ## Verification
 
