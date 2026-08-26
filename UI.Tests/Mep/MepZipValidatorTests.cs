@@ -8,15 +8,11 @@ using Xunit;
 
 namespace Mesen.Tests.Mep
 {
-	//Fase 1 (docs/roadmap/plano-testes-unitarios.md): exercises UI/Logic/MepZipValidator.cs
-	//entirely in-memory - no filesystem zip, no host, no Avalonia/EmuApi.
-	//Partial: continues in MepZipValidatorFallbackTests.cs, sharing BuildZip/FindRepoRoot.
-	public partial class MepZipValidatorTests
+	//Fase 1 (docs/roadmap/plano-testes-unitarios.md): exercises UI/Logic/MepZipValidator.cs entirely in-memory - no filesystem zip, no host, no Avalonia/EmuApi.
+	public class MepZipValidatorTests
 	{
-		//Every convention-layout probe MepPack::DetectConventionLayout recognizes
-		//(Core/Shared/EnhancementPacks/MepPack.cpp kConventionProbe), plus the
-		//audio/fingerprints.json alternative (ADR-0047), each also checked in its
-		//`auto/` form.
+		//Every convention-layout probe MepPack::DetectConventionLayout recognizes (Core/Shared/EnhancementPacks/MepPack.cpp
+		//kConventionProbe), plus the audio/fingerprints.json alternative (ADR-0047), each also checked in its `auto/` form.
 		public static IEnumerable<object[]> LayerProbes()
 		{
 			string[] probes = {
@@ -40,10 +36,7 @@ namespace Mesen.Tests.Mep
 		public void Validate_AcceptsEveryDocumentedLayerProbe(string probeEntryName)
 		{
 			using ZipArchive zip = BuildZip((probeEntryName, "x"));
-
-			string? result = MepZipValidator.Validate(zip);
-
-			Assert.Null(result);
+			Assert.Null(MepZipValidator.Validate(zip));
 		}
 
 		[Fact]
@@ -54,30 +47,47 @@ namespace Mesen.Tests.Mep
 			Assert.Contains("\"version\": 1", goldenContent);
 
 			using ZipArchive zip = BuildZip(("audio/fingerprints.json", goldenContent));
-
-			string? result = MepZipValidator.Validate(zip);
-
-			Assert.Null(result);
+			Assert.Null(MepZipValidator.Validate(zip));
 		}
 
 		[Fact]
 		public void Validate_RejectsZipWithNoRecognizedLayer()
 		{
 			using ZipArchive zip = BuildZip(("readme.txt", "not a pack"), ("textures/Tiles_00_0.png", "x"));
-
-			string? result = MepZipValidator.Validate(zip);
-
-			Assert.Equal("InstallMepPackInvalidPack", result);
+			Assert.Equal("InstallMepPackInvalidPack", MepZipValidator.Validate(zip));
 		}
 
 		[Fact]
 		public void Validate_RejectsAnEmptyZip()
 		{
 			using ZipArchive zip = BuildZip();
+			Assert.Equal("InstallMepPackInvalidPack", MepZipValidator.Validate(zip));
+		}
 
-			string? result = MepZipValidator.Validate(zip);
+		//ADR-0120 structural fallback (no ROM name here, unlike Core's MepPackManager::FindFallbackSubfolder): accepts one
+		//unambiguous subfolder holding a layer probe, depth/entry-capped via FallbackMaxDepth/FallbackMaxEntries. Root-level
+		//regressions (pack.json, synth/preset.cfg standing in for zip-named-as-ROM) already run via
+		//Validate_AcceptsEveryDocumentedLayerProbe above.
+		public static IEnumerable<object[]> StructuralFallbackCases()
+		{
+			yield return new object[] { new[] { ("P/readme.txt", "n"), ("P/Game/textures/hires.txt", "x") }, true };
+			yield return new object[] { new[] { ("A/textures/hires.txt", "x"), ("B/textures/hires.txt", "x") }, false }; //ambiguous
+			yield return new object[] { new[] { ("A/B/C/textures/hires.txt", "x") }, false }; //depth 5 > FallbackMaxDepth (4)
 
-			Assert.Equal("InstallMepPackInvalidPack", result);
+			var overCap = new List<(string, string)>();
+			for(int i = 0; i < 2001; i++) {
+				overCap.Add(($"filler/decoy{i}.txt", "x"));
+			}
+			overCap.Add(("P/Game/textures/hires.txt", "x"));
+			yield return new object[] { overCap.ToArray(), false }; //2001 entries > FallbackMaxEntries (2000)
+		}
+
+		[Theory]
+		[MemberData(nameof(StructuralFallbackCases))]
+		public void Validate_HandlesStructuralFallbackCases((string, string)[] entries, bool expectedAccept)
+		{
+			using ZipArchive zip = BuildZip(entries);
+			Assert.Equal(expectedAccept, MepZipValidator.Validate(zip) == null);
 		}
 
 		public static IEnumerable<object[]> FixtureCases()
@@ -94,17 +104,14 @@ namespace Mesen.Tests.Mep
 			Assert.Equal(expectedOk, MepZipValidator.IsSafePath(path));
 		}
 
-		//A zip-slip path smuggled alongside a perfectly valid pack.json layer
-		//must still fail the whole archive - Validate walks every entry, not
-		//just the layer probes.
+		//A zip-slip path smuggled alongside a perfectly valid pack.json layer must still fail the whole archive - Validate
+		//walks every entry, not just the layer probes.
 		[Theory]
 		[MemberData(nameof(FixtureCases))]
 		public void Validate_HonorsFixtureVerdictEvenWithAValidLayerPresent(string path, bool expectedOk)
 		{
 			using ZipArchive zip = BuildZip(("pack.json", "{}"), (path, "x"));
-
 			string? result = MepZipValidator.Validate(zip);
-
 			if(expectedOk) {
 				Assert.Null(result);
 			} else {
@@ -112,9 +119,8 @@ namespace Mesen.Tests.Mep
 			}
 		}
 
-		//Control characters aren't part of the shared fixture (raw control bytes
-		//in a TAB-separated text file are fragile across editors/git) - covered
-		//directly here instead, via escape sequences.
+		//Control characters aren't part of the shared fixture (raw control bytes in a TAB-separated text file are fragile
+		//across editors/git) - covered directly here instead, via escape sequences.
 		[Theory]
 		[InlineData('\u0000')]
 		[InlineData('\u0001')]
@@ -122,9 +128,7 @@ namespace Mesen.Tests.Mep
 		[InlineData('\u001f')]
 		public void IsSafePath_RejectsControlCharacters(char controlChar)
 		{
-			string path = "textures/bad" + controlChar + "name.txt";
-
-			Assert.False(MepZipValidator.IsSafePath(path));
+			Assert.False(MepZipValidator.IsSafePath("textures/bad" + controlChar + "name.txt"));
 		}
 
 		[Fact]
@@ -137,7 +141,6 @@ namespace Mesen.Tests.Mep
 		public void PathCasesFixture_ContainsTheDocumentedRequiredCases()
 		{
 			List<(string path, bool ok)> cases = LoadPathCasesFixture().ToList();
-
 			Assert.Contains(cases, c => c.path == "../x" && !c.ok);
 			Assert.Contains(cases, c => c.path.Contains("/abs") && !c.ok);
 		}
@@ -163,9 +166,8 @@ namespace Mesen.Tests.Mep
 			return cases;
 		}
 
-		//Builds an in-memory zip with the given (entryName, textContent) pairs.
-		//Entry names are stored verbatim (including "bad" ones under test) - the
-		//zip format itself does not validate them, only MepZipValidator does.
+		//Builds an in-memory zip with the given (entryName, textContent) pairs. Entry names are stored verbatim (including
+		//"bad" ones under test) - the zip format itself does not validate them, only MepZipValidator does.
 		private static ZipArchive BuildZip(params (string name, string content)[] entries)
 		{
 			var stream = new MemoryStream();
@@ -181,9 +183,8 @@ namespace Mesen.Tests.Mep
 			return new ZipArchive(stream, ZipArchiveMode.Read);
 		}
 
-		//UI.Tests runs from bin/<config>/net10.0/ inside whichever checkout
-		//(worktree or main tree) built it - walk up to the nearest Mesen.sln
-		//instead of hardcoding an absolute repo path.
+		//UI.Tests runs from bin/<config>/net10.0/ inside whichever checkout (worktree or main tree) built it - walk up to
+		//the nearest Mesen.sln instead of hardcoding an absolute repo path.
 		private static string FindRepoRoot()
 		{
 			DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
