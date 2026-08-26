@@ -1,0 +1,26 @@
+name: Unit tests
+
+on: [push, pull_request]
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  ui-tests:
+    # Fase 0 (docs/roadmap/plano-testes-unitarios.md): cheap, cross-platform
+    # dotnet test job. Deliberately independent of tests.yml (the Windows
+    # ROM/PGOHelper suite) - no native build, no SDL2, no MesenCore.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Run unit tests
+        run: dotnet test UI.Tests/UI.Tests.csproj --nologo

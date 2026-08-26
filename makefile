@@ -200,7 +200,15 @@ ifeq ($(MESENOS),osx)
 	endif
 endif
 
+DOTNET ?= dotnet
+
 all: ui
+
+#Fase 0 (docs/roadmap/plano-testes-unitarios.md): host-free C# unit tests.
+#Deliberately has no dependency on the `core`/`ui` targets - runs on any OS
+#without SDL2 or the native MesenCore library.
+unit-tests:
+	$(DOTNET) test UI.Tests/UI.Tests.csproj --nologo
 
 check-manifest:
 	./scripts/check-core-manifest.sh

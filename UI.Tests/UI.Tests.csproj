@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		Fase 0 test harness (docs/roadmap/plano-testes-unitarios.md).
+		Deliberately host-free: no RuntimeIdentifier, no ProjectReference to UI/UI.csproj,
+		no Avalonia/EmuApi packages. This project must be able to `dotnet test` on any OS
+		without SDL2/MesenCore/Avalonia being present. See UI.Tests/AGENTS.md.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<RootNamespace>Mesen.Tests</RootNamespace>
+		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- This project's own tests (obj/bin excluded: EnableDefaultCompileItems=false means
+		     this manual glob would otherwise pick up generated files under obj/ too). -->
+		<Compile Include="**/*.cs" Exclude="bin/**/*.cs;obj/**/*.cs" />
+		<!-- Host-free logic under UI/Logic/, compiled a second time here (no ProjectReference
+		     to UI.csproj) so any accidental Avalonia/EmuApi dependency breaks `dotnet test`
+		     instead of only being caught by review. -->
+		<Compile Include="../UI/Logic/**/*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+		<PackageReference Include="xunit" Version="2.9.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+	</ItemGroup>
+
+</Project>

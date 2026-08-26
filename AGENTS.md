@@ -85,6 +85,7 @@ When the user requests a durable behavior change, record it here or in the relev
 - Linux/ — Linux platform support layer
 - MacOS/ — macOS platform support layer
 - UI/ — .NET desktop UI application
+- UI.Tests/ — xunit harness for host-free UI/Logic/ code (Fase 0, docs/roadmap/plano-testes-unitarios.md)
 - Windows/ — Windows platform support layer
 - Utilities/ — Shared utilities and helper code
 - Lua/ — Lua scripting integration
