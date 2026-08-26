@@ -43,6 +43,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `make_gb_test_rom.py`,
   `validate_hdpack_dump.py` - Python spec/golden/pack validators and
   test-ROM/test-pack generators; no emulator dependency.
+- `validate_palette_variants.py` (F5.4b) - builds `headless_record` via
+  `make capture-tool` if missing, records `roms/Zelda.nes` with the `hdpack`
+  flag, and checks that `HdPackBuilder::ProcessTile` now captures more than
+  one distinct palette for at least one tile shape instead of collapsing
+  into a single `DefaultTile` wildcard entry. Needs `make core`/a real ROM,
+  unlike the fixture-only validators above.
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh` - repo-hygiene shell checks run from `make`
   or CI.

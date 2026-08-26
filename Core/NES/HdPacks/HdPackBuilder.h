@@ -18,6 +18,19 @@ private:
 	unordered_map<HdTileKey, uint32_t> _tileUsageCount;
 	unordered_map<HdTileKey, HdPackTileInfo*> _tilesByKey;
 	std::map<uint32_t, std::map<uint32_t, vector<HdPackTileInfo*>>> _tilesByChrBankByPalette;
+
+	//F5.4b: real palette variants captured so far per tile shape (shapeKey =
+	//tile.GetKey(true) - same tile content, PaletteColors wildcarded). ProcessTile
+	//promotes the first real-palette sighting of a shape (even one that so far only
+	//has a DefaultTile neutral-ramp entry) into its own HdPackTileInfo, and keeps
+	//doing that for each further distinct PaletteColors value seen for the same
+	//shape, up to MaxPaletteVariantsPerTile. Beyond that cap, further sightings just
+	//bump usage on the shape's last captured variant instead of growing the pack.
+	//Not seeded from an existing on-disk pack at construction (same gap noted below
+	//for _screensSeen) - a re-record session can add up to MaxPaletteVariantsPerTile
+	//more variants on top of what is already on disk.
+	unordered_map<HdTileKey, vector<HdPackTileInfo*>> _paletteVariantsByShape;
+	static constexpr uint32_t MaxPaletteVariantsPerTile = 8;
 	bool _isChrRam = false;
 	string _saveFolder;
 	string _romName;
@@ -57,6 +70,11 @@ private:
 	void AddTile(HdPackTileInfo* tile, uint32_t usageCount);
 	void GenerateHdTile(HdPackTileInfo* tile);
 	void DrawTile(HdPackTileInfo* tile, int tileIndex, uint32_t* pngBuffer, int pageNumber, bool containsSpritesOnly);
+
+	//F5.4b: ProcessTile helpers (kept separate to stay under the per-function line/
+	//complexity limits) - see _paletteVariantsByShape above for the overall design.
+	void UpdateTileUsage(const HdTileKey& exactKey, unordered_map<HdTileKey, uint32_t>::iterator usage, bool transparencyRequired);
+	void CaptureOrCapPaletteVariant(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, uint32_t chrBankHash, bool transparencyRequired);
 
 public:
 	HdPackBuilder(Emulator* emu, PpuModel ppuModel, bool isChrRam, HdPackBuilderOptions options);

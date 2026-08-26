@@ -102,6 +102,56 @@ void HdPackBuilder::AddTile(HdPackTileInfo* tile, uint32_t usageCount)
 	_tileUsageCount[tile->GetKey(false)] = usageCount;
 }
 
+void HdPackBuilder::UpdateTileUsage(const HdTileKey& exactKey, unordered_map<HdTileKey, uint32_t>::iterator usage, bool transparencyRequired)
+{
+	//Already captured this exact tile shape/palette combination before
+	if(transparencyRequired) {
+		auto existingTile = _tilesByKey.find(exactKey);
+		if(existingTile != _tilesByKey.end()) {
+			existingTile->second->TransparencyRequired = true;
+		}
+	}
+
+	if(usage->second < 0x7FFFFFFF) {
+		//Increase usage count
+		usage->second++;
+	}
+}
+
+void HdPackBuilder::CaptureOrCapPaletteVariant(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, uint32_t chrBankHash, bool transparencyRequired)
+{
+	//New palette for this tile shape - whether never seen before, or so far only a
+	//DefaultTile neutral-ramp entry (AddRomTiles/AddPrgScanTiles). Every distinct real
+	//PaletteColors value seen for the shape is promoted into its own HdPackTileInfo, up
+	//to MaxPaletteVariantsPerTile, instead of collapsing into a single wildcard match.
+	vector<HdPackTileInfo*>& variants = _paletteVariantsByShape[tile.GetKey(true)];
+	if(variants.size() >= MaxPaletteVariantsPerTile) {
+		//Cap reached: don't grow the pack further, just bump usage on the shape's most
+		//recently captured variant instead of creating a new entry.
+		HdPackTileInfo* fallbackTile = variants.back();
+		fallbackTile->TransparencyRequired |= transparencyRequired;
+		auto fallbackUsage = _tileUsageCount.find(fallbackTile->GetKey(false));
+		if(fallbackUsage != _tileUsageCount.end() && fallbackUsage->second < 0x7FFFFFFF) {
+			fallbackUsage->second++;
+		}
+		return;
+	}
+
+	HdPackTileInfo* hdTile = new HdPackTileInfo();
+	hdTile->PaletteColors = tile.PaletteColors;
+	hdTile->TileIndex = tile.TileIndex;
+	hdTile->DefaultTile = false;
+	hdTile->IsChrRamTile = _isChrRam;
+	hdTile->Brightness = 255;
+	hdTile->ChrBankId = _isChrRam ? chrBankHash : (tileAddr / 16 / 256);
+	hdTile->TransparencyRequired = transparencyRequired;
+	memcpy(hdTile->TileData, tile.TileData, 16);
+
+	_hdData.Tiles.push_back(unique_ptr<HdPackTileInfo>(hdTile));
+	AddTile(hdTile, 1);
+	variants.push_back(hdTile);
+}
+
 void HdPackBuilder::ProcessTile(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, BaseMapper* mapper, bool isSprite, uint32_t chrBankHash, bool transparencyRequired)
 {
 	if(_options.IgnoreOverscan) {
@@ -112,39 +162,12 @@ void HdPackBuilder::ProcessTile(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpu
 		}
 	}
 
-	auto result = _tileUsageCount.find(tile.GetKey(false));
-	if(result == _tileUsageCount.end()) {
-		//Check to see if a default tile matches
-		result = _tileUsageCount.find(tile.GetKey(true));
-	}
-
-	if(result == _tileUsageCount.end()) {
-		//First time seeing this tile/palette combination, store it
-		HdPackTileInfo* hdTile = new HdPackTileInfo();
-		hdTile->PaletteColors = tile.PaletteColors;
-		hdTile->TileIndex = tile.TileIndex;
-		hdTile->DefaultTile = false;
-		hdTile->IsChrRamTile = _isChrRam;
-		hdTile->Brightness = 255;
-		hdTile->ChrBankId = _isChrRam ? chrBankHash : (tileAddr / 16 / 256);
-		hdTile->TransparencyRequired = transparencyRequired;
-
-		memcpy(hdTile->TileData, tile.TileData, 16);
-
-		_hdData.Tiles.push_back(unique_ptr<HdPackTileInfo>(hdTile));
-		AddTile(hdTile, 1);
+	HdTileKey exactKey = tile.GetKey(false);
+	auto result = _tileUsageCount.find(exactKey);
+	if(result != _tileUsageCount.end()) {
+		UpdateTileUsage(exactKey, result, transparencyRequired);
 	} else {
-		if(transparencyRequired) {
-			auto existingTile = _tilesByKey.find(tile.GetKey(false));
-			if(existingTile != _tilesByKey.end()) {
-				existingTile->second->TransparencyRequired = true;
-			}
-		}
-
-		if(result->second < 0x7FFFFFFF) {
-			//Increase usage count
-			result->second++;
-		}
+		CaptureOrCapPaletteVariant(x, y, tileAddr, tile, chrBankHash, transparencyRequired);
 	}
 }
 
