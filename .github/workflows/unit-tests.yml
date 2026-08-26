@@ -8,7 +8,8 @@ env:
 
 jobs:
   ui-tests:
-    # Fase 0 (docs/roadmap/plano-testes-unitarios.md): cheap, cross-platform
+    # Fase 0 of the now-completed unit-test plan - see git history for
+    # docs/roadmap/plano-testes-unitarios.md - cheap, cross-platform
     # dotnet test job. Deliberately independent of tests.yml (the Windows
     # ROM/PGOHelper suite) - no native build, no SDL2, no MesenCore.
     runs-on: ubuntu-latest
@@ -24,3 +25,6 @@ jobs:
 
       - name: Run unit tests
         run: dotnet test UI.Tests/UI.Tests.csproj --nologo
+
+      - name: Run core unit tests
+        run: make core-unit-tests
