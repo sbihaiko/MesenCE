@@ -29,7 +29,10 @@ namespace
 		}
 	}
 
-	double NoteToFreq(double note) { return 440.0 * std::pow(2.0, (note - 69.0) / 12.0); }
+	double NoteToFreq(double note)
+	{
+		return 440.0 * std::pow(2.0, (note - 69.0) / 12.0);
+	}
 
 	//--- Bloco A: ChannelRoleClassifier -------------------------------------
 
@@ -54,7 +57,7 @@ namespace
 	//seconds for 8 steps; returns the OR of every SfxCue seen along the way.
 	uint8_t RunHwSweepGlide(ChannelRoleClassifier& roles, double stepSemitones, double dt)
 	{
-		ChannelRoleClassifier::Channel ch{ NoteToFreq(60.0), 0.8, true };
+		ChannelRoleClassifier::Channel ch { NoteToFreq(60.0), 0.8, true };
 		roles.Update(&ch, dt); //onset: establishes the baseline pitch
 		uint8_t cues = 0;
 		double note = 60.0;
