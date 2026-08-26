@@ -1,0 +1,46 @@
+name: Community pack catalog
+
+# Regenera docs/community-packs.md a partir do board "MesenCE Community
+# Packs" (Project 3, owner sbihaiko, node id PVT_kwHOB1MsbM4BhjpN).
+#
+# Trigger: só workflow_dispatch neste arquivo. community-pack-validate.yml
+# também dispara este workflow (via `gh workflow run community-pack-catalog.yml`)
+# quando o veredito final é um dos dois estados "Aceito*" — essa chamada
+# vive no arquivo do workflow reutilizável, não aqui.
+#
+# `gh project item-list` (usado por scripts/generate_community_pack_catalog.py)
+# exige Projects v2 read; o GITHUB_TOKEN padrão não enxerga Projects v2 num
+# repo pessoal, então este job precisa de um PAT com escopo `project`
+# configurado manualmente como secret do repo (nome exato: `PROJECTS_PAT`).
+# Esse secret não é criado por este workflow nem por nenhuma automação.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-catalog:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECTS_PAT }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Generate community-packs.md
+        run: python3 scripts/generate_community_pack_catalog.py
+
+      - name: Commit regenerated catalog
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/community-packs.md; then
+            echo "docs/community-packs.md sem mudanças, nada a commitar."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/community-packs.md
+          git commit -m "chore: regenerate docs/community-packs.md"
+          git push
