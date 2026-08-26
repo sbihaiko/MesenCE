@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mesen.Config;
+using Mesen.Interop;
 using Mesen.Utilities;
 using System;
 using System.Linq;
@@ -23,6 +24,12 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial VideoConfig Config { get; set; }
 		[ObservableProperty] public partial VideoConfig OriginalConfig { get; set; }
 		public UInt32[] AvailableRefreshRates { get; } = new UInt32[] { 50, 60, 75, 100, 120, 144, 200, 240, 360 };
+
+		//NtscScale/NtscYFilterLength/NtscIFilterLength/NtscQFilterLength are only read by
+		//BisqwitNtscFilter (NES-only, see Core/NES/BisqwitNtscFilter.cpp). GB/SMS/GBA route
+		//NtscBisqwit to the same generic filter as NtscBlargg, so this panel has no effect
+		//there - only show it while the active game is NES.
+		[ObservableProperty] public partial bool ShowBisqwitSettingsPanel { get; set; }
 
 		public VideoConfigViewModel()
 		{
@@ -55,6 +62,16 @@ namespace Mesen.ViewModels
 			}
 
 			AddDisposable(ReactiveHelper.RegisterRecursiveObserver(Config, (s, e) => { Config.ApplyConfig(); }));
+
+			AddDisposable(Config.ObserveProp(nameof(VideoConfig.VideoFilter), UpdateBisqwitSettingsPanel));
+			AddDisposable(MainWindowViewModel.Instance.ObserveProp(nameof(MainWindowViewModel.RomInfo), UpdateBisqwitSettingsPanel));
+			UpdateBisqwitSettingsPanel();
+		}
+
+		private void UpdateBisqwitSettingsPanel()
+		{
+			bool isNes = MainWindowViewModel.Instance.RomInfo.ConsoleType == ConsoleType.Nes;
+			ShowBisqwitSettingsPanel = isNes && Config.VideoFilter == VideoFilterType.NtscBisqwit;
 		}
 
 		private void SetNtscPreset(int hue, int saturation, int contrast, int brightness, int sharpness, int gamma, int resolution, int artifacts, int fringing, int bleed, int scanlines, bool mergeFields)

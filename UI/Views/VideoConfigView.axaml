@@ -171,7 +171,7 @@
 
 							<c:OptionSection
 								Header="{l:Translate lblNtscBisqwitSettings}"
-								IsVisible="{Binding Config.VideoFilter, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static cfg:VideoFilterType.NtscBisqwit}}"
+								IsVisible="{Binding ShowBisqwitSettingsPanel}"
 							>
 								<Grid ColumnDefinitions="Auto,*">
 									<TextBlock Text="{l:Translate lblNtscFilterScale}" VerticalAlignment="Center" />

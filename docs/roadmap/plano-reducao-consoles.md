@@ -1,10 +1,10 @@
-# Plano — produto do fork: `main` + cores reduzidos
+# Plano — produto do fork: `main` + consoles reduzidos
 
 **Status:** concluída (2026-08-26) — `main` é a default; NES, GB/GBC/GBS, SMS/GG/SG-1000 e GBA restam. SNES (incl. SGB), PC Engine, WonderSwan e ColecoVision estão fora. ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES já estava fora das fases) ·
 **Fora de spec:** corte de emulação, não de formato de pack.
 
-Este fork não tem fluxo de PR para [nesdev-org/MesenCE](https://github.com/nesdev-org/MesenCE) (`CONTRIBUTING.md`). Depois de cortar SNES / PC Engine / WonderSwan / ColecoVision, um `git merge upstream/master` (ou o botão **Sync fork** do GitHub) reintroduz os cores. Por isso a troca da branch principal vem **antes** de apagar código.
+Este fork não tem fluxo de PR para [nesdev-org/MesenCE](https://github.com/nesdev-org/MesenCE) (`CONTRIBUTING.md`). Depois de cortar SNES / PC Engine / WonderSwan / ColecoVision, um `git merge upstream/master` (ou o botão **Sync fork** do GitHub) reintroduz os consoles. Por isso a troca da branch principal vem **antes** de apagar código.
 
 ## Critério de sucesso
 
@@ -17,7 +17,7 @@ O default do `sbihaiko/MesenCE` é `main`. Nela o emulador carrega só:
 
 ColecoVision, SNES (emulação: SGB, MSU-1, coprocessors), PC Engine (incl. CD) e WonderSwan não carregam ROM, não aparecem no file dialog e não têm tela de settings de sistema. CI (clang-format, unit tests, Run tests, Build) verde em `main`. Badges e nightly.link apontam para `main`.
 
-**Input SNES fica.** Pad, mouse e NTT Data Keypad (`ControllerType::SnesController` e afins) continuam como dispositivos de porta nos cores vivos — no NES o dropdown já os lista; um USB/Bluetooth com layout SNES mapeia no host como qualquer outro pad. Não voltar o core, o Super Scope, Multitap, rumble/BlueRetro (dependiam de `SnesConsole`), nem `.sfc`/`.spc`.
+**Input SNES fica.** Pad, mouse e NTT Data Keypad (`ControllerType::SnesController` e afins) continuam como dispositivos de porta nos corconsoleses vivos — no NES o dropdown já os lista; um USB/Bluetooth com layout SNES mapeia no host como qualquer outro pad. Não voltar o core, o Super Scope, Multitap, rumble/BlueRetro (dependiam de `SnesConsole`), nem `.sfc`/`.spc`.
 
 ## Decisão de branch — sim, mudar a default
 
