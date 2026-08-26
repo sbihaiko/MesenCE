@@ -2,7 +2,7 @@
 
 This is a personal fork of [MesenCE](https://github.com/nesdev-org/MesenCE). It exists because the work here — the Enhanced Audio engine and the broader [Community Enhancement Ecosystem](docs/enhancement-ecosystem.md) — is built with the help of AI tools, which the upstream project's [contribution policy](https://github.com/nesdev-org/MesenCE/blob/master/CONTRIBUTING.md) does not allow. There is no upstream PR flow for this work; it lives here.
 
-**Product branch is `main`.** `master` is a frozen full-console snapshot. Do not use GitHub **Sync fork** and do not `git merge upstream/master` into `main` — that reintroduces consoles this fork dropped. Bugfixes from upstream are cherry-picked file-by-file. Code taken *from* upstream still follows upstream's style (clang-format / dotnet format) so those cherry-picks stay readable.
+**Product branch is `main`.** `master` is a frozen full-console snapshot. Do not use GitHub **Sync fork** and do not `git merge upstream/master` into `main` — that reintroduces consoles this fork dropped (SNES including SGB, PC Engine, WonderSwan, ColecoVision). Remaining cores: NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA. Bugfixes from upstream are cherry-picked file-by-file. Code taken *from* upstream still follows upstream's style (clang-format / dotnet format) so those cherry-picks stay readable.
 
 ## Licensing
 

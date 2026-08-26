@@ -1,6 +1,6 @@
 # Plano — produto do fork: `main` + cores reduzidos
 
-**Status:** F0–F3 feitos na `main` (2026-08-26) — Coleco / WonderSwan / PC Engine fora; F4 SNES+SGB pendente ·
+**Status:** concluída (2026-08-26) — `main` é a default; NES, GB/GBC/GBS, SMS/GG/SG-1000 e GBA restam. SNES (incl. SGB), PC Engine, WonderSwan e ColecoVision estão fora. ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES já estava fora das fases) ·
 **Fora de spec:** corte de emulação, não de formato de pack.
 
