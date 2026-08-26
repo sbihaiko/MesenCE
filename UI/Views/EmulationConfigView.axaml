@@ -151,18 +151,7 @@
 						</Grid>
 					</c:OptionSection>
 					
-					<c:OptionSection Header="{l:Translate lblWonderSwan}" Icon="Assets/WsIcon.png" >
-						<Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*">
-							<TextBlock Text="Boot ROM (WonderSwan)" />
-							<c:FirmwareSelect FirmwareType="WonderSwan" Grid.Column="1" />
 
-							<TextBlock Text="Boot ROM (WonderSwan Color)" Grid.Row="1" />
-							<c:FirmwareSelect FirmwareType="WonderSwanColor" Grid.Column="1" Grid.Row="1" />
-
-							<TextBlock Text="Boot ROM (SwanCrystal)" Grid.Row="2" />
-							<c:FirmwareSelect FirmwareType="SwanCrystal" Grid.Column="1" Grid.Row="2" />
-						</Grid>
-					</c:OptionSection>
 
 
 				</StackPanel>

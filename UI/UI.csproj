@@ -257,9 +257,7 @@
     <Compile Update="Debugger\Views\GbaEventViewerConfigView.axaml.cs">
       <DependentUpon>GbaEventViewerConfigView.axaml</DependentUpon>
     </Compile>
-    <Compile Update="Debugger\Views\WsEventViewerConfigView.axaml.cs">
-      <DependentUpon>WsEventViewerConfigView.axaml</DependentUpon>
-    </Compile>
+
     <Compile Update="Debugger\Views\SmsEventViewerConfigView.axaml.cs">
       <DependentUpon>SmsEventViewerConfigView.axaml</DependentUpon>
     </Compile>
@@ -287,18 +285,7 @@
     <Compile Update="Debugger\Windows\CommentEditWindow.axaml.cs">
       <DependentUpon>CommentEditWindow.axaml</DependentUpon>
     </Compile>
-    <Compile Update="Views\WsControllerVerticalView.axaml.cs">
-      <DependentUpon>WsControllerVerticalView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\WsPcv2ControllerView.axaml.cs">
-      <DependentUpon>WsPcv2ControllerView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\WsControllerView.axaml.cs">
-      <DependentUpon>WsControllerView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\WsConfigView.axaml.cs">
-      <DependentUpon>WsConfigView.axaml</DependentUpon>
-    </Compile>
+
     <Compile Update="Views\VideoConfigOverrideView.axaml.cs">
       <DependentUpon>VideoConfigOverrideView.axaml</DependentUpon>
     </Compile>

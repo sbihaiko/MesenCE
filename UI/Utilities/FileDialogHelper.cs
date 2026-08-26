@@ -61,7 +61,6 @@ namespace Mesen.Utilities
 								"*.pce", "*.sgx", "*.cue", "*.hes",
 								"*.sms", "*.gg", "*.sg",
 								"*.gba",
-								"*.ws", "*.wsc", "*.pc2",
 								"*.zip", "*.7z",
 								"*.ips", "*.bps"
 							}
@@ -73,10 +72,9 @@ namespace Mesen.Utilities
 						filter.Add(new FilePickerFileType("PC Engine ROM files") { Patterns = new List<string>() { "*.pce", "*.sgx", "*.cue", "*.hes" } });
 						filter.Add(new FilePickerFileType("SMS / GG ROM files") { Patterns = new List<string>() { "*.sms", "*.gg" } });
 						filter.Add(new FilePickerFileType("SG-1000 ROM files") { Patterns = new List<string>() { "*.sg" } });
-						filter.Add(new FilePickerFileType("WonderSwan ROM files") { Patterns = new List<string>() { "*.ws", "*.wsc", "*.pc2" } });
 						filter.Add(new FilePickerFileType("Patch files (IPS/BPS)") { Patterns = new List<string>() { "*.ips", "*.bps" } });
 					} else if(ext == FileDialogHelper.FirmwareExt) {
-						filter.Add(new FilePickerFileType("All firmware files") { Patterns = new List<string>() { "*.sfc", "*.pce", "*.nes", "*.bin", "*.rom", "*.sms", "*.gg", "*.gba", "*.ws", "*.wsc" } });
+						filter.Add(new FilePickerFileType("All firmware files") { Patterns = new List<string>() { "*.sfc", "*.pce", "*.nes", "*.bin", "*.rom", "*.sms", "*.gg", "*.gba" } });
 					} else if(ext == FileDialogHelper.LabelFileExt) {
 						filter.Add(new FilePickerFileType("All label files") { Patterns = new List<string>() { "*.mlb", "*.sym", "*.dbg", "*.fns", "*.elf", "*.cdb" } });
 					} else if(ext == FileDialogHelper.MovieFileExt) {

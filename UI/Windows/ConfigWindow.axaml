@@ -50,10 +50,6 @@
 		<DataTemplate DataType="{x:Type vm:SmsConfigViewModel}">
 			<v:SmsConfigView />
 		</DataTemplate>
-		<DataTemplate DataType="{x:Type vm:WsConfigViewModel}">
-			<v:WsConfigView />
-		</DataTemplate>
-
 		<DataTemplate DataType="{x:Type vm:PreferencesConfigViewModel}">
 			<v:PreferencesConfigView />
 		</DataTemplate>
@@ -164,15 +160,6 @@
 				</TabItem.Header>
 			</TabItem>
 
-			<TabItem Content="{Binding Ws}">
-				<TabItem.Header>
-					<StackPanel Orientation="Horizontal">
-						<Image Source="/Assets/WsIcon.png" Margin="0 0 10 0" />
-						<TextBlock VerticalAlignment="Center" Text="{l:Translate tabWs}" />
-					</StackPanel>
-				</TabItem.Header>
-			</TabItem>
-			
 
 			<TabItem IsEnabled="False" MinHeight="10">
 				<TabItem.Header>

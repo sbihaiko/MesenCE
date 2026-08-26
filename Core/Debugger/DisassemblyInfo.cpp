@@ -19,7 +19,6 @@
 #include "PCE/Debugger/PceDisUtils.h"
 #include "SMS/Debugger/SmsDisUtils.h"
 #include "GBA/Debugger/GbaDisUtils.h"
-#include "WS/Debugger/WsDisUtils.h"
 #include "Shared/EmuSettings.h"
 
 DisassemblyInfo::DisassemblyInfo()
@@ -80,7 +79,6 @@ void DisassemblyInfo::GetDisassembly(string& out, uint32_t memoryAddr, LabelMana
 		case CpuType::Pce: PceDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Sms: SmsDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Gba: GbaDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
-		case CpuType::Ws: WsDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 
 		default:
 			throw std::runtime_error("GetDisassembly - Unsupported CPU type");
@@ -115,7 +113,6 @@ EffectiveAddressInfo DisassemblyInfo::GetEffectiveAddress(Debugger* debugger, vo
 		case CpuType::Pce: return PceDisUtils::GetEffectiveAddress(*this, (PceConsole*)debugger->GetConsole(), *(PceCpuState*)cpuState);
 		case CpuType::Sms: return SmsDisUtils::GetEffectiveAddress(*this, (SmsConsole*)debugger->GetConsole(), *(SmsCpuState*)cpuState);
 		case CpuType::Gba: return GbaDisUtils::GetEffectiveAddress(*this, (GbaConsole*)debugger->GetConsole(), *(GbaCpuState*)cpuState);
-		case CpuType::Ws: return WsDisUtils::GetEffectiveAddress(*this, (WsConsole*)debugger->GetConsole(), *(WsCpuState*)cpuState);
 	}
 
 	throw std::runtime_error("GetEffectiveAddress - Unsupported CPU type");
@@ -140,7 +137,6 @@ uint32_t DisassemblyInfo::GetFullOpCode()
 		case CpuType::Cx4: return _byteCode[1];
 		case CpuType::St018: return _byteCode[0] | (_byteCode[1] << 8) | (_opSize == 4 ? ((_byteCode[2] << 16) | (_byteCode[3] << 24)) : 0);
 		case CpuType::Gba: return _byteCode[0] | (_byteCode[1] << 8) | (_opSize == 4 ? ((_byteCode[2] << 16) | (_byteCode[3] << 24)) : 0);
-		case CpuType::Ws: return WsDisUtils::GetFullOpCode(*this);
 	}
 }
 
@@ -197,7 +193,6 @@ uint8_t DisassemblyInfo::GetOpSize(uint32_t opCode, uint8_t flags, CpuType type,
 		case CpuType::Pce: return PceDisUtils::GetOpSize(opCode);
 		case CpuType::Sms: return SmsDisUtils::GetOpSize(opCode, cpuAddress, memType, memoryDumper);
 		case CpuType::Gba: return GbaDisUtils::GetOpSize(opCode, flags);
-		case CpuType::Ws: return WsDisUtils::GetOpSize(cpuAddress, memType, memoryDumper);
 	}
 
 	throw std::runtime_error("GetOpSize - Unsupported CPU type");
@@ -218,7 +213,6 @@ bool DisassemblyInfo::IsJumpToSub()
 		case CpuType::Pce: return PceDisUtils::IsJumpToSub(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsJumpToSub(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsJumpToSub(GetFullOpCode<CpuType::Gba>(), _flags);
-		case CpuType::Ws: return WsDisUtils::IsJumpToSub(GetFullOpCode<CpuType::Ws>());
 	}
 
 	throw std::runtime_error("IsJumpToSub - Unsupported CPU type");
@@ -239,7 +233,6 @@ bool DisassemblyInfo::IsReturnInstruction()
 		case CpuType::Pce: return PceDisUtils::IsReturnInstruction(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsReturnInstruction(_byteCode[0] | (_byteCode[1] << 8));
 		case CpuType::Gba: return GbaDisUtils::IsReturnInstruction(GetFullOpCode<CpuType::Gba>(), _flags);
-		case CpuType::Ws: return WsDisUtils::IsReturnInstruction(GetFullOpCode<CpuType::Ws>());
 	}
 
 	throw std::runtime_error("IsReturnInstruction - Unsupported CPU type");
@@ -275,7 +268,6 @@ bool DisassemblyInfo::IsUnconditionalJump()
 		case CpuType::Pce: return PceDisUtils::IsUnconditionalJump(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsUnconditionalJump(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsUnconditionalJump(GetFullOpCode<CpuType::Gba>(), _flags);
-		case CpuType::Ws: return WsDisUtils::IsUnconditionalJump(GetFullOpCode<CpuType::Ws>());
 	}
 
 	throw std::runtime_error("IsUnconditionalJump - Unsupported CPU type");
@@ -301,7 +293,6 @@ bool DisassemblyInfo::IsJump()
 		case CpuType::Pce: return PceDisUtils::IsConditionalJump(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsConditionalJump(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsConditionalJump(GetFullOpCode<CpuType::Gba>(), _flags);
-		case CpuType::Ws: return WsDisUtils::IsConditionalJump(GetFullOpCode<CpuType::Ws>());
 	}
 
 	throw std::runtime_error("IsJump - Unsupported CPU type");

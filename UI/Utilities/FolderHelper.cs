@@ -16,8 +16,7 @@ namespace Mesen.Utilities
 			".nes", ".unif", ".unf", ".fds", ".qd", ".studybox",
 			".pce", ".sgx", ".cue",
 			".sms", ".gg", ".sg",
-			".gba",
-			".ws", ".wsc", ".pc2"
+			".gba"
 		};
 
 		public static bool IsRomFile(string path)

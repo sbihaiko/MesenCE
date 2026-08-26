@@ -286,9 +286,6 @@ private:
 	unordered_map<string, int64_t>& GetGbaTokens();
 	int64_t GetGbaTokenValue(int64_t token, EvalResultType& resultType);
 
-	unordered_map<string, int64_t>& GetWsTokens();
-	int64_t GetWsTokenValue(int64_t token, EvalResultType& resultType);
-
 	bool ReturnBool(int64_t value, EvalResultType& resultType);
 
 	int64_t ProcessSharedTokens(string token);

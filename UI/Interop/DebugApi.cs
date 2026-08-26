@@ -121,7 +121,6 @@ namespace Mesen.Interop
 				CpuType.Pce => GetPpuState<PceVideoState>(cpuType),
 				CpuType.Sms => GetPpuState<SmsVdpState>(cpuType),
 				CpuType.Gba => GetPpuState<GbaPpuState>(cpuType),
-				CpuType.Ws => GetPpuState<WsPpuState>(cpuType),
 				_ => throw new Exception("Unsupported cpu type")
 			};
 		}
@@ -409,7 +408,6 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropGbaEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropPceEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropSmsEventViewerConfig config);
-		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropWsEventViewerConfig config);
 
 		[DllImport(DllPath, EntryPoint = "GetEventViewerEvent")] private static extern DebugEventInfo GetEventViewerEventWrapper(CpuType cpuType, UInt16 scanline, UInt16 cycle);
 		public static DebugEventInfo? GetEventViewerEvent(CpuType cpuType, UInt16 scanline, UInt16 cycle)
@@ -570,7 +568,6 @@ namespace Mesen.Interop
 				ConsoleType.PcEngine => state is PceVideoState,
 				ConsoleType.Sms => state is SmsVdpState,
 				ConsoleType.Gba => state is GbaPpuState,
-				ConsoleType.Ws => state is WsPpuState,
 				_ => false
 			};
 		}
@@ -1012,45 +1009,6 @@ namespace Mesen.Interop
 
 		public InteropEventViewerCategoryCfg GameGearPortWrite;
 		public InteropEventViewerCategoryCfg GameGearPortRead;
-
-		[MarshalAs(UnmanagedType.I1)] public bool ShowPreviousFrameEvents;
-	}
-
-	[StructLayout(LayoutKind.Sequential)]
-	public class InteropWsEventViewerConfig
-	{
-		public InteropEventViewerCategoryCfg PpuPaletteRead;
-		public InteropEventViewerCategoryCfg PpuPaletteWrite;
-		public InteropEventViewerCategoryCfg PpuVramRead;
-		public InteropEventViewerCategoryCfg PpuVramWrite;
-		public InteropEventViewerCategoryCfg PpuVCounterRead;
-		public InteropEventViewerCategoryCfg PpuScrollRead;
-		public InteropEventViewerCategoryCfg PpuScrollWrite;
-		public InteropEventViewerCategoryCfg PpuWindowRead;
-		public InteropEventViewerCategoryCfg PpuWindowWrite;
-		public InteropEventViewerCategoryCfg PpuOtherRead;
-		public InteropEventViewerCategoryCfg PpuOtherWrite;
-		public InteropEventViewerCategoryCfg AudioRead;
-		public InteropEventViewerCategoryCfg AudioWrite;
-		public InteropEventViewerCategoryCfg SerialRead;
-		public InteropEventViewerCategoryCfg SerialWrite;
-		public InteropEventViewerCategoryCfg DmaRead;
-		public InteropEventViewerCategoryCfg DmaWrite;
-		public InteropEventViewerCategoryCfg InputRead;
-		public InteropEventViewerCategoryCfg InputWrite;
-		public InteropEventViewerCategoryCfg IrqRead;
-		public InteropEventViewerCategoryCfg IrqWrite;
-		public InteropEventViewerCategoryCfg TimerRead;
-		public InteropEventViewerCategoryCfg TimerWrite;
-		public InteropEventViewerCategoryCfg EepromRead;
-		public InteropEventViewerCategoryCfg EepromWrite;
-		public InteropEventViewerCategoryCfg CartRead;
-		public InteropEventViewerCategoryCfg CartWrite;
-		public InteropEventViewerCategoryCfg OtherRead;
-		public InteropEventViewerCategoryCfg OtherWrite;
-
-		public InteropEventViewerCategoryCfg Irq;
-		public InteropEventViewerCategoryCfg MarkedBreakpoints;
 
 		[MarshalAs(UnmanagedType.I1)] public bool ShowPreviousFrameEvents;
 	}

@@ -34,7 +34,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial SmsConfig Sms { get; set; } = new();
 		[ObservableProperty] public partial EnhancementPackConfig EnhancementPacks { get; set; } = new();
 		[ObservableProperty] public partial GbaConfig Gba { get; set; } = new();
-		[ObservableProperty] public partial WsConfig Ws { get; set; } = new();
 		[ObservableProperty] public partial PreferencesConfig Preferences { get; set; } = new();
 		[ObservableProperty] public partial AudioPlayerConfig AudioPlayer { get; set; } = new();
 		[ObservableProperty] public partial DebugConfig Debug { get; set; } = new();
@@ -90,7 +89,6 @@ namespace Mesen.Config
 			Snes.ApplyConfig();
 			Sms.ApplyConfig();
 			EnhancementPacks.ApplyConfig();
-			Ws.ApplyConfig();
 			Preferences.ApplyConfig();
 			AudioPlayer.ApplyConfig();
 			Debug.ApplyConfig();
@@ -120,10 +118,6 @@ namespace Mesen.Config
 				Gba.InitializeDefaults(DefaultKeyMappings);
 			}
 
-			if(ConfigUpgrade < (int)ConfigUpgradeHint.WsInput) {
-				Ws.InitializeDefaults(DefaultKeyMappings);
-			}
-
 			ConfigUpgrade = (int)ConfigUpgradeHint.NextValue - 1;
 			Version = EmuApi.GetMesenVersion().ToString(3);
 		}
@@ -137,8 +131,6 @@ namespace Mesen.Config
 				Gba.InitializeDefaults(DefaultKeyMappings);
 				PcEngine.InitializeDefaults(DefaultKeyMappings);
 				Sms.InitializeDefaults(DefaultKeyMappings);
-				Cv.InitializeDefaults(DefaultKeyMappings);
-				Ws.InitializeDefaults(DefaultKeyMappings);
 				ConfigUpgrade = (int)ConfigUpgradeHint.NextValue - 1;
 			}
 			Preferences.InitializeDefaultShortcuts();

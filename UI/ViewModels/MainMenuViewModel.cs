@@ -426,7 +426,6 @@ namespace Mesen.ViewModels
 					SubActions = new List<object>() {
 						GetRegionMenuItem(ConsoleRegion.Auto),
 						GetPcEngineModelMenuItem(PceConsoleType.Auto),
-						GetWsModelMenuItem(WsModel.Auto),
 						new ContextMenuSeparator(),
 						GetRegionMenuItem(ConsoleRegion.Ntsc),
 						GetRegionMenuItem(ConsoleRegion.NtscJapan),
@@ -435,10 +434,6 @@ namespace Mesen.ViewModels
 						GetPcEngineModelMenuItem(PceConsoleType.PcEngine),
 						GetPcEngineModelMenuItem(PceConsoleType.SuperGrafx),
 						GetPcEngineModelMenuItem(PceConsoleType.TurboGrafx),
-						GetWsModelMenuItem(WsModel.Monochrome),
-						GetWsModelMenuItem(WsModel.Color),
-						GetWsModelMenuItem(WsModel.SwanCrystal),
-						GetWsModelMenuItem(WsModel.PocketChallenge),
 					}
 				},
 
@@ -503,10 +498,6 @@ namespace Mesen.ViewModels
 					ActionType = ActionType.Sms,
 					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Sms)
 				},
-				new MainMenuAction() {
-					ActionType = ActionType.Ws,
-					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Ws)
-				},
 				new ContextMenuSeparator(),
 
 				new MainMenuAction() {
@@ -551,7 +542,7 @@ namespace Mesen.ViewModels
 					return ResourceHelper.GetEnumText(region);
 				},
 				IsVisible = () => {
-					if(MainWindow.RomInfo.ConsoleType == ConsoleType.PcEngine || MainWindow.RomInfo.ConsoleType == ConsoleType.Gameboy || MainWindow.RomInfo.ConsoleType == ConsoleType.Ws) {
+					if(MainWindow.RomInfo.ConsoleType == ConsoleType.PcEngine || MainWindow.RomInfo.ConsoleType == ConsoleType.Gameboy) {
 						return false;
 					}
 
@@ -611,20 +602,6 @@ namespace Mesen.ViewModels
 				OnClick = () => {
 					ConfigManager.Config.PcEngine.ConsoleType = model;
 					ConfigManager.Config.PcEngine.ApplyConfig();
-				}
-			};
-		}
-
-		private MainMenuAction GetWsModelMenuItem(WsModel model)
-		{
-			return new MainMenuAction() {
-				ActionType = ActionType.Custom,
-				CustomText = ResourceHelper.GetEnumText(model),
-				IsVisible = () => MainWindow.RomInfo.ConsoleType == ConsoleType.Ws,
-				IsSelected = () => ConfigManager.Config.Ws.Model == model,
-				OnClick = () => {
-					ConfigManager.Config.Ws.Model = model;
-					ConfigManager.Config.Ws.ApplyConfig();
 				}
 			};
 		}

@@ -21,7 +21,6 @@ public abstract class ElfImporter
 	public static void Import(string path, bool showResult, CpuType cpuType)
 	{
 		switch(cpuType) {
-			case CpuType.Ws: new ElfImporterWs().PrivateImport(path, showResult, cpuType); break;
 			case CpuType.Gba: new ElfImporterGba().PrivateImport(path, showResult, cpuType); break;
 		}
 	}
@@ -147,46 +146,6 @@ public class ElfSymbolInfo
 {
 	public AddressInfo Address;
 	public string Name = "";
-}
-
-public class ElfImporterWs : ElfImporter
-{
-	protected override bool TryGetSymbolInfo(SymbolEntry<uint> symbol, int romSize, [MaybeNullWhen(false)] out ElfSymbolInfo symbolInfo)
-	{
-		symbolInfo = null;
-
-		if(symbol.Name.EndsWith("$") || symbol.Name.EndsWith("&") || symbol.Name.EndsWith("!")) {
-			return false;
-		}
-
-		AddressInfo absAddr = new();
-		uint addr = symbol.Value;
-
-		if((addr & 0x80000000) != 0) {
-			// Wonderful's linker places ROM data in 0x80000000 .. 0xFFFFFFFF/
-			absAddr.Address = (int)((addr & 0xFFFF) | ((addr & 0x7FF00000) >> 4)) & (romSize - 1);
-			absAddr.Type = MemoryType.WsPrgRom;
-		} else if(addr <= 0xFFFF) {
-			absAddr.Address = (int)addr;
-			absAddr.Type = MemoryType.WsWorkRam;
-		} else if((addr & 0xF0000) == 0x10000) {
-			// Wonderful's linker places SRAM data in 0x00010000 .. 0x0071FFFF.
-			absAddr.Address = (int)((addr & 0xFFFF) | ((addr & 0xF00000) >> 4));
-			absAddr.Type = MemoryType.WsCartRam;
-		} else if(addr <= 0xFFFFF) {
-			// Standard ELF linking may place ROM data in 0x00020000 .. 0x000FFFFF,
-			// treating the memory space as unbanked. If so, assume the top of the ROM.
-			absAddr.Address = (((romSize - 1) & ~0xFFFFF) | (int)(addr & 0xFFFFF)) & (romSize - 1);
-			absAddr.Type = MemoryType.WsPrgRom;
-		}
-
-		symbolInfo = new() {
-			Address = absAddr,
-			Name = symbol.Name
-		};
-
-		return true;
-	}
 }
 
 public class ElfImporterGba : ElfImporter

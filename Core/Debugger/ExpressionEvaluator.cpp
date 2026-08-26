@@ -71,10 +71,8 @@ unordered_map<string, int64_t>* ExpressionEvaluator::GetAvailableTokens()
 		case CpuType::Pce: return &GetPceTokens();
 		case CpuType::Sms: return &GetSmsTokens();
 		case CpuType::Gba: return &GetGbaTokens();
-		case CpuType::Ws: return &GetWsTokens();
+		default: return nullptr;
 	}
-
-	return nullptr;
 }
 
 bool ExpressionEvaluator::CheckSpecialTokens(string expression, size_t& pos, string& output, ExpressionData& data)
@@ -427,7 +425,6 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 								case CpuType::Pce: token = GetPceTokenValue(token, resultType); break;
 								case CpuType::Sms: token = GetSmsTokenValue(token, resultType); break;
 								case CpuType::Gba: token = GetGbaTokenValue(token, resultType); break;
-								case CpuType::Ws: token = GetWsTokenValue(token, resultType); break;
 							}
 						}
 						break;
