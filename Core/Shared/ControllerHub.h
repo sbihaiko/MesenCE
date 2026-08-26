@@ -12,8 +12,6 @@
 #include "NES/Input/PachinkoController.h"
 #include "NES/Input/FcnsController.h"
 #include "NES/Input/VirtualBoyController.h"
-#include "PCE/Input/PceController.h"
-#include "PCE/Input/PceAvenuePad6.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/StringUtilities.h"
 
@@ -100,14 +98,6 @@ public:
 
 				case ControllerType::FcnsController:
 					_ports[i].reset(new FcnsController(emu, 0, controllers[i].Keys));
-					break;
-
-				case ControllerType::PceController:
-					_ports[i].reset(new PceController(emu, 0, controllers[i].Keys));
-					break;
-
-				case ControllerType::PceAvenuePad6:
-					_ports[i].reset(new PceAvenuePad6(emu, 0, controllers[i].Keys));
 					break;
 			}
 		}

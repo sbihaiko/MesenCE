@@ -41,8 +41,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial bool AssociateGbRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateGbMusicFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateGbaRomFiles { get; set; } = false;
-		[ObservableProperty] public partial bool AssociatePceRomFiles { get; set; } = false;
-		[ObservableProperty] public partial bool AssociatePceMusicFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateSmsRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateGameGearRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateSgRomFiles { get; set; } = false;

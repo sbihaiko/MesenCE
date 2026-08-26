@@ -214,20 +214,6 @@
 					Content="{l:Translate chkNesBreakOnExtOutputMode}"
 				/>
 			</StackPanel>
-			<StackPanel IsVisible="{Binding IsPce}">
-				<CheckBox
-					IsChecked="{Binding Config.Pce.BreakOnBrk}"
-					Content="{l:Translate chkBreakOnBrk}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Pce.BreakOnUnofficialOpCode}"
-					Content="{l:Translate chkBreakOnUnofficialOpCode}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Pce.BreakOnInvalidVramAddress}"
-					Content="{l:Translate chkPceBreakOnInvalidVramAddress}"
-				/>
-			</StackPanel>
 			<StackPanel IsVisible="{Binding IsSms}">
 				<CheckBox
 					IsChecked="{Binding Config.Sms.BreakOnNopLoad}"
@@ -246,12 +232,6 @@
 				<CheckBox
 					IsChecked="{Binding Config.Gba.BreakOnUnalignedMemAccess}"
 					Content="{l:Translate chkBreakOnUnalignedMemAccess}"
-				/>
-			</StackPanel>
-			<StackPanel IsVisible="{Binding IsWs}">
-				<CheckBox
-					IsChecked="{Binding Config.Ws.BreakOnUndefinedOpCode}"
-					Content="{l:Translate chkBreakOnUndefinedOpCode}"
 				/>
 			</StackPanel>
 			<Rectangle  IsVisible="{Binding HasSpecificBreakOptions}" Stroke="#AAA" Height="1" StrokeThickness="1" HorizontalAlignment="Stretch" Margin="0 2" />

@@ -33,7 +33,6 @@ public partial class ConsoleOverrideConfig : BaseConfig<GameConfig>
 			case ConsoleType.Snes: return ConfigManager.Config.Snes.ConfigOverrides;
 			case ConsoleType.Gameboy: return ConfigManager.Config.Gameboy.ConfigOverrides;
 			case ConsoleType.Nes: return ConfigManager.Config.Nes.ConfigOverrides;
-			case ConsoleType.PcEngine: return ConfigManager.Config.PcEngine.ConfigOverrides;
 			case ConsoleType.Sms:
 				if(romInfo.Format == RomFormat.GameGear) {
 					return ConfigManager.Config.Sms.GgConfigOverrides;

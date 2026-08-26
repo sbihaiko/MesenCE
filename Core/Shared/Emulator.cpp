@@ -33,7 +33,6 @@
 #include "SNES/SnesDefaultVideoFilter.h"
 #include "NES/NesConsole.h"
 #include "Gameboy/Gameboy.h"
-#include "PCE/PceConsole.h"
 #include "SMS/SmsConsole.h"
 #include "GBA/GbaConsole.h"
 #include "Debugger/Debugger.h"
@@ -598,7 +597,6 @@ void Emulator::TryLoadRom(VirtualFile& romFile, LoadRomResult& result, unique_pt
 	TryLoadRom<NesConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<SnesConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<Gameboy>(romFile, result, console, useFileSignature);
-	TryLoadRom<PceConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<SmsConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<GbaConsole>(romFile, result, console, useFileSignature);
 }

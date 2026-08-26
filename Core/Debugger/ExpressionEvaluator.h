@@ -277,9 +277,6 @@ private:
 	unordered_map<string, int64_t>& GetNesTokens();
 	int64_t GetNesTokenValue(int64_t token, EvalResultType& resultType);
 
-	unordered_map<string, int64_t>& GetPceTokens();
-	int64_t GetPceTokenValue(int64_t token, EvalResultType& resultType);
-
 	unordered_map<string, int64_t>& GetSmsTokens();
 	int64_t GetSmsTokenValue(int64_t token, EvalResultType& resultType);
 

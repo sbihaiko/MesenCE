@@ -118,7 +118,6 @@ namespace Mesen.Interop
 				CpuType.Snes => GetPpuState<SnesPpuState>(cpuType),
 				CpuType.Nes => GetPpuState<NesPpuState>(cpuType),
 				CpuType.Gameboy => GetPpuState<GbPpuState>(cpuType),
-				CpuType.Pce => GetPpuState<PceVideoState>(cpuType),
 				CpuType.Sms => GetPpuState<SmsVdpState>(cpuType),
 				CpuType.Gba => GetPpuState<GbaPpuState>(cpuType),
 				_ => throw new Exception("Unsupported cpu type")
@@ -139,7 +138,6 @@ namespace Mesen.Interop
 				CpuType.Snes => GetPpuToolsState<SnesPpuToolsState>(cpuType),
 				CpuType.Nes => GetPpuToolsState<NesPpuToolsState>(cpuType),
 				CpuType.Gameboy => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
-				CpuType.Pce => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
 				CpuType.Sms => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
 				CpuType.Gba => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
 				CpuType.Ws => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
@@ -406,7 +404,6 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropNesEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropGbEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropGbaEventViewerConfig config);
-		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropPceEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropSmsEventViewerConfig config);
 
 		[DllImport(DllPath, EntryPoint = "GetEventViewerEvent")] private static extern DebugEventInfo GetEventViewerEventWrapper(CpuType cpuType, UInt16 scanline, UInt16 cycle);
@@ -551,10 +548,8 @@ namespace Mesen.Interop
 				CpuType.St018 => state is ArmV3CpuState,
 				CpuType.Gameboy => state is GbCpuState,
 				CpuType.Nes => state is NesCpuState,
-				CpuType.Pce => state is PceCpuState,
 				CpuType.Sms => state is SmsCpuState,
 				CpuType.Gba => state is GbaCpuState,
-				CpuType.Ws => state is WsCpuState,
 				_ => false
 			};
 		}
@@ -565,7 +560,6 @@ namespace Mesen.Interop
 				ConsoleType.Snes => state is SnesPpuState,
 				ConsoleType.Nes => state is NesPpuState,
 				ConsoleType.Gameboy => state is GbPpuState,
-				ConsoleType.PcEngine => state is PceVideoState,
 				ConsoleType.Sms => state is SmsVdpState,
 				ConsoleType.Gba => state is GbaPpuState,
 				_ => false
@@ -938,50 +932,6 @@ namespace Mesen.Interop
 		public InteropEventViewerCategoryCfg OtherRegisterReads;
 		public InteropEventViewerCategoryCfg OtherRegisterWrites;
 
-		[MarshalAs(UnmanagedType.I1)] public bool ShowPreviousFrameEvents;
-	}
-
-	[StructLayout(LayoutKind.Sequential)]
-	public class InteropPceEventViewerConfig
-	{
-		public InteropEventViewerCategoryCfg Irq;
-		public InteropEventViewerCategoryCfg MarkedBreakpoints;
-
-		public InteropEventViewerCategoryCfg VdcStatusReads;
-
-		public InteropEventViewerCategoryCfg VdcVramWrites;
-		public InteropEventViewerCategoryCfg VdcVramReads;
-
-		public InteropEventViewerCategoryCfg VdcRegSelectWrites;
-		public InteropEventViewerCategoryCfg VdcControlWrites;
-		public InteropEventViewerCategoryCfg VdcRcrWrites;
-		public InteropEventViewerCategoryCfg VdcHvConfigWrites;
-		public InteropEventViewerCategoryCfg VdcMemoryWidthWrites;
-		public InteropEventViewerCategoryCfg VdcScrollWrites;
-		public InteropEventViewerCategoryCfg VdcDmaWrites;
-
-		public InteropEventViewerCategoryCfg VceWrites;
-		public InteropEventViewerCategoryCfg VceReads;
-		public InteropEventViewerCategoryCfg PsgWrites;
-		public InteropEventViewerCategoryCfg PsgReads;
-		public InteropEventViewerCategoryCfg TimerWrites;
-		public InteropEventViewerCategoryCfg TimerReads;
-		public InteropEventViewerCategoryCfg IoWrites;
-		public InteropEventViewerCategoryCfg IoReads;
-		public InteropEventViewerCategoryCfg IrqControlWrites;
-		public InteropEventViewerCategoryCfg IrqControlReads;
-
-		public InteropEventViewerCategoryCfg CdRomWrites;
-		public InteropEventViewerCategoryCfg CdRomReads;
-		public InteropEventViewerCategoryCfg AdpcmWrites;
-		public InteropEventViewerCategoryCfg AdpcmReads;
-		public InteropEventViewerCategoryCfg ArcadeCardWrites;
-		public InteropEventViewerCategoryCfg ArcadeCardReads;
-
-		public InteropEventViewerCategoryCfg VpcWrites;
-		public InteropEventViewerCategoryCfg VpcReads;
-
-		public PceEventViewerSgxFilter SuperGrafxFilter;
 		[MarshalAs(UnmanagedType.I1)] public bool ShowPreviousFrameEvents;
 	}
 

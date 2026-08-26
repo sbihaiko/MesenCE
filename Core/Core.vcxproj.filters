@@ -1677,89 +1677,53 @@
     <ClInclude Include="Shared\CpuType.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceConsole.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceCpu.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceControlManager.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceDefaultVideoFilter.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceDebugger.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceDisUtils.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceTraceLogger.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceVdcTools.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceTypes.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceMemoryManager.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceVdc.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceTimer.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceConstants.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceSf2RomMapper.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\DummyPceCpu.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceEventManager.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PcePsg.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PcePsgChannel.h">
       <Filter>PCE</Filter>
     </ClInclude>
     <ClInclude Include="Shared\CdReader.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Input\PceController.h">
-      <Filter>PCE\Input</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Input\PceTurboTap.h">
-      <Filter>PCE\Input</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Input\PceAvenuePad6.h">
-      <Filter>PCE\Input</Filter>
     </ClInclude>
     <ClInclude Include="Shared\Video\ScanlineFilter.h">
       <Filter>Shared\Video</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceNtscFilter.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceVce.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\PceVpc.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\IPceMapper.h">
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\Debugger\PceAssembler.h">
-      <Filter>PCE\Debugger</Filter>
     </ClInclude>
     <ClInclude Include="Debugger\Base6502Assembler.h">
       <Filter>Debugger</Filter>
@@ -2613,7 +2577,6 @@
     <ClInclude Include="NES\Mappers\Mmc3Variants\Sachen9602.h">
       <Filter>NES\Mappers\Mmc3Variants</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\HesFileData.h">
       <Filter>PCE</Filter>
     </ClInclude>
     <ClInclude Include="SNES\DSP\Dsp.h">
@@ -2775,26 +2738,12 @@
     <ClInclude Include="SMS\Carts\SmsNemesisCart.h">
       <Filter>SMS\Carts</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceAdpcm.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceArcadeCard.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceAudioFader.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceCdAudioPlayer.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceCdRom.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceCdSeekDelay.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
-    <ClInclude Include="PCE\CdRom\PceScsiBus.h">
-      <Filter>PCE\CdRom</Filter>
     </ClInclude>
     <ClInclude Include="Gameboy\APU\GbApu.h">
       <Filter>Gameboy\APU</Filter>
@@ -3077,73 +3026,44 @@
     <ClCompile Include="NES\BisqwitNtscFilter.cpp">
       <Filter>NES</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceConsole.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceCpu.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceCpu.Instructions.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceControlManager.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceDebugger.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceDisUtils.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceTraceLogger.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceVdcTools.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.Pce.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceVdc.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceTimer.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceSf2RomMapper.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\DummyPceCpu.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceEventManager.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PcePsg.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PcePsgChannel.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
     <ClCompile Include="Shared\CdReader.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Input\PceTurboTap.cpp">
-      <Filter>PCE\Input</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceNtscFilter.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceVce.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\Debugger\PceAssembler.cpp">
-      <Filter>PCE\Debugger</Filter>
     </ClCompile>
     <ClCompile Include="Debugger\Base6502Assembler.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceVpc.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
     <ClCompile Include="Debugger\CdlManager.cpp">
@@ -3164,7 +3084,6 @@
     <ClCompile Include="Shared\HistoryViewer.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\PceMemoryManager.cpp">
       <Filter>PCE</Filter>
     </ClCompile>
     <ClCompile Include="SNES\DSP\Dsp.cpp">
@@ -3245,23 +3164,11 @@
     <ClCompile Include="SMS\SmsBiosMapper.cpp">
       <Filter>SMS</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceAdpcm.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceArcadeCard.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceAudioFader.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceCdAudioPlayer.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceCdRom.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
-    <ClCompile Include="PCE\CdRom\PceScsiBus.cpp">
-      <Filter>PCE\CdRom</Filter>
     </ClCompile>
     <ClCompile Include="Gameboy\APU\GbApu.cpp">
       <Filter>Gameboy\APU</Filter>
@@ -3430,10 +3337,8 @@
     <Filter Include="PCE">
       <UniqueIdentifier>{f0c9479c-8c8b-4cf2-8810-2db6ec545b7b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="PCE\Debugger">
       <UniqueIdentifier>{71cd23d2-e1b9-4a25-a92a-34b2f64f8086}</UniqueIdentifier>
     </Filter>
-    <Filter Include="PCE\Input">
       <UniqueIdentifier>{a2cd79a6-585b-408d-b6af-c273b94092a7}</UniqueIdentifier>
     </Filter>
     <Filter Include="NES\Mappers\Mmc3Variants">
@@ -3514,7 +3419,6 @@
     <Filter Include="Shared\Utilities">
       <UniqueIdentifier>{9c5b1b92-fa62-42bf-9102-9cc5d35262b8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="PCE\CdRom">
       <UniqueIdentifier>{d8c09137-ed0d-4674-8017-a1f3be7cf2a6}</UniqueIdentifier>
     </Filter>
     <Filter Include="Gameboy\APU">

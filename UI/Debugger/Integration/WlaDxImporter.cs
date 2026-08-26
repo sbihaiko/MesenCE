@@ -327,57 +327,6 @@ public class GbWlaDxImporter : WlaDxImporter
 	}
 }
 
-public class PceWlaDxImporter : WlaDxImporter
-{
-	private RomFormat _format;
-
-	public PceWlaDxImporter()
-	{
-		_format = EmuApi.GetRomInfo().Format;
-	}
-
-	protected override AddressInfo GetLabelAddress(int bank, int addr)
-	{
-		if(bank == 0xF8 && bank <= 0xFB) {
-			return new AddressInfo() {
-				Address = (bank - 0xF8) * 0x2000 + (addr & 0x1FFF),
-				Type = MemoryType.PceWorkRam
-			};
-		} else if(bank == 0xF7) {
-			return new AddressInfo() {
-				Address = (addr & 0x1FFF),
-				Type = MemoryType.PceSaveRam
-			};
-		} else if(bank == 0xFF) {
-			return new AddressInfo() {
-				Address = (addr & 0x1FFF),
-				Type = MemoryType.PceMemory
-			};
-		} else if(_format == RomFormat.PceCdRom && (bank >= 0x68 && bank <= 0x7F)) {
-			return new AddressInfo() {
-				Address = (bank - 0x68) * 0x2000 + (addr & 0x1FFF),
-				Type = MemoryType.PceCardRam
-			};
-		} else if(_format == RomFormat.PceCdRom && (bank >= 0x80 && bank <= 0x87)) {
-			return new AddressInfo() {
-				Address = (bank - 0x80) * 0x2000 + (addr & 0x1FFF),
-				Type = MemoryType.PceCdromRam
-			};
-		} else if(bank > 0xFF) {
-			return new AddressInfo() {
-				Address = (bank - 0x80) * 0x2000 + (addr & 0x1FFF),
-				Type = MemoryType.PcePrgRom
-			};
-		} else if(bank < 0x80) {
-			return new AddressInfo() {
-				Address = bank * 0x2000 + (addr & 0x1FFF),
-				Type = MemoryType.PcePrgRom
-			};
-		}
-		return default;
-	}
-}
-
 public class SmsWlaDxImporter : WlaDxImporter
 {
 	protected override AddressInfo GetLabelAddress(int bank, int addr)

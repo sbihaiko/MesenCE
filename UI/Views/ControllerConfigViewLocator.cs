@@ -29,12 +29,7 @@ namespace Mesen.Views
 					ControllerType.HoriTrack => new NesControllerView(),
 					ControllerType.GameboyController => new NesControllerView(),
 					ControllerType.GbaController => new GbaControllerView(),
-					ControllerType.PceController => new PceControllerView(),
-					ControllerType.PceAvenuePad6 => new PceAvenuePad6View(),
 					ControllerType.SmsController => new SmsControllerView(),
-					ControllerType.WsController => new WsControllerView(),
-					ControllerType.WsControllerVertical => new WsControllerVerticalView(),
-					ControllerType.Pcv2Controller => new WsPcv2ControllerView(),
 					_ => new DefaultControllerView()
 				};
 			}

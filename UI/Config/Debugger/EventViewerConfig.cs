@@ -24,7 +24,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial NesEventViewerConfig NesConfig { get; set; } = new NesEventViewerConfig();
 		[ObservableProperty] public partial GbEventViewerConfig GbConfig { get; set; } = new GbEventViewerConfig();
 		[ObservableProperty] public partial GbaEventViewerConfig GbaConfig { get; set; } = new GbaEventViewerConfig();
-		[ObservableProperty] public partial PceEventViewerConfig PceConfig { get; set; } = new PceEventViewerConfig();
 		[ObservableProperty] public partial SmsEventViewerConfig SmsConfig { get; set; } = new SmsEventViewerConfig();
 	}
 }

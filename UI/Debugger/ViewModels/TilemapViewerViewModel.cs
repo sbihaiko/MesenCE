@@ -365,20 +365,6 @@ namespace Mesen.Debugger.ViewModels
 					};
 					break;
 
-				case CpuType.Pce:
-					if(DebugApi.GetConsoleState<PceState>(ConsoleType.PcEngine).IsSuperGrafx) {
-						_refreshDataOnTabChange = true;
-						Tabs = new List<TilemapViewerTab>() {
-							new() { Title = "VDC1", Layer = 0 },
-							new() { Title = "VDC2", Layer = 1, VramMemoryType = MemoryType.PceVideoRamVdc2 }
-						};
-					} else {
-						Tabs = new List<TilemapViewerTab>() {
-							new() { Title = "", Layer = 0 }
-						};
-					}
-					break;
-
 				case CpuType.Gameboy:
 					Tabs = new List<TilemapViewerTab>() {
 						new() { Title = "$9800", Layer = 0 },

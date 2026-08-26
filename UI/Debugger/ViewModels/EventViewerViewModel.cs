@@ -245,7 +245,6 @@ namespace Mesen.Debugger.ViewModels
 				CpuType.Snes => Config.SnesConfig,
 				CpuType.Nes => Config.NesConfig,
 				CpuType.Gameboy => Config.GbConfig,
-				CpuType.Pce => Config.PceConfig,
 				CpuType.Sms => Config.SmsConfig,
 				CpuType.Gba => Config.GbaConfig,
 				_ => throw new Exception("Invalid cpu type")
@@ -400,8 +399,6 @@ namespace Mesen.Debugger.ViewModels
 				DebugApi.SetEventViewerConfig(CpuType, gbCfg.ToInterop());
 			} else if(ConsoleConfig is GbaEventViewerConfig gbaCfg) {
 				DebugApi.SetEventViewerConfig(CpuType, gbaCfg.ToInterop());
-			} else if(ConsoleConfig is PceEventViewerConfig pceCfg) {
-				DebugApi.SetEventViewerConfig(CpuType, pceCfg.ToInterop());
 			} else if(ConsoleConfig is SmsEventViewerConfig smsCfg) {
 				DebugApi.SetEventViewerConfig(CpuType, smsCfg.ToInterop());
 			}

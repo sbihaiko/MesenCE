@@ -82,9 +82,6 @@
 		<DataTemplate DataType="{x:Type sv:NesStatusViewModel}">
 			<sv:NesStatusView />
 		</DataTemplate>
-		<DataTemplate DataType="{x:Type sv:PceStatusViewModel}">
-			<sv:PceStatusView />
-		</DataTemplate>
 		<DataTemplate DataType="{x:Type sv:SmsStatusViewModel}">
 			<sv:SmsStatusView />
 		</DataTemplate>

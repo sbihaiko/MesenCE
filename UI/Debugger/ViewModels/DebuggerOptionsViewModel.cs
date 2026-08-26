@@ -33,7 +33,7 @@ namespace Mesen.Debugger.ViewModels
 			IsGba = cpuType == CpuType.Gba;
 			IsWs = cpuType == CpuType.Ws;
 
-			HasSpecificBreakOptions = IsSnes || IsSpc || IsNes || IsGameboy || IsPce || IsSms || IsGba || IsWs;
+			HasSpecificBreakOptions = IsSnes || IsSpc || IsNes || IsGameboy || IsSms || IsGba;
 		}
 	}
 }

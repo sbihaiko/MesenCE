@@ -99,8 +99,6 @@ namespace Mesen.Debugger.ViewModels
 				_state = DebugApi.GetConsoleState<NesState>(ConsoleType.Nes);
 			} else if(_romInfo.ConsoleType == ConsoleType.Gameboy) {
 				_state = DebugApi.GetConsoleState<GbState>(ConsoleType.Gameboy);
-			} else if(_romInfo.ConsoleType == ConsoleType.PcEngine) {
-				_state = DebugApi.GetConsoleState<PceState>(ConsoleType.PcEngine);
 			} else if(_romInfo.ConsoleType == ConsoleType.Sms) {
 				_state = DebugApi.GetConsoleState<SmsState>(ConsoleType.Sms);
 			} else if(_romInfo.ConsoleType == ConsoleType.Gba) {
@@ -127,8 +125,6 @@ namespace Mesen.Debugger.ViewModels
 				tabs = NesRegisterViewer.GetTabs(ref nesState);
 			} else if(lastState is GbState gbState) {
 				tabs = GbRegisterViewer.GetTabs(ref gbState);
-			} else if(lastState is PceState pceState) {
-				tabs = PceRegisterViewer.GetTabs(ref pceState);
 			} else if(lastState is SmsState smsState) {
 				tabs = SmsRegisterViewer.GetTabs(ref smsState, _romInfo.Format);
 			} else if(lastState is GbaState gbaState) {

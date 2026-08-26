@@ -16,7 +16,6 @@
 #include "SNES/Debugger/St018DisUtils.h"
 #include "Gameboy/Debugger/GameboyDisUtils.h"
 #include "NES/Debugger/NesDisUtils.h"
-#include "PCE/Debugger/PceDisUtils.h"
 #include "SMS/Debugger/SmsDisUtils.h"
 #include "GBA/Debugger/GbaDisUtils.h"
 #include "Shared/EmuSettings.h"
@@ -76,7 +75,6 @@ void DisassemblyInfo::GetDisassembly(string& out, uint32_t memoryAddr, LabelMana
 		case CpuType::St018: GbaDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Gameboy: GameboyDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Nes: NesDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
-		case CpuType::Pce: PceDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Sms: SmsDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 		case CpuType::Gba: GbaDisUtils::GetDisassembly(*this, out, memoryAddr, labelManager, settings); break;
 
@@ -110,7 +108,6 @@ EffectiveAddressInfo DisassemblyInfo::GetEffectiveAddress(Debugger* debugger, vo
 		}
 
 		case CpuType::Nes: return NesDisUtils::GetEffectiveAddress(*this, *(NesCpuState*)cpuState, debugger->GetMemoryDumper());
-		case CpuType::Pce: return PceDisUtils::GetEffectiveAddress(*this, (PceConsole*)debugger->GetConsole(), *(PceCpuState*)cpuState);
 		case CpuType::Sms: return SmsDisUtils::GetEffectiveAddress(*this, (SmsConsole*)debugger->GetConsole(), *(SmsCpuState*)cpuState);
 		case CpuType::Gba: return GbaDisUtils::GetEffectiveAddress(*this, (GbaConsole*)debugger->GetConsole(), *(GbaCpuState*)cpuState);
 	}
@@ -190,7 +187,6 @@ uint8_t DisassemblyInfo::GetOpSize(uint32_t opCode, uint8_t flags, CpuType type,
 		case CpuType::St018: return GbaDisUtils::GetOpSize(opCode, flags);
 		case CpuType::Gameboy: return GameboyDisUtils::GetOpSize(opCode);
 		case CpuType::Nes: return NesDisUtils::GetOpSize(opCode);
-		case CpuType::Pce: return PceDisUtils::GetOpSize(opCode);
 		case CpuType::Sms: return SmsDisUtils::GetOpSize(opCode, cpuAddress, memType, memoryDumper);
 		case CpuType::Gba: return GbaDisUtils::GetOpSize(opCode, flags);
 	}
@@ -210,7 +206,6 @@ bool DisassemblyInfo::IsJumpToSub()
 		case CpuType::St018: return GbaDisUtils::IsJumpToSub(GetFullOpCode<CpuType::St018>(), _flags);
 		case CpuType::Gameboy: return GameboyDisUtils::IsJumpToSub(GetOpCode());
 		case CpuType::Nes: return NesDisUtils::IsJumpToSub(GetOpCode());
-		case CpuType::Pce: return PceDisUtils::IsJumpToSub(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsJumpToSub(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsJumpToSub(GetFullOpCode<CpuType::Gba>(), _flags);
 	}
@@ -230,7 +225,6 @@ bool DisassemblyInfo::IsReturnInstruction()
 		case CpuType::St018: return GbaDisUtils::IsReturnInstruction(GetFullOpCode<CpuType::St018>(), _flags);
 		case CpuType::Gameboy: return GameboyDisUtils::IsReturnInstruction(GetOpCode());
 		case CpuType::Nes: return NesDisUtils::IsReturnInstruction(GetOpCode());
-		case CpuType::Pce: return PceDisUtils::IsReturnInstruction(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsReturnInstruction(_byteCode[0] | (_byteCode[1] << 8));
 		case CpuType::Gba: return GbaDisUtils::IsReturnInstruction(GetFullOpCode<CpuType::Gba>(), _flags);
 	}
@@ -265,7 +259,6 @@ bool DisassemblyInfo::IsUnconditionalJump()
 		case CpuType::St018: return GbaDisUtils::IsUnconditionalJump(GetFullOpCode<CpuType::St018>(), _flags);
 		case CpuType::Gameboy: return GameboyDisUtils::IsUnconditionalJump(GetOpCode());
 		case CpuType::Nes: return NesDisUtils::IsUnconditionalJump(GetOpCode());
-		case CpuType::Pce: return PceDisUtils::IsUnconditionalJump(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsUnconditionalJump(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsUnconditionalJump(GetFullOpCode<CpuType::Gba>(), _flags);
 	}
@@ -290,7 +283,6 @@ bool DisassemblyInfo::IsJump()
 		case CpuType::St018: return GbaDisUtils::IsConditionalJump(GetFullOpCode<CpuType::St018>(), GetByteCode()[0]);
 		case CpuType::Gameboy: return GameboyDisUtils::IsConditionalJump(GetOpCode());
 		case CpuType::Nes: return NesDisUtils::IsConditionalJump(GetOpCode());
-		case CpuType::Pce: return PceDisUtils::IsConditionalJump(GetOpCode());
 		case CpuType::Sms: return SmsDisUtils::IsConditionalJump(GetOpCode());
 		case CpuType::Gba: return GbaDisUtils::IsConditionalJump(GetFullOpCode<CpuType::Gba>(), _flags);
 	}

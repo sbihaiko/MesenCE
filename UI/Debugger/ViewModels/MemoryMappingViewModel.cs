@@ -43,8 +43,6 @@ namespace Mesen.Debugger.ViewModels
 					PpuMappings = UpdateMappings(PpuMappings, GetNesPpuMappings(state));
 				} else if(_cpuType == CpuType.Gameboy) {
 					CpuMappings = UpdateMappings(CpuMappings, GetGameboyCpuMappings(DebugApi.GetConsoleState<GbState>(ConsoleType.Gameboy)));
-				} else if(_cpuType == CpuType.Pce) {
-					CpuMappings = UpdateMappings(CpuMappings, GetPceCpuMappings(DebugApi.GetConsoleState<PceState>(ConsoleType.PcEngine).MemoryManager));
 				} else if(_cpuType == CpuType.Sms) {
 					CpuMappings = UpdateMappings(CpuMappings, GetSmsCpuMappings(DebugApi.GetConsoleState<SmsState>(ConsoleType.Sms).MemoryManager));
 				}
@@ -352,79 +350,6 @@ namespace Mesen.Debugger.ViewModels
 			return mappings;
 		}
 
-		private List<MemoryMappingBlock> GetPceCpuMappings(PceMemoryManagerState state)
-		{
-			//TODOv2 improve/complete logic for save ram, etc.
-			List<MemoryMappingBlock> mappings = new();
-
-			Dictionary<MemoryType, Color> mainColors = new() {
-				{ MemoryType.None, Color.FromRgb(222, 222, 222) },
-				{ MemoryType.PceWorkRam, Color.FromRgb(0xCD, 0xDC, 0xFA) },
-				{ MemoryType.PceSaveRam, Color.FromRgb(0xCD, 0xDC, 0xFA) },
-				{ MemoryType.PceCdromRam, Color.FromRgb(0xFA, 0xDC, 0xCD) },
-				{ MemoryType.PceCardRam, Color.FromRgb(0xFA, 0xDC, 0xCD) },
-				{ MemoryType.PcePrgRom, Color.FromRgb(0xC4, 0xE7, 0xD4) }
-			};
-
-			Dictionary<MemoryType, Color> altColors = new() {
-				{ MemoryType.None, Color.FromRgb(222, 222, 222) },
-				{ MemoryType.PceWorkRam, Color.FromRgb(0xBD, 0xCC, 0xEA) },
-				{ MemoryType.PceSaveRam, Color.FromRgb(0xBD, 0xCC, 0xEA) },
-				{ MemoryType.PceCdromRam, Color.FromRgb(0xEA, 0xCC, 0xBD) },
-				{ MemoryType.PceCardRam, Color.FromRgb(0xEA, 0xCC, 0xBD) },
-				{ MemoryType.PcePrgRom, Color.FromRgb(0xA4, 0xD7, 0xB4) }
-			};
-
-			Dictionary<MemoryType, string> accessNotes = new() {
-				{ MemoryType.None, "RW" },
-				{ MemoryType.PceWorkRam, "RW" },
-				{ MemoryType.PceSaveRam, "RW" },
-				{ MemoryType.PceCdromRam, "RW" },
-				{ MemoryType.PceCardRam, "RW" },
-				{ MemoryType.PcePrgRom, "R" },
-			};
-
-			for(int i = 0; i < 8; i++) {
-				AddressInfo absAddr = DebugApi.GetAbsoluteAddress(new AddressInfo() { Address = i * 0x2000, Type = MemoryType.PceMemory });
-				if(!mainColors.ContainsKey(absAddr.Type)) {
-					//Prevent crash when power cycling caused by core returning { 0, MemoryType.SnesMemory } (default value)
-					absAddr.Address = -1;
-				}
-
-				if(absAddr.Address >= 0) {
-					MemoryType memType = absAddr.Type;
-					string note = "";
-					if(memType == MemoryType.PcePrgRom && state.Mpr[i] != absAddr.Address / 0x2000) {
-						note = " ($" + (absAddr.Address / 0x2000).ToString("X2") + ")";
-					}
-					mappings.Add(new MemoryMappingBlock() {
-						Length = 0x2000,
-						Name = memType.GetShortName(),
-						Page = state.Mpr[i],
-						Note = accessNotes[memType] + note,
-						Color = (i % 2 == 0) ? mainColors[memType] : altColors[memType]
-					});
-				} else if(state.Mpr[i] == 0xFF) {
-					MemoryType memType = MemoryType.None;
-					mappings.Add(new MemoryMappingBlock() {
-						Length = 0x2000,
-						Name = "REG",
-						Page = state.Mpr[i],
-						Note = accessNotes[memType],
-						Color = (i % 2 == 0) ? mainColors[memType] : altColors[memType]
-					});
-				} else {
-					mappings.Add(new MemoryMappingBlock() {
-						Length = 0x2000,
-						Name = "N/A",
-						Note = "OB",
-						Color = Color.FromRgb(222, 222, 222)
-					});
-				}
-			}
-
-			return mappings;
-		}
 
 		private List<MemoryMappingBlock> GetSmsCpuMappings(SmsMemoryManagerState state)
 		{

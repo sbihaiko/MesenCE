@@ -126,7 +126,6 @@ namespace Mesen.Debugger.ViewModels
 				CpuType.St018 => new St018StatusViewModel(),
 				CpuType.Gameboy => new GbStatusViewModel(),
 				CpuType.Nes => new NesStatusViewModel(),
-				CpuType.Pce => new PceStatusViewModel(),
 				CpuType.Sms => new SmsStatusViewModel(),
 				CpuType.Gba => new GbaStatusViewModel(),
 				_ => null

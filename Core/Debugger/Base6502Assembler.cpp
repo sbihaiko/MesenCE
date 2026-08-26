@@ -294,7 +294,3 @@ template bool Base6502Assembler<SnesAddrMode>::IsOpModeAvailable(string& opcode,
 enum class NesAddrMode;
 template void Base6502Assembler<NesAddrMode>::ProcessLine(string code, uint32_t& instructionAddress, vector<int16_t>& output, unordered_map<string, uint32_t>& labels, bool firstPass, unordered_map<string, uint32_t>& currentPassLabels);
 template bool Base6502Assembler<NesAddrMode>::IsOpModeAvailable(string& opcode, NesAddrMode mode);
-
-enum class PceAddrMode;
-template void Base6502Assembler<PceAddrMode>::ProcessLine(string code, uint32_t& instructionAddress, vector<int16_t>& output, unordered_map<string, uint32_t>& labels, bool firstPass, unordered_map<string, uint32_t>& currentPassLabels);
-template bool Base6502Assembler<PceAddrMode>::IsOpModeAvailable(string& opcode, PceAddrMode mode);

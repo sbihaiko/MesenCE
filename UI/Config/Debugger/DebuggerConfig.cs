@@ -27,7 +27,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial NesDebuggerConfig Nes { get; set; } = new();
 		[ObservableProperty] public partial GbDebuggerConfig Gameboy { get; set; } = new();
 		[ObservableProperty] public partial GbaDebuggerConfig Gba { get; set; } = new();
-		[ObservableProperty] public partial PceDebuggerConfig Pce { get; set; } = new();
 		[ObservableProperty] public partial SmsDebuggerConfig Sms { get; set; } = new();
 
 		[ObservableProperty] public partial bool BreakOnUninitRead { get; set; } = false;

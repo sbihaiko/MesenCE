@@ -30,7 +30,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial SnesConfig Snes { get; set; } = new();
 		[ObservableProperty] public partial NesConfig Nes { get; set; } = new();
 		[ObservableProperty] public partial GameboyConfig Gameboy { get; set; } = new();
-		[ObservableProperty] public partial PcEngineConfig PcEngine { get; set; } = new();
 		[ObservableProperty] public partial SmsConfig Sms { get; set; } = new();
 		[ObservableProperty] public partial EnhancementPackConfig EnhancementPacks { get; set; } = new();
 		[ObservableProperty] public partial GbaConfig Gba { get; set; } = new();
@@ -84,7 +83,6 @@ namespace Mesen.Config
 			Emulation.ApplyConfig();
 			Gameboy.ApplyConfig();
 			Gba.ApplyConfig();
-			PcEngine.ApplyConfig();
 			Nes.ApplyConfig();
 			Snes.ApplyConfig();
 			Sms.ApplyConfig();
@@ -129,7 +127,6 @@ namespace Mesen.Config
 				Nes.InitializeDefaults(DefaultKeyMappings);
 				Gameboy.InitializeDefaults(DefaultKeyMappings);
 				Gba.InitializeDefaults(DefaultKeyMappings);
-				PcEngine.InitializeDefaults(DefaultKeyMappings);
 				Sms.InitializeDefaults(DefaultKeyMappings);
 				ConfigUpgrade = (int)ConfigUpgradeHint.NextValue - 1;
 			}

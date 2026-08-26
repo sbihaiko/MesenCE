@@ -425,15 +425,11 @@ namespace Mesen.ViewModels
 					),
 					SubActions = new List<object>() {
 						GetRegionMenuItem(ConsoleRegion.Auto),
-						GetPcEngineModelMenuItem(PceConsoleType.Auto),
 						new ContextMenuSeparator(),
 						GetRegionMenuItem(ConsoleRegion.Ntsc),
 						GetRegionMenuItem(ConsoleRegion.NtscJapan),
 						GetRegionMenuItem(ConsoleRegion.Pal),
 						GetRegionMenuItem(ConsoleRegion.Dendy),
-						GetPcEngineModelMenuItem(PceConsoleType.PcEngine),
-						GetPcEngineModelMenuItem(PceConsoleType.SuperGrafx),
-						GetPcEngineModelMenuItem(PceConsoleType.TurboGrafx),
 					}
 				},
 
@@ -491,10 +487,6 @@ namespace Mesen.ViewModels
 					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Gba)
 				},
 				new MainMenuAction() {
-					ActionType = ActionType.PcEngine,
-					OnClick = () => OpenConfig(wnd, ConfigWindowTab.PcEngine)
-				},
-				new MainMenuAction() {
 					ActionType = ActionType.Sms,
 					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Sms)
 				},
@@ -542,7 +534,7 @@ namespace Mesen.ViewModels
 					return ResourceHelper.GetEnumText(region);
 				},
 				IsVisible = () => {
-					if(MainWindow.RomInfo.ConsoleType == ConsoleType.PcEngine || MainWindow.RomInfo.ConsoleType == ConsoleType.Gameboy) {
+					if(MainWindow.RomInfo.ConsoleType == ConsoleType.Gameboy) {
 						return false;
 					}
 
@@ -588,20 +580,6 @@ namespace Mesen.ViewModels
 						default:
 							break;
 					}
-				}
-			};
-		}
-
-		private MainMenuAction GetPcEngineModelMenuItem(PceConsoleType model)
-		{
-			return new MainMenuAction() {
-				ActionType = ActionType.Custom,
-				CustomText = ResourceHelper.GetEnumText(model),
-				IsVisible = () => MainWindow.RomInfo.ConsoleType == ConsoleType.PcEngine,
-				IsSelected = () => ConfigManager.Config.PcEngine.ConsoleType == model,
-				OnClick = () => {
-					ConfigManager.Config.PcEngine.ConsoleType = model;
-					ConfigManager.Config.PcEngine.ApplyConfig();
 				}
 			};
 		}

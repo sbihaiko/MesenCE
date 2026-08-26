@@ -88,18 +88,12 @@ namespace Mesen.Config
 				NesBreakOnInvalidOamWrite = Debugger.Nes.BreakOnInvalidOamWrite,
 				NesBreakOnDmaInputRead = Debugger.Nes.BreakOnDmaInputRead,
 
-				PceBreakOnBrk = Debugger.Pce.BreakOnBrk,
-				PceBreakOnUnofficialOpCode = Debugger.Pce.BreakOnUnofficialOpCode,
-				PceBreakOnInvalidVramAddress = Debugger.Pce.BreakOnInvalidVramAddress,
-
 				SmsBreakOnNopLoad = Debugger.Sms.BreakOnNopLoad,
 
 				GbaBreakOnInvalidOpCode = Debugger.Gba.BreakOnInvalidOpCode,
 				GbaBreakOnNopLoad = Debugger.Gba.BreakOnNopLoad,
 				GbaBreakOnUnalignedMemAccess = Debugger.Gba.BreakOnUnalignedMemAccess,
 				GbaDisMode = Debugger.Gba.DisassemblyMode,
-
-				WsBreakOnUndefinedOpCode = Debugger.Ws.BreakOnUndefinedOpCode,
 
 				ScriptAllowIoOsAccess = ScriptWindow.AllowIoOsAccess,
 				ScriptAllowNetworkAccess = ScriptWindow.AllowNetworkAccess,

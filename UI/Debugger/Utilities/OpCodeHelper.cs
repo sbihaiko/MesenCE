@@ -22,11 +22,9 @@ public static class OpCodeHelper
 	{
 		InitNesDocumentation();
 		InitSnesDocumentation();
-		InitPceDocumentation();
 		InitGbDocumentation();
 		InitSmsDocumentation();
 		InitGbaDocumentation();
-		InitWsDocumentation();
 	}
 
 	public static DynamicTooltip? GetTooltip(CodeSegmentInfo seg)
@@ -117,19 +115,6 @@ public static class OpCodeHelper
 		InitDocumentation(CpuType.Spc, ReadDocumentationFile("SpcDocumentation.json"));
 	}
 
-	private static void InitPceDocumentation()
-	{
-		Dictionary<string, OpCodeDesc> baseDesc = new(_data[CpuType.Nes].OpDesc);
-		InitDocumentation(CpuType.Pce, ReadDocumentationFile("PceDocumentation.json"), baseDesc);
-		_data[CpuType.Pce].OpDescGetter = (dict, opName, _) => {
-			OpCodeDesc? desc = null;
-			int index = opName.IndexOf("."); //ignore anything after a dot (e.g lda.h, etc.)
-			opName = index >= 0 ? opName.Substring(0, index) : opName;
-			dict.TryGetValue(opName.Substring(0, Math.Min(opName.Length, 3)), out desc);
-			return desc;
-		};
-	}
-
 	private static void InitGbDocumentation()
 	{
 		InitDocumentation(CpuType.Gameboy, ReadDocumentationFile("GbDocumentation.json"));
@@ -139,12 +124,6 @@ public static class OpCodeHelper
 	{
 		//TODOSMS add missing descriptions, etc.
 		InitDocumentation(CpuType.Sms, ReadDocumentationFile("SmsDocumentation.json"));
-	}
-
-	private static void InitWsDocumentation()
-	{
-		//TODOWS add missing descriptions, etc.
-		InitDocumentation(CpuType.Ws, ReadDocumentationFile("WsDocumentation.json"));
 	}
 
 	private static void InitGbaDocumentation()

@@ -131,16 +131,6 @@
 						</Grid>
 					</c:OptionSection>
 
-					<c:OptionSection Header="{l:Translate lblPce}" Icon="Assets/PceIcon.png" >
-						<Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*">
-							<TextBlock Text="Super CD-ROM²" />
-							<c:FirmwareSelect FirmwareType="PceSuperCd" Grid.Column="1" />
-
-							<TextBlock Text="Games Express" Grid.Row="1" />
-							<c:FirmwareSelect FirmwareType="PceGamesExpress" Grid.Column="1" Grid.Row="1" />
-						</Grid>
-					</c:OptionSection>
-
 					<c:OptionSection Header="{l:Translate lblSms}" Icon="Assets/SmsIcon.png" >
 						<Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*">
 							<TextBlock Text="Boot ROM (SMS)" />

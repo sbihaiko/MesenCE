@@ -1,6 +1,6 @@
 # Plano — produto do fork: `main` + cores reduzidos
 
-**Status:** F0 em andamento (2026-08-26) — `main` criada; cortes F1–F4 pendentes ·
+**Status:** F0–F3 feitos na `main` (2026-08-26) — Coleco / WonderSwan / PC Engine fora; F4 SNES+SGB pendente ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES já estava fora das fases) ·
 **Fora de spec:** corte de emulação, não de formato de pack.
 

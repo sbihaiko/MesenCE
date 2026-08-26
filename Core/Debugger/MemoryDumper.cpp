@@ -16,8 +16,6 @@
 #include "Debugger/MemoryDumper.h"
 #include "SNES/BaseCartridge.h"
 #include "NES/NesConsole.h"
-#include "PCE/PceConsole.h"
-#include "PCE/PceMemoryManager.h"
 #include "SMS/SmsConsole.h"
 #include "SMS/SmsVdp.h"
 #include "SMS/SmsMemoryManager.h"
@@ -46,8 +44,6 @@ MemoryDumper::MemoryDumper(Debugger* debugger)
 		_nesConsole = nes;
 	} else if(Gameboy* gb = dynamic_cast<Gameboy*>(console)) {
 		_gameboy = gb;
-	} else if(PceConsole* pce = dynamic_cast<PceConsole*>(console)) {
-		_pceConsole = pce;
 	} else if(SmsConsole* sms = dynamic_cast<SmsConsole*>(console)) {
 		_smsConsole = sms;
 	} else if(GbaConsole* gba = dynamic_cast<GbaConsole*>(console)) {
@@ -190,16 +186,6 @@ void MemoryDumper::GetMemoryState(MemoryType type, uint8_t* buffer)
 			break;
 		}
 
-		case MemoryType::PceMemory: {
-			if(_pceConsole) {
-				PceMemoryManager* memManager = _pceConsole->GetMemoryManager();
-				for(int i = 0; i <= 0xFFFF; i++) {
-					buffer[i] = memManager->DebugRead(i);
-				}
-			}
-			break;
-		}
-
 		case MemoryType::SmsMemory: {
 			if(_smsConsole) {
 				SmsMemoryManager* memManager = _smsConsole->GetMemoryManager();
@@ -268,7 +254,6 @@ void MemoryDumper::InternalSetMemoryValues(MemoryType originalMemoryType, uint32
 			case MemoryType::GameboyMemory: _gameboy->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::NesMemory: _nesConsole->DebugWrite(address, value, disableSideEffects); break;
 			case MemoryType::NesPpuMemory: _nesConsole->DebugWriteVram(address, value); break;
-			case MemoryType::PceMemory: _pceConsole->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::SmsMemory: _smsConsole->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::GbaMemory: _gbaConsole->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::SpcDspRegisters: _spc->DebugWriteDspReg(address, value); break;
@@ -367,7 +352,6 @@ uint8_t MemoryDumper::InternalGetMemoryValue(MemoryType memoryType, uint32_t add
 		case MemoryType::GameboyMemory: return _gameboy->GetMemoryManager()->DebugRead(address);
 		case MemoryType::NesMemory: return _nesConsole->DebugRead(address);
 		case MemoryType::NesPpuMemory: return _nesConsole->DebugReadVram(address);
-		case MemoryType::PceMemory: return _pceConsole->GetMemoryManager()->DebugRead(address);
 		case MemoryType::SmsMemory: return _smsConsole->GetMemoryManager()->DebugRead(address);
 		case MemoryType::SmsPort: return _smsConsole->GetMemoryManager()->DebugReadPort(address);
 		case MemoryType::GbaMemory: return _gbaConsole->GetMemoryManager()->DebugRead(address);

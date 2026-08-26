@@ -18,7 +18,6 @@
 #include "Gameboy/GbTypes.h"
 #include "GBA/GbaTypes.h"
 #include "NES/NesTypes.h"
-#include "PCE/PceTypes.h"
 #include "SMS/SmsTypes.h"
 #include "Shared/EmuSettings.h"
 #include "Utilities/FastString.h"
@@ -513,25 +512,6 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 					CodeDataLogger* cdl = cdlManager->GetCodeDataLogger(row.Address.Type);
 					if(!disInfo.IsInitialized()) {
 						disInfo = DisassemblyInfo(row.Address.Address, 0, CpuType::Nes, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= (!cdl || cdl->IsCode(data.AbsoluteAddress.Address)) ? LineFlags::VerifiedCode : LineFlags::UnexecutedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
-				case CpuType::Pce: {
-					PceCpuState state = (PceCpuState&)_debugger->GetCpuStateRef(lineCpuType);
-					state.PC = (uint16_t)row.CpuAddress;
-
-					CodeDataLogger* cdl = cdlManager->GetCodeDataLogger(row.Address.Type);
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, 0, CpuType::Pce, row.Address.Type, _memoryDumper);
 					} else {
 						data.Flags |= (!cdl || cdl->IsCode(data.AbsoluteAddress.Address)) ? LineFlags::VerifiedCode : LineFlags::UnexecutedCode;
 					}

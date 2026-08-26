@@ -164,7 +164,6 @@ namespace Mesen.Debugger.Utilities
 							break;
 
 						case ConsoleType.Gameboy: importer = new GbWlaDxImporter(); break;
-						case ConsoleType.PcEngine: importer = new PceWlaDxImporter(); break;
 						case ConsoleType.Sms: importer = new SmsWlaDxImporter(); break;
 					}
 
@@ -181,15 +180,7 @@ namespace Mesen.Debugger.Utilities
 							BassLabelFile.Import(path, showResult, CpuType.Gameboy);
 						}
 					} else {
-						if(_romInfo.ConsoleType == ConsoleType.PcEngine && PceasSymbolImporter.IsValidFile(symContent)) {
-							PceasSymbolImporter importer = new PceasSymbolImporter();
-							importer.Import(path, showResult);
-							SymbolProvider = importer;
-						} else if(_romInfo.ConsoleType == ConsoleType.PcEngine && LegacyPceasSymbolFile.IsValidFile(symContent)) {
-							LegacyPceasSymbolFile.Import(path, showResult);
-						} else {
-							BassLabelFile.Import(path, showResult, _romInfo.ConsoleType.GetMainCpuType());
-						}
+						BassLabelFile.Import(path, showResult, _romInfo.ConsoleType.GetMainCpuType());
 					}
 				}
 			}

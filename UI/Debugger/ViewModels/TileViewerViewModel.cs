@@ -814,23 +814,6 @@ namespace Mesen.Debugger.ViewModels
 						};
 					}
 
-				case CpuType.Pce:
-					if(DebugApi.GetConsoleState<PceState>(ConsoleType.PcEngine).IsSuperGrafx) {
-						return new() {
-							CreatePreset(0, "BG1", () => ApplyBgPreset(0)),
-							CreatePreset(0, "SPR1", () => ApplySpritePreset(0)),
-							CreatePreset(1, "BG2", () => ApplyBgPreset(1)),
-							CreatePreset(1, "SPR2", () => ApplySpritePreset(1)),
-							CreatePreset(2, "ROM", () => ApplyPrgPreset()),
-						};
-					} else {
-						return new() {
-							CreatePreset(0, "BG", () => ApplyBgPreset(0)),
-							CreatePreset(0, "Sprites", () => ApplySpritePreset(0)),
-							CreatePreset(0, "ROM", () => ApplyPrgPreset()),
-						};
-					}
-
 				case CpuType.Sms:
 					return new() {
 						CreatePreset(0, "VDP", () => ApplyPpuPreset()),

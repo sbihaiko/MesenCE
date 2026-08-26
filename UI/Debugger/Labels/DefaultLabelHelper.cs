@@ -22,8 +22,6 @@ namespace Mesen.Debugger.Labels
 				SetSnesDefaultLabels();
 			} else if(cpuTypes.Contains(CpuType.Nes)) {
 				SetDefaultNesLabels();
-			} else if(cpuTypes.Contains(CpuType.Pce)) {
-				SetPceDefaultLabels();
 			} else if(cpuTypes.Contains(CpuType.Sms)) {
 				SetSmsDefaultLabels();
 			} else if(cpuTypes.Contains(CpuType.Gba)) {
@@ -333,52 +331,6 @@ namespace Mesen.Debugger.Labels
 			}
 		}
 
-		private static void SetPceDefaultLabels()
-		{
-			bool isSuperGrafx = DebugApi.GetConsoleState<PceState>(ConsoleType.PcEngine).IsSuperGrafx;
-
-			LabelManager.SetLabel(0x000, MemoryType.PceMemory, "VDC_AR_0000", "Address Register (W) / Status Register (R)");
-			LabelManager.SetLabel(0x002, MemoryType.PceMemory, "VDC_DATA_LO_0002", "Data (low byte)");
-			LabelManager.SetLabel(0x003, MemoryType.PceMemory, "VDC_DATA_HI_0003", "Data (high byte) + Latch");
-
-			if(isSuperGrafx) {
-				LabelManager.SetLabel(0x008, MemoryType.PceMemory, "VPC_PRIO_LO_0008", "Priority Control (LSB)");
-				LabelManager.SetLabel(0x009, MemoryType.PceMemory, "VPC_PRIO_HI_0009", "Priority Control (MSB)");
-				LabelManager.SetLabel(0x00A, MemoryType.PceMemory, "VPC_WND1_LO_000A", "Window 1 (LSB)");
-				LabelManager.SetLabel(0x00B, MemoryType.PceMemory, "VPC_WND1_HI_000B", "Window 1 (MSB)");
-				LabelManager.SetLabel(0x00C, MemoryType.PceMemory, "VPC_WND2_LO_000C", "Window 2 (LSB)");
-				LabelManager.SetLabel(0x00D, MemoryType.PceMemory, "VPC_WND2_HI_000D", "Window 2 (MSB)");
-				LabelManager.SetLabel(0x00E, MemoryType.PceMemory, "VPC_STCTRL_000E", "Store Immediate Control");
-				LabelManager.SetLabel(0x010, MemoryType.PceMemory, "VDC2_AR_0010", "Address Register (W) / Status Register (R)");
-				LabelManager.SetLabel(0x012, MemoryType.PceMemory, "VDC2_DATA_LO_0012", "Data (low byte)");
-				LabelManager.SetLabel(0x013, MemoryType.PceMemory, "VDC2_DATA_HI_0013", "Data (high byte) + Latch");
-			}
-
-			LabelManager.SetLabel(0x400, MemoryType.PceMemory, "VCE_CONTROL_0400", "VCE Control Register");
-			LabelManager.SetLabel(0x402, MemoryType.PceMemory, "VCE_ADDR_LO_0402", "Color Table Address Register (LSB)");
-			LabelManager.SetLabel(0x403, MemoryType.PceMemory, "VCE_ADDR_HI_0403", "Color Table Address Register (MSB)");
-			LabelManager.SetLabel(0x404, MemoryType.PceMemory, "VCE_DATA_LO_0404", "Color Table Data Register (LSB)");
-			LabelManager.SetLabel(0x405, MemoryType.PceMemory, "VCE_DATA_HI_0405", "Color Table Data Register (MSB)");
-
-			LabelManager.SetLabel(0x800, MemoryType.PceMemory, "PSG_CHANSELECT_0800", "PSG channel select ($00-$05)");
-			LabelManager.SetLabel(0x801, MemoryType.PceMemory, "PSG_GLOBALVOL_0801", "Global Sound Volume (top 4 bits: Left; bottom 4 bits: Right)");
-			LabelManager.SetLabel(0x802, MemoryType.PceMemory, "PSG_FREQLO_0802", "Frequency (LSB)");
-			LabelManager.SetLabel(0x803, MemoryType.PceMemory, "PSG_FREQHI_0803", "Frequency (MSB - 4 bits)");
-			LabelManager.SetLabel(0x804, MemoryType.PceMemory, "PSG_CHANCTRL_0804", "Channel on/off, DDA on/off, Channel volume");
-			LabelManager.SetLabel(0x805, MemoryType.PceMemory, "PSG_CHANPAN_0805", "Channel sound balance/panning (Left/Right)");
-			LabelManager.SetLabel(0x806, MemoryType.PceMemory, "PSG_CHANDATA_0806", "Channel sound data (5 bits)");
-			LabelManager.SetLabel(0x807, MemoryType.PceMemory, "PSG_NOISE_0807", "Noise enable, Noise frequency");
-			LabelManager.SetLabel(0x808, MemoryType.PceMemory, "PSG_LFOFREQ_0808", "LFO frequency");
-			LabelManager.SetLabel(0x809, MemoryType.PceMemory, "PSG_LFOCONTROL_0809", "LFO trigger, LFO control");
-
-			LabelManager.SetLabel(0xC00, MemoryType.PceMemory, "TIMER_COUNTER_0C00", "Timer Counter (read)/latch (write)");
-			LabelManager.SetLabel(0xC01, MemoryType.PceMemory, "TIMER_CONTROL_0C01", "Timer Control");
-
-			LabelManager.SetLabel(0x1000, MemoryType.PceMemory, "JOYPAD_1000", "Joypad I/O");
-
-			LabelManager.SetLabel(0x1402, MemoryType.PceMemory, "IRQ_DISABLE_1402", "IRQ Disable toggle");
-			LabelManager.SetLabel(0x1403, MemoryType.PceMemory, "IRQ_STATUS_1403", "IRQ Status (Read); Acknowledge Timer interrupt (write)");
-		}
 
 		private static void SetSmsDefaultLabels()
 		{

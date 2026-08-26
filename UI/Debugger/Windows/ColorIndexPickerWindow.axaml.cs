@@ -30,10 +30,6 @@ namespace Mesen.Debugger.Windows
 					Palette = ConfigManager.Config.Nes.UserPalette;
 					break;
 
-				case CpuType.Pce:
-					Palette = ConfigManager.Config.PcEngine.Palette;
-					break;
-
 				case CpuType.Gameboy:
 					if(selectedPalette < 4) {
 						Palette = ConfigManager.Config.Gameboy.BgColors;

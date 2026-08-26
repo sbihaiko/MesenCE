@@ -11,7 +11,6 @@ class NesConsole;
 class BaseCartridge;
 class Spc;
 class Gameboy;
-class PceConsole;
 class SmsConsole;
 class GbaConsole;
 class Emulator;
@@ -37,7 +36,6 @@ private:
 	Gameboy* _gameboy = nullptr;
 	SnesMemoryManager* _memoryManager = nullptr;
 	NesConsole* _nesConsole = nullptr;
-	PceConsole* _pceConsole = nullptr;
 	SmsConsole* _smsConsole = nullptr;
 	GbaConsole* _gbaConsole = nullptr;
 	BaseCartridge* _cartridge = nullptr;

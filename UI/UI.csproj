@@ -66,11 +66,9 @@
 	  <None Remove="Debugger\Documentation\GbaDocumentation.json" />
 	  <None Remove="Debugger\Documentation\GbDocumentation.json" />
 	  <None Remove="Debugger\Documentation\NesDocumentation.json" />
-	  <None Remove="Debugger\Documentation\PceDocumentation.json" />
 	  <None Remove="Debugger\Documentation\SmsDocumentation.json" />
 	  <None Remove="Debugger\Documentation\SnesDocumentation.json" />
 	  <None Remove="Debugger\Documentation\SpcDocumentation.json" />
-	  <None Remove="Debugger\Documentation\WsDocumentation.json" />
 	  <None Remove="Debugger\HighlightAssembly.xshd" />
 	  <None Remove="Debugger\HighlightLua.xshd" />
 	  <None Remove="Debugger\Utilities\LuaDocumentation.json" />
@@ -182,9 +180,6 @@
     <Compile Update="Debugger\StatusViews\GbaStatusView.axaml.cs">
       <DependentUpon>GbaStatusView.axaml</DependentUpon>
     </Compile>
-    <Compile Update="Debugger\StatusViews\WsStatusView.axaml.cs">
-      <DependentUpon>WsStatusView.axaml</DependentUpon>
-    </Compile>
     <Compile Update="Debugger\StatusViews\SmsStatusView.axaml.cs">
       <DependentUpon>SmsStatusView.axaml</DependentUpon>
     </Compile>
@@ -239,9 +234,6 @@
     <Compile Update="Debugger\StatusViews\GbStatusView.axaml.cs">
       <DependentUpon>GbStatusView.axaml</DependentUpon>
     </Compile>
-    <Compile Update="Debugger\StatusViews\PceStatusView.axaml.cs">
-      <DependentUpon>PceStatusView.axaml</DependentUpon>
-    </Compile>
     <Compile Update="Debugger\StatusViews\SpcStatusView.axaml.cs">
       <DependentUpon>SpcStatusView.axaml</DependentUpon>
     </Compile>
@@ -263,9 +255,6 @@
     </Compile>
     <Compile Update="Debugger\Views\RegisterTabView.axaml.cs">
       <DependentUpon>RegisterTabView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Debugger\Views\PceEventViewerConfigView.axaml.cs">
-      <DependentUpon>PceEventViewerConfigView.axaml</DependentUpon>
     </Compile>
     <Compile Update="Debugger\Views\QuickSearchView.axaml.cs">
       <DependentUpon>QuickSearchView.axaml</DependentUpon>
@@ -403,9 +392,6 @@
     <Compile Update="Views\GbaControllerView.axaml.cs">
       <DependentUpon>GbaControllerView.axaml</DependentUpon>
     </Compile>
-    <Compile Update="Views\PceAvenuePad6View.axaml.cs">
-      <DependentUpon>PceAvenuePad6View.axaml</DependentUpon>
-    </Compile>
     <Compile Update="Views\SmsInputConfigView.axaml.cs">
       <DependentUpon>SmsInputConfigView.axaml</DependentUpon>
     </Compile>
@@ -414,15 +400,6 @@
     </Compile>
     <Compile Update="Views\SmsConfigView.axaml.cs">
       <DependentUpon>SmsConfigView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\PceControllerView.axaml.cs">
-      <DependentUpon>PceControllerView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\PceInputConfigView.axaml.cs">
-      <DependentUpon>PceInputConfigView.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="Views\PceConfigView.axaml.cs">
-      <DependentUpon>PceConfigView.axaml</DependentUpon>
     </Compile>
     <Compile Update="Views\InputConfigView.axaml.cs">
       <DependentUpon>InputConfigView.axaml</DependentUpon>
@@ -609,11 +586,9 @@
     <AvaloniaResource Include="ThirdParty\DataBox\Themes\Fluent.axaml" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Debugger\Documentation\WsDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\SmsDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\GbaDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\SpcDocumentation.json" />
-    <EmbeddedResource Include="Debugger\Documentation\PceDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\GbDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\SnesDocumentation.json" />
     <EmbeddedResource Include="Debugger\Documentation\NesDocumentation.json" />

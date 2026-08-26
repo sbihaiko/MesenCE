@@ -68,7 +68,6 @@ unordered_map<string, int64_t>* ExpressionEvaluator::GetAvailableTokens()
 		case CpuType::St018: return &GetSt018Tokens();
 		case CpuType::Gameboy: return &GetGameboyTokens();
 		case CpuType::Nes: return &GetNesTokens();
-		case CpuType::Pce: return &GetPceTokens();
 		case CpuType::Sms: return &GetSmsTokens();
 		case CpuType::Gba: return &GetGbaTokens();
 		default: return nullptr;
@@ -422,7 +421,6 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 								case CpuType::St018: token = GetSt018TokenValue(token, resultType); break;
 								case CpuType::Gameboy: token = GetGameboyTokenValue(token, resultType); break;
 								case CpuType::Nes: token = GetNesTokenValue(token, resultType); break;
-								case CpuType::Pce: token = GetPceTokenValue(token, resultType); break;
 								case CpuType::Sms: token = GetSmsTokenValue(token, resultType); break;
 								case CpuType::Gba: token = GetGbaTokenValue(token, resultType); break;
 							}
