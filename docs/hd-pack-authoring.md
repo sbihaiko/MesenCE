@@ -46,6 +46,28 @@ A submissão é rejeitada quando:
 - há um problema óbvio de conteúdo/licenciamento (ex.: assets extraídos da
   ROM sem direito de distribuição, ou créditos claramente ausentes).
 
+## Zips de release com pasta de wrapper/promoção
+
+Alguns lançamentos empacotam o pack dentro de uma subpasta de nome livre
+(ex.: `Contra80s-v1.1/...`), às vezes junto com material que não faz parte do
+pack (screenshots, README de divulgação). Isso não casa nenhuma convenção de
+primeira classe: não há `pack.json` na raiz do zip nem o zip é nomeado
+exatamente como a ROM (MEP-v1.md §2.1, regras 5-6).
+
+Para esse caso existe um **caminho de compatibilidade de última prioridade**
+(MEP-v1.md §2.1, regra 9): tanto a triagem automática (`mep_lint.py`) quanto
+o host MesenCE tentam localizar, dentro do zip, a subpasta que parece ser a
+raiz do pack (contém `textures/hires.txt`, `audio/hires.txt`,
+`audio/fingerprints.json` e/ou `synth/preset.cfg`) e usá-la como raiz efetiva
+— só depois que as convenções normais falham. Se o zip tiver **mais de uma**
+subpasta candidata, a submissão é rejeitada por ambiguidade, então evite
+empacotar mais de uma pasta de conteúdo por zip.
+
+Esse fallback é um recurso de última instância, não a forma recomendada de
+publicar: sempre que possível, coloque pack.json na raiz do zip ou nomeie o
+arquivo exatamente como a ROM (sem extensão), para que a submissão seja
+aceita pela primeira convenção sem depender do fallback.
+
 ## Antes de enviar
 
 - **Direitos de distribuição.** O pack MUST NOT conter bytes da ROM nem

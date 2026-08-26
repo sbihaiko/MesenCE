@@ -57,6 +57,33 @@ distribuição; a responsabilidade pelo conteúdo é do autor do pack.
    `patches[]` e `sections` explícitas; seus `targets` não precisam casar
    (localização é identidade). Ao publicar, ferramentas SHOULD gerar o
    `pack.json` a partir da pasta (`mep pack`).
+9. **Fallback de subpasta (v1.1, última prioridade da cadeia).** Quando um
+   `.zip` não casa **nenhuma** das convenções acima — sem `pack.json` na
+   raiz **e** nome do arquivo diferente do nome da ROM (regra 5) — hosts MAY,
+   como último recurso antes de rejeitar o pack, buscar na lista de entradas
+   já conhecida do zip (profundidade e quantidade de entradas limitadas, para
+   não degenerar em busca irrestrita) uma subpasta que pareça ser a raiz do
+   pack (contém o layout fixo da regra 6) e usá-la como raiz efetiva de
+   extração. Esta regra é estritamente **aditiva e de menor prioridade**:
+   roda só depois que a pasta irmã, o contêiner nomeado e o `pack.json` na
+   raiz falharem, e nunca reordena a precedência da regra 7. Havendo mais de
+   uma subpasta candidata, o pack MUST ser rejeitado por ambiguidade — hosts
+   MUST NOT adivinhar.
+
+   **Assimetria motor-vs-validadores (name vs structural — intencional).** A
+   implementação de referência (motor C++, `PrepareZip`) resolve o fallback
+   por **casamento de nome**: aceita a subpasta cujo nome casa o nome da ROM
+   (case-insensitive), igual à regra 5. Os validadores auxiliares que rodam
+   sem o nome da ROM disponível no ponto de chamada (`MepZipValidator.cs` da
+   UI e `scripts/mep_lint.py` da triagem de submissões) usam em vez disso um
+   casamento **estrutural** (name-agnostic): aceitam a subpasta cujo conteúdo
+   satisfaz as sondas de camada da regra 6 (`textures/hires.txt`,
+   `audio/hires.txt`, `audio/fingerprints.json`, `synth/preset.cfg`). Essa
+   divergência entre motor e validadores é deliberada, não um bug — os dois
+   lados compartilham o mesmo limite de profundidade/entradas e a mesma
+   postura de rejeitar por ambiguidade em vez de adivinhar; ver ADR-0120 para
+   a decisão completa e o follow-up de dar nome de ROM opcional aos
+   validadores.
 
 ## 3. `pack.json`
 
