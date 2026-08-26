@@ -580,8 +580,13 @@ void MepPackManager::ScanAndMatch()
 		if(!LoadContainer(rootFolder, name, fromZip, pack, error)) {
 			if(error == "no pack.json") {
 				//ADR-0049: a container named like the ROM is "the folder, zipped"
-				//(or the fallback location when the ROM's folder is read-only)
-				if(StringUtilities::ToLower(name) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, pack)) {
+				//(or the fallback location when the ROM's folder is read-only).
+				//ADR-0120: when PrepareZip resolved a fallback subfolder,
+				//rootFolder's own last segment - not the zip's file name in
+				//"name" - is the one guaranteed to match the ROM, so the gate
+				//has to look there for the recovery to ever be reachable.
+				string rootLeaf = FolderUtilities::GetFilename(rootFolder, true);
+				if(StringUtilities::ToLower(rootLeaf) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, pack)) {
 					candidates.emplace_back(StringUtilities::ToLower(name), std::move(pack));
 				} else if(fromZip) {
 					_rejected.push_back(name + ": " + error);
