@@ -177,7 +177,7 @@ e `c9d11911`. `make core-unit-tests` compila e roda sem depender de `core`/
 (`ChannelRoleClassifier`: canal silencioso não vira SFX; sweep rápido +
 amplitude → `CueSweep`/`IsSfx`; porta lenta de 2 semitons → música, não SFX;
 lead vs. bass pela altura média após `kDecisionPeriodS`) e o Bloco B
-(`MepPack::NormalizeRelativePath` contra os 44 casos de
+(`MepPack::NormalizeRelativePath` contra todos os casos de
 `docs/specs/golden/mep/path-cases.txt`; `MepPack::Parse` contra o golden
 `docs/specs/golden/mep/pack.json` e as falhas controladas de JSON malformado
 e root não-objeto). O DOX `scripts/AGENTS.md` já existe e documenta o
