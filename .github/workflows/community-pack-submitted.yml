@@ -1,0 +1,83 @@
+name: Community Pack Submitted
+
+# Trigger-only workflow for the "Community HD/MEP Packs" triage pipeline.
+# Deliberately thin: it only figures out *which* pack link and *which*
+# validation mode apply, then hands both to the reusable
+# `community-pack-validate.yml` workflow. All Project/Status/Pack-Hash
+# manipulation, downloading, linting and classification lives there, not
+# here, so this file stays reviewable on its own.
+#
+# Two ways in:
+#   1. An Issue Form submission/edit carrying the `community-pack` label
+#      (`issues: opened|edited`) -> mode: submit.
+#   2. A comment whose body is EXACTLY `/revalidate` on an issue that
+#      already carries the `community-pack` label -> mode: revalidate.
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+jobs:
+  prepare:
+    # Only issues (not PRs) carrying the community-pack label, and only an
+    # exact "/revalidate" comment body (no partial/contains match) on such
+    # an issue.
+    if: >
+      (github.event_name == 'issues' &&
+       contains(github.event.issue.labels.*.name, 'community-pack')) ||
+      (github.event_name == 'issue_comment' &&
+       !github.event.issue.pull_request &&
+       github.event.comment.body == '/revalidate' &&
+       contains(github.event.issue.labels.*.name, 'community-pack'))
+    runs-on: ubuntu-latest
+    outputs:
+      pack_url: ${{ steps.extract.outputs.pack_url }}
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - name: Extract pack URL from issue body
+        id: extract
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set -euo pipefail
+          # The Issue Form renders the "Link do pack" field as the first
+          # http(s) URL in the structured body; grep it out defensively
+          # rather than assuming a fixed line number.
+          PACK_URL=$(printf '%s\n' "$ISSUE_BODY" | grep -oE 'https?://[^[:space:]]+' | head -n1 || true)
+          if [ -z "$PACK_URL" ]; then
+            echo "Nenhuma URL de pack encontrada no corpo da issue (campo 'Link do pack')." >&2
+            exit 1
+          fi
+          echo "pack_url=$PACK_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Determine validation mode
+        id: mode
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "mode=revalidate" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=submit" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate-submit:
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'submit'
+    uses: ./.github/workflows/community-pack-validate.yml
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      pack_url: ${{ needs.prepare.outputs.pack_url }}
+      mode: submit
+    secrets: inherit
+
+  validate-revalidate:
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'revalidate'
+    uses: ./.github/workflows/community-pack-validate.yml
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      pack_url: ${{ needs.prepare.outputs.pack_url }}
+      mode: revalidate
+    secrets: inherit
