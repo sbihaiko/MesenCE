@@ -40,6 +40,27 @@ what CI actually runs; this doc records why they're split the way they are.
   checkbox, and an optional description. Sets `labels: [community-pack]`
   and links `docs/hd-pack-authoring.md`. Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
+- `workflows/community-pack-validate.yml` — reusable (`workflow_call` only,
+  no trigger of its own) validate/classify pipeline for the "Community
+  HD/MEP Packs" triage board (GitHub Project "MesenCE Community Packs",
+  project number 3, owner `sbihaiko`). Referenced by value only, never
+  created/rediscovered: Project node id, the Status field's five option
+  ids, and the Pack Hash field id. Enforces a host allow-list
+  (`github.com/*/releases/*`, `raw.githubusercontent.com`,
+  `gist.githubusercontent.com`, `gist.github.com`) and a 50MB cap before
+  and during the download, always records the pack's `sha256` to Pack
+  Hash, calls `scripts/mep_lint.py` unmodified, and — only on lint
+  success — classifies the pack via `anthropics/claude-code-action`
+  restricted to comment/label/Project-move tools (no `Bash`), with the
+  pack's own file names/`pack.json`/issue text framed as data, never
+  instructions, in the prompt. Dispatches
+  `workflows/community-pack-catalog.yml` by name (never opens it) when the
+  final Status is one of the two "Aceito" states. Requires the caller to
+  supply a `GH_PROJECT_TOKEN` PAT (`project` scope) and either
+  `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` as repo secrets — this
+  workflow only documents those names, never creates them. See
+  `scripts/checks/verify_community_pack_validate_workflow.py` for its
+  structural contract.
 
 ## Work Guidance
 
