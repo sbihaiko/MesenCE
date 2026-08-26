@@ -55,6 +55,19 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   per-shape growth from near-blank/flat tiles - see that constant's comment
   in `Core/NES/HdPacks/HdPackBuilder.h`). Needs `make core`/a real ROM, unlike
   the fixture-only validators above.
+- `checks/verify_community_pack_validate_workflow.py` — stdlib+PyYAML
+  structural checker for `.github/workflows/community-pack-validate.yml`
+  (AC-2, AC-6 validate-side of the community-pack triage task): parses the
+  reusable workflow's `workflow_call` inputs, the exact Project/Status/
+  option/Pack-Hash ids, the host allow-list, the 50MB cap, the always-write
+  `sha256` step, the unmodified `mep_lint.py` call, the Claude Code Action
+  tool restriction + data-not-instruction prompt clause, the secret-name
+  comment, and — by literal `uses:`/string match against this workflow's
+  own text only, never by opening `community-pack-catalog.yml` — that it
+  dispatches that catalog workflow gated on an "Aceito*" Status. Sibling
+  checkers for the other community-pack deliverables land in this same
+  `checks/` subfolder as later tasks add them; none needs its own AGENTS.md
+  (same one-script-one-contract pattern as the checks below).
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh`, `check-f5-4b-doc.sh` - repo-hygiene shell
   checks run from `make` or CI. `check-f5-4b-doc.sh` guards the F5.4b clause
@@ -75,4 +88,6 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Child DOX Index
 
-(none - no subfolders)
+- `checks/` — one-script-one-contract structural checkers (see Work
+  Guidance above); no AGENTS.md of its own, same rationale as the
+  standalone shell checks listed there.
