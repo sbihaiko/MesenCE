@@ -1,20 +1,9 @@
 #include "pch.h"
 #include "Debugger/Debugger.h"
 #include "Shared/Emulator.h"
-#include "SNES/SnesMemoryManager.h"
-#include "SNES/Spc.h"
-#include "SNES/Coprocessors/DSP/NecDsp.h"
-#include "SNES/Coprocessors/SA1/Sa1.h"
-#include "SNES/Coprocessors/CX4/Cx4.h"
-#include "SNES/Coprocessors/GSU/Gsu.h"
-#include "SNES/Coprocessors/ST018/St018.h"
 #include "Gameboy/Gameboy.h"
 #include "Gameboy/GbMemoryManager.h"
-#include "SNES/Coprocessors/BSX/BsxCart.h"
-#include "SNES/Coprocessors/BSX/BsxMemoryPack.h"
-#include "SNES/SnesConsole.h"
 #include "Debugger/MemoryDumper.h"
-#include "SNES/BaseCartridge.h"
 #include "NES/NesConsole.h"
 #include "SMS/SmsConsole.h"
 #include "SMS/SmsVdp.h"
@@ -35,12 +24,7 @@ MemoryDumper::MemoryDumper(Debugger* debugger)
 
 	IConsole* console = _debugger->GetConsole();
 	//TODOv2 - generic code? (or at least rename SNES-specific members)
-	if(SnesConsole* snes = dynamic_cast<SnesConsole*>(console)) {
-		_spc = snes->GetSpc();
-		_memoryManager = snes->GetMemoryManager();
-		_cartridge = snes->GetCartridge();
-		_gameboy = snes->GetCartridge()->GetGameboy();
-	} else if(NesConsole* nes = dynamic_cast<NesConsole*>(console)) {
+	if(NesConsole* nes = dynamic_cast<NesConsole*>(console)) {
 		_nesConsole = nes;
 	} else if(Gameboy* gb = dynamic_cast<Gameboy*>(console)) {
 		_gameboy = gb;
@@ -110,54 +94,6 @@ void MemoryDumper::GetMemoryState(MemoryType type, uint8_t* buffer)
 	}
 
 	switch(type) {
-		case MemoryType::SnesMemory:
-			for(int i = 0; i <= 0xFFFFFF; i += 0x1000) {
-				_memoryManager->PeekBlock(i, buffer + i);
-			}
-			break;
-
-		case MemoryType::SpcMemory:
-			for(int i = 0; i <= 0xFFFF; i++) {
-				buffer[i] = _spc->DebugRead(i);
-			}
-			break;
-
-		case MemoryType::Sa1Memory:
-			if(_cartridge->GetSa1()) {
-				for(int i = 0; i <= 0xFFFFFF; i += 0x1000) {
-					_cartridge->GetSa1()->GetMemoryMappings()->PeekBlock(i, buffer + i);
-				}
-			}
-			break;
-
-		case MemoryType::NecDspMemory:
-			GetMemoryState(MemoryType::DspProgramRom, buffer);
-			break;
-
-		case MemoryType::GsuMemory:
-			if(_cartridge->GetGsu()) {
-				for(int i = 0; i <= 0xFFFFFF; i += 0x1000) {
-					_cartridge->GetGsu()->GetMemoryMappings()->PeekBlock(i, buffer + i);
-				}
-			}
-			break;
-
-		case MemoryType::Cx4Memory:
-			if(_cartridge->GetCx4()) {
-				for(int i = 0; i <= 0xFFFFFF; i += 0x1000) {
-					_cartridge->GetCx4()->GetMemoryMappings()->PeekBlock(i, buffer + i);
-				}
-			}
-			break;
-
-		case MemoryType::St018Memory:
-			if(_cartridge->GetSt018()) {
-				for(int i = 0; i < 0x20000; i += 0x1000) {
-					_cartridge->GetSt018()->PeekBlock(i, buffer + i);
-				}
-			}
-			break;
-
 		case MemoryType::GameboyMemory: {
 			if(_gameboy) {
 				GbMemoryManager* memManager = _gameboy->GetMemoryManager();
@@ -244,19 +180,12 @@ void MemoryDumper::InternalSetMemoryValues(MemoryType originalMemoryType, uint32
 		}
 
 		switch(memoryType) {
-			case MemoryType::SnesMemory: _memoryManager->GetMemoryMappings()->DebugWrite(address, value); break;
-			case MemoryType::SpcMemory: _spc->DebugWrite(address, value); break;
-			case MemoryType::Sa1Memory: _cartridge->GetSa1()->GetMemoryMappings()->DebugWrite(address, value); break;
 			case MemoryType::NecDspMemory: SetMemoryValue(MemoryType::DspProgramRom, address, value, disableSideEffects); return;
-			case MemoryType::GsuMemory: _cartridge->GetGsu()->GetMemoryMappings()->DebugWrite(address, value); break;
-			case MemoryType::Cx4Memory: _cartridge->GetCx4()->GetMemoryMappings()->DebugWrite(address, value); break;
-			case MemoryType::St018Memory: _cartridge->GetSt018()->DebugWrite(address, value); break;
 			case MemoryType::GameboyMemory: _gameboy->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::NesMemory: _nesConsole->DebugWrite(address, value, disableSideEffects); break;
 			case MemoryType::NesPpuMemory: _nesConsole->DebugWriteVram(address, value); break;
 			case MemoryType::SmsMemory: _smsConsole->GetMemoryManager()->DebugWrite(address, value); break;
 			case MemoryType::GbaMemory: _gbaConsole->GetMemoryManager()->DebugWrite(address, value); break;
-			case MemoryType::SpcDspRegisters: _spc->DebugWriteDspReg(address, value); break;
 
 			default:
 				uint8_t* src = GetMemoryBuffer(memoryType);
@@ -342,13 +271,7 @@ uint8_t MemoryDumper::GetMemoryValue(MemoryType memoryType, uint32_t address, bo
 uint8_t MemoryDumper::InternalGetMemoryValue(MemoryType memoryType, uint32_t address, bool disableSideEffects)
 {
 	switch(memoryType) {
-		case MemoryType::SnesMemory: return _memoryManager->Peek(address);
-		case MemoryType::SpcMemory: return _spc->DebugRead(address);
-		case MemoryType::Sa1Memory: return _cartridge->GetSa1()->GetMemoryMappings()->Peek(address);
 		case MemoryType::NecDspMemory: return GetMemoryValue(MemoryType::DspProgramRom, address);
-		case MemoryType::GsuMemory: return _cartridge->GetGsu()->GetMemoryMappings()->Peek(address);
-		case MemoryType::Cx4Memory: return _cartridge->GetCx4()->GetMemoryMappings()->Peek(address);
-		case MemoryType::St018Memory: return _cartridge->GetSt018()->DebugRead(address);
 		case MemoryType::GameboyMemory: return _gameboy->GetMemoryManager()->DebugRead(address);
 		case MemoryType::NesMemory: return _nesConsole->DebugRead(address);
 		case MemoryType::NesPpuMemory: return _nesConsole->DebugReadVram(address);

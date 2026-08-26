@@ -253,24 +253,6 @@ private:
 	unordered_map<string, int64_t>* GetAvailableTokens();
 	bool CheckSpecialTokens(string expression, size_t& pos, string& output, ExpressionData& data);
 
-	unordered_map<string, int64_t>& GetSnesTokens();
-	int64_t GetSnesTokenValue(int64_t token, EvalResultType& resultType);
-
-	unordered_map<string, int64_t>& GetSpcTokens();
-	int64_t GetSpcTokenValue(int64_t token, EvalResultType& resultType);
-
-	unordered_map<string, int64_t>& GetGsuTokens();
-	int64_t GetGsuTokenValue(int64_t token, EvalResultType& resultType);
-
-	unordered_map<string, int64_t>& GetCx4Tokens();
-	int64_t GetCx4TokenValue(int64_t token, EvalResultType& resultType);
-
-	unordered_map<string, int64_t>& GetNecDspTokens();
-	int64_t GetNecDspTokenValue(int64_t token, EvalResultType& resultType);
-
-	unordered_map<string, int64_t>& GetSt018Tokens();
-	int64_t GetSt018TokenValue(int64_t token, EvalResultType& resultType);
-
 	unordered_map<string, int64_t>& GetGameboyTokens();
 	int64_t GetGameboyTokenValue(int64_t token, EvalResultType& resultType);
 

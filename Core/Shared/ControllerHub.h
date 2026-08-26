@@ -4,9 +4,6 @@
 #include "Shared/BaseControlDevice.h"
 #include "Shared/InputHud.h"
 #include "Shared/IControllerHub.h"
-#include "SNES/Input/SnesController.h"
-#include "SNES/Input/SnesMouse.h"
-#include "SNES/Input/SnesNttDataKeypad.h"
 #include "NES/Input/NesController.h"
 #include "NES/Input/SuborMouse.h"
 #include "NES/Input/PachinkoController.h"
@@ -66,18 +63,6 @@ public:
 
 		for(int i = 0; i < HubPortCount; i++) {
 			switch(controllers[i].Type) {
-				case ControllerType::SnesController:
-					_ports[i].reset(new SnesController(emu, 0, controllers[i].Keys));
-					break;
-
-				case ControllerType::SnesMouse:
-					_ports[i].reset(new SnesMouse(emu, 0, controllers[i].Keys));
-					break;
-
-				case ControllerType::SnesNttDataKeypad:
-					_ports[i].reset(new SnesNttDataKeypad(emu, 0, controllers[i].Keys));
-					break;
-
 				case ControllerType::NesController:
 				case ControllerType::FamicomController:
 				case ControllerType::FamicomControllerP2:

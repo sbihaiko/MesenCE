@@ -32,9 +32,6 @@
 	</Window.Resources>
 	
 	<Window.DataTemplates>
-		<DataTemplate DataType="{x:Type cfg:SnesEventViewerConfig}">
-			<v:SnesEventViewerConfigView />
-		</DataTemplate>
 		<DataTemplate DataType="{x:Type cfg:NesEventViewerConfig}">
 			<v:NesEventViewerConfigView />
 		</DataTemplate>

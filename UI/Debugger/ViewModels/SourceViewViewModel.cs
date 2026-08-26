@@ -48,7 +48,7 @@ public partial class SourceViewViewModel : DisposableViewModel, ISelectableModel
 	private Action? _refreshScrollbar = null;
 
 	[Obsolete("For designer only")]
-	public SourceViewViewModel() : this(new(), new SnesDbgImporter(RomFormat.Sfc), CpuType.Snes) { }
+	public SourceViewViewModel() : this(new(), new NesDbgImporter(RomFormat.iNes), CpuType.Nes) { }
 
 	public SourceViewViewModel(DebuggerWindowViewModel debugger, ISymbolProvider symbolProvider, CpuType cpuType)
 	{

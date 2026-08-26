@@ -5,12 +5,6 @@
 #include "Shared/MemoryType.h"
 
 class Debugger;
-class SnesMemoryManager;
-class Spc;
-class SnesConsole;
-class Sa1;
-class Gsu;
-class Cx4;
 class Gameboy;
 
 struct AddressCounters

@@ -55,7 +55,6 @@ namespace Mesen.Utilities
 					if(ext == FileDialogHelper.RomExt) {
 						filter.Add(new FilePickerFileType("All supported files") {
 							Patterns = new List<string>() {
-								"*.sfc", "*.fig", "*.smc", "*.bs", "*.st", "*.spc",
 								"*.nes", "*.fds", "*.qd", "*.unif", "*.unf", "*.studybox", "*.nsf", "*.nsfe",
 								"*.gb", "*.gbc", "*.gbx", "*.gbs",
 								"*.sms", "*.gg", "*.sg",
@@ -64,7 +63,6 @@ namespace Mesen.Utilities
 								"*.ips", "*.bps"
 							}
 						});
-						filter.Add(new FilePickerFileType("SNES ROM files") { Patterns = new List<string>() { "*.sfc", "*.fig", "*.smc", "*.bs", "*.st", "*.spc" } });
 						filter.Add(new FilePickerFileType("NES ROM files") { Patterns = new List<string>() { "*.nes", "*.fds", "*.qd", "*.unif", "*.unf", "*.studybox", "*.nsf", "*.nsfe" } });
 						filter.Add(new FilePickerFileType("GB ROM files") { Patterns = new List<string>() { "*.gb", "*.gbc", "*.gbx", "*.gbs" } });
 						filter.Add(new FilePickerFileType("GBA ROM files") { Patterns = new List<string>() { "*.gba" } });
@@ -72,7 +70,7 @@ namespace Mesen.Utilities
 						filter.Add(new FilePickerFileType("SG-1000 ROM files") { Patterns = new List<string>() { "*.sg" } });
 						filter.Add(new FilePickerFileType("Patch files (IPS/BPS)") { Patterns = new List<string>() { "*.ips", "*.bps" } });
 					} else if(ext == FileDialogHelper.FirmwareExt) {
-						filter.Add(new FilePickerFileType("All firmware files") { Patterns = new List<string>() { "*.sfc", "*.nes", "*.bin", "*.rom", "*.sms", "*.gg", "*.gba" } });
+						filter.Add(new FilePickerFileType("All firmware files") { Patterns = new List<string>() { "*.nes", "*.bin", "*.rom", "*.sms", "*.gg", "*.gba" } });
 					} else if(ext == FileDialogHelper.LabelFileExt) {
 						filter.Add(new FilePickerFileType("All label files") { Patterns = new List<string>() { "*.mlb", "*.sym", "*.dbg", "*.fns", "*.elf", "*.cdb" } });
 					} else if(ext == FileDialogHelper.MovieFileExt) {

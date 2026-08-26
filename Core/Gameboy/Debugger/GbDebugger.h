@@ -9,7 +9,6 @@ class GbTraceLogger;
 class Gameboy;
 class CallstackManager;
 class MemoryAccessCounter;
-class SnesConsole;
 class BreakpointManager;
 class EmuSettings;
 class GbEventManager;

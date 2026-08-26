@@ -803,54 +803,7 @@ namespace Mesen.Debugger.ViewModels
 
 		private void DrawMode7Overlay()
 		{
-			if(_data.PpuToolsState is SnesPpuToolsState toolsState && _data.PpuState is SnesPpuState ppuState && ppuState.BgMode == 7) {
-				List<PictureViewerLine> lines = new();
-
-				Point prevStart = new();
-				Point prevEnd = new();
-				void AddLine(Point start, Point end, Color color)
-				{
-					if(start != prevStart && end != prevEnd) {
-						lines.Add(new PictureViewerLine() { Start = start, End = end, Width = 1.5, Color = color });
-						prevStart = start;
-						prevEnd = end;
-					}
-				}
-
-				Mesen.Utilities.HslColor baseColor = ColorHelper.RgbToHsl(Color.FromRgb(255, 0, 255));
-				for(int i = 0; i < 239; i++) {
-					if(toolsState.ScanlineBgMode[i] == 7) {
-						Color lineColor = ColorHelper.HslToRgb(baseColor);
-						Color alphaColor = Color.FromArgb(0xA0, lineColor.R, lineColor.G, lineColor.B);
-
-						int startX = toolsState.Mode7StartX[i] >> 8;
-						int startY = toolsState.Mode7StartY[i] >> 8;
-						int endX = toolsState.Mode7EndX[i] >> 8;
-						int endY = toolsState.Mode7EndY[i] >> 8;
-
-						AddLine(new Point(startX, startY), new Point(endX, endY), alphaColor);
-						if(!ppuState.Mode7.LargeMap) {
-							void Translate(ref int start, ref int end, int offset, Func<int, bool> predicate)
-							{
-								while(predicate(start) || predicate(end)) {
-									start += offset;
-									end += offset;
-									AddLine(new Point(startX, startY), new Point(endX, endY), alphaColor);
-								}
-							}
-
-							Translate(ref startX, ref endX, 1024, x => x < 0);
-							Translate(ref startY, ref endY, 1024, x => x < 0);
-							Translate(ref startX, ref endX, -1024, x => x >= 1024);
-							Translate(ref startY, ref endY, -1024, x => x >= 1024);
-						}
-					}
-					baseColor.H = (baseColor.H + 1) % 360;
-				}
-				OverlayLines = lines;
-			} else {
-				OverlayLines = null;
-			}
+			OverlayLines = null;
 		}
 
 		public void OnGameLoaded()

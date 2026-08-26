@@ -16,7 +16,6 @@
 #include "Shared/ColorUtilities.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Shared/HdPacks/HdTilePack.h"
-#include "SNES/Coprocessors/SGB/SuperGameboy.h"
 #include "Utilities/HexUtilities.h"
 #include "Utilities/Serializer.h"
 #include "Shared/EventType.h"
@@ -193,9 +192,6 @@ void GbPpu::ExecCycle()
 		if(_drawnPixels == 160) {
 			//Mode turns to hblank on the same cycle as the last pixel is output
 			_state.IrqMode = PpuMode::HBlank;
-			if(_gameboy->IsSgb()) {
-				_gameboy->GetSgb()->ProcessHBlank();
-			}
 			_state.IdleCycles = 456 - _state.Cycle - 1;
 
 			_oamReadBlocked = false;
@@ -238,9 +234,6 @@ void GbPpu::ProcessVblankScanline()
 				if(_state.Scanline == _vblankStartScanline) {
 					SetMode(PpuMode::VBlank);
 					_state.IrqMode = PpuMode::VBlank;
-					if(_gameboy->IsSgb()) {
-						_gameboy->GetSgb()->ProcessVBlank();
-					}
 					_windowCounter = -1;
 					_memoryManager->RequestIrq(GbIrqSource::VerticalBlank);
 					SendFrame();
@@ -274,7 +267,7 @@ void GbPpu::ProcessVblankScanline()
 			_drawnPixels = 0;
 
 			if(_state.Scanline > _lastScanline) {
-				_overclockScanlineCount = _gameboy->IsSgb() ? 0 : _settings->GetGameboyConfig().OverclockScanlineCount;
+				_overclockScanlineCount = _settings->GetGameboyConfig().OverclockScanlineCount;
 				_vblankStartScanline = 144 + _overclockScanlineCount;
 				_lastScanline = 153 + _overclockScanlineCount;
 
@@ -542,18 +535,12 @@ void GbPpu::WriteBgPixel(uint8_t colorIndex)
 {
 	uint16_t outOffset = _state.Scanline * GbConstants::ScreenWidth + _drawnPixels;
 	_currentBuffer[outOffset] = LcdReadBgPalette(colorIndex) & 0x7FFF;
-	if(_gameboy->IsSgb()) {
-		_gameboy->GetSgb()->WriteLcdColor(_state.Scanline, (uint8_t)_drawnPixels, colorIndex & 0x03);
-	}
 }
 
 void GbPpu::WriteObjPixel(uint8_t colorIndex)
 {
 	uint16_t outOffset = _state.Scanline * GbConstants::ScreenWidth + _drawnPixels;
 	_currentBuffer[outOffset] = LcdReadObjPalette(colorIndex) & 0x7FFF;
-	if(_gameboy->IsSgb()) {
-		_gameboy->GetSgb()->WriteLcdColor(_state.Scanline, (uint8_t)_drawnPixels, colorIndex & 0x03);
-	}
 }
 
 void GbPpu::RunSpriteEvaluation()
@@ -1062,12 +1049,6 @@ void GbPpu::SendFrame()
 	_emu->ProcessEvent(EventType::EndFrame, CpuType::Gameboy);
 	_state.FrameCount++;
 
-	if(_gameboy->IsSgb()) {
-		_isFirstFrame = false;
-		_forceBlankFrame = false;
-		return;
-	}
-
 	UpdatePalette();
 
 	if(_gameboy->IsPrimaryConsole()) {
@@ -1134,10 +1115,6 @@ void GbPpu::SendLinkedFrame(RenderedFrame& frame)
 
 void GbPpu::DebugSendFrame()
 {
-	if(_gameboy->IsSgb()) {
-		return;
-	}
-
 	int lastPixel = std::max(0, _state.IrqMode == PpuMode::HBlank ? 160 : _drawnPixels);
 	int offset = std::max(0, (int)(lastPixel + 1 + _state.Scanline * GbConstants::ScreenWidth));
 	int pixelsToClear = GbConstants::PixelCount - offset;

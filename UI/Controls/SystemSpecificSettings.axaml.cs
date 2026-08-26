@@ -40,11 +40,6 @@ namespace Mesen.Controls
 			NavigateTo(ConfigWindowTab.Nes);
 		}
 
-		private void OnClickSnes(object sender, RoutedEventArgs e)
-		{
-			NavigateTo(ConfigWindowTab.Snes);
-		}
-
 		private void OnClickGameboy(object sender, RoutedEventArgs e)
 		{
 			NavigateTo(ConfigWindowTab.Gameboy);
@@ -73,17 +68,6 @@ namespace Mesen.Controls
 								ConfigType.Emulation => NesConfigTab.Emulation,
 								ConfigType.Input => NesConfigTab.Input,
 								_ or ConfigType.Video => NesConfigTab.Video,
-							};
-						}
-						break;
-
-					case ConfigWindowTab.Snes:
-						if(cfg.Snes != null) {
-							cfg.Snes.SelectedTab = ConfigType switch {
-								ConfigType.Audio => SnesConfigTab.Audio,
-								ConfigType.Emulation => SnesConfigTab.Emulation,
-								ConfigType.Input => SnesConfigTab.Input,
-								_ or ConfigType.Video => SnesConfigTab.Video,
 							};
 						}
 						break;

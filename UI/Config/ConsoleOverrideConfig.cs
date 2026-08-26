@@ -30,7 +30,6 @@ public partial class ConsoleOverrideConfig : BaseConfig<GameConfig>
 		}
 
 		switch(romInfo.ConsoleType) {
-			case ConsoleType.Snes: return ConfigManager.Config.Snes.ConfigOverrides;
 			case ConsoleType.Gameboy: return ConfigManager.Config.Gameboy.ConfigOverrides;
 			case ConsoleType.Nes: return ConfigManager.Config.Nes.ConfigOverrides;
 			case ConsoleType.Sms:

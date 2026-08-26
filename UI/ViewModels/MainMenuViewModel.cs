@@ -445,7 +445,6 @@ namespace Mesen.ViewModels
 						new ContextMenuSeparator(),
 						GetGameboyModelMenuItem(GameboyModel.Gameboy),
 						GetGameboyModelMenuItem(GameboyModel.GameboyColor),
-						GetGameboyModelMenuItem(GameboyModel.SuperGameboy),
 					}
 				},
 
@@ -473,10 +472,6 @@ namespace Mesen.ViewModels
 				new MainMenuAction() {
 					ActionType = ActionType.Nes,
 					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Nes)
-				},
-				new MainMenuAction() {
-					ActionType = ActionType.Snes,
-					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Snes)
 				},
 				new MainMenuAction() {
 					ActionType = ActionType.Gameboy,
@@ -547,7 +542,6 @@ namespace Mesen.ViewModels
 					};
 				},
 				IsSelected = () => MainWindow.RomInfo.ConsoleType switch {
-					ConsoleType.Snes => ConfigManager.Config.Snes.Region == region,
 					ConsoleType.Nes => ConfigManager.Config.Nes.Region == region,
 					ConsoleType.Sms => (
 						MainWindow.RomInfo.Format switch {
@@ -559,11 +553,6 @@ namespace Mesen.ViewModels
 				},
 				OnClick = () => {
 					switch(MainWindow.RomInfo.ConsoleType) {
-						case ConsoleType.Snes:
-							ConfigManager.Config.Snes.Region = region;
-							ConfigManager.Config.Snes.ApplyConfig();
-							break;
-
 						case ConsoleType.Nes:
 							ConfigManager.Config.Nes.Region = region;
 							ConfigManager.Config.Nes.ApplyConfig();
@@ -760,13 +749,6 @@ namespace Mesen.ViewModels
 					ActionType = ActionType.TakeScreenshot,
 				},
 
-				new MainMenuAction() {
-					ActionType = ActionType.SaveSpcFile,
-					IsVisible = () => MainWindow.RomInfo.CpuTypes.Contains(CpuType.Spc),
-					OnClick = () => {
-						ApplicationHelper.GetOrCreateUniqueWindow(wnd, () => new SaveSpcFileWindow());
-					}
-				},
 			};
 		}
 

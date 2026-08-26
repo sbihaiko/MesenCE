@@ -27,7 +27,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial AudioConfig Audio { get; set; } = new();
 		[ObservableProperty] public partial InputConfig Input { get; set; } = new();
 		[ObservableProperty] public partial EmulationConfig Emulation { get; set; } = new();
-		[ObservableProperty] public partial SnesConfig Snes { get; set; } = new();
 		[ObservableProperty] public partial NesConfig Nes { get; set; } = new();
 		[ObservableProperty] public partial GameboyConfig Gameboy { get; set; } = new();
 		[ObservableProperty] public partial SmsConfig Sms { get; set; } = new();
@@ -84,7 +83,6 @@ namespace Mesen.Config
 			Gameboy.ApplyConfig();
 			Gba.ApplyConfig();
 			Nes.ApplyConfig();
-			Snes.ApplyConfig();
 			Sms.ApplyConfig();
 			EnhancementPacks.ApplyConfig();
 			Preferences.ApplyConfig();
@@ -123,7 +121,6 @@ namespace Mesen.Config
 		public void InitializeDefaults()
 		{
 			if(ConfigUpgrade == (int)ConfigUpgradeHint.FirstRun) {
-				Snes.InitializeDefaults(DefaultKeyMappings);
 				Nes.InitializeDefaults(DefaultKeyMappings);
 				Gameboy.InitializeDefaults(DefaultKeyMappings);
 				Gba.InitializeDefaults(DefaultKeyMappings);

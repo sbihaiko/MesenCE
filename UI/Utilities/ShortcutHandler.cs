@@ -258,16 +258,6 @@ namespace Mesen.Utilities
 		private (Func<bool>? get, Action<bool>? set) GetFlagSetterGetter(VideoLayer layer)
 		{
 			switch(MainWindowViewModel.Instance.RomInfo.ConsoleType) {
-				case ConsoleType.Snes:
-					switch(layer) {
-						case VideoLayer.Bg1: return (() => ConfigManager.Config.Snes.HideBgLayer1, (val) => ConfigManager.Config.Snes.HideBgLayer1 = val);
-						case VideoLayer.Bg2: return (() => ConfigManager.Config.Snes.HideBgLayer2, (val) => ConfigManager.Config.Snes.HideBgLayer2 = val);
-						case VideoLayer.Bg3: return (() => ConfigManager.Config.Snes.HideBgLayer3, (val) => ConfigManager.Config.Snes.HideBgLayer3 = val);
-						case VideoLayer.Bg4: return (() => ConfigManager.Config.Snes.HideBgLayer4, (val) => ConfigManager.Config.Snes.HideBgLayer4 = val);
-						case VideoLayer.Sprite1: return (() => ConfigManager.Config.Snes.HideSprites, (val) => ConfigManager.Config.Snes.HideSprites = val);
-					}
-					break;
-
 				case ConsoleType.Nes:
 					switch(layer) {
 						case VideoLayer.Bg1: return (() => ConfigManager.Config.Nes.DisableBackground, (val) => ConfigManager.Config.Nes.DisableBackground = val);
@@ -320,11 +310,6 @@ namespace Mesen.Utilities
 
 		private void EnableAllLayers()
 		{
-			ConfigManager.Config.Snes.HideBgLayer1 = false;
-			ConfigManager.Config.Snes.HideBgLayer2 = false;
-			ConfigManager.Config.Snes.HideBgLayer3 = false;
-			ConfigManager.Config.Snes.HideBgLayer4 = false;
-			ConfigManager.Config.Snes.HideSprites = false;
 			ConfigManager.Config.Nes.DisableBackground = false;
 			ConfigManager.Config.Nes.DisableSprites = false;
 			ConfigManager.Config.Gameboy.DisableBackground = false;
@@ -342,7 +327,6 @@ namespace Mesen.Utilities
 
 		private void UpdateAllCoreConfig()
 		{
-			ConfigManager.Config.Snes.ApplyConfig();
 			ConfigManager.Config.Nes.ApplyConfig();
 			ConfigManager.Config.Gameboy.ApplyConfig();
 			ConfigManager.Config.Gba.ApplyConfig();

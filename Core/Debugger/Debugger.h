@@ -8,13 +8,6 @@
 
 class IConsole;
 class Emulator;
-class SnesCpu;
-class SnesPpu;
-class Spc;
-class BaseCartridge;
-class SnesMemoryManager;
-class InternalRegisters;
-class SnesDmaController;
 class EmuSettings;
 
 class ExpressionEvaluator;

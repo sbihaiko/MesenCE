@@ -254,7 +254,7 @@ namespace Mesen.Controls
 			}
 
 			List<KeyMapping> mappings = new List<ControllerConfig>() {
-				ConfigManager.Config.Nes.Port1, ConfigManager.Config.Snes.Port1,
+				ConfigManager.Config.Nes.Port1,
 				ConfigManager.Config.Gameboy.Controller, ConfigManager.Config.Gba.Controller, ConfigManager.Config.Sms.Port1
 			}.SelectMany((a) => new List<KeyMapping>() { a.Mapping1, a.Mapping2, a.Mapping3, a.Mapping4 }).ToList();
 

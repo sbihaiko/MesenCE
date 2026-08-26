@@ -15,7 +15,6 @@
 	<c:OptionSection Header="{l:Translate lblSystemSpecificSettings}" Margin="0">
 		<WrapPanel Orientation="Horizontal" MaxWidth="470">
 			<c:ButtonWithIcon Icon="Assets/NesIcon.png" Text="{l:Translate lblNes}" MinWidth="110" Click="OnClickNes" />
-			<c:ButtonWithIcon Icon="Assets/SnesIcon.png" Text="{l:Translate lblSnes}" MinWidth="110" Click="OnClickSnes" />
 			<c:ButtonWithIcon Icon="Assets/GameboyIcon.png" Text="{l:Translate lblGameboy}" MinWidth="110" Click="OnClickGameboy" />
 			<c:ButtonWithIcon Icon="Assets/GbaIcon.png" Text="{l:Translate lblGba}" MinWidth="110" Click="OnClickGba" />
 			<c:ButtonWithIcon Icon="Assets/SmsIcon.png" Text="{l:Translate lblSms}" MinWidth="110" Click="OnClickSms" />

@@ -29,9 +29,8 @@
 #include "Shared/Interfaces/IBarcodeReader.h"
 #include "Shared/Interfaces/ITapeRecorder.h"
 #include "Shared/BaseControlManager.h"
-#include "SNES/SnesConsole.h"
-#include "SNES/SnesDefaultVideoFilter.h"
 #include "NES/NesConsole.h"
+#include "NES/NesDefaultVideoFilter.h"
 #include "Gameboy/Gameboy.h"
 #include "SMS/SmsConsole.h"
 #include "GBA/GbaConsole.h"
@@ -595,7 +594,6 @@ void Emulator::InitConsole(unique_ptr<IConsole>& newConsole, ConsoleMemoryInfo o
 void Emulator::TryLoadRom(VirtualFile& romFile, LoadRomResult& result, unique_ptr<IConsole>& console, bool useFileSignature)
 {
 	TryLoadRom<NesConsole>(romFile, result, console, useFileSignature);
-	TryLoadRom<SnesConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<Gameboy>(romFile, result, console, useFileSignature);
 	TryLoadRom<SmsConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<GbaConsole>(romFile, result, console, useFileSignature);
@@ -1025,7 +1023,7 @@ DeserializeResult Emulator::Deserialize(istream& in, uint32_t fileFormatVersion,
 BaseVideoFilter* Emulator::GetVideoFilter(bool getDefaultFilter)
 {
 	shared_ptr<IConsole> console = GetConsole();
-	return console ? console->GetVideoFilter(getDefaultFilter) : new SnesDefaultVideoFilter(this);
+	return console ? console->GetVideoFilter(getDefaultFilter) : new NesDefaultVideoFilter(this);
 }
 
 void Emulator::GetScreenRotationOverride(uint32_t& rotation)

@@ -115,7 +115,6 @@ namespace Mesen.Interop
 		public static BaseState GetPpuState(CpuType cpuType)
 		{
 			return cpuType switch {
-				CpuType.Snes => GetPpuState<SnesPpuState>(cpuType),
 				CpuType.Nes => GetPpuState<NesPpuState>(cpuType),
 				CpuType.Gameboy => GetPpuState<GbPpuState>(cpuType),
 				CpuType.Sms => GetPpuState<SmsVdpState>(cpuType),
@@ -135,7 +134,6 @@ namespace Mesen.Interop
 		public static BaseState GetPpuToolsState(CpuType cpuType)
 		{
 			return cpuType switch {
-				CpuType.Snes => GetPpuToolsState<SnesPpuToolsState>(cpuType),
 				CpuType.Nes => GetPpuToolsState<NesPpuToolsState>(cpuType),
 				CpuType.Gameboy => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
 				CpuType.Sms => GetPpuToolsState<EmptyPpuToolsState>(cpuType),
@@ -400,7 +398,6 @@ namespace Mesen.Interop
 			return debugEvents;
 		}
 
-		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropSnesEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropNesEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropGbEventViewerConfig config);
 		[DllImport(DllPath)] public static extern void SetEventViewerConfig(CpuType cpuType, InteropGbaEventViewerConfig config);
@@ -539,13 +536,6 @@ namespace Mesen.Interop
 		private static bool IsValidCpuState<T>(ref T state, CpuType cpuType) where T : BaseState
 		{
 			return cpuType switch {
-				CpuType.Snes => state is SnesCpuState,
-				CpuType.Spc => state is SpcState,
-				CpuType.NecDsp => state is NecDspState,
-				CpuType.Sa1 => state is SnesCpuState,
-				CpuType.Gsu => state is GsuState,
-				CpuType.Cx4 => state is Cx4State,
-				CpuType.St018 => state is ArmV3CpuState,
 				CpuType.Gameboy => state is GbCpuState,
 				CpuType.Nes => state is NesCpuState,
 				CpuType.Sms => state is SmsCpuState,
@@ -557,7 +547,6 @@ namespace Mesen.Interop
 		private static bool IsValidPpuState<T>(ref T state, CpuType cpuType) where T : BaseState
 		{
 			return cpuType.GetConsoleType() switch {
-				ConsoleType.Snes => state is SnesPpuState,
 				ConsoleType.Nes => state is NesPpuState,
 				ConsoleType.Gameboy => state is GbPpuState,
 				ConsoleType.Sms => state is SmsVdpState,

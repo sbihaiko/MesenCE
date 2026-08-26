@@ -3,7 +3,26 @@
 #include "Debugger/DebugTypes.h"
 #include "Shared/SettingTypes.h"
 #include "Utilities/SimpleLock.h"
-#include "SNES/DmaControllerTypes.h"
+struct DmaChannelConfig
+{
+	uint16_t SrcAddress;
+	uint16_t TransferSize;
+	uint16_t HdmaTableAddress;
+	uint8_t SrcBank;
+	uint8_t DestAddress;
+	bool DmaActive;
+	bool InvertDirection;
+	bool Decrement;
+	bool FixedTransfer;
+	bool HdmaIndirectAddressing;
+	uint8_t TransferMode;
+	uint8_t HdmaBank;
+	uint8_t HdmaLineCounterAndRepeat;
+	bool DoTransfer;
+	bool UnusedControlFlag;
+	uint8_t UnusedRegister;
+};
+
 
 enum class EventFlags
 {

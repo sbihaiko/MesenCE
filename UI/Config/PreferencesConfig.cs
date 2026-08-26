@@ -34,8 +34,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial bool ShowTurboRewindIcons { get; set; } = true;
 		[ObservableProperty] public partial bool ConfirmExitResetPower { get; set; } = false;
 
-		[ObservableProperty] public partial bool AssociateSnesRomFiles { get; set; } = false;
-		[ObservableProperty] public partial bool AssociateSnesMusicFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateNesRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateNesMusicFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateGbRomFiles { get; set; } = false;
@@ -44,8 +42,6 @@ namespace Mesen.Config
 		[ObservableProperty] public partial bool AssociateSmsRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateGameGearRomFiles { get; set; } = false;
 		[ObservableProperty] public partial bool AssociateSgRomFiles { get; set; } = false;
-		[ObservableProperty] public partial bool AssociateCvRomFiles { get; set; } = false;
-		[ObservableProperty] public partial bool AssociateWsRomFiles { get; set; } = false;
 
 		[ObservableProperty] public partial bool EnableAutoSaveState { get; set; } = true;
 		[ObservableProperty] public partial UInt32 AutoSaveStateDelay { get; set; } = 5;

@@ -76,7 +76,7 @@ namespace Mesen.Debugger.ViewModels
 		private PixelRect _previewCropRect;
 
 		[Obsolete("For designer only")]
-		public TileViewerViewModel() : this(CpuType.Snes, new(), new(), null) { }
+		public TileViewerViewModel() : this(CpuType.Nes, new(), new(), null) { }
 
 		public TileViewerViewModel(CpuType cpuType, PictureViewer picViewer, ScrollPictureViewer scrollViewer, Window? wnd)
 		{
@@ -294,7 +294,6 @@ namespace Mesen.Debugger.ViewModels
 			string selectedPreset = Config.SelectedPreset;
 
 			AvailableFormats = CpuType switch {
-				CpuType.Snes => new Enum[] { TileFormat.Bpp2, TileFormat.Bpp4, TileFormat.Bpp8, TileFormat.DirectColor, TileFormat.Mode7, TileFormat.Mode7ExtBg, TileFormat.Mode7DirectColor },
 				CpuType.Nes => new Enum[] { TileFormat.NesBpp2 },
 				CpuType.Gameboy => new Enum[] { TileFormat.Bpp2 },
 				CpuType.Pce => new Enum[] { TileFormat.Bpp4, TileFormat.PceSpriteBpp4, TileFormat.PceSpriteBpp2Sp01, TileFormat.PceSpriteBpp2Sp23, TileFormat.PceBackgroundBpp2Cg0, TileFormat.PceBackgroundBpp2Cg1 },
@@ -335,7 +334,6 @@ namespace Mesen.Debugger.ViewModels
 			Config.Source = CpuType.GetVramMemoryType();
 			Config.StartAddress = 0;
 			switch(CpuType) {
-				case CpuType.Snes:
 				case CpuType.Nes:
 				case CpuType.Gameboy:
 					ApplyPpuPreset();
@@ -774,18 +772,6 @@ namespace Mesen.Debugger.ViewModels
 			ConfigPresetRows = new() { new(), new(), new() };
 
 			switch(CpuType) {
-				case CpuType.Snes:
-					return new() {
-						CreatePreset(0, "PPU", () => ApplyPpuPreset()),
-						CreatePreset(0, "ROM", () => ApplyPrgPreset()),
-						CreatePreset(1, "BG1", () => ApplyBgPreset(0)),
-						CreatePreset(1, "BG2", () => ApplyBgPreset(1)),
-						CreatePreset(1, "BG3", () => ApplyBgPreset(2)),
-						CreatePreset(1, "BG4", () => ApplyBgPreset(3)),
-						CreatePreset(2, "OAM1", () => ApplySpritePreset(0)),
-						CreatePreset(2, "OAM2", () => ApplySpritePreset(1)),
-					};
-
 				case CpuType.Nes:
 					return new() {
 						CreatePreset(0, "PPU", () => ApplyPpuPreset()),
@@ -877,16 +863,6 @@ namespace Mesen.Debugger.ViewModels
 			PresetValues preset = new();
 
 			switch(CpuType) {
-				case CpuType.Snes: {
-					preset.Source = MemoryType.SnesVideoRam;
-					preset.StartAddress = 0;
-					preset.ColumnCount = 16;
-					preset.RowCount = 128;
-					preset.Layout = TileLayout.Normal;
-					preset.Format = TileFormat.Bpp4;
-					break;
-				}
-
 				case CpuType.Nes: {
 					preset.Source = MemoryType.NesPpuMemory;
 					preset.StartAddress = 0;
@@ -946,33 +922,6 @@ namespace Mesen.Debugger.ViewModels
 			PresetValues preset = new();
 
 			switch(CpuType) {
-				case CpuType.Snes: {
-					int[,] layerBpp = new int[8, 4] { { 2, 2, 2, 2 }, { 4, 4, 2, 0 }, { 4, 4, 0, 0 }, { 8, 4, 0, 0 }, { 8, 2, 0, 0 }, { 4, 2, 0, 0 }, { 4, 0, 0, 0 }, { 8, 0, 0, 0 } };
-					SnesPpuState ppu = (SnesPpuState)state;
-					preset.Source = MemoryType.SnesVideoRam;
-					preset.ColumnCount = 16;
-					preset.RowCount = 64;
-					preset.Layout = TileLayout.Normal;
-					if(ppu.BgMode == 7) {
-						preset.Format = ppu.ExtBgEnabled ? TileFormat.Mode7ExtBg : (ppu.DirectColorMode ? TileFormat.Mode7DirectColor : TileFormat.Mode7);
-						preset.StartAddress = 0;
-						preset.SelectedPalette = 0;
-					} else {
-						preset.StartAddress = ppu.Layers[layer].ChrAddress * 2;
-						preset.Format = layerBpp[ppu.BgMode, layer] switch {
-							2 => TileFormat.Bpp2,
-							4 => TileFormat.Bpp4,
-							8 => ppu.DirectColorMode ? TileFormat.DirectColor : TileFormat.Bpp8,
-							_ => TileFormat.Bpp2
-						};
-
-						if(layerBpp[ppu.BgMode, layer] == 8 || SelectedPalette >= (layerBpp[ppu.BgMode, layer] == 2 ? 32 : 8)) {
-							preset.SelectedPalette = 0;
-						}
-					}
-					break;
-				}
-
 				case CpuType.Nes: {
 					NesPpuState ppu = (NesPpuState)state;
 					preset.Source = MemoryType.NesPpuMemory;
@@ -1046,19 +995,6 @@ namespace Mesen.Debugger.ViewModels
 			PresetValues preset = new();
 
 			switch(CpuType) {
-				case CpuType.Snes: {
-					SnesPpuState ppu = (SnesPpuState)state;
-					preset.Source = MemoryType.SnesVideoRam;
-					preset.Format = TileFormat.Bpp4;
-					preset.ColumnCount = 16;
-					preset.RowCount = 16;
-					preset.StartAddress = (ppu.OamBaseAddress + (layer == 1 ? ppu.OamAddressOffset : 0)) * 2;
-					if(SelectedPalette < 8 || SelectedPalette >= 16) {
-						preset.SelectedPalette = 8;
-					}
-					break;
-				}
-
 				case CpuType.Nes: {
 					NesPpuState ppu = (NesPpuState)state;
 					if(ppu.Control.LargeSprites) {

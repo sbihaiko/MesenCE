@@ -23,7 +23,6 @@ namespace Mesen.Config
 
 		[ObservableProperty] public partial bool DrawPartialFrame { get; set; } = false;
 
-		[ObservableProperty] public partial SnesDebuggerConfig Snes { get; set; } = new();
 		[ObservableProperty] public partial NesDebuggerConfig Nes { get; set; } = new();
 		[ObservableProperty] public partial GbDebuggerConfig Gameboy { get; set; } = new();
 		[ObservableProperty] public partial GbaDebuggerConfig Gba { get; set; } = new();

@@ -242,7 +242,6 @@ namespace Mesen.Debugger.ViewModels
 		private void InitForCpuType()
 		{
 			ConsoleConfig = CpuType switch {
-				CpuType.Snes => Config.SnesConfig,
 				CpuType.Nes => Config.NesConfig,
 				CpuType.Gameboy => Config.GbConfig,
 				CpuType.Sms => Config.SmsConfig,
@@ -391,9 +390,7 @@ namespace Mesen.Debugger.ViewModels
 
 		public void UpdateConfig()
 		{
-			if(ConsoleConfig is SnesEventViewerConfig snesCfg) {
-				DebugApi.SetEventViewerConfig(CpuType, snesCfg.ToInterop());
-			} else if(ConsoleConfig is NesEventViewerConfig nesCfg) {
+			if(ConsoleConfig is NesEventViewerConfig nesCfg) {
 				DebugApi.SetEventViewerConfig(CpuType, nesCfg.ToInterop());
 			} else if(ConsoleConfig is GbEventViewerConfig gbCfg) {
 				DebugApi.SetEventViewerConfig(CpuType, gbCfg.ToInterop());

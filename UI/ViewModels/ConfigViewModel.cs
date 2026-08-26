@@ -14,7 +14,6 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial PreferencesConfigViewModel? Preferences { get; set; }
 		[ObservableProperty] public partial EmulationConfigViewModel? Emulation { get; set; }
 
-		[ObservableProperty] public partial SnesConfigViewModel? Snes { get; set; }
 		[ObservableProperty] public partial NesConfigViewModel? Nes { get; set; }
 		[ObservableProperty] public partial GameboyConfigViewModel? Gameboy { get; set; }
 		[ObservableProperty] public partial GbaConfigViewModel? Gba { get; set; }
@@ -52,7 +51,6 @@ namespace Mesen.ViewModels
 					Nes ??= AddDisposable(new NesConfigViewModel(Preferences.Config));
 					break;
 
-				case ConfigWindowTab.Snes: Snes ??= AddDisposable(new SnesConfigViewModel()); break;
 				case ConfigWindowTab.Gameboy: Gameboy ??= AddDisposable(new GameboyConfigViewModel()); break;
 				case ConfigWindowTab.Gba: Gba ??= AddDisposable(new GbaConfigViewModel()); break;
 				case ConfigWindowTab.Sms: Sms ??= AddDisposable(new SmsConfigViewModel()); break;
@@ -78,7 +76,6 @@ namespace Mesen.ViewModels
 			ConfigManager.Config.Preferences = Preferences?.OriginalConfig ?? ConfigManager.Config.Preferences;
 			ConfigManager.Config.Emulation = Emulation?.OriginalConfig ?? ConfigManager.Config.Emulation;
 			ConfigManager.Config.Nes = Nes?.OriginalConfig ?? ConfigManager.Config.Nes;
-			ConfigManager.Config.Snes = Snes?.OriginalConfig ?? ConfigManager.Config.Snes;
 			ConfigManager.Config.Gameboy = Gameboy?.OriginalConfig ?? ConfigManager.Config.Gameboy;
 			ConfigManager.Config.Gba = Gba?.OriginalConfig ?? ConfigManager.Config.Gba;
 			ConfigManager.Config.Sms = Sms?.OriginalConfig ?? ConfigManager.Config.Sms;
@@ -95,7 +92,6 @@ namespace Mesen.ViewModels
 				Preferences?.OriginalConfig.IsIdentical(ConfigManager.Config.Preferences) == false ||
 				Emulation?.OriginalConfig.IsIdentical(ConfigManager.Config.Emulation) == false ||
 				Nes?.OriginalConfig.IsIdentical(ConfigManager.Config.Nes) == false ||
-				Snes?.OriginalConfig.IsIdentical(ConfigManager.Config.Snes) == false ||
 				Gameboy?.OriginalConfig.IsIdentical(ConfigManager.Config.Gameboy) == false ||
 				Gba?.OriginalConfig.IsIdentical(ConfigManager.Config.Gba) == false ||
 				Sms?.OriginalConfig.IsIdentical(ConfigManager.Config.Sms) == false
@@ -111,7 +107,7 @@ namespace Mesen.ViewModels
 		Video = 3,
 		//separator
 		Nes = 5,
-		Snes = 6,
+		// 6 was Snes — do not reuse
 		Gameboy = 7,
 		Gba = 8,
 		// 9 was PcEngine — do not reuse

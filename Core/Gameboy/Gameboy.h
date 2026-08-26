@@ -19,7 +19,6 @@ class GbControlManager;
 class GbEnhancedSynth;
 class HdTilePack;
 class HdTilePackBuilder;
-class SuperGameboy;
 class VirtualFile;
 class BaseControlManager;
 
@@ -30,8 +29,6 @@ private:
 	static constexpr int HighRamSize = 0x7F;
 
 	Emulator* _emu = nullptr;
-	SuperGameboy* _superGameboy = nullptr;
-	bool _allowSgb = false;
 
 	unique_ptr<Gameboy> _secondaryConsole;
 	Gameboy* _mainConsole = nullptr;
@@ -79,15 +76,13 @@ private:
 public:
 	static constexpr int HeaderOffset = 0x134;
 
-	Gameboy(Emulator* emu, bool allowSgb = false);
+	Gameboy(Emulator* emu);
 	virtual ~Gameboy();
 
 	static vector<string> GetSupportedExtensions() { return { ".gb", ".gbc", ".gbx", ".gbs" }; }
 	static vector<string> GetSupportedSignatures() { return { "GBS" }; }
 
-	void PowerOn(SuperGameboy* sgb);
-
-	void RunSgb(uint64_t runUntilClock);
+	void PowerOn();
 
 	void LoadBattery();
 	void SaveBattery() override;
@@ -97,7 +92,7 @@ public:
 	GbApu* GetApu();
 
 	//True when this Gameboy owns an enhanced synth (main handheld console
-	//only - never SGB or the link-cable secondary console); GbApu uses it to
+	//only - never the link-cable secondary console); GbApu uses it to
 	//decide whether the enhanced-audio chip mix should duck its output
 	bool HasEnhancedSynth() { return _enhancedSynth != nullptr; }
 	GbPpu* GetPpu();
@@ -116,8 +111,6 @@ public:
 
 	bool IsCpuStopped();
 	bool IsCgb();
-	bool IsSgb();
-	SuperGameboy* GetSgb();
 	Gameboy* GetLinkedConsole();
 
 	uint64_t GetCycleCount();

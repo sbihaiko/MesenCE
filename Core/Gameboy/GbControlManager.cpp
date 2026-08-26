@@ -3,7 +3,6 @@
 #include "Gameboy/GbMemoryManager.h"
 #include "Gameboy/GbControlManager.h"
 #include "Gameboy/Input/GbController.h"
-#include "SNES/Coprocessors/SGB/SuperGameboy.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/KeyManager.h"
@@ -32,10 +31,6 @@ GbControlManagerState GbControlManager::GetState()
 
 shared_ptr<BaseControlDevice> GbControlManager::CreateControllerDevice(ControllerType type, uint8_t port)
 {
-	if(_console->IsSgb()) {
-		return nullptr;
-	}
-
 	shared_ptr<BaseControlDevice> device;
 
 	GameboyConfig& cfg = _emu->GetSettings()->GetGameboyConfig();
@@ -89,33 +84,19 @@ uint8_t GbControlManager::ReadInputPort()
 	uint8_t result = 0x0F;
 
 	uint8_t inputSelect = _state.InputSelect;
-	SuperGameboy* sgb = _console->GetSgb();
-	if(sgb) {
-		if((inputSelect & 0x30) == 0x30) {
-			result = sgb->GetInputIndex();
-		} else {
+	for(shared_ptr<BaseControlDevice>& controller : _controlDevices) {
+		if(controller->GetPort() == 0 && controller->GetControllerType() == ControllerType::GameboyController) {
 			if(!(inputSelect & 0x20)) {
-				result &= sgb->GetInput() >> 4;
+				result &= ~(controller->IsPressed(GbController::A) ? 0x01 : 0);
+				result &= ~(controller->IsPressed(GbController::B) ? 0x02 : 0);
+				result &= ~(controller->IsPressed(GbController::Select) ? 0x04 : 0);
+				result &= ~(controller->IsPressed(GbController::Start) ? 0x08 : 0);
 			}
 			if(!(inputSelect & 0x10)) {
-				result &= sgb->GetInput() & 0x0F;
-			}
-		}
-	} else {
-		for(shared_ptr<BaseControlDevice>& controller : _controlDevices) {
-			if(controller->GetPort() == 0 && controller->GetControllerType() == ControllerType::GameboyController) {
-				if(!(inputSelect & 0x20)) {
-					result &= ~(controller->IsPressed(GbController::A) ? 0x01 : 0);
-					result &= ~(controller->IsPressed(GbController::B) ? 0x02 : 0);
-					result &= ~(controller->IsPressed(GbController::Select) ? 0x04 : 0);
-					result &= ~(controller->IsPressed(GbController::Start) ? 0x08 : 0);
-				}
-				if(!(inputSelect & 0x10)) {
-					result &= ~(controller->IsPressed(GbController::Right) ? 0x01 : 0);
-					result &= ~(controller->IsPressed(GbController::Left) ? 0x02 : 0);
-					result &= ~(controller->IsPressed(GbController::Up) ? 0x04 : 0);
-					result &= ~(controller->IsPressed(GbController::Down) ? 0x08 : 0);
-				}
+				result &= ~(controller->IsPressed(GbController::Right) ? 0x01 : 0);
+				result &= ~(controller->IsPressed(GbController::Left) ? 0x02 : 0);
+				result &= ~(controller->IsPressed(GbController::Up) ? 0x04 : 0);
+				result &= ~(controller->IsPressed(GbController::Down) ? 0x08 : 0);
 			}
 		}
 	}
@@ -127,11 +108,6 @@ void GbControlManager::WriteInputPort(uint8_t value)
 {
 	//Changing the select bits can trigger the joypad IRQ (Fixes Double Dragon 3 input issues)
 	ProcessInputChange([&]() { _state.InputSelect = value & 0x30; });
-
-	SuperGameboy* sgb = _console->GetSgb();
-	if(sgb) {
-		sgb->ProcessInputPortWrite(_state.InputSelect);
-	}
 }
 
 void GbControlManager::ProcessInputChange(std::function<void()> inputUpdateCallback)

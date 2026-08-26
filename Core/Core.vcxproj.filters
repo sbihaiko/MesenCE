@@ -70,28 +70,23 @@
     <ClCompile Include="Debugger\ExpressionEvaluator.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.Cx4.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
     <ClCompile Include="Debugger\ExpressionEvaluator.Gameboy.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.Gsu.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
     <ClInclude Include="Debugger\ExpressionEvaluator.h">
       <Filter>Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="Debugger\ExpressionEvaluator.NecDsp.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
     <ClCompile Include="Debugger\ExpressionEvaluator.Nes.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.Snes.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.Spc.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
     <ClInclude Include="Debugger\IAssembler.h">
@@ -538,136 +533,92 @@
     <ClInclude Include="Shared\TimingInfo.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\AluMulDiv.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\AluMulDiv.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\BaseCartridge.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\BaseCartridge.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\CartTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\DmaControllerTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\IMemoryHandler.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\InternalRegisters.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\InternalRegisters.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\InternalRegisterTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\MemoryMappings.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\MemoryMappings.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\RamHandler.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\RegisterHandlerA.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\RegisterHandlerB.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\RegisterHandlerB.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\RomHandler.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesConsole.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesConsole.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesControlManager.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesControlManager.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesCpu.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesCpu.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SnesCpu.Instructions.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SnesCpu.Shared.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SnesCpuTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesDefaultVideoFilter.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesDefaultVideoFilter.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesDmaController.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesDmaController.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesMemoryManager.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesMemoryManager.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesNtscFilter.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesNtscFilter.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\SnesPpu.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SnesPpu.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SnesPpuTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SnesState.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Spc.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Spc.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Spc.Instructions.cpp">
       <Filter>SNES</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\SpcFileData.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SpcTimer.h">
       <Filter>SNES</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\SpcTypes.h">
       <Filter>SNES</Filter>
     </ClInclude>
     <ClInclude Include="Gameboy\Carts\GbCart.h">
@@ -1201,116 +1152,42 @@
     <ClInclude Include="Shared\Video\VideoRenderer.h">
       <Filter>Shared\Video</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\BaseCoprocessor.h">
-      <Filter>SNES\Coprocessors</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\Cx4Debugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\Cx4Debugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\Cx4DisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\Cx4DisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\DummySnesCpu.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\DummySnesCpu.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\DummySpc.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\DummySpc.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\GsuDebugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\GsuDebugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\GsuDisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\GsuDisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\NecDspDebugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\NecDspDebugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\NecDspDisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\NecDspDisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SnesAssembler.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SnesAssembler.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SnesDebugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SnesDebugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SnesDisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SnesDisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SnesEventManager.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SnesEventManager.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SnesPpuTools.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SnesPpuTools.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SpcDebugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SpcDebugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\SpcDisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\SpcDisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Input\Multitap.cpp">
-      <Filter>SNES\Input</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Input\Multitap.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Input\SnesController.cpp">
-      <Filter>SNES\Input</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Input\SnesController.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\SnesMouse.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\SuperScope.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
     <ClInclude Include="NES\Mappers\Audio\Mmc5Audio.h">
       <Filter>NES\Mappers\Audio</Filter>
@@ -1369,182 +1246,64 @@
     <ClInclude Include="NES\Mappers\VsSystem\VsSystem.h">
       <Filter>NES\Mappers\VsSystem</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\BSX\BsxCart.cpp">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\BSX\BsxCart.h">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\BSX\BsxMemoryPack.cpp">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\BSX\BsxMemoryPack.h">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\BSX\BsxSatellaview.cpp">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\BSX\BsxSatellaview.h">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\BSX\BsxStream.cpp">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\BSX\BsxStream.h">
-      <Filter>SNES\Coprocessors\BSX</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\CX4\Cx4.cpp">
-      <Filter>SNES\Coprocessors\CX4</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\CX4\Cx4.h">
-      <Filter>SNES\Coprocessors\CX4</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\CX4\Cx4.Instructions.cpp">
-      <Filter>SNES\Coprocessors\CX4</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\CX4\Cx4Types.h">
-      <Filter>SNES\Coprocessors\CX4</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\DSP\NecDsp.cpp">
-      <Filter>SNES\Coprocessors\DSP</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\DSP\NecDsp.h">
-      <Filter>SNES\Coprocessors\DSP</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\DSP\NecDspTypes.h">
-      <Filter>SNES\Coprocessors\DSP</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\GSU\Gsu.cpp">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\GSU\Gsu.h">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\GSU\Gsu.Instructions.cpp">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\GSU\GsuRamHandler.h">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\GSU\GsuRomHandler.h">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\GSU\GsuTypes.h">
-      <Filter>SNES\Coprocessors\GSU</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\MSU1\Msu1.cpp">
-      <Filter>SNES\Coprocessors\MSU1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\MSU1\Msu1.h">
-      <Filter>SNES\Coprocessors\MSU1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\OBC1\Obc1.cpp">
-      <Filter>SNES\Coprocessors\OBC1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\OBC1\Obc1.h">
-      <Filter>SNES\Coprocessors\OBC1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SA1\CpuBwRamHandler.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SA1\Sa1.cpp">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1BwRamHandler.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SA1\Sa1Cpu.cpp">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1Cpu.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1IRamHandler.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1Types.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SA1\Sa1VectorHandler.h">
-      <Filter>SNES\Coprocessors\SA1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SDD1\Sdd1.cpp">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SDD1\Sdd1.h">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SDD1\Sdd1Decomp.cpp">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SDD1\Sdd1Decomp.h">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SDD1\Sdd1Mmc.cpp">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SDD1\Sdd1Mmc.h">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SDD1\Sdd1Types.h">
-      <Filter>SNES\Coprocessors\SDD1</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SGB\SuperGameboy.cpp">
-      <Filter>SNES\Coprocessors\SGB</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SGB\SuperGameboy.h">
-      <Filter>SNES\Coprocessors\SGB</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SPC7110\Rtc4513.cpp">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SPC7110\Rtc4513.h">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SPC7110\Spc7110.cpp">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SPC7110\Spc7110.h">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Coprocessors\SPC7110\Spc7110Decomp.cpp">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Coprocessors\SPC7110\Spc7110Decomp.h">
-      <Filter>SNES\Coprocessors\SPC7110</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\TraceLogger\Cx4TraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\TraceLogger\Cx4TraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\TraceLogger\GsuTraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\TraceLogger\GsuTraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\TraceLogger\NecDspTraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\TraceLogger\NecDspTraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\TraceLogger\SnesCpuTraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\TraceLogger\SnesCpuTraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
-    <ClCompile Include="SNES\Debugger\TraceLogger\SpcTraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClInclude Include="SNES\Debugger\TraceLogger\SpcTraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
     <Filter Include="Debugger">
       <UniqueIdentifier>e21e9d85-24e1-4395-8c60-9d9f968d5099</UniqueIdentifier>
@@ -1609,16 +1368,12 @@
     <Filter Include="Shared\Video">
       <UniqueIdentifier>0f929ae6-fb17-42e9-8d14-a51a3d7fe699</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors">
       <UniqueIdentifier>b3cb27d8-27d6-4d71-8798-ccb247257a3d</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Debugger">
       <UniqueIdentifier>2bf513ec-e547-4864-b05d-c5f5c8acad1d</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\DSP">
       <UniqueIdentifier>16a6c959-f380-4b77-80ed-5148c03ae04b</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Input">
       <UniqueIdentifier>fcd1ddbf-e636-444c-a6af-275fe4bde663</UniqueIdentifier>
     </Filter>
     <Filter Include="NES\Mappers\Audio">
@@ -1630,37 +1385,26 @@
     <Filter Include="NES\Mappers\VsSystem">
       <UniqueIdentifier>7bef26bc-a1f0-4a4f-a204-acc261e0dee5</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\BSX">
       <UniqueIdentifier>4060b572-7678-441f-9613-ade9bfbe3a2c</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\CX4">
       <UniqueIdentifier>663ed878-5334-4cb0-b8aa-a0ea7d90cf6c</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\DSP">
       <UniqueIdentifier>43030901-e007-43c8-b4c3-050a00d93fe0</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\GSU">
       <UniqueIdentifier>dcfa4270-b4e8-49af-8990-92471b230337</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\MSU1">
       <UniqueIdentifier>e9613a02-c8d9-487e-9a4f-5e15ef8be007</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\OBC1">
       <UniqueIdentifier>e4767b5e-8bda-4af3-bd19-79e2142197be</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\SA1">
       <UniqueIdentifier>c1b244a7-2c12-47cd-b811-1405910ac2ee</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\SDD1">
       <UniqueIdentifier>3fc00271-ef18-4d36-b972-8450b525c628</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\SGB">
       <UniqueIdentifier>6966d6d8-05fc-4d1a-9c25-2b08365948b8</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\SPC7110">
       <UniqueIdentifier>e1c78923-7878-4bf6-91d4-50d0f87653e9</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Debugger\TraceLogger">
       <UniqueIdentifier>ef983cb6-a7e5-4b4b-a6f8-7c3210e9faca</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -1728,8 +1472,6 @@
     <ClInclude Include="Debugger\Base6502Assembler.h">
       <Filter>Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Debugger\SnesCodeDataLogger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
     <ClInclude Include="NES\Debugger\NesCodeDataLogger.h">
       <Filter>NES\Debugger</Filter>
@@ -2579,17 +2321,9 @@
     </ClInclude>
       <Filter>PCE</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\DSP\Dsp.h">
-      <Filter>SNES\DSP</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\DSP\DspVoice.h">
-      <Filter>SNES\DSP</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\DSP\DspInterpolation.h">
-      <Filter>SNES\DSP</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\DSP\DspTypes.h">
-      <Filter>SNES\DSP</Filter>
     </ClInclude>
     <ClInclude Include="Debugger\StepBackManager.h">
       <Filter>Debugger</Filter>
@@ -2943,35 +2677,17 @@
     <ClInclude Include="GBA\GbaCpuMultiply.h">
       <Filter>GBA</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\ST018\St018.h">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\ST018\St018Types.h">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\ST018\ArmV3Cpu.h">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\ST018\ArmV3Types.h">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Debugger\St018Debugger.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Debugger\TraceLogger\St018TraceLogger.h">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Debugger\DummyArmV3Cpu.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Debugger\St018DisUtils.h">
-      <Filter>SNES\Debugger</Filter>
     </ClInclude>
     <ClInclude Include="Shared\ArmEnums.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Coprocessors\SufamiTurbo\SufamiTurbo.h">
-      <Filter>SNES\Coprocessors\SufamiTurbo</Filter>
     </ClInclude>
     <ClInclude Include="NES\Mappers\Unlicensed\Mapper487.h">
       <Filter>NES\Mappers\Unlicensed</Filter>
@@ -2982,20 +2698,12 @@
     <ClInclude Include="GBA\GbaWaitStates.h">
       <Filter>GBA</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\SnesRumbleController.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
     <ClInclude Include="Shared\Utilities\AvMergeUtilities.h">
       <Filter>Shared\Utilities</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\SnesNttDataKeypad.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\AsciiTurboFileTwinStf.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\AsciiTurboFileTwinTf2.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
     </ClInclude>
     </ClInclude>
@@ -3003,8 +2711,6 @@
     <ClInclude Include="Shared\Utilities\S3511ARtc.h">
       <Filter>Shared\Utilities</Filter>
     </ClInclude>
-    <ClInclude Include="SNES\Input\SnesBlueRetroController.h">
-      <Filter>SNES\Input</Filter>
     </ClInclude>
     </ClInclude>
     </ClInclude>
@@ -3086,11 +2792,7 @@
     </ClCompile>
       <Filter>PCE</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\DSP\Dsp.cpp">
-      <Filter>SNES\DSP</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\DSP\DspVoice.cpp">
-      <Filter>SNES\DSP</Filter>
     </ClCompile>
     <ClCompile Include="Debugger\StepBackManager.cpp">
       <Filter>Debugger</Filter>
@@ -3292,39 +2994,20 @@
     <ClCompile Include="NES\Mappers\Homebrew\Rainbow.cpp">
       <Filter>NES\Mappers\Homebrew</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Coprocessors\ST018\St018.cpp">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Coprocessors\ST018\ArmV3Cpu.cpp">
-      <Filter>SNES\Coprocessors\ST018</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Debugger\St018Debugger.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Debugger\TraceLogger\St018TraceLogger.cpp">
-      <Filter>SNES\Debugger\TraceLogger</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Debugger\DummyArmV3Cpu.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="Debugger\ExpressionEvaluator.St018.cpp">
       <Filter>Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Debugger\St018DisUtils.cpp">
-      <Filter>SNES\Debugger</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Input\SnesRumbleController.cpp">
-      <Filter>SNES\Input</Filter>
     </ClCompile>
-    <ClCompile Include="SNES\Input\SnesNttDataKeypad.cpp">
-      <Filter>SNES\Input</Filter>
     </ClCompile>
     <ClCompile Include="Shared\Utilities\S3511ARtc.cpp">
       <Filter>Shared\Utilities</Filter>
     </ClCompile>
     </ClCompile>
-    <ClCompile Include="SNES\Input\SnesBlueRetroController.cpp">
-      <Filter>SNES\Input</Filter>
     </ClCompile>
     </ClCompile>
     </ClCompile>
@@ -3448,10 +3131,8 @@
     </Filter>
       <UniqueIdentifier>{e8ed2b40-f0e0-4dc5-89b7-9acc460359c8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\ST018">
       <UniqueIdentifier>{387c0b44-8063-45e8-a28a-b6d9e27b5a3f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="SNES\Coprocessors\SufamiTurbo">
       <UniqueIdentifier>{bfdd4bb9-41c2-4255-a8c3-0176c990cbf3}</UniqueIdentifier>
     </Filter>
       <UniqueIdentifier>{5077d508-bbdf-4bab-9d03-9b3d2b05edfb}</UniqueIdentifier>

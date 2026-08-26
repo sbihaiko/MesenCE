@@ -24,8 +24,6 @@
 #include "Gameboy/Debugger/GbAssembler.h"
 #include "Gameboy/GbPpu.h"
 #include "Gameboy/GbCpu.h"
-#include "SNES/SnesConsole.h"
-#include "SNES/BaseCartridge.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/Emulator.h"
 #include "Shared/BaseControlManager.h"
@@ -39,11 +37,7 @@ GbDebugger::GbDebugger(Debugger* debugger) : IDebugger(debugger->GetEmulator())
 	_disassembler = debugger->GetDisassembler();
 	_memoryAccessCounter = debugger->GetMemoryAccessCounter();
 
-	if(_emu->GetConsoleType() == ConsoleType::Snes) {
-		_gameboy = ((SnesConsole*)debugger->GetConsole())->GetCartridge()->GetGameboy();
-	} else {
-		_gameboy = ((Gameboy*)debugger->GetConsole());
-	}
+	_gameboy = ((Gameboy*)debugger->GetConsole());
 
 	_cpu = _gameboy->GetCpu();
 	_ppu = _gameboy->GetPpu();

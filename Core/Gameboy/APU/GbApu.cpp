@@ -125,7 +125,7 @@ void GbApu::Run()
 		}
 	}
 
-	if(_gameboy->IsPrimaryConsole() && !_gameboy->IsSgb() && _clockCounter >= 20000) {
+	if(_gameboy->IsPrimaryConsole() && _clockCounter >= 20000) {
 		PlayQueuedAudio();
 	}
 }

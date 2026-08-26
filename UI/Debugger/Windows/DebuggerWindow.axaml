@@ -61,36 +61,17 @@
 			</StackPanel>
 		</DataTemplate>
 
-		<DataTemplate DataType="{x:Type sv:Cx4StatusViewModel}">
-			<sv:Cx4StatusView />
-		</DataTemplate>
 		<DataTemplate DataType="{x:Type sv:GbaStatusViewModel}">
 			<sv:GbaStatusView />
 		</DataTemplate>
 		<DataTemplate DataType="{x:Type sv:GbStatusViewModel}">
 			<sv:GbStatusView />
 		</DataTemplate>
-		<DataTemplate DataType="{x:Type sv:GsuStatusViewModel}">
-			<sv:GsuStatusView />
-		</DataTemplate>
-		<DataTemplate DataType="{x:Type sv:NecDspStatusViewModel}">
-			<sv:NecDspStatusView />
-		</DataTemplate>
-		<DataTemplate DataType="{x:Type sv:St018StatusViewModel}">
-			<sv:St018StatusView />
-		</DataTemplate>
 		<DataTemplate DataType="{x:Type sv:NesStatusViewModel}">
 			<sv:NesStatusView />
 		</DataTemplate>
 		<DataTemplate DataType="{x:Type sv:SmsStatusViewModel}">
 			<sv:SmsStatusView />
-		</DataTemplate>
-
-		<DataTemplate DataType="{x:Type sv:SnesStatusViewModel}">
-			<sv:SnesStatusView />
-		</DataTemplate>
-		<DataTemplate DataType="{x:Type sv:SpcStatusViewModel}">
-			<sv:SpcStatusView />
 		</DataTemplate>
 		
 		<DataTemplate DataType="{x:Type vmd:BaseToolContainerViewModel}">

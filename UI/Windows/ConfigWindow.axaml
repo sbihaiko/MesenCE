@@ -35,9 +35,6 @@
 		<DataTemplate DataType="{x:Type vm:NesConfigViewModel}">
 			<v:NesConfigView />
 		</DataTemplate>
-		<DataTemplate DataType="{x:Type vm:SnesConfigViewModel}">
-			<v:SnesConfigView />
-		</DataTemplate>
 		<DataTemplate DataType="{x:Type vm:GameboyConfigViewModel}">
 			<v:GameboyConfigView />
 		</DataTemplate>
@@ -108,15 +105,6 @@
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/NesIcon.png" Margin="0 0 10 0" />
 						<TextBlock VerticalAlignment="Center" Text="{l:Translate tabNes}" />
-					</StackPanel>
-				</TabItem.Header>
-			</TabItem>
-
-			<TabItem Content="{Binding Snes}">
-				<TabItem.Header>
-					<StackPanel Orientation="Horizontal">
-						<Image Source="/Assets/SnesIcon.png" Margin="0 0 10 0" />
-						<TextBlock VerticalAlignment="Center" Text="{l:Translate tabSnes}" />
 					</StackPanel>
 				</TabItem.Header>
 			</TabItem>

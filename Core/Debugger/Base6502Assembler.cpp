@@ -287,10 +287,6 @@ void Base6502Assembler<T>::AssembleInstruction(AssemblerLineData& op, uint32_t& 
 	output.push_back(AssemblerSpecialCodes::EndOfLine);
 }
 
-enum class SnesAddrMode : uint8_t;
-template void Base6502Assembler<SnesAddrMode>::ProcessLine(string code, uint32_t& instructionAddress, vector<int16_t>& output, unordered_map<string, uint32_t>& labels, bool firstPass, unordered_map<string, uint32_t>& currentPassLabels);
-template bool Base6502Assembler<SnesAddrMode>::IsOpModeAvailable(string& opcode, SnesAddrMode mode);
-
 enum class NesAddrMode;
 template void Base6502Assembler<NesAddrMode>::ProcessLine(string code, uint32_t& instructionAddress, vector<int16_t>& output, unordered_map<string, uint32_t>& labels, bool firstPass, unordered_map<string, uint32_t>& currentPassLabels);
 template bool Base6502Assembler<NesAddrMode>::IsOpModeAvailable(string& opcode, NesAddrMode mode);

@@ -34,10 +34,9 @@
 #include "Utilities/Serializer.h"
 #include "Utilities/CRC32.h"
 
-Gameboy::Gameboy(Emulator* emu, bool allowSgb)
+Gameboy::Gameboy(Emulator* emu)
 {
 	_emu = emu;
-	_allowSgb = allowSgb;
 }
 
 Gameboy::~Gameboy()
@@ -95,13 +94,8 @@ void Gameboy::Init(GbCart* cart, std::vector<uint8_t>& romData, uint32_t cartRam
 
 	_bootRomSize = 0;
 
-	EmuSettings* settings = _emu->GetSettings();
-	GameboyConfig cfg = settings->GetGameboyConfig();
-
 	FirmwareType type = FirmwareType::Gameboy;
-	if(_model == GameboyModel::SuperGameboy) {
-		type = cfg.UseSgb2 ? FirmwareType::Sgb2GameboyCpu : FirmwareType::Sgb1GameboyCpu;
-	} else if(_model == GameboyModel::GameboyColor) {
+	if(_model == GameboyModel::GameboyColor) {
 		type = FirmwareType::GameboyColor;
 	}
 
@@ -118,15 +112,6 @@ void Gameboy::Init(GbCart* cart, std::vector<uint8_t>& romData, uint32_t cartRam
 				_bootRom = new uint8_t[_bootRomSize];
 				memcpy(_bootRom, cgbBootRom, _bootRomSize);
 				break;
-
-			case GameboyModel::SuperGameboy:
-				_bootRom = new uint8_t[_bootRomSize];
-				if(cfg.UseSgb2) {
-					memcpy(_bootRom, sgb2BootRom, _bootRomSize);
-				} else {
-					memcpy(_bootRom, sgbBootRom, _bootRomSize);
-				}
-				break;
 		}
 	}
 
@@ -139,20 +124,15 @@ void Gameboy::Init(GbCart* cart, std::vector<uint8_t>& romData, uint32_t cartRam
 	InitializeRam(_videoRam, _videoRamSize);
 
 	LoadBattery();
-	if(!_allowSgb) {
-		PowerOn(nullptr);
-	}
+	PowerOn();
 }
 
-void Gameboy::PowerOn(SuperGameboy* sgb)
+void Gameboy::PowerOn()
 {
-	_superGameboy = sgb;
-
-	//Enhanced audio synth: main handheld console only. On SGB the audio
-	//pipeline belongs to the SNES core, and the link-cable secondary console
-	//re-interpreting a second game at the same time would just double the
-	//synth output.
-	if(!sgb && !_mainConsole && !_enhancedSynth) {
+	//Enhanced audio synth: main handheld console only. The link-cable
+	//secondary console re-interpreting a second game at the same time
+	//would just double the synth output.
+	if(!_mainConsole && !_enhancedSynth) {
 		_enhancedSynth.reset(new GbEnhancedSynth(_emu, this));
 	}
 
@@ -169,13 +149,6 @@ void Gameboy::PowerOn(SuperGameboy* sgb)
 	}
 
 	_cpu->PowerOn();
-}
-
-void Gameboy::RunSgb(uint64_t runUntilClock)
-{
-	while(_cpu->GetCycleCount() < runUntilClock) {
-		_cpu->Exec();
-	}
 }
 
 void Gameboy::LoadBattery()
@@ -351,16 +324,6 @@ bool Gameboy::IsCgb()
 	return _model == GameboyModel::GameboyColor;
 }
 
-bool Gameboy::IsSgb()
-{
-	return _model == GameboyModel::SuperGameboy;
-}
-
-SuperGameboy* Gameboy::GetSgb()
-{
-	return _superGameboy;
-}
-
 Gameboy* Gameboy::GetLinkedConsole()
 {
 	if(_secondaryConsole) {
@@ -437,7 +400,7 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 
 	GbsHeader gbsHeader = {};
 	memcpy(&gbsHeader, romData.data(), sizeof(GbsHeader));
-	if(!_allowSgb && memcmp(gbsHeader.Header, "GBS", sizeof(gbsHeader.Header)) == 0) {
+	if(memcmp(gbsHeader.Header, "GBS", sizeof(gbsHeader.Header)) == 0) {
 		//GBS music file
 		uint16_t loadAddr = gbsHeader.LoadAddress[0] | (gbsHeader.LoadAddress[1] << 8);
 
@@ -470,9 +433,6 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 		GameboyHeader header = GetHeader(romData.data(), (uint32_t)romData.size());
 
 		_model = GetEffectiveModel(header);
-		if(_allowSgb && _model != GameboyModel::SuperGameboy) {
-			return LoadRomResult::UnknownType;
-		}
 
 		MessageManager::Log("-----------------------------");
 		MessageManager::Log("File: " + romFile.GetFileName());
@@ -497,7 +457,6 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 
 		switch(_model) {
 			case GameboyModel::Gameboy: MessageManager::Log("Game Boy model selected: Game Boy"); break;
-			case GameboyModel::SuperGameboy: MessageManager::Log("Game Boy model selected: Super Game Boy"); break;
 			case GameboyModel::GameboyColor: MessageManager::Log("Game Boy model selected: Game Boy Color"); break;
 		}
 
@@ -513,7 +472,7 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 			EmuSettings* settings = _emu->GetSettings();
 			GameboyConfig cfg = settings->GetGameboyConfig();
 
-			if(!_mainConsole && !_allowSgb && cfg.EnableHdPacks && GetRomFormat() != RomFormat::Gbs) {
+			if(!_mainConsole && cfg.EnableHdPacks && GetRomFormat() != RomFormat::Gbs) {
 				//The pack's key format depends on the render mode the game will
 				//actually use (ADR-0036): CGB-exclusive/compatible carts on a CGB
 				//model run the CGB path; everything else runs the DMG path.
@@ -528,7 +487,7 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 				}
 			}
 
-			if(!_mainConsole && cfg.UseLocalLinkCable && !_allowSgb) { // Don't allow link cable with SGB for now
+			if(!_mainConsole && cfg.UseLocalLinkCable) {
 
 				// Create second console and link it with this one
 				_secondaryConsole.reset(new Gameboy(_emu));
@@ -595,7 +554,6 @@ GameboyModel Gameboy::GetEffectiveModel(GameboyHeader& header)
 	GameboyConfig cfg = settings->GetGameboyConfig();
 	GameboyModel model = cfg.Model;
 	CgbCompat cgbFlag = (CgbCompat)((int)header.CgbFlag & 0xC0);
-	bool supportsSgb = header.SgbFlag == 0x03;
 	switch(model) {
 		case GameboyModel::AutoFavorGb:
 			if(cgbFlag == CgbCompat::GameboyColorExclusive) {
@@ -606,35 +564,18 @@ GameboyModel Gameboy::GetEffectiveModel(GameboyHeader& header)
 			break;
 
 		case GameboyModel::AutoFavorSgb:
-			if(cgbFlag == CgbCompat::GameboyColorExclusive) {
-				model = GameboyModel::GameboyColor;
-			} else {
-				model = GameboyModel::SuperGameboy;
-			}
-			break;
-
 		case GameboyModel::AutoFavorGbc:
-			if(supportsSgb && cgbFlag == CgbCompat::Gameboy) {
-				model = GameboyModel::SuperGameboy;
-			} else {
-				model = GameboyModel::GameboyColor;
-			}
-			break;
-
 		case GameboyModel::AutoFavorBest:
-			if(cgbFlag == CgbCompat::GameboyColorExclusive || cgbFlag == CgbCompat::GameboyColorSupport) {
-				model = GameboyModel::GameboyColor;
-			} else if(supportsSgb) {
-				model = GameboyModel::SuperGameboy;
-			} else {
+			if(cgbFlag == CgbCompat::Gameboy) {
 				model = GameboyModel::Gameboy;
+			} else {
+				model = GameboyModel::GameboyColor;
 			}
 			break;
-	}
 
-	if(!_allowSgb && model == GameboyModel::SuperGameboy) {
-		//SGB isn't available, use gameboy color mode instead
-		model = GameboyModel::GameboyColor;
+		case GameboyModel::SuperGameboy:
+			model = GameboyModel::GameboyColor;
+			break;
 	}
 
 	return model;

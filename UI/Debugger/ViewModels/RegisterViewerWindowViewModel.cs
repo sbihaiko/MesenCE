@@ -34,9 +34,6 @@ namespace Mesen.Debugger.ViewModels
 		}
 
 		private RomInfo _romInfo = new RomInfo();
-		private byte _snesReg4210;
-		private byte _snesReg4211;
-		private byte _snesReg4212;
 
 		public RegisterViewerWindowViewModel()
 		{
@@ -90,12 +87,7 @@ namespace Mesen.Debugger.ViewModels
 
 		public void RefreshData()
 		{
-			if(_romInfo.ConsoleType == ConsoleType.Snes) {
-				_snesReg4210 = DebugApi.GetMemoryValue(MemoryType.SnesMemory, 0x4210);
-				_snesReg4211 = DebugApi.GetMemoryValue(MemoryType.SnesMemory, 0x4211);
-				_snesReg4212 = DebugApi.GetMemoryValue(MemoryType.SnesMemory, 0x4212);
-				_state = DebugApi.GetConsoleState<SnesState>(ConsoleType.Snes);
-			} else if(_romInfo.ConsoleType == ConsoleType.Nes) {
+			if(_romInfo.ConsoleType == ConsoleType.Nes) {
 				_state = DebugApi.GetConsoleState<NesState>(ConsoleType.Nes);
 			} else if(_romInfo.ConsoleType == ConsoleType.Gameboy) {
 				_state = DebugApi.GetConsoleState<GbState>(ConsoleType.Gameboy);
@@ -119,9 +111,7 @@ namespace Mesen.Debugger.ViewModels
 			List<RegisterViewerTab> tabs = new List<RegisterViewerTab>();
 			BaseState lastState = _state;
 
-			if(lastState is SnesState snesState) {
-				tabs = SnesRegisterViewer.GetTabs(ref snesState, _romInfo.CpuTypes, _snesReg4210, _snesReg4211, _snesReg4212);
-			} else if(lastState is NesState nesState) {
+			if(lastState is NesState nesState) {
 				tabs = NesRegisterViewer.GetTabs(ref nesState);
 			} else if(lastState is GbState gbState) {
 				tabs = GbRegisterViewer.GetTabs(ref gbState);

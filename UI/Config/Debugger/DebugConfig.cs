@@ -57,18 +57,6 @@ namespace Mesen.Config
 				UsePredictiveBreakpoints = Debugger.UsePredictiveBreakpoints,
 				SingleBreakpointPerInstruction = Debugger.SingleBreakpointPerInstruction,
 
-				SnesBreakOnBrk = Debugger.Snes.BreakOnBrk,
-				SnesBreakOnCop = Debugger.Snes.BreakOnCop,
-				SnesBreakOnWdm = Debugger.Snes.BreakOnWdm,
-				SnesBreakOnStp = Debugger.Snes.BreakOnStp,
-				SnesBreakOnInvalidPpuAccess = Debugger.Snes.BreakOnInvalidPpuAccess,
-				SnesBreakOnReadDuringAutoJoy = Debugger.Snes.BreakOnReadDuringAutoJoy,
-				SnesUseAltSpcOpNames = Debugger.Snes.UseAltSpcOpNames,
-				SnesIgnoreDspReadWrites = Debugger.Snes.IgnoreDspReadWrites,
-
-				SpcBreakOnBrk = Debugger.Snes.SpcBreakOnBrk,
-				SpcBreakOnStpSleep = Debugger.Snes.SpcBreakOnStpSleep,
-
 				GbBreakOnInvalidOamAccess = Debugger.Gameboy.GbBreakOnInvalidOamAccess,
 				GbBreakOnInvalidVramAccess = Debugger.Gameboy.GbBreakOnInvalidVramAccess,
 				GbBreakOnDisableLcdOutsideVblank = Debugger.Gameboy.GbBreakOnDisableLcdOutsideVblank,

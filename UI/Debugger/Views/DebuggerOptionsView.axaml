@@ -92,51 +92,9 @@
 				IsChecked="{Binding Config.UseLowerCaseDisassembly}"
 				Content="{l:Translate chkUseLowerCaseDisassembly}"
 			/>
-			<CheckBox
-				IsVisible="{Binding IsSpc}"
-				IsChecked="{Binding Config.Snes.UseAltSpcOpNames}"
-				Content="{l:Translate chkSnesUseAltSpcOpNames}"
-			/>
 		</c:OptionSection>
 
 		<c:OptionSection Header="{l:Translate lblBreakOptions}">
-			<StackPanel IsVisible="{Binding IsSnes}">
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnBrk}"
-					Content="{l:Translate chkBreakOnBrk}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnCop}"
-					Content="{l:Translate chkBreakOnCop}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnWdm}"
-					Content="{l:Translate chkBreakOnWdm}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnStp}"
-					Content="{l:Translate chkBreakOnStp}"
-				/>
-				<Rectangle Stroke="#AAA" Height="1" StrokeThickness="1" HorizontalAlignment="Stretch" Margin="0 2" />
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnInvalidPpuAccess}"
-					Content="{l:Translate chkBreakOnInvalidPpuAccess}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Snes.BreakOnReadDuringAutoJoy}"
-					Content="{l:Translate chkBreakOnReadDuringAutoJoy}"
-				/>
-			</StackPanel>
-			<StackPanel IsVisible="{Binding IsSpc}">
-				<CheckBox
-					IsChecked="{Binding Config.Snes.SpcBreakOnBrk}"
-					Content="{l:Translate chkBreakOnBrk}"
-				/>
-				<CheckBox
-					IsChecked="{Binding Config.Snes.SpcBreakOnStpSleep}"
-					Content="{l:Translate chkSpcBreakOnStpSleep}"
-				/>
-			</StackPanel>
 			<StackPanel IsVisible="{Binding IsGameboy}">
 				<CheckBox
 					IsChecked="{Binding Config.Gameboy.GbBreakOnInvalidOamAccess}"
@@ -250,21 +208,6 @@
 		</c:OptionSection>
 
 		<c:OptionSection Header="{l:Translate lblMiscSettings}">
-			<CheckBox
-				IsChecked="{Binding Config.Snes.IgnoreDspReadWrites}"
-				Content="{l:Translate chkSnesIgnoreDspReadWrites}"
-				ToolTip.Tip="{l:Translate chkSnesIgnoreDspReadWritesHint}"
-			>
-				<CheckBox.IsVisible>
-					<MultiBinding Converter="{x:Static BoolConverters.Or}">
-						<MultiBinding.Bindings>
-							<Binding Path="IsSpc" />
-							<Binding Path="IsSnes" />
-						</MultiBinding.Bindings>
-					</MultiBinding>
-				</CheckBox.IsVisible>
-			</CheckBox>
-			
 			<CheckBox
 				IsChecked="{Binding Config.BringToFrontOnBreak}"
 				Content="{l:Translate chkBringToFrontOnBreak}"

@@ -21,7 +21,6 @@ public static class OpCodeHelper
 	static OpCodeHelper()
 	{
 		InitNesDocumentation();
-		InitSnesDocumentation();
 		InitGbDocumentation();
 		InitSmsDocumentation();
 		InitGbaDocumentation();
@@ -106,13 +105,6 @@ public static class OpCodeHelper
 	private static void InitNesDocumentation()
 	{
 		InitDocumentation(CpuType.Nes, ReadDocumentationFile("NesDocumentation.json"));
-	}
-
-	private static void InitSnesDocumentation()
-	{
-		Dictionary<string, OpCodeDesc> baseDesc = new(_data[CpuType.Nes].OpDesc);
-		InitDocumentation(CpuType.Snes, ReadDocumentationFile("SnesDocumentation.json"), baseDesc);
-		InitDocumentation(CpuType.Spc, ReadDocumentationFile("SpcDocumentation.json"));
 	}
 
 	private static void InitGbDocumentation()

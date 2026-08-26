@@ -3,7 +3,6 @@
 #include <algorithm>
 #include "Debugger/DebugTypes.h"
 #include "Debugger/ExpressionEvaluator.h"
-#include "SNES/SnesConsole.h"
 #include "Debugger/Debugger.h"
 #include "Debugger/IDebugger.h"
 #include "Debugger/MemoryDumper.h"
@@ -59,13 +58,6 @@ EvalOperators ExpressionEvaluator::GetOperator(string token, bool unaryOperator)
 unordered_map<string, int64_t>* ExpressionEvaluator::GetAvailableTokens()
 {
 	switch(_cpuType) {
-		case CpuType::Snes: return &GetSnesTokens();
-		case CpuType::Spc: return &GetSpcTokens();
-		case CpuType::NecDsp: return &GetNecDspTokens();
-		case CpuType::Sa1: return &GetSnesTokens();
-		case CpuType::Gsu: return &GetGsuTokens();
-		case CpuType::Cx4: return &GetCx4Tokens();
-		case CpuType::St018: return &GetSt018Tokens();
 		case CpuType::Gameboy: return &GetGameboyTokens();
 		case CpuType::Nes: return &GetNesTokens();
 		case CpuType::Sms: return &GetSmsTokens();
@@ -412,13 +404,6 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 							token = 0;
 						} else {
 							switch(_cpuType) {
-								case CpuType::Snes: token = GetSnesTokenValue(token, resultType); break;
-								case CpuType::Spc: token = GetSpcTokenValue(token, resultType); break;
-								case CpuType::NecDsp: token = GetNecDspTokenValue(token, resultType); break;
-								case CpuType::Sa1: token = GetSnesTokenValue(token, resultType); break;
-								case CpuType::Gsu: token = GetGsuTokenValue(token, resultType); break;
-								case CpuType::Cx4: token = GetCx4TokenValue(token, resultType); break;
-								case CpuType::St018: token = GetSt018TokenValue(token, resultType); break;
 								case CpuType::Gameboy: token = GetGameboyTokenValue(token, resultType); break;
 								case CpuType::Nes: token = GetNesTokenValue(token, resultType); break;
 								case CpuType::Sms: token = GetSmsTokenValue(token, resultType); break;
@@ -656,8 +641,6 @@ bool ExpressionEvaluator::Validate(string expression)
 
 #if _DEBUG
 	#include <assert.h>
-	#include "SNES/SnesCpuTypes.h"
-	#include "SNES/SnesPpuTypes.h"
 void ExpressionEvaluator::RunTests()
 {
 	//Some basic unit tests to run in debug mode

@@ -62,13 +62,6 @@ namespace Mesen.Config
 			}
 
 			List<string> mimeTypes = new List<string>();
-			CreateMimeType("x-mesen-sfc", "sfc", "SNES Rom", mimeTypes, cfg.AssociateSnesRomFiles);
-			CreateMimeType("x-mesen-smc", "smc", "SNES Rom", mimeTypes, cfg.AssociateSnesRomFiles);
-			CreateMimeType("x-mesen-swc", "swc", "SNES Rom", mimeTypes, cfg.AssociateSnesRomFiles);
-			CreateMimeType("x-mesen-fig", "fig", "SNES Rom", mimeTypes, cfg.AssociateSnesRomFiles);
-			CreateMimeType("x-mesen-bs", "bs", "BS-X Memory Pack", mimeTypes, cfg.AssociateSnesRomFiles);
-			CreateMimeType("x-mesen-spc", "spc", "SPC Sound File", mimeTypes, cfg.AssociateSnesMusicFiles);
-
 			CreateMimeType("x-mesen-nes", "nes", "NES ROM", mimeTypes, cfg.AssociateNesRomFiles);
 			CreateMimeType("x-mesen-fds", "fds", "FDS ROM", mimeTypes, cfg.AssociateNesRomFiles);
 			CreateMimeType("x-mesen-qd", "qd", "FDS ROM (QD format)", mimeTypes, cfg.AssociateNesRomFiles);
@@ -87,9 +80,6 @@ namespace Mesen.Config
 			CreateMimeType("x-mesen-sms", "sms", "Master System ROM", mimeTypes, cfg.AssociateSmsRomFiles);
 			CreateMimeType("x-mesen-gg", "gg", "Game Gear ROM", mimeTypes, cfg.AssociateGameGearRomFiles);
 			CreateMimeType("x-mesen-sg", "sg", "SG-1000 ROM", mimeTypes, cfg.AssociateSgRomFiles);
-			CreateMimeType("x-mesen-ws", "ws", "WonderSwan ROM", mimeTypes, cfg.AssociateWsRomFiles);
-			CreateMimeType("x-mesen-wsc", "wsc", "WonderSwan Color ROM", mimeTypes, cfg.AssociateWsRomFiles);
-			CreateMimeType("x-mesen-pc2", "pc2", "Pocket Challenge V2 ROM", mimeTypes, cfg.AssociateWsRomFiles);
 
 			//Icon used for shortcuts
 			using(FileStream file = File.Open(Path.Combine(iconFolder, "MesenIcon.png"), FileMode.OpenOrCreate, FileAccess.Write)) {
@@ -180,14 +170,6 @@ namespace Mesen.Config
 		static public void UpdateWindowsFileAssociations()
 		{
 			PreferencesConfig cfg = ConfigManager.Config.Preferences;
-			FileAssociationHelper.UpdateFileAssociation("sfc", cfg.AssociateSnesRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("smc", cfg.AssociateSnesRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("swc", cfg.AssociateSnesRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("fig", cfg.AssociateSnesRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("bs", cfg.AssociateSnesRomFiles);
-
-			FileAssociationHelper.UpdateFileAssociation("spc", cfg.AssociateSnesMusicFiles);
-
 			FileAssociationHelper.UpdateFileAssociation("nes", cfg.AssociateNesRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("fds", cfg.AssociateNesRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("qd", cfg.AssociateNesRomFiles);
@@ -207,10 +189,6 @@ namespace Mesen.Config
 			FileAssociationHelper.UpdateFileAssociation("sms", cfg.AssociateSmsRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("gg", cfg.AssociateGameGearRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("sg", cfg.AssociateSgRomFiles);
-
-			FileAssociationHelper.UpdateFileAssociation("ws", cfg.AssociateWsRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("wsc", cfg.AssociateWsRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("pc2", cfg.AssociateWsRomFiles);
 		}
 
 		static private void UpdateFileAssociation(string extension, bool associate)

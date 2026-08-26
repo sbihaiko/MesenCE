@@ -10,11 +10,6 @@
 #include "Debugger/DebugBreakHelper.h"
 #include "Debugger/DebugUtilities.h"
 #include "Debugger/IDebugger.h"
-#include "SNES/SnesCpuTypes.h"
-#include "SNES/SpcTypes.h"
-#include "SNES/Coprocessors/GSU/GsuTypes.h"
-#include "SNES/Coprocessors/CX4/Cx4Types.h"
-#include "SNES/Coprocessors/ST018/ArmV3Types.h"
 #include "Gameboy/GbTypes.h"
 #include "GBA/GbaTypes.h"
 #include "NES/NesTypes.h"
@@ -376,116 +371,11 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 			DisassemblerSource& src = GetSource(row.Address.Type);
 			DisassemblyInfo disInfo = src.Cache[row.Address.Address];
 
-			//Always use Sa1 as the cpu type when disassembling Sa1 address space
-			CpuType lineCpuType = type != CpuType::Sa1 && disInfo.IsInitialized() ? disInfo.GetCpuType() : type;
+			CpuType lineCpuType = disInfo.IsInitialized() ? disInfo.GetCpuType() : type;
 
 			data.LineCpuType = lineCpuType;
 			CdlManager* cdlManager = _debugger->GetCdlManager();
 			switch(lineCpuType) {
-				case CpuType::Snes:
-				case CpuType::Sa1: {
-					SnesCpuState state = (SnesCpuState&)_debugger->GetCpuStateRef(lineCpuType);
-					state.PC = (uint16_t)row.CpuAddress;
-					state.K = (row.CpuAddress >> 16);
-
-					CodeDataLogger* cdl = cdlManager->GetCodeDataLogger(row.Address.Type);
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, state.PS, lineCpuType, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= (!cdl || cdl->IsCode(data.AbsoluteAddress.Address)) ? LineFlags::VerifiedCode : LineFlags::UnexecutedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
-				case CpuType::Spc: {
-					SpcState state = (SpcState&)_debugger->GetCpuStateRef(lineCpuType);
-					state.PC = (uint16_t)row.CpuAddress;
-
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, 0, CpuType::Spc, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= LineFlags::VerifiedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
-				case CpuType::Gsu: {
-					GsuState state = (GsuState&)_debugger->GetCpuStateRef(lineCpuType);
-					state.R[15] = (uint16_t)row.CpuAddress;
-					state.ProgramBank = (row.CpuAddress >> 16);
-
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, 0, CpuType::Gsu, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= LineFlags::VerifiedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
-				case CpuType::NecDsp:
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, 0, type, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= LineFlags::VerifiedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					break;
-
-				case CpuType::Cx4: {
-					Cx4State state = (Cx4State&)_debugger->GetCpuStateRef(lineCpuType);
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, 0, type, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= LineFlags::VerifiedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
-				case CpuType::St018: {
-					ArmV3CpuState state = (ArmV3CpuState&)_debugger->GetCpuStateRef(lineCpuType);
-					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, state.CPSR.ToInt32(), CpuType::St018, row.Address.Type, _memoryDumper);
-					} else {
-						data.Flags |= LineFlags::VerifiedCode;
-					}
-
-					data.OpSize = disInfo.GetOpSize();
-
-					state.Pipeline.Execute.Address = (uint32_t)row.CpuAddress;
-					state.R[15] = state.Pipeline.Execute.Address + (data.OpSize * 2);
-
-					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
-					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
-						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
-					}
-					break;
-				}
-
 				case CpuType::Gameboy: {
 					GbCpuState state = (GbCpuState&)_debugger->GetCpuStateRef(lineCpuType);
 					state.PC = (uint16_t)row.CpuAddress;
