@@ -3,7 +3,7 @@
 # PVT_kwHOB1MsbM4BhjpN). workflow_call only; called by
 # community-pack-submitted.yml / community-pack-drift-check.yml.
 #
-# Caller secrets: GH_PROJECT_TOKEN (PAT, `project` scope — GITHUB_TOKEN
+# Caller secrets: PROJECT_PAT (PAT, `project` scope — GITHUB_TOKEN
 # cannot read/write Projects v2 on a personal account) and, for the
 # classification step, ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
 # Documented here only; neither secret is created here.
@@ -55,7 +55,7 @@ jobs:
       - name: Add item to Project 3 (idempotent) and move to "Em validação"
         id: project-item
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           MODE: ${{ inputs.mode }}
         run: |
@@ -87,7 +87,7 @@ jobs:
       - name: Reject disallowed host
         if: steps.host-check.outputs.allowed != '1'
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
@@ -117,7 +117,7 @@ jobs:
       - name: Reject oversized/failed download
         if: steps.host-check.outputs.allowed == '1' && steps.download.outcome == 'failure'
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
@@ -133,7 +133,7 @@ jobs:
         id: hash
         if: steps.download.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
           HASH=$(sha256sum pack_download.bin | awk '{print $1}')
@@ -157,7 +157,7 @@ jobs:
       - name: Reject on lint failure
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'failure'
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
@@ -180,7 +180,7 @@ jobs:
           # regardless) — without it the comment/label/Project-move tools
           # below have no working credential and the accept path can never
           # complete.
-          github_token: ${{ secrets.GH_PROJECT_TOKEN }}
+          github_token: ${{ secrets.PROJECT_PAT }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_tools: >-
@@ -211,7 +211,7 @@ jobs:
         id: read-status
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
@@ -235,5 +235,5 @@ jobs:
       - name: Dispatch catalog regeneration on acceptance
         if: env.FINAL_STATUS_ID == env.STATUS_ACEITO_PARCIAL || env.FINAL_STATUS_ID == env.STATUS_ACEITO_COMPLETO
         env:
-          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: gh workflow run community-pack-catalog.yml --repo "$REPO" --ref main

@@ -11,7 +11,7 @@ name: Community pack catalog
 # `gh project item-list` (usado por scripts/generate_community_pack_catalog.py)
 # exige Projects v2 read; o GITHUB_TOKEN padrão não enxerga Projects v2 num
 # repo pessoal, então este job precisa de um PAT com escopo `project`
-# configurado manualmente como secret do repo (nome exato: `PROJECTS_PAT`).
+# configurado manualmente como secret do repo (nome exato: `PROJECT_PAT`).
 # Esse secret não é criado por este workflow nem por nenhuma automação.
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
   generate-catalog:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.PROJECTS_PAT }}
+      GH_TOKEN: ${{ secrets.PROJECT_PAT }}
 
     steps:
       - name: Checkout repo
