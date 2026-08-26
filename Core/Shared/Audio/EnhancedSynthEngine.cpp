@@ -16,6 +16,38 @@ EnhancedSynthEngine::~EnhancedSynthEngine()
 	}
 }
 
+int EnhancedSynthEngine::SfChannelVoices(int channel) const
+{
+	if(!_sf) {
+		return 0;
+	}
+	int n = 0;
+	for(int i = 0; i < _sf->voiceNum; i++) {
+		if(_sf->voices[i].playingPreset != -1 && _sf->voices[i].playingChannel == channel) {
+			n++;
+		}
+	}
+	return n;
+}
+
+int EnhancedSynthEngine::SfPresetIndex(int channel) const
+{
+	return _sf ? tsf_channel_get_preset_index(_sf, channel) : -1;
+}
+
+double EnhancedSynthEngine::SfChannelGainDb(int channel) const
+{
+	if(!_sf || !_sf->channels || channel >= _sf->channels->channelNum) {
+		return 0;
+	}
+	return _sf->channels->channels[channel].gainDB;
+}
+
+int EnhancedSynthEngine::SfVoiceCount() const
+{
+	return _sf ? tsf_active_voice_count(_sf) : 0;
+}
+
 bool EnhancedSynthEngine::LoadSoundFont(const string& path)
 {
 	if(_sf && path == _sfPath) {
@@ -29,6 +61,9 @@ bool EnhancedSynthEngine::LoadSoundFont(const string& path)
 	_sfRate = 0;
 	for(SfNote& n : _sfNotes) {
 		n = {};
+	}
+	for(SfDrumHit& hit : _sfDrums) {
+		hit = {};
 	}
 	for(int& prog : _sfPrograms) {
 		prog = -1;
@@ -54,7 +89,10 @@ bool EnhancedSynthEngine::LoadSoundFont(const string& path)
 		MessageManager::Log("[EnhancedAudio] SoundFont could not be parsed (not an .sf2?): " + path);
 		return false;
 	}
-	tsf_set_max_voices(_sf, 48);
+	//Headroom over the ~10 melodic voices in flight: percussion hits are held
+	//for kSfDrumHoldS before their note-off, and TSF can only recycle voices
+	//that are already in release
+	tsf_set_max_voices(_sf, 96);
 	MessageManager::Log("[EnhancedAudio] SoundFont loaded: " + path + " (" + std::to_string(tsf_get_presetcount(_sf)) + " presets)");
 	return true;
 }
@@ -120,6 +158,50 @@ void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const R
 	}
 }
 
+void EnhancedSynthEngine::SfAgeDrums(double dt)
+{
+	for(SfDrumHit& hit : _sfDrums) {
+		if(hit.Key < 0) {
+			continue;
+		}
+		hit.LeftS -= dt;
+		if(hit.LeftS <= 0) {
+			tsf_channel_note_off(_sf, 9, hit.Key);
+			hit.Key = -1;
+		}
+	}
+}
+
+void EnhancedSynthEngine::SfTriggerDrum(int key, double vel, double gain)
+{
+	//Re-hitting the same drum, a free slot, or (last resort) the oldest hit
+	SfDrumHit* slot = nullptr;
+	for(SfDrumHit& hit : _sfDrums) {
+		if(hit.Key == key) {
+			slot = &hit;
+			break;
+		}
+		if(!slot && hit.Key < 0) {
+			slot = &hit;
+		}
+	}
+	if(!slot) {
+		slot = &_sfDrums[0];
+		for(SfDrumHit& hit : _sfDrums) {
+			if(hit.LeftS < slot->LeftS) {
+				slot = &hit;
+			}
+		}
+	}
+	if(slot->Key >= 0) {
+		tsf_channel_note_off(_sf, 9, slot->Key);
+	}
+	tsf_channel_set_volume(_sf, 9, (float)std::clamp(gain, 0.0, 2.0));
+	tsf_channel_note_on(_sf, 9, key, (float)std::clamp(vel, 0.2, 1.0));
+	slot->Key = key;
+	slot->LeftS = kSfDrumHoldS;
+}
+
 void EnhancedSynthEngine::SfUpdateVoice(int channel, SfNote& note, double freq, double vol, double gain)
 {
 	double n = freq > 1.0 ? 69.0 + 12.0 * std::log2(freq / 440.0) : -1.0;
@@ -141,7 +223,10 @@ void EnhancedSynthEngine::SfUpdateVoice(int channel, SfNote& note, double freq, 
 		note.OnVol = std::max(vol, 0.05);
 		tsf_channel_set_volume(_sf, channel, (float)std::clamp(gain, 0.0, 2.0));
 		tsf_channel_set_pitchwheel(_sf, channel, 8192);
-		tsf_channel_note_on(_sf, channel, key, (float)std::clamp(std::sqrt(vol), 0.1, 1.0));
+		if(!tsf_channel_note_on(_sf, channel, key, (float)std::clamp(std::sqrt(vol), 0.1, 1.0))) {
+			_sfNoteOnFails++;
+		}
+		_sfNoteOns++;
 	}
 	//Pitch inside the note follows the chip exactly (vibrato, small slides)
 	//through the wheel, range +/-24 semitones set at load time
@@ -149,7 +234,11 @@ void EnhancedSynthEngine::SfUpdateVoice(int channel, SfNote& note, double freq, 
 	tsf_channel_set_pitchwheel(_sf, channel, (int)std::clamp(8192.0 + bend * 8192.0, 0.0, 16383.0));
 	//Envelope shape (decays, tremolo) follows the chip through the channel
 	//volume relative to the level the note was struck at
-	tsf_channel_set_volume(_sf, channel, (float)std::clamp(gain * vol / note.OnVol, 0.0, 2.0));
+	double chVol = std::clamp(gain * vol / note.OnVol, 0.0, 2.0);
+	if(channel >= 0 && channel < 3) {
+		_sfChannelVol[channel] = chVol;
+	}
+	tsf_channel_set_volume(_sf, channel, (float)chVol);
 }
 
 void EnhancedSynthEngine::InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const vector<string>& packPresetPaths)
@@ -338,19 +427,23 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		SfUpdateVoice(0, _sfNotes[0], in.LeadFreq, in.LeadVol, p.LeadGain);
 		SfUpdateVoice(1, _sfNotes[1], in.HarmFreq, in.HarmVol, p.HarmGain);
 		SfUpdateVoice(2, _sfNotes[2], in.BassFreq, in.BassVol, p.BassGain);
+		SfAgeDrums((double)sampleCount / sampleRate);
 		if(sfDrums) {
 			//One percussion hit per noise attack: bright LFSR = closed hi-hat,
 			//slow + loud = kick, slow = low tom (same mapping as MidiExporter)
 			if(in.NoiseVol >= 0.2 && in.NoiseVol > prevNoisePollVol + 0.08) {
 				int key = in.NoiseBrightness >= 0.5 ? 42 : (in.ThumpEligible && in.NoiseVol >= 0.65 ? 36 : 45);
-				tsf_channel_set_volume(_sf, 9, (float)std::clamp(p.DrumGain, 0.0, 2.0));
-				tsf_channel_note_on(_sf, 9, key, (float)std::clamp(in.NoiseVol, 0.2, 1.0));
+				SfTriggerDrum(key, in.NoiseVol, p.DrumGain);
 			}
 		}
 		if(_sfBuf.size() < sampleCount * 2) {
 			_sfBuf.resize(sampleCount * 2);
 		}
 		tsf_render_float(_sf, _sfBuf.data(), (int)sampleCount, 0);
+		_sfLastPeak = 0;
+		for(uint32_t i = 0; i < sampleCount * 2; i++) {
+			_sfLastPeak = std::max(_sfLastPeak, (double)std::abs(_sfBuf[i]));
+		}
 	}
 
 	//Delay lines: lead echo + 83/127/173ms feedforward reverb taps

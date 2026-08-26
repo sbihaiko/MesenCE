@@ -85,7 +85,26 @@ private:
 	uint32_t _sfRate = 0;
 	int _sfPrograms[3] = { -1, -1, -1 };
 	SfNote _sfNotes[3];
+	//Percussion voices must be released explicitly: a drum kit region with an
+	//infinite sustain never leaves its sustain segment on its own, and TSF
+	//(with a voice cap set) can only recycle voices that are *in release* - a
+	//pool full of held drum voices makes it drop every new melodic note
+	//silently, which is heard as the music fading out after ~30s.
+	struct SfDrumHit
+	{
+		int Key = -1;
+		double LeftS = 0;
+	};
+	static constexpr uint32_t MaxSfDrumHits = 6;
+	static constexpr double kSfDrumHoldS = 0.18;
+	SfDrumHit _sfDrums[MaxSfDrumHits];
+	void SfTriggerDrum(int key, double vel, double gain);
+	void SfAgeDrums(double dt);
 	std::vector<float> _sfBuf;
+	double _sfLastPeak = 0;
+	double _sfChannelVol[3] = {};
+	uint64_t _sfNoteOns = 0;
+	uint64_t _sfNoteOnFails = 0;
 	void SfUpdateVoice(int channel, SfNote& note, double freq, double vol, double gain);
 
 	//Drum tone shaping (one-pole states) + low thump oscillator
@@ -120,6 +139,19 @@ private:
 	double NextNoise();
 
 public:
+	//Diagnostics: active SoundFont voices and the peak of the last SF flush
+	//(a voice leak or a stuck channel shows up here before it is audible)
+	int SfVoiceCount() const;
+	double SfLastPeak() const { return _sfLastPeak; }
+	//Last values handed to TinySoundFont per channel (key, channel volume)
+	int SfKey(int ch) const { return _sfNotes[ch].Key; }
+	double SfChannelVolume(int ch) const { return _sfChannelVol[ch]; }
+	double SfOnVol(int ch) const { return _sfNotes[ch].OnVol; }
+	int SfChannelVoices(int channel) const;
+	double SfChannelGainDb(int channel) const;
+	uint64_t SfNoteOns() const { return _sfNoteOns; }
+	uint64_t SfNoteOnFails() const { return _sfNoteOnFails; }
+	int SfPresetIndex(int channel) const;
 	//Stores the wrapper's built-in preset table + its EnhancedAudioPresets.cfg
 	//section suffix (see EnhancedSynthPresetLoader::Load) and loads the user
 	//overrides once. Call from the wrapper's constructor.

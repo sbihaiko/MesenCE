@@ -138,6 +138,7 @@ int main(int argc, char** argv)
 	bool autoRoles = true, sfxSep = true;
 	bool enhanced = true; //--no-enhanced: play the raw APU instead of the F1 synth
 uint32_t apuMix = 0; //--apu-mix N
+uint32_t preset = 4; //--preset N (0 Synthwave, 1 ChipDeluxe, 2 OrchestralLite, 3 Dry, 4 Studio)
 bool synth = false; //--synth: enable the pack synth layer (EnableSynth) like the GUI does
 bool bootstrap = false; //--bootstrap: let the MEP bootstrap recorder run (writes beside the ROM - use a copy!)
 bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, OGG off, patch off)
@@ -155,6 +156,7 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 		else if(a == "--synth") synth = true;
 		else if(a == "--no-enhanced") enhanced = false;
 		else if(a == "--apu-mix") apuMix = (uint32_t)atoi(next().c_str());
+		else if(a == "--preset") preset = (uint32_t)atoi(next().c_str());
 		else seconds = atof(a.c_str());
 	}
 	std::filesystem::create_directories(work);
@@ -192,7 +194,7 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 		audio.MasterVolume = 100;
 		audio.EnhancedAudioVolume = 100;
 		audio.EnhancedAudioApuMix = apuMix;
-		audio.EnhancedAudioPreset = 4; //Studio
+		audio.EnhancedAudioPreset = preset;
 		audio.EnableEnhancedAudio = enhanced;
 		audio.EnhancedAudioAutoRoles = autoRoles;
 		audio.EnhancedAudioSfxSeparation = sfxSep;
