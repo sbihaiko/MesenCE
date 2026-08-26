@@ -10,7 +10,10 @@ name: Community pack catalog
 #
 # `gh project item-list` (usado por scripts/generate_community_pack_catalog.py)
 # exige Projects v2 read; o GITHUB_TOKEN padrão não enxerga Projects v2 num
-# repo pessoal, então este job precisa de um PAT com escopo `project`
+# repo pessoal, então este job precisa de um PAT clássico com escopos
+# `repo` + `project` + `read:org` (o `read:org` também é exigido pelos
+# comandos `gh project` para resolver o tipo do owner mesmo em projeto
+# pessoal — confirmado ao vivo via falha "unknown owner type" sem ele)
 # configurado manualmente como secret do repo (nome exato: `PROJECT_PAT`).
 # Esse secret não é criado por este workflow nem por nenhuma automação.
 on:

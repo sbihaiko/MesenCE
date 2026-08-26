@@ -3,8 +3,11 @@
 # PVT_kwHOB1MsbM4BhjpN). workflow_call only; called by
 # community-pack-submitted.yml / community-pack-drift-check.yml.
 #
-# Caller secrets: PROJECT_PAT (PAT, `project` scope — GITHUB_TOKEN
-# cannot read/write Projects v2 on a personal account) and, for the
+# Caller secrets: PROJECT_PAT (classic PAT, `repo` + `project` + `read:org`
+# scopes — GITHUB_TOKEN cannot read/write Projects v2 on a personal account;
+# `read:org` is also required, confirmed live: `gh project item-add` fails
+# with "unknown owner type" against a personal-account owner without it,
+# even though the project itself is user-owned, not org-owned) and, for the
 # classification step, ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
 # Documented here only; neither secret is created here.
 #

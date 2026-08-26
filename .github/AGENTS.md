@@ -56,7 +56,10 @@ what CI actually runs; this doc records why they're split the way they are.
   instructions, in the prompt. Dispatches
   `workflows/community-pack-catalog.yml` by name (never opens it) when the
   final Status is one of the two "Aceito" states. Requires the caller to
-  supply a `GH_PROJECT_TOKEN` PAT (`project` scope) and either
+  supply a `PROJECT_PAT` PAT (`repo` + `project` + `read:org` scopes —
+  `read:org` is required by `gh project` commands to resolve a
+  personal-account owner, confirmed via a live "unknown owner type"
+  failure without it) and either
   `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` as repo secrets — this
   workflow only documents those names, never creates them. See
   `scripts/checks/verify_community_pack_validate_workflow.py` for its

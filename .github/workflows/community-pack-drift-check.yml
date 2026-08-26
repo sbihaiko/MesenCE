@@ -8,8 +8,11 @@
 # reutilizável `community-pack-validate.yml` com `mode: revalidate`.
 #
 # O `GITHUB_TOKEN` padrão do Actions NÃO tem permissão de leitura/escrita em
-# Projects v2 numa conta pessoal — este workflow precisa de um PAT com escopo
-# `project` fornecido manualmente no secret de repositório `PROJECT_PAT`
+# Projects v2 numa conta pessoal — este workflow precisa de um PAT clássico
+# com escopos `repo` + `project` + `read:org` (o `read:org` também é
+# exigido pelos comandos `gh project` para resolver o tipo do owner mesmo
+# em projeto pessoal — confirmado ao vivo via falha "unknown owner type"
+# sem ele) fornecido manualmente no secret de repositório `PROJECT_PAT`
 # (mesma exigência documentada em `community-pack-validate.yml`; este
 # workflow não cria esse secret, apenas o consome).
 #
