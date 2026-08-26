@@ -120,10 +120,12 @@ void HdPackBuilder::UpdateTileUsage(const HdTileKey& exactKey, unordered_map<HdT
 
 void HdPackBuilder::CaptureOrCapPaletteVariant(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, uint32_t chrBankHash, bool transparencyRequired)
 {
-	//New palette for this tile shape - whether never seen before, or so far only a
-	//DefaultTile neutral-ramp entry (AddRomTiles/AddPrgScanTiles). Every distinct real
-	//PaletteColors value seen for the shape is promoted into its own HdPackTileInfo, up
-	//to MaxPaletteVariantsPerTile, instead of collapsing into a single wildcard match.
+	//New palette for this tile shape - whether never seen before, or already holding
+	//a DefaultTile neutral-ramp entry (AddRomTiles/AddPrgScanTiles) and/or other real
+	//palette variants. Every distinct real PaletteColors value seen for the shape gets
+	//its own HdPackTileInfo, up to MaxPaletteVariantsPerTile - see the field's comment
+	//in HdPackBuilder.h for why that cap exists (bounding per-shape growth, not fixing
+	//a wildcard collapse: ProcessTile's old wildcard fallback was already dead code).
 	vector<HdPackTileInfo*>& variants = _paletteVariantsByShape[tile.GetKey(true)];
 	if(variants.size() >= MaxPaletteVariantsPerTile) {
 		//Cap reached: don't grow the pack further, just bump usage on the shape's most

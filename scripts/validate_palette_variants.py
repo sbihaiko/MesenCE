@@ -1,10 +1,37 @@
 #!/usr/bin/env python3
 """validate_palette_variants — headless proof for F5.4b (ADR-0050 step b):
-HdPackBuilder::ProcessTile used to funnel every real-palette sighting of a
-tile shape that only had a DefaultTile wildcard entry into that one neutral
-entry, so the bootstrap capture only ever recorded one palette per shape.
-This checks that a real gameplay recording now captures several distinct
-palette-specific HdPackTileInfo entries for the same tile shape instead.
+HdPackBuilder::ProcessTile already gave every distinct (shape, PaletteColors)
+combination its own HdPackTileInfo (the old "DefaultTile wildcard" fallback
+was dead code - GetKey(true) sentinels PaletteColors to 0xFFFFFFFF, a value
+no real PPU palette word ever produces, so it could never match anything in
+_tileUsageCount). What was genuinely unbounded was per-shape growth: a
+mostly/fully flat tile shape renders identically under any background
+palette, so unrelated screen state alone can rack up dozens of "distinct"
+PaletteColors sightings for one shape with no artistic value - measured on a
+pre-cap 20s roms/Zelda.nes hdpack recording, a single all-zero blank-tile
+shape alone reached 71 variants while the rest of the corpus sat at a median
+of 14 (p99 27). MaxPaletteVariantsPerTile (Core/NES/HdPacks/HdPackBuilder.h)
+bounds that long tail.
+
+This checks BOTH halves of the fix against a real gameplay recording:
+  1) capture still produces several distinct palette-specific entries for the
+     same tile shape (the pre-existing, non-regressed capability), and
+  2) no single tile shape ever exceeds MaxPaletteVariantsPerTile (the actual
+     structural guarantee this task adds - provably false pre-fix, since the
+     71-variant blank-tile shape above exceeds any sane cap), with at least
+     one shape reaching the cap so the check is known to engage on real data
+     rather than passing vacuously because nothing ever gets close to it.
+
+Reproducing the pre-fix baseline this cap is derived from (no double-build
+baked into this script, to keep it to a single `make capture-tool` + one
+recording):
+    git checkout <base-commit> -- Core/NES/HdPacks/HdPackBuilder.cpp Core/NES/HdPacks/HdPackBuilder.h
+    make capture-tool
+    ./scripts/headless_record roms/Zelda.nes 20 /tmp/pre hdpack
+    # group /tmp/pre-hdpack/hires.txt <tile> lines by TileData like
+    # group_palettes_by_shape() below and look at the per-shape variant counts
+    git checkout HEAD -- Core/NES/HdPacks/HdPackBuilder.cpp Core/NES/HdPacks/HdPackBuilder.h
+    make capture-tool
 
 Builds scripts/headless_record via `make capture-tool` if missing, records
 roms/Zelda.nes (a CHR RAM title, per F5.2's prior validation) for a fixed
@@ -26,8 +53,19 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ROM = REPO_ROOT / "roms" / "Zelda.nes"
+HEADER = REPO_ROOT / "Core" / "NES" / "HdPacks" / "HdPackBuilder.h"
 CAPTURE_SECONDS = 20
 TILE_RE = re.compile(r"^(\[(?P<cond>[^\]]*)\])?<tile>(?P<body>.*)$")
+CAP_RE = re.compile(r"MaxPaletteVariantsPerTile\s*=\s*(\d+)\s*;")
+
+
+def read_cap() -> int:
+    """The MaxPaletteVariantsPerTile value straight from the header, so this
+    validator always checks against the constant the build actually used."""
+    match = CAP_RE.search(HEADER.read_text())
+    if not match:
+        raise RuntimeError(f"MaxPaletteVariantsPerTile not found in {HEADER}")
+    return int(match.group(1))
 
 
 def ensure_capture_tool() -> Path:
@@ -67,20 +105,44 @@ def group_palettes_by_shape(hires: Path) -> dict:
     return shapes
 
 
-def run_checks(hires: Path) -> list:
+def run_checks(hires: Path, cap: int) -> list:
     checks = [(f"hires.txt gerado ({hires})", hires.exists())]
 
     shapes = group_palettes_by_shape(hires)
     checks.append((f"tiles capturados ({len(shapes)} shapes distintos)", len(shapes) > 0))
 
     multi_palette_shapes = {k: v for k, v in shapes.items() if len(v) > 1}
-    max_variants = max((len(v) for v in shapes.values()), default=0)
+    variant_counts = [len(v) for v in shapes.values()]
+    max_variants = max(variant_counts, default=0)
     checks.append(
         (
             "pelo menos 1 tile shape com mais de 1 paleta distinta capturada "
             f"({len(multi_palette_shapes)}/{len(shapes)} shapes com variantes, "
             f"máximo {max_variants} paletas num único shape)",
             len(multi_palette_shapes) > 0,
+        )
+    )
+
+    # Discriminating check: this is provably false on the pre-fix build (a
+    # single all-zero blank-tile shape reached 71 variants in the reproduction
+    # steps in the module docstring), so passing here is real evidence the cap
+    # in HdPackBuilder::CaptureOrCapPaletteVariant is actually enforced.
+    checks.append(
+        (
+            f"nenhum tile shape excede MaxPaletteVariantsPerTile ({cap}) "
+            f"(máximo observado: {max_variants})",
+            max_variants <= cap,
+        )
+    )
+
+    # And that the cap is actually exercised by this recording (not vacuously
+    # true because no shape ever gets close to it).
+    shapes_at_cap = sum(1 for c in variant_counts if c == cap)
+    checks.append(
+        (
+            f"cap efetivamente atingido por pelo menos 1 shape real "
+            f"({shapes_at_cap} shape(s) com exatamente {cap} variantes)",
+            shapes_at_cap > 0,
         )
     )
     return checks
@@ -91,6 +153,9 @@ def main() -> int:
         print(f"FAIL: rom não encontrada em {ROM} (necessária para esta validação)")
         return 1
 
+    cap = read_cap()
+    print(f"PASS: MaxPaletteVariantsPerTile lido de {HEADER} = {cap}")
+
     tool = ensure_capture_tool()
     if not tool.exists():
         print(f"FAIL: {tool} continua ausente após 'make capture-tool'")
@@ -99,7 +164,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="hdpack-palette-") as tmp:
         hires = record_hdpack(tool, Path(tmp))
-        checks = run_checks(hires)
+        checks = run_checks(hires, cap)
 
     ok = True
     for name, passed in checks:

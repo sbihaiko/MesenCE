@@ -20,17 +20,28 @@ private:
 	std::map<uint32_t, std::map<uint32_t, vector<HdPackTileInfo*>>> _tilesByChrBankByPalette;
 
 	//F5.4b: real palette variants captured so far per tile shape (shapeKey =
-	//tile.GetKey(true) - same tile content, PaletteColors wildcarded). ProcessTile
-	//promotes the first real-palette sighting of a shape (even one that so far only
-	//has a DefaultTile neutral-ramp entry) into its own HdPackTileInfo, and keeps
-	//doing that for each further distinct PaletteColors value seen for the same
-	//shape, up to MaxPaletteVariantsPerTile. Beyond that cap, further sightings just
-	//bump usage on the shape's last captured variant instead of growing the pack.
-	//Not seeded from an existing on-disk pack at construction (same gap noted below
-	//for _screensSeen) - a re-record session can add up to MaxPaletteVariantsPerTile
-	//more variants on top of what is already on disk.
+	//tile.GetKey(true) - same tile content, PaletteColors wildcarded). Every
+	//distinct PaletteColors value ProcessTile sees for a shape already got its
+	//own HdPackTileInfo even before this change: ProcessTile's old "DefaultTile
+	//wildcard" fallback was dead code (GetKey(true) sentinels PaletteColors to
+	//0xFFFFFFFF, a value no real PPU palette word can ever produce, so it never
+	//matched anything in _tileUsageCount, which AddTile only ever populates
+	//with real PaletteColors via GetKey(false)). What was genuinely unbounded
+	//is per-shape growth: a mostly/fully flat tile (e.g. TileData all-zero)
+	//renders identically under any background palette, so unrelated screen
+	//state alone can rack up dozens of "distinct" PaletteColors sightings for
+	//one shape with no artistic value. Measured on a 20s roms/Zelda.nes hdpack
+	//recording pre-cap: 182 shapes, median 14 variants/shape, p95 15, p99 27,
+	//and a single all-zero blank-tile shape alone reaching 71 - the long tail
+	//this cap targets. MaxPaletteVariantsPerTile is set above that p99 so real
+	//per-shape diversity survives intact and only the degenerate/near-blank
+	//outliers get bounded. Beyond the cap, further sightings just bump usage
+	//on the shape's last captured variant instead of growing the pack further.
+	//Not seeded from an existing on-disk pack at construction (same gap noted
+	//below for _screensSeen) - a re-record session can add up to
+	//MaxPaletteVariantsPerTile more variants on top of what is already on disk.
 	unordered_map<HdTileKey, vector<HdPackTileInfo*>> _paletteVariantsByShape;
-	static constexpr uint32_t MaxPaletteVariantsPerTile = 8;
+	static constexpr uint32_t MaxPaletteVariantsPerTile = 32;
 	bool _isChrRam = false;
 	string _saveFolder;
 	string _romName;
