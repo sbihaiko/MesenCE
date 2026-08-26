@@ -1,6 +1,6 @@
 # Plano — produto do fork: `main` + cores reduzidos
 
-**Status:** proposto (2026-08-26) ·
+**Status:** F0 em andamento (2026-08-26) — `main` criada; cortes F1–F4 pendentes ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES já estava fora das fases) ·
 **Fora de spec:** corte de emulação, não de formato de pack.
 

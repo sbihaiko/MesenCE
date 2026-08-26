@@ -14,8 +14,10 @@ what CI actually runs; this doc records why they're split the way they are.
 
 - `workflows/build.yml` — full native + UI release build.
 - `workflows/clang-format-check.yml` — C++ formatting gate (`clang-format` 20,
-  `check-path: ./`). Excludes vendored `Utilities/Audio/tsf.h` (TinySoundFont);
+  `check-path: ./`). Runs on push to `main` (the product branch) and on
+  every PR. Excludes vendored `Utilities/Audio/tsf.h` (TinySoundFont);
   that header is also wrapped in `clang-format off/on`.
+  `master` is a frozen full-console snapshot and is not gated here.
 - `workflows/dotnet-format-check.yml` — `dotnet format --verify-no-changes`
   against `Mesen.sln` (Windows). Only touches projects that are members of
   the `.sln`.

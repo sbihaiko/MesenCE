@@ -76,6 +76,9 @@ Default section order:
 
 ## User Preferences
 
+- Product branch is `main`. `master` is a frozen full-console snapshot of the upstream-shaped tree. Never merge `upstream/master` (or GitHub Sync fork) into `main`.
+- This fork does not maintain SNES, PC Engine, WonderSwan, or ColecoVision. Remaining cores: NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA. See `docs/roadmap/plano-reducao-cores.md`.
+
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
 ## Child DOX Index
