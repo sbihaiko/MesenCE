@@ -217,7 +217,12 @@ void MessageManager::Log(string message)
 		std::time_t t = std::chrono::system_clock::to_time_t(now);
 		int ms = (int)(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000);
 		char stamp[32];
-		std::tm tmv = *std::localtime(&t);
+		std::tm tmv {};
+#if (defined(WIN32) || defined(_WIN32) || defined(__WIN32__))
+		localtime_s(&tmv, &t);
+#else
+		localtime_r(&t, &tmv);
+#endif
 		std::strftime(stamp, sizeof(stamp), "%H:%M:%S", &tmv);
 		_logFile << stamp << "." << (ms < 100 ? (ms < 10 ? "00" : "0") : "") << ms << " " << message << std::endl;
 	}
