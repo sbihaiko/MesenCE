@@ -1,6 +1,6 @@
 # Plano de execução — Testes unitários (sem reescrever MVVM)
 
-**Status:** em execução (2026-08-25, revisado 2026-08-25) — Fase 0, Fase 1 e Fase 2 concluídas · próxima: Fase 3 ·
+**Status:** em execução (2026-08-25, revisado 2026-08-26) — Fase 0, Fase 1, Fase 2 e Fase 3 concluídas · próxima: Fase 4 ·
 **Origem:** avaliação da UI Avalonia (já MVVM) vs. o bloqueio real (estáticos `EmuApi`/`ConfigManager`, RID `win-x64`, zero `*Test*.csproj`) ·
 **Não substitui:** goldens headless (`headless_record`, `mep_lint.py`, `validate-specs.py`, `roles_probe`) nem o CI de ROM (`.github/workflows/tests.yml`).
 
@@ -143,7 +143,21 @@ Cada fase é mergeável sozinha e deixa `dotnet format` / `make` verdes.
 
 **Testes:** códigos GG/PAR/custom NES e SNES; console não suportado (inclui `Gameboy`: o enum tem `GbGameGenie`/`GbGameShark`, mas o detector lança — caso documentado como comportamento atual, não como verdade); toggle da lista (duplicata, case, reabilitar).
 
-### Fase 3 — Regra para ViewModels novos (sem retrofit)
+### Fase 3 — Regra para ViewModels novos (sem retrofit) ✅ concluída
+
+A regra já está documentada em `UI/AGENTS.md` (seção "Local Contracts", bullet
+"New ViewModels") — entregue adiantada dentro do commit `91f5ed78` da Fase 1,
+que já empacotava esse texto no mesmo PR. Nada a codar aqui: `UI/AGENTS.md`
+foi conferido linha a linha contra as 4 regras abaixo e bate exatamente.
+
+O item opcional (ctor `EnhancementPacksViewModel(EnhancementPackConfig config)`
++ `Refresh` público) foi avaliado e **descartado por ora**: o texto do plano
+já condiciona isso a "só se um teste de orquestração se justificar", e não há
+teste de orquestração pendente que exija essa mudança — o ctor atual
+(`EnhancementPacksViewModel()`, `UI/ViewModels/EnhancementPacksViewModel.cs:30`)
+segue chamando `EmuApi`/`ConfigManager` diretamente, como o próprio
+`UI/AGENTS.md` já documenta como intencional (não é um retrofit desta fase).
+Revisitar apenas quando essa ViewModel for tocada por outro motivo.
 
 Não reescrever VMs antigos. Documentar em `UI/AGENTS.md` e aplicar só no código que tocarmos:
 
