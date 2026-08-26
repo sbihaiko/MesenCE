@@ -1,0 +1,77 @@
+name: "Submissão de Community HD/MEP Pack"
+description: >-
+  Envie um HD Pack ou MEP Pack (texturas, áudio e/ou synth) feito pela
+  comunidade para triagem no board "MesenCE Community Packs".
+title: "[Community Pack] "
+labels:
+  - community-pack
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de enviar, leia o guia de autoria de packs:
+        https://github.com/sbihaiko/MesenCE/blob/main/docs/hd-pack-authoring.md
+        (`docs/hd-pack-authoring.md`) — ele explica o que diferencia um pack
+        "Aceito (MEP completo)" de um "Aceito parcial (HD Mesen)" e o que
+        causa rejeição ("Inválido").
+
+        Após a abertura, um workflow automático baixa o link informado,
+        valida a estrutura do pack e classifica a submissão. Comentar
+        `/revalidate` nesta issue depois de atualizar o pack dispara uma
+        nova validação.
+  - type: input
+    id: pack_link
+    attributes:
+      label: "Link do pack"
+      description: >-
+        URL de download direto do pack (release do GitHub, gist ou raw
+        githubusercontent). Ex.: https://github.com/<user>/<repo>/releases/...
+      placeholder: "https://github.com/<user>/<repo>/releases/download/..."
+    validations:
+      required: true
+  - type: input
+    id: rom_target
+    attributes:
+      label: "Jogo/ROM alvo e região"
+      description: "Nome do jogo e região da ROM à qual o pack se aplica."
+      placeholder: "Ex.: After Burner (World)"
+    validations:
+      required: true
+  - type: dropdown
+    id: console
+    attributes:
+      label: "Console"
+      description: "Sistema de destino do pack."
+      options:
+        - NES
+        - SNES
+        - GB
+        - GBC
+        - SMS
+        - Outro
+    validations:
+      required: true
+  - type: input
+    id: author_credits
+    attributes:
+      label: "Autor/créditos"
+      description: "Autor(es) do pack e créditos de terceiros, se houver."
+      placeholder: "Ex.: seu-usuario-github, com texturas de fulano"
+    validations:
+      required: true
+  - type: checkboxes
+    id: rights_confirmation
+    attributes:
+      label: "Direitos de distribuição"
+      options:
+        - label: "Confirmo que tenho direito de distribuir esses assets."
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: "Descrição (opcional)"
+      description: >-
+        Qualquer detalhe adicional: o que o pack cobre, ferramentas usadas,
+        instruções especiais de instalação, etc.
+    validations:
+      required: false

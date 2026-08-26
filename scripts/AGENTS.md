@@ -61,6 +61,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   in `docs/roadmap/plano-execucao-F5.md`'s header Status line: a done (✅)
   marker paired with `F5.4b` and no leftover instance of the pre-fix pending
   phrasing.
+- `checks/` - per-deliverable acceptance-criteria verifiers for the
+  community-pack triage automation (each is invoked directly by its AC's
+  verification command, not from `make`). `verify_community_pack_issue_template.py`
+  parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
+  the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
+  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6.
 
 ## Verification
 
@@ -72,7 +79,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
+- `python3 scripts/checks/verify_community_pack_issue_template.py` and
+  `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
 
 ## Child DOX Index
 
-(none - no subfolders)
+(none - `checks/` is a flat collection of independent per-AC verifier
+scripts with no domain contract of its own beyond what's listed above)

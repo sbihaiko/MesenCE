@@ -34,6 +34,12 @@ what CI actually runs; this doc records why they're split the way they are.
   is intentionally NOT a member of `Mesen.sln`, so this workflow does not go
   through `dotnet-format-check.yml` or `build.yml`'s restore/publish flow
   either.
+- `ISSUE_TEMPLATE/community-pack.yml` — GitHub Issue Form for community
+  HD/MEP pack submissions (not a free-text issue): pack link, jogo/ROM alvo
+  + região, console dropdown, autor/créditos, a required rights-confirmation
+  checkbox, and an optional description. Sets `labels: [community-pack]`
+  and links `docs/hd-pack-authoring.md`. Structurally checked by
+  `scripts/checks/verify_community_pack_issue_template.py`.
 
 ## Work Guidance
 
@@ -50,6 +56,7 @@ what CI actually runs; this doc records why they're split the way they are.
 - `grep -E "dotnet test" .github/workflows/unit-tests.yml`
 - `grep -E "make core-unit-tests" .github/workflows/unit-tests.yml`
 - `grep -E "exclude-regex" .github/workflows/clang-format-check.yml`
+- `python3 scripts/checks/verify_community_pack_issue_template.py`
 
 ## Child DOX Index
 
