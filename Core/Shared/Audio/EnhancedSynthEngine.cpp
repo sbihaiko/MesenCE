@@ -127,9 +127,15 @@ void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const R
 			//while the voice's release tail is still fading
 			int slot = (int)roles.Role(i);
 			if(!slotUsed[slot]) {
-				if(slot == 0) { in.LeadFreq = raw[i].Freq; in.LeadWidth = raw[i].Width; }
-				else if(slot == 1) { in.HarmFreq = raw[i].Freq; in.HarmWidth = raw[i].Width; }
-				else { in.BassFreq = raw[i].Freq; }
+				if(slot == 0) {
+					in.LeadFreq = raw[i].Freq;
+					in.LeadWidth = raw[i].Width;
+				} else if(slot == 1) {
+					in.HarmFreq = raw[i].Freq;
+					in.HarmWidth = raw[i].Width;
+				} else {
+					in.BassFreq = raw[i].Freq;
+				}
 			}
 			continue;
 		}
@@ -146,15 +152,26 @@ void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const R
 		if(slotUsed[slot]) {
 			//two channels with the same role (only with >3 melodic channels):
 			//the extra one takes the first free slot
-			slot = !slotUsed[1] ? 1 : !slotUsed[0] ? 0 : !slotUsed[2] ? 2 : -1;
+			slot = !slotUsed[1] ? 1 : !slotUsed[0] ? 0 :
+				!slotUsed[2]								? 2 :
+																  -1;
 			if(slot < 0) {
 				continue;
 			}
 		}
 		slotUsed[slot] = true;
-		if(slot == 0) { in.LeadFreq = raw[i].Freq; in.LeadVol = raw[i].Vol; in.LeadWidth = raw[i].Width; }
-		else if(slot == 1) { in.HarmFreq = raw[i].Freq; in.HarmVol = raw[i].Vol; in.HarmWidth = raw[i].Width; }
-		else { in.BassFreq = raw[i].Freq; in.BassVol = raw[i].Vol; }
+		if(slot == 0) {
+			in.LeadFreq = raw[i].Freq;
+			in.LeadVol = raw[i].Vol;
+			in.LeadWidth = raw[i].Width;
+		} else if(slot == 1) {
+			in.HarmFreq = raw[i].Freq;
+			in.HarmVol = raw[i].Vol;
+			in.HarmWidth = raw[i].Width;
+		} else {
+			in.BassFreq = raw[i].Freq;
+			in.BassVol = raw[i].Vol;
+		}
 	}
 }
 
@@ -498,29 +515,29 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 			sfL = _sfBuf[i * 2] * kSfGain;
 			sfR = _sfBuf[i * 2 + 1] * kSfGain;
 		} else {
-		//Lead: detuned pulse pair + octave-up saw shimmer, or (Studio) a fixed
-		//detuned-saw stack that ignores the pulse width entirely
-		if(p.LeadAlwaysSaw) {
-			lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune)) + 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune)) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
-		} else {
-			lead = 0.45 * pulse(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune), in.LeadWidth) + 0.45 * pulse(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune), in.LeadWidth) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
-		}
-		lead = softClip(lead * p.LeadDrive);
-		_lead.Lp += (lead - _lead.Lp) * leadLpCoeff;
-		lead = _lead.Lp * _lead.SmoothedVol;
+			//Lead: detuned pulse pair + octave-up saw shimmer, or (Studio) a fixed
+			//detuned-saw stack that ignores the pulse width entirely
+			if(p.LeadAlwaysSaw) {
+				lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune)) + 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune)) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
+			} else {
+				lead = 0.45 * pulse(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune), in.LeadWidth) + 0.45 * pulse(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune), in.LeadWidth) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
+			}
+			lead = softClip(lead * p.LeadDrive);
+			_lead.Lp += (lead - _lead.Lp) * leadLpCoeff;
+			lead = _lead.Lp * _lead.SmoothedVol;
 
-		//Harmony: softer detuned pulse pair
-		harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
-		_harmony.Lp += (harm - _harmony.Lp) * harmLpCoeff;
-		harm = _harmony.Lp * _harmony.SmoothedVol;
+			//Harmony: softer detuned pulse pair
+			harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
+			_harmony.Lp += (harm - _harmony.Lp) * harmLpCoeff;
+			harm = _harmony.Lp * _harmony.SmoothedVol;
 
-		//Bass: sine + saw + half-frequency sub sine, mildly driven
-		step(_bass.Phase, bassInc);
-		step(_bass.SubPhase, bassInc * 0.5);
-		bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
-		bass = softClip(bass * p.BassDrive);
-		_bass.Lp += (bass - _bass.Lp) * bassLpCoeff;
-		bass = _bass.Lp * _bass.SmoothedVol;
+			//Bass: sine + saw + half-frequency sub sine, mildly driven
+			step(_bass.Phase, bassInc);
+			step(_bass.SubPhase, bassInc * 0.5);
+			bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
+			bass = softClip(bass * p.BassDrive);
+			_bass.Lp += (bass - _bass.Lp) * bassLpCoeff;
+			bass = _bass.Lp * _bass.SmoothedVol;
 		}
 
 		//Drums: bandpassed body vs highpassed top blended by LFSR rate + thump

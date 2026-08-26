@@ -109,19 +109,29 @@ namespace
 
 	void ApplyButton(DebugControllerState& st, const std::string& b, bool on)
 	{
-		if(b == "a") st.A = on;
-		else if(b == "b") st.B = on;
-		else if(b == "start") st.Start = on;
-		else if(b == "select") st.Select = on;
-		else if(b == "up") st.Up = on;
-		else if(b == "down") st.Down = on;
-		else if(b == "left") st.Left = on;
-		else if(b == "right") st.Right = on;
+		if(b == "a") {
+			st.A = on;
+		} else if(b == "b") {
+			st.B = on;
+		} else if(b == "start") {
+			st.Start = on;
+		} else if(b == "select") {
+			st.Select = on;
+		} else if(b == "up") {
+			st.Up = on;
+		} else if(b == "down") {
+			st.Down = on;
+		} else if(b == "left") {
+			st.Left = on;
+		} else if(b == "right") {
+			st.Right = on;
+		}
 	}
 
 	const char* ChName(int i)
 	{
-		return i == 0 ? "sq1" : i == 1 ? "sq2" : "tri";
+		return i == 0 ? "sq1" : i == 1 ? "sq2" :
+													"tri";
 	}
 }
 
@@ -137,31 +147,47 @@ int main(int argc, char** argv)
 	std::string statePath, inputScript, wavPath, sf2Path;
 	bool autoRoles = true, sfxSep = true;
 	bool enhanced = true; //--no-enhanced: play the raw APU instead of the F1 synth
-uint32_t apuMix = 0; //--apu-mix N
-uint32_t preset = 4; //--preset N (0 Synthwave, 1 ChipDeluxe, 2 OrchestralLite, 3 Dry, 4 Studio)
-bool packAudio = false; //--pack-audio: enable the pack's OGG layer (EnableAudio)
-bool patches = false; //--patches: let the pack apply its <patch> (ROM patch layer)
-bool synth = false; //--synth: enable the pack synth layer (EnableSynth) like the GUI does
-bool bootstrap = false; //--bootstrap: let the MEP bootstrap recorder run (writes beside the ROM - use a copy!)
-bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, OGG off, patch off)
+	uint32_t apuMix = 0; //--apu-mix N
+	uint32_t preset = 4; //--preset N (0 Synthwave, 1 ChipDeluxe, 2 OrchestralLite, 3 Dry, 4 Studio)
+	bool packAudio = false; //--pack-audio: enable the pack's OGG layer (EnableAudio)
+	bool patches = false; //--patches: let the pack apply its <patch> (ROM patch layer)
+	bool synth = false; //--synth: enable the pack synth layer (EnableSynth) like the GUI does
+	bool bootstrap = false; //--bootstrap: let the MEP bootstrap recorder run (writes beside the ROM - use a copy!)
+	bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, OGG off, patch off)
 	for(int i = 3; i < argc; i++) {
 		std::string a = argv[i];
 		auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
-		if(a == "--state") statePath = next();
-		else if(a == "--input") inputScript = next();
-		else if(a == "--wav") wavPath = next();
-		else if(a == "--sf2") sf2Path = next();
-		else if(a == "--no-auto-roles") autoRoles = false;
-		else if(a == "--no-sfx") sfxSep = false;
-		else if(a == "--packs") packs = true;
-		else if(a == "--bootstrap") bootstrap = true;
-		else if(a == "--synth") synth = true;
-		else if(a == "--patches") patches = true;
-		else if(a == "--pack-audio") packAudio = true;
-		else if(a == "--no-enhanced") enhanced = false;
-		else if(a == "--apu-mix") apuMix = (uint32_t)atoi(next().c_str());
-		else if(a == "--preset") preset = (uint32_t)atoi(next().c_str());
-		else seconds = atof(a.c_str());
+		if(a == "--state") {
+			statePath = next();
+		} else if(a == "--input") {
+			inputScript = next();
+		} else if(a == "--wav") {
+			wavPath = next();
+		} else if(a == "--sf2") {
+			sf2Path = next();
+		} else if(a == "--no-auto-roles") {
+			autoRoles = false;
+		} else if(a == "--no-sfx") {
+			sfxSep = false;
+		} else if(a == "--packs") {
+			packs = true;
+		} else if(a == "--bootstrap") {
+			bootstrap = true;
+		} else if(a == "--synth") {
+			synth = true;
+		} else if(a == "--patches") {
+			patches = true;
+		} else if(a == "--pack-audio") {
+			packAudio = true;
+		} else if(a == "--no-enhanced") {
+			enhanced = false;
+		} else if(a == "--apu-mix") {
+			apuMix = (uint32_t)atoi(next().c_str());
+		} else if(a == "--preset") {
+			preset = (uint32_t)atoi(next().c_str());
+		} else {
+			seconds = atof(a.c_str());
+		}
 	}
 	std::filesystem::create_directories(work);
 	std::filesystem::path home = work / "mesen-home";
@@ -178,7 +204,9 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 		mep.EnablePatches = patches;
 		mep.EnableSynth = synth;
 		mep.BootstrapEnhancementFolder = bootstrap;
-		if(bootstrap) { mep.EnableMepPacks = true; }
+		if(bootstrap) {
+			mep.EnableMepPacks = true;
+		}
 		SetEnhancementPackConfig(mep);
 	}
 	{
@@ -245,10 +273,18 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 	uint8_t sfxCues[3] = {};
 	auto cueNames = [](uint8_t c) {
 		std::string s;
-		if(c & ChannelRoleClassifier::CueSweep) s += "sweep ";
-		if(c & ChannelRoleClassifier::CueGlide) s += "glide ";
-		if(c & ChannelRoleClassifier::CueSqueak) s += "squeak ";
-		if(c & ChannelRoleClassifier::CueRetrigger) s += "retrig ";
+		if(c & ChannelRoleClassifier::CueSweep) {
+			s += "sweep ";
+		}
+		if(c & ChannelRoleClassifier::CueGlide) {
+			s += "glide ";
+		}
+		if(c & ChannelRoleClassifier::CueSqueak) {
+			s += "squeak ";
+		}
+		if(c & ChannelRoleClassifier::CueRetrigger) {
+			s += "retrig ";
+		}
 		return s.empty() ? std::string("hold") : s;
 	};
 	double roleTime[3][3] = {};

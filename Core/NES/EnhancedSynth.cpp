@@ -217,13 +217,6 @@ void EnhancedSynth::LogDiagnostics(const EnhancedSynthEngine::Input& in, const E
 	_diagTimerS = 0;
 	_diagState = state;
 	char buf[512];
-	snprintf(buf, sizeof(buf), "[EnhancedAudio] %s - apu vol %.2f/%.2f/%.2f freq %.0f/%.0f/%.0f, buffer peak %d -> %d, soundfont %d voices peak %.4f keys %d/%d/%d chvol %.2f/%.2f/%.2f voices %d/%d/%d/%d gaindb %.1f/%.1f/%.1f noteons %llu fails %llu presets %d/%d/%d/%d (apu mix %u%%, synth volume %u%%)",
-		state ? "playing" : "silent", raw[0].Vol, raw[1].Vol, raw[2].Vol, raw[0].Freq, raw[1].Freq, raw[2].Freq, peakBefore, peakAfter, _engine.SfVoiceCount(), _engine.SfLastPeak(),
-		_engine.SfKey(0), _engine.SfKey(1), _engine.SfKey(2),
-		_engine.SfChannelVolume(0), _engine.SfChannelVolume(1), _engine.SfChannelVolume(2),
-		_engine.SfChannelVoices(0), _engine.SfChannelVoices(1), _engine.SfChannelVoices(2), _engine.SfChannelVoices(9),
-		_engine.SfChannelGainDb(0), _engine.SfChannelGainDb(1), _engine.SfChannelGainDb(2),
-		(unsigned long long)_engine.SfNoteOns(), (unsigned long long)_engine.SfNoteOnFails(),
-		_engine.SfPresetIndex(0), _engine.SfPresetIndex(1), _engine.SfPresetIndex(2), _engine.SfPresetIndex(9), cfg.EnhancedAudioApuMix, cfg.EnhancedAudioVolume);
+	snprintf(buf, sizeof(buf), "[EnhancedAudio] %s - apu vol %.2f/%.2f/%.2f freq %.0f/%.0f/%.0f, buffer peak %d -> %d, soundfont %d voices peak %.4f keys %d/%d/%d chvol %.2f/%.2f/%.2f voices %d/%d/%d/%d gaindb %.1f/%.1f/%.1f noteons %llu fails %llu presets %d/%d/%d/%d (apu mix %u%%, synth volume %u%%)", state ? "playing" : "silent", raw[0].Vol, raw[1].Vol, raw[2].Vol, raw[0].Freq, raw[1].Freq, raw[2].Freq, peakBefore, peakAfter, _engine.SfVoiceCount(), _engine.SfLastPeak(), _engine.SfKey(0), _engine.SfKey(1), _engine.SfKey(2), _engine.SfChannelVolume(0), _engine.SfChannelVolume(1), _engine.SfChannelVolume(2), _engine.SfChannelVoices(0), _engine.SfChannelVoices(1), _engine.SfChannelVoices(2), _engine.SfChannelVoices(9), _engine.SfChannelGainDb(0), _engine.SfChannelGainDb(1), _engine.SfChannelGainDb(2), (unsigned long long)_engine.SfNoteOns(), (unsigned long long)_engine.SfNoteOnFails(), _engine.SfPresetIndex(0), _engine.SfPresetIndex(1), _engine.SfPresetIndex(2), _engine.SfPresetIndex(9), cfg.EnhancedAudioApuMix, cfg.EnhancedAudioVolume);
 	MessageManager::Log(buf);
 }

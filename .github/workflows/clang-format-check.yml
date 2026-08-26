@@ -19,3 +19,7 @@ jobs:
       with:
         clang-format-version: '20'
         check-path: './'
+        # Vendored TinySoundFont (Utilities/Audio/tsf.h) is also wrapped in
+        # clang-format off/on; keep it out of the gate so a wrap regression
+        # does not dump 2k lines of vendor noise into the job log.
+        exclude-regex: 'Utilities/Audio/tsf\.h$'

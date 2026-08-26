@@ -1,6 +1,9 @@
 ﻿#include "pch.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
+//<filesystem> before <chrono>: MSVC's chrono injects an incomplete std::filesystem.
+#include <filesystem>
+#include <system_error>
 #include <chrono>
 #include <ctime>
 
@@ -200,8 +203,11 @@ void MessageManager::Log(string message)
 		_logFileTried = true;
 		try {
 			string path = FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "mesen.log");
+			string bak = path + ".1";
 			std::error_code ec;
-			std::filesystem::rename(path, path + ".1", ec);
+			//Windows rejects rename-over-existing; drop the previous .1 first.
+			std::filesystem::remove(bak, ec);
+			std::filesystem::rename(path, bak, ec);
 			_logFile.open(path, std::ios::out | std::ios::trunc);
 		} catch(...) {
 		}

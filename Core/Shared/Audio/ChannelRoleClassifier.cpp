@@ -277,7 +277,8 @@ void ChannelRoleClassifier::Decide()
 
 	ChannelRole candidate[MaxChannels];
 	for(uint32_t i = 0; i < _count; i++) {
-		candidate[i] = (int)i == bass ? ChannelRole::Bass : (int)i == lead ? ChannelRole::Lead : ChannelRole::Harmony;
+		candidate[i] = (int)i == bass ? ChannelRole::Bass : (int)i == lead ? ChannelRole::Lead :
+																									ChannelRole::Harmony;
 	}
 
 	bool same = true, samePending = true;

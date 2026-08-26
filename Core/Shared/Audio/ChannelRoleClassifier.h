@@ -173,5 +173,6 @@ public:
 	double MeanNote(uint32_t i) const { return _ch[i].MeanNote; }
 	double OnsetRate(uint32_t i) const { return _ch[i].OnsetRate; }
 	double AudibleFraction(uint32_t i) const { return _ch[i].AudibleFraction; }
-	static const char* RoleName(ChannelRole r) { return r == ChannelRole::Lead ? "lead" : r == ChannelRole::Harmony ? "harm" : "bass"; }
+	static const char* RoleName(ChannelRole r) { return r == ChannelRole::Lead ? "lead" : r == ChannelRole::Harmony ? "harm" :
+																																							"bass"; }
 };

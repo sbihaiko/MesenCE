@@ -37,7 +37,7 @@ private:
 	atomic<uint64_t> _debuggerFlags;
 
 	string _audioDevice;
-string _soundFontPath;
+	string _soundFontPath;
 	string _saveFolder;
 	string _saveStateFolder;
 	string _screenshotFolder;

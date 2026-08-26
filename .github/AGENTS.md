@@ -13,7 +13,9 @@ what CI actually runs; this doc records why they're split the way they are.
 ## Local Contracts
 
 - `workflows/build.yml` — full native + UI release build.
-- `workflows/clang-format-check.yml` — C++ formatting gate.
+- `workflows/clang-format-check.yml` — C++ formatting gate (`clang-format` 20,
+  `check-path: ./`). Excludes vendored `Utilities/Audio/tsf.h` (TinySoundFont);
+  that header is also wrapped in `clang-format off/on`.
 - `workflows/dotnet-format-check.yml` — `dotnet format --verify-no-changes`
   against `Mesen.sln` (Windows). Only touches projects that are members of
   the `.sln`.
@@ -41,6 +43,7 @@ what CI actually runs; this doc records why they're split the way they are.
 ## Verification
 
 - `grep -E "dotnet test" .github/workflows/unit-tests.yml`
+- `grep -E "exclude-regex" .github/workflows/clang-format-check.yml`
 
 ## Child DOX Index
 
