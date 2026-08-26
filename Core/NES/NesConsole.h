@@ -87,6 +87,7 @@ public:
 	//console only); NesSoundMixer uses it to decide whether the
 	//enhanced-audio chip mix should duck its output
 	bool HasEnhancedSynth() { return _enhancedSynth != nullptr; }
+	void WarnAboutSilentPatchedMusic();
 	BaseNesPpu* GetPpu() { return _ppu.get(); }
 	NesApu* GetApu() { return _apu.get(); }
 	NesMemoryManager* GetMemoryManager() { return _memoryManager.get(); }

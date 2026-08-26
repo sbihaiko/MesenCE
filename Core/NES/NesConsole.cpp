@@ -387,18 +387,30 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 
 	//<patch> lines are keyed by the whole-file sha1 of the ROM they were made
 	//for; ADR-0044 adds an explicit override for other revisions
-	if(!_hdData->PatchesByHash.empty() && !_emu->GetSettings()->GetEnhancementPackConfig().EnablePatches) {
+	EnhancementPackConfig& mepCfg = _emu->GetSettings()->GetEnhancementPackConfig();
+	//A pack that ships <bgm> uses its patch to route the game's music to those
+	//OGG files, stripping it out of the PRG. Applying it with the audio layer
+	//off would leave the game with no music at all and nothing for the
+	//enhanced synth to re-interpret, so the audio layer being off also turns
+	//this patch off - the player asked to hear the game, not silence.
+	bool patchServesPackAudio = !_hdData->BgmFilesById.empty() && !mepCfg.EnableAudio;
+	if(!_hdData->PatchesByHash.empty() && !mepCfg.EnablePatches) {
 		MessageManager::Log("[HDPack] <patch> skipped: 'ROM patch' layer disabled in Tools > Enhancement Packs");
+	} else if(!_hdData->PatchesByHash.empty() && patchServesPackAudio) {
+		MessageManager::DisplayMessage("HDPack", "ROM patch skipped: it replaces the game's music with the pack's OGG tracks, which are turned off - the game's own music plays instead");
+		MessageManager::Log("[HDPack] <patch> skipped: the pack's <bgm> patch would mute the game while 'Audio (OGG)' is off (turn the audio layer on to use the pack's music)");
 	} else if(!_hdData->PatchesByHash.empty()) {
 		auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());
 		if(result != _hdData->PatchesByHash.end()) {
 			VirtualFile patchFile = result->second;
 			romFile.ApplyPatch(patchFile);
 			MessageManager::Log("[HDPack] <patch> applied: '" + result->second + "' (ROM sha1 " + result->first + "; the running ROM's hash is now the patched one)");
-		} else if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
+			WarnAboutSilentPatchedMusic();
+		} else if(mepCfg.ApplyPatchOnHashMismatch) {
 			VirtualFile patchFile = _hdData->PatchesByHash.begin()->second;
 			romFile.ApplyPatch(patchFile);
 			MessageManager::DisplayMessage("HDPack", "Applying patch made for another ROM revision (hash override enabled)");
+			WarnAboutSilentPatchedMusic();
 			MessageManager::Log("[HDPack] <patch> hash mismatch - applied '" + _hdData->PatchesByHash.begin()->second + "' anyway (ApplyPatchOnHashMismatch)");
 		} else {
 			MessageManager::Log("[HDPack] <patch> skipped: no entry for this ROM's sha1 " + romFile.GetSha1Hash() + " (enable 'apply patches on hash mismatch' to force it)");
@@ -412,6 +424,19 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		});
 		asyncLoadData.detach();
 	}
+}
+
+void NesConsole::WarnAboutSilentPatchedMusic()
+{
+	//An HDNes <patch> typically strips the game's music out of the PRG and
+	//makes it ask the pack for an OGG instead. With the pack's audio layer
+	//off that leaves the game with no music at all and nothing for the
+	//enhanced synth to re-interpret - say so instead of just going quiet.
+	if(_hdData->BgmFilesById.empty() || _emu->GetSettings()->GetEnhancementPackConfig().EnableAudio) {
+		return;
+	}
+	MessageManager::DisplayMessage("HDPack", "The ROM patch removed the game's music (the pack plays it as OGG) - turn 'Audio (OGG)' on, or turn 'ROM patch' off to hear the original music");
+	MessageManager::Log("[HDPack] <patch> applied with the pack's 'Audio (OGG)' layer off: the patched ROM has no music of its own");
 }
 
 void NesConsole::StartAudioBootstrap(const string& audioFolder)

@@ -139,6 +139,8 @@ int main(int argc, char** argv)
 	bool enhanced = true; //--no-enhanced: play the raw APU instead of the F1 synth
 uint32_t apuMix = 0; //--apu-mix N
 uint32_t preset = 4; //--preset N (0 Synthwave, 1 ChipDeluxe, 2 OrchestralLite, 3 Dry, 4 Studio)
+bool packAudio = false; //--pack-audio: enable the pack's OGG layer (EnableAudio)
+bool patches = false; //--patches: let the pack apply its <patch> (ROM patch layer)
 bool synth = false; //--synth: enable the pack synth layer (EnableSynth) like the GUI does
 bool bootstrap = false; //--bootstrap: let the MEP bootstrap recorder run (writes beside the ROM - use a copy!)
 bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, OGG off, patch off)
@@ -154,6 +156,8 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 		else if(a == "--packs") packs = true;
 		else if(a == "--bootstrap") bootstrap = true;
 		else if(a == "--synth") synth = true;
+		else if(a == "--patches") patches = true;
+		else if(a == "--pack-audio") packAudio = true;
 		else if(a == "--no-enhanced") enhanced = false;
 		else if(a == "--apu-mix") apuMix = (uint32_t)atoi(next().c_str());
 		else if(a == "--preset") preset = (uint32_t)atoi(next().c_str());
@@ -170,8 +174,8 @@ bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, 
 		EnhancementPackConfig mep = {};
 		mep.EnableMepPacks = packs;
 		mep.EnableTextures = packs;
-		mep.EnableAudio = false;
-		mep.EnablePatches = false;
+		mep.EnableAudio = packAudio;
+		mep.EnablePatches = patches;
 		mep.EnableSynth = synth;
 		mep.BootstrapEnhancementFolder = bootstrap;
 		if(bootstrap) { mep.EnableMepPacks = true; }

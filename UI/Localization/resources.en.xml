@@ -954,7 +954,7 @@
 			<Control ID="chkEnableAudio">Audio (OGG)</Control>
 			<Control ID="chkEnableSynth">Synth preset</Control>
 			<Control ID="chkEnablePatches">ROM patch</Control>
-			<Control ID="tipEnablePatches">Apply the pack's IPS patch. Turn off (with Audio (OGG)) to hear the game's own music again under a pack that replaces it - textures may glitch where the patch changed graphics.</Control>
+			<Control ID="tipEnablePatches">Apply the pack's IPS patch. A patch that routes the game's music to the pack's OGG tracks is skipped on its own while Audio (OGG) is off, so the game's own music plays - textures may glitch where the patch changed graphics.</Control>
 			<Control ID="chkBootstrapEnhancementFolder">Bootstrap an enhancement folder beside played ROMs (records the game's tiles upscaled into &lt;Game&gt;/auto/ when no pack applies yet)</Control>
 			<Control ID="btnOpenSiblingFolder">Open Game Folder</Control>
 			<Control ID="chkApplyPatchOnHashMismatch">Apply ROM patches even when the hash does not match (may break other revisions)</Control>
