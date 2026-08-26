@@ -488,7 +488,6 @@ LoadRomResult Gameboy::LoadRom(VirtualFile& romFile)
 			}
 
 			if(!_mainConsole && cfg.UseLocalLinkCable) {
-
 				// Create second console and link it with this one
 				_secondaryConsole.reset(new Gameboy(_emu));
 				_secondaryConsole->_mainConsole = this;

@@ -792,7 +792,6 @@ BaseState& Debugger::GetCpuStateRef(CpuType cpuType)
 void Debugger::GetPpuState(BaseState& state, CpuType cpuType)
 {
 	switch(cpuType) {
-
 		case CpuType::Gameboy: {
 			GetDebugger<CpuType::Gameboy, GbDebugger>()->GetPpuState(state);
 			break;
@@ -803,7 +802,6 @@ void Debugger::GetPpuState(BaseState& state, CpuType cpuType)
 			break;
 		}
 
-
 		case CpuType::Sms: {
 			GetDebugger<CpuType::Sms, SmsDebugger>()->GetPpuState(state);
 			break;
@@ -813,7 +811,6 @@ void Debugger::GetPpuState(BaseState& state, CpuType cpuType)
 			GetDebugger<CpuType::Gba, GbaDebugger>()->GetPpuState(state);
 			break;
 		}
-
 	}
 }
 
@@ -821,7 +818,6 @@ void Debugger::SetPpuState(BaseState& state, CpuType cpuType)
 {
 	DebugBreakHelper helper(this);
 	switch(cpuType) {
-
 		case CpuType::Gameboy: {
 			GetDebugger<CpuType::Gameboy, GbDebugger>()->SetPpuState(state);
 			break;
@@ -832,7 +828,6 @@ void Debugger::SetPpuState(BaseState& state, CpuType cpuType)
 			break;
 		}
 
-
 		case CpuType::Sms: {
 			GetDebugger<CpuType::Sms, SmsDebugger>()->SetPpuState(state);
 			break;
@@ -842,7 +837,6 @@ void Debugger::SetPpuState(BaseState& state, CpuType cpuType)
 			GetDebugger<CpuType::Gba, GbaDebugger>()->SetPpuState(state);
 			break;
 		}
-
 	}
 }
 
@@ -945,7 +939,6 @@ string Debugger::GetLog()
 bool Debugger::SaveRomToDisk(string filename, bool saveAsIps, CdlStripOption stripOption)
 {
 	switch(_mainCpuType) {
-
 		case CpuType::Gameboy: return GetDebugger<CpuType::Gameboy, GbDebugger>()->SaveRomToDisk(filename, saveAsIps, stripOption);
 		case CpuType::Nes: return GetDebugger<CpuType::Nes, NesDebugger>()->SaveRomToDisk(filename, saveAsIps, stripOption);
 		case CpuType::Sms: return GetDebugger<CpuType::Sms, SmsDebugger>()->SaveRomToDisk(filename, saveAsIps, stripOption);
@@ -1081,8 +1074,6 @@ template void Debugger::ProcessMemoryAccess<CpuType::Nes, MemoryType::NesMapperR
 
 template void Debugger::ProcessMemoryAccess<CpuType::Sms, MemoryType::SmsPort, MemoryOperationType::Write>(uint32_t addr, uint8_t& value);
 template void Debugger::ProcessMemoryAccess<CpuType::Sms, MemoryType::SmsPort, MemoryOperationType::Read>(uint32_t addr, uint8_t& value);
-
-
 
 template void Debugger::ProcessHaltedCpu<CpuType::Gameboy>();
 template void Debugger::ProcessHaltedCpu<CpuType::Sms>();

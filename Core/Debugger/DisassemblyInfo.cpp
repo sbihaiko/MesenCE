@@ -185,9 +185,7 @@ bool DisassemblyInfo::CanDisassembleNextOp()
 		return false;
 	}
 
-	switch(_cpuType) {
-		default: return true;
-	}
+	return true;
 }
 
 bool DisassemblyInfo::IsUnconditionalJump()
@@ -221,9 +219,6 @@ bool DisassemblyInfo::IsJump()
 
 void DisassemblyInfo::UpdateCpuFlags(uint8_t& cpuFlags)
 {
-	switch(_cpuType) {
-		default: break;
-	}
 }
 
 uint32_t DisassemblyInfo::GetMemoryValue(EffectiveAddressInfo effectiveAddress, MemoryDumper* memoryDumper, MemoryType memType)

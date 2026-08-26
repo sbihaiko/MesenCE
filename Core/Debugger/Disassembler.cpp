@@ -455,7 +455,6 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 					}
 					break;
 				}
-
 			}
 
 			if(!showMemoryValues) {

@@ -23,7 +23,6 @@ struct DmaChannelConfig
 	uint8_t UnusedRegister;
 };
 
-
 enum class EventFlags
 {
 	PreviousFrame = 1 << 0,
