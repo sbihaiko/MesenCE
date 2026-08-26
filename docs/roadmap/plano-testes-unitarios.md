@@ -1,6 +1,6 @@
 # Plano de execução — Testes unitários (sem reescrever MVVM)
 
-**Status:** em execução (2026-08-25, revisado 2026-08-26) — Fase 0, Fase 1, Fase 2 e Fase 3 concluídas · próxima: Fase 4 ·
+**Status:** em execução (2026-08-25, revisado 2026-08-26) — Fase 0, Fase 1, Fase 2, Fase 3 e Fase 4 concluídas · trilha C# (Fases 0-3) e trilha C++ (Fase 4) completas ·
 **Origem:** avaliação da UI Avalonia (já MVVM) vs. o bloqueio real (estáticos `EmuApi`/`ConfigManager`, RID `win-x64`, zero `*Test*.csproj`) ·
 **Não substitui:** goldens headless (`headless_record`, `mep_lint.py`, `validate-specs.py`, `roles_probe`) nem o CI de ROM (`.github/workflows/tests.yml`).
 
@@ -168,7 +168,26 @@ Não reescrever VMs antigos. Documentar em `UI/AGENTS.md` e aplicar só no códi
 
 Opcional, só se um teste de orquestração se justificar: `EnhancementPacksViewModel` ganha ctor `(EnhancementPackConfig config)` + `Refresh` público alimentado pelo Window. Ainda **não** mockar `EmuApi`.
 
-### Fase 4 — Testes C++ sem emulador (trilha paralela)
+### Fase 4 — Testes C++ sem emulador (trilha paralela) ✅ concluída
+
+Entregue no commit `036795c3` (harness `scripts/core_unit_tests.cpp` + alvo
+`make core-unit-tests`), com correções de escopo/DOX nos commits `2fdd41a2`
+e `c9d11911`. `make core-unit-tests` compila e roda sem depender de `core`/
+`MesenCore.dylib` — 43/43 casos passam, cobrindo o Bloco A
+(`ChannelRoleClassifier`: canal silencioso não vira SFX; sweep rápido +
+amplitude → `CueSweep`/`IsSfx`; porta lenta de 2 semitons → música, não SFX;
+lead vs. bass pela altura média após `kDecisionPeriodS`) e o Bloco B
+(`MepPack::NormalizeRelativePath` contra os 44 casos de
+`docs/specs/golden/mep/path-cases.txt`; `MepPack::Parse` contra o golden
+`docs/specs/golden/mep/pack.json` e as falhas controladas de JSON malformado
+e root não-objeto). O DOX `scripts/AGENTS.md` já existe e documenta o
+binário ao lado de `roles_probe`/`headless_record`, fechando o gap que o
+Child DOX Index raiz apontava.
+
+`EnhancedSynthEngine::Render` segue fora de escopo desta fase, como já
+previsto abaixo: o link é mais sujo (`pch.h` + `MessageManager` +
+TinySoundFont) e fica para um PR seguinte. `CheatManager::ConvertFrom*`
+também segue não extraído (métodos privados que exigem `Emulator*`).
 
 Depois do harness C#, não misturar no mesmo PR.
 
