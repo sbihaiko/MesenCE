@@ -35,11 +35,17 @@ env:
   PROJECT_NUMBER: 3
   PROJECT_ID: PVT_kwHOB1MsbM4BhjpN
   STATUS_FIELD_ID: PVTSSF_lAHOB1MsbM4BhjpNzhge86c
-  STATUS_NOVO_ENVIO: 5173b5cd
-  STATUS_EM_VALIDACAO: 51951f52
-  STATUS_INVALIDO: 227e4623
-  STATUS_ACEITO_PARCIAL: 39e4f3a1
-  STATUS_ACEITO_COMPLETO: cd763737
+  # Quoted: these are opaque hex option ids, not numbers. Unquoted,
+  # "227e4623" parses under YAML's core-schema float grammar as
+  # 227 * 10^4623 — a magnitude that overflows to the literal string
+  # "Infinity" once resolved, silently breaking every step that reads
+  # STATUS_INVALIDO. Quoting all five here defensively, since any future
+  # option id could collide with the same digit-e-digit float shape.
+  STATUS_NOVO_ENVIO: "5173b5cd"
+  STATUS_EM_VALIDACAO: "51951f52"
+  STATUS_INVALIDO: "227e4623"
+  STATUS_ACEITO_PARCIAL: "39e4f3a1"
+  STATUS_ACEITO_COMPLETO: "cd763737"
   PACK_HASH_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhge9Is
   MAX_PACK_BYTES: 314572800 # 300MB pre-download cap (300 * 1024 * 1024)
 
