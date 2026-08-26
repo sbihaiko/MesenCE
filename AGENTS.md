@@ -78,6 +78,7 @@ Default section order:
 
 - Product branch is `main`. `master` is a frozen full-console snapshot of the upstream-shaped tree. Never merge `upstream/master` (or GitHub Sync fork) into `main`.
 - This fork does not maintain SNES, PC Engine, WonderSwan, or ColecoVision. Remaining cores: NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA. See `docs/roadmap/plano-reducao-cores.md`.
+- SNES **gamepads** stay: `SnesController` (and mouse/NTT on NES ports) are host/console input devices, not a SNES core. Do not drop them when touching input.
 
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 

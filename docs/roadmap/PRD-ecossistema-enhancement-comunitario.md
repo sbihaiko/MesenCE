@@ -17,13 +17,15 @@ Este PRD define a evolução natural dessa tese no MesenCE: transformar o emulad
 **plataforma de extração, autoria e consumo de packs de enhancement**, com a comunidade
 produzindo o conteúdo — mantendo o projeto juridicamente limpo.
 
-O Mesen já traz duas fundações prontas:
+O Mesen já traz fundações prontas nos cores que este fork mantém (NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA — ver `plano-reducao-cores.md`):
 
 | Fundação | Onde | O que dá de graça |
 |---|---|---|
 | NES HD Packs (formato HDNes) | `Core/NES/HdPacks/` | Replacement de tiles + áudio OGG (`OggMixer`), condições por contexto, **HD Pack Builder** (gravador de tiles) |
-| MSU-1 | `Core/SNES/Coprocessors/MSU1/` | Padrão aberto de áudio em streaming p/ SNES, ecossistema comunitário existente (Zeldix) |
+| HD tiles GB/SMS | `Core/Shared/HdPacks/` + `HdTilePack` | Mesmo envelope de tiles para handheld/SMS; OGG nesses sistemas ainda depende da extensão hires-gbsms |
 | Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | Tap que já converte estado de registradores em abstrações de nota/voz — ~90% de um exportador MIDI |
+
+Este fork **não** emula SNES. MSU-1 (`Core/SNES/Coprocessors/MSU1/`) saiu com o core; não é fundação do produto.
 
 ## 2. Objetivos
 
@@ -55,8 +57,9 @@ transcrição da obra, como partitura). O mesmo vale para tiles extraídos. Logo
    (interoperabilidade); os outputs ficam na máquina do usuário.
 2. **Canal oficial só com conteúdo limpo:** presets de synth, mapeamentos por hash,
    manifests, ferramentas, composições originais licenciadas (CC).
-3. **Conteúdo derivado circula nos hubs comunitários existentes** (Zeldix p/ áudio SNES,
-   VGMusic p/ MIDIs, GitHub individual + romhack.ing p/ texturas), que já absorvem o
+3. **Conteúdo derivado circula nos hubs comunitários existentes** (VGMusic p/ MIDIs,
+   GitHub individual + romhack.ing p/ texturas; Zeldix continua existindo para MSU-1
+   noutros emuladores, não neste host), que já absorvem o
    risco de takedown há décadas. O emulador só consome manifests apontados pelo usuário.
 4. **O emulador é burro em relação a conteúdo:** nenhum endosso, bundle ou default que
    aponte para material derivado.
@@ -76,7 +79,6 @@ Regra geral: **adotar padrão comunitário existente sempre que houver; formaliz
 | Log de áudio | VGM v1.71+ com tags GD3 | Exportador F1.1 | Toca em qualquer player VGM (foobar2000, in_vgm); metadados no padrão do vgmrips |
 | Partitura/notas | SMF tipo 1 + General MIDI | Exportador F1.2 | Abre em MuseScore/DAWs sem conversão |
 | Texturas | HDNes `hires.txt` (Mesen é a implementação de referência) | F2/F3 | Autores e ferramentas existentes já dominam o formato |
-| Áudio SNES | MSU-1 (`.msu` + `.pcm`) | F3 (via `Msu1.cpp`, já suportado) | Uma década de packs do Zeldix funcionando no dia zero |
 | Áudio NES | OGG via HD pack (`OggMixer`) | F3 | Já suportado; parte do padrão HDNes |
 | Patches | BPS (beat) | Se packs incluírem patches de ROM | Valida checksum da ROM fonte — casa com o modelo keyed-por-hash |
 
@@ -88,7 +90,7 @@ Cada spec vive em `docs/specs/<sigla>-v<N>.md`, licenciada **CC0** (domínio pú
 
 **4.2.1 ESP — Enhanced Synth Preset (v1).** Formalização do atual `EnhancedAudioPresets.cfg`: gramática do arquivo, parâmetros de voz por chip (NES APU, GB APU, SMS PSG, YM2413), faixas válidas de cada parâmetro, comportamento default de campos omitidos e regras de fallback (por jogo → por chip → global). É o único formato 100% novo do ecossistema — não há equivalente no mercado.
 
-**4.2.2 MEP — MesenCE Enhancement Pack (v1).** O envelope da Fase 3: um `.zip` com `pack.json` na raiz. Casca fina que só **compõe** padrões existentes: identificação por hash No-Intro, metadados (nome, autor, licença, versão semver) e seções opcionais apontando para formatos já padronizados — `textures/` (hires.txt), `audio/` (OGG/MSU-1), `synth/` (ESP). Cada seção declara-se individualmente desativável (toggle granular, F3.2).
+**4.2.2 MEP — MesenCE Enhancement Pack (v1).** O envelope da Fase 3: um `.zip` com `pack.json` na raiz. Casca fina que só **compõe** padrões existentes: identificação por hash No-Intro, metadados (nome, autor, licença, versão semver) e seções opcionais apontando para formatos já padronizados — `textures/` (hires.txt), `audio/` (OGG no host NES; GB/SMS via extensão 4.2.3), `synth/` (ESP). Cada seção declara-se individualmente desativável (toggle granular, F3.2). Este host não carrega MSU-1.
 
 **4.2.3 Extensão hires.txt para GB/SMS (proposta).** Extensão retrocompatível do formato HDNes usando o campo `<ver>` existente: novas tags para os PPUs de GB/SMS (paletas CGB, modos do VDP) e para replacement de áudio OGG nesses sistemas (o vão identificado em 4.1). A proposta deve ser discutida com a comunidade HDNes/Mesen antes de congelar a v1.
 
@@ -125,7 +127,7 @@ Cada fase entrega valor sozinha e não depende da seguinte.
 
 - **F3.1** Implementar a spec **MEP v1** (4.2.2): `pack.json` com hash(es) No-Intro da
   ROM, versão, autor, licença, e seções opcionais `textures/` (hires.txt), `audio/`
-  (OGG via OggMixer / MSU-1), `synth/` (preset ESP embutido).
+  (OGG via OggMixer no NES), `synth/` (preset ESP embutido).
 - **F3.2** Toggles granulares: cada seção — e cada voz/camada dentro dela —
   individualmente desativável na UI (lição SUPER ZSNES: "to suit your play style").
 - **F3.3** Carregamento por hash ao abrir a ROM; múltiplos packs com precedência.
@@ -185,7 +187,7 @@ Cada fase entrega valor sozinha e não depende da seguinte.
 ## 7. Referências
 
 - SUPER ZSNES — https://www.zsnes.com/ (modelo de curadoria e claim legal dos dados)
-- Zeldix (hub MSU-1) — https://www.zeldix.net/
+- Zeldix (hub MSU-1, outros emuladores) — https://www.zeldix.net/
 - VGMusic (MIDIs desde 1996) — https://www.vgmusic.com/
 - romhack.ing / RetroGameTalk (sucessores do RHDN); acervo RHDN no Internet Archive
 - Formato VGM + tags GD3 — https://vgmrips.net/ · Formato HD Pack (hires.txt) — docs do Mesen

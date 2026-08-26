@@ -1,6 +1,6 @@
 # Plano de execução — Fase 3: Formato de pack unificado (MEP v1)
 
-**Status:** concluída (2026-08-24; validação GUI manual da janela pendente do usuário) — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 ✅ (EnhancementPackConfig + espelho C#, exports GetMepPackList/GetMepRomSha1/SetMepPackEnabled, janela "Enhancement Packs" no menu HD Packs; toggles validados headless via flags `mep-*` do harness; dotnet build 0 warnings), F3.4 ✅ (golden tree, E2E zip NES textures+bgm+synth, regressões F1/F2, README) ·
+**Status:** concluída (2026-08-24; validação GUI manual da janela pendente do usuário). Depois disto o fork cortou SNES/PCE/WS/Coleco (`plano-reducao-cores.md`): MSU-1 e hash Coleco/SNES deste documento são histórico da fase, não do produto. — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 ✅ (EnhancementPackConfig + espelho C#, exports GetMepPackList/GetMepRomSha1/SetMepPackEnabled, janela "Enhancement Packs" no menu HD Packs; toggles validados headless via flags `mep-*` do harness; dotnet build 0 warnings), F3.4 ✅ (golden tree, E2E zip NES textures+bgm+synth, regressões F1/F2, README) ·
 **PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 3 ·
 **Spec:** [MEP-v1.md](../specs/MEP-v1.md) (publicada) ·
 **Processo:** resolver os ADRs da fase (F3.0) antes de qualquer código, como nas fases 1 e 2.
@@ -26,7 +26,7 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
 | Texturas GB/SMS | `HdTilePack::LoadFromFolder(folder, ...)` já existe (criado na consolidação pós-F2) — só diretório, sem zip |
 | Áudio OGG NES | tags `<bgm>`/`<sfx>` no hires.txt via `OggMixer` — já funciona |
 | Áudio OGG GB/SMS | loader v1 ignora as tags (log "not supported yet") — fora da F3 |
-| MSU-1 | existe só no SNES (`Core/SNES/Coprocessors/MSU1`) — fora da F3 (SNES não é alvo das fases) |
+| MSU-1 | era SNES-only; o core SNES saiu depois (`plano-reducao-cores.md`). Fora da F3 e fora do produto |
 | Preset ESP | `EnhancedSynthPreset` lê `EnhancedAudioPresets.cfg` do home no reset/load — precisa de camada de override intermediária (defaults < pack < arquivo do usuário, spec MEP §5.3) |
 | Zip | `Utilities/ZipReader` (miniz) disponível |
 | Validação de spec | `scripts/validate-specs.py` já valida o golden `pack.json` |
@@ -40,8 +40,8 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
    evita dependências, o pack.json é pequeno e o golden file vira teste.
 2. **ADR-0039 — Hash No-Intro por console.** Novo `HashType::Sha1NoIntro`
    resolvido pelo host a partir do *arquivo* (tabela da spec MEP §4): NES
-   pula header/trainer; GB/GBC/SMS/GG/SG/Coleco = arquivo inteiro; SNES pula
-   copier header. Onde vive: função estática no manager MEP (não exige
+   pula header/trainer; GB/GBC/SMS/GG/SG = arquivo inteiro (Coleco/SNES
+   estavam na tabela da ADR; saíram do produto depois). Onde vive: função estática no manager MEP (não exige
    console montado — o matching roda antes do `console->LoadRom`).
 3. **ADR-0040 — Armazenamento, descoberta e precedência.** Pasta central
    `EnhancementPacks/` no home; cada pack = subdiretório `<nome>/pack.json`
@@ -55,7 +55,7 @@ issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
    instalação — decidir aqui.
 4. **ADR-0041 — Escopo de áudio do v1.** Seção `audio` no v1 = OGG por
    hires.txt (NES). GB/SMS adiado até o freeze da extensão draft; MSU-1
-   adiado (SNES fora das fases). Documentar no README/spec como limitação de
+   adiado (SNES fora das fases e, depois, fora do host). Documentar no README/spec como limitação de
    host (a spec MEP permanece como está — a limitação é da implementação).
 5. **ADR-0042 — Camada de override ESP.** Ordem de aplicação: defaults
    embutidos → preset do pack (seção `synth`) → `EnhancedAudioPresets.cfg`

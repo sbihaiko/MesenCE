@@ -15,7 +15,9 @@ O default do `sbihaiko/MesenCE` é `main`. Nela o emulador carrega só:
 - Master System / Game Gear / SG-1000
 - GBA
 
-ColecoVision, SNES (incl. SGB, MSU-1, coprocessors), PC Engine (incl. CD) e WonderSwan não compilam, não aparecem no file dialog e não têm tela de settings. CI (clang-format, unit tests, Run tests, Build) verde em `main`. Badges e nightly.link apontam para `main`.
+ColecoVision, SNES (emulação: SGB, MSU-1, coprocessors), PC Engine (incl. CD) e WonderSwan não carregam ROM, não aparecem no file dialog e não têm tela de settings de sistema. CI (clang-format, unit tests, Run tests, Build) verde em `main`. Badges e nightly.link apontam para `main`.
+
+**Input SNES fica.** Pad, mouse e NTT Data Keypad (`ControllerType::SnesController` e afins) continuam como dispositivos de porta nos cores vivos — no NES o dropdown já os lista; um USB/Bluetooth com layout SNES mapeia no host como qualquer outro pad. Não voltar o core, o Super Scope, Multitap, rumble/BlueRetro (dependiam de `SnesConsole`), nem `.sfc`/`.spc`.
 
 ## Decisão de branch — sim, mudar a default
 
@@ -90,12 +92,12 @@ Core próprio (HuC6280, VDC/VCE, CD em `PCE/CdRom/`). Não compartilha CPU de ru
 
 ### F4 — SNES + SGB (o grande)
 
-- Apagar `Core/SNES/` (~68 cpp, 170 entradas no vcxproj), incluindo coprocessors (SA-1, GSU, CX4, DSP, MSU-1, BS-X, ST018, SGB, SPC7110, SDD1, OBC1, Sufami).
+- Apagar emulação SNES (`SnesConsole`, PPU/APU, coprocessors SA-1, GSU, CX4, DSP, MSU-1, BS-X, ST018, SGB, SPC7110, SDD1, OBC1, Sufami). **Não** apagar o pad SNES: `SnesController` / `SnesMouse` / `SnesNttDataKeypad` passam a `Core/Shared/Input/` para o NES e o `ControllerHub`.
 - `Emulator.cpp`: tirar `TryLoadRom<SnesConsole>` e o include.
 - Debugger: `SnesDebugger` e os `CpuType::{Snes,Spc,NecDsp,Sa1,Gsu,Cx4,St018}` nos switches de `Debugger.cpp` / `DebugUtilities.h` / disassembler / memory dumper / `ExpressionEvaluator.Snes.cpp` (e Cx4/Gsu/Spc/St018 se existirem).
 - **GB:** remover `SuperGameboy.h`, `IsSgb()` / `GetSgb()` / `RunSgb` / `GameboyModel::SuperGameboy` / `AutoFavorSgb` / firmware SGB. GB handheld permanece.
 - Interop: `SetSnesConfig`, `SnesState`, Save SPC.
-- UI: `Snes*`, `Spc*`, `Gsu*`, `Sa1*`, `SaveSpcFile*`, `CheatDb.Snes.json`, ícones.
+- UI de sistema: settings SNES, debugger SPC/GSU/SA-1, `SaveSpcFile*`, `CheatDb.Snes.json`, ícone de console. **Fica** `SnesControllerView` / `SnesNttDataKeypadControllerView` (mapping do pad).
 - File dialog: `*.sfc` / `*.smc` / `*.spc`.
 
 ### F5 — docs e contrato do fork

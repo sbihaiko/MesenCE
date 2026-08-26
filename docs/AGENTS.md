@@ -19,6 +19,8 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 - New execution plan: `docs/roadmap/plano-*.md`, same header shape as `plano-execucao-F3.md` (`Status`, links to PRD/spec).
 - Unit-test refactor plan: completed (Fases 0-4) and removed; see git history for `docs/roadmap/plano-testes-unitarios.md`.
 - Core reduction + fork default branch: `docs/roadmap/plano-reducao-cores.md`.
+- Host gamepad tester (Settings → Input → Test): `docs/roadmap/plano-host-input-tester.md`.
+- Roadmap local contract (product consoles after the core cut): `docs/roadmap/AGENTS.md`.
 
 ## Verification
 
@@ -28,4 +30,4 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 ## Child DOX Index
 
 - specs/ — ESP, MEP, MEI, hires-gbsms drafts and `golden/`
-- roadmap/ — PRD and phase / refactoring plans
+- roadmap/ — PRD and phase / refactoring plans (product consoles: NES, GB, SMS-family, GBA)
