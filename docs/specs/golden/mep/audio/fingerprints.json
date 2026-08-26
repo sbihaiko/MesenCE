@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "tracks": [
+    { "id": "track01", "kind": "bgm", "frames": 612, "midi": "midi/track01.mid", "events": [[0, 0, 0], [0, 4, 8], [0, 7, 16], [1, 0, 0], [1, 3, 12], [2, -12, 0], [2, -12, 24], [3, 0, 4], [3, 0, 20]] },
+    { "id": "sfx01", "kind": "sfx", "frames": 18, "midi": "midi/sfx01.mid", "events": [[3, 0, 0], [3, 0, 3], [3, 0, 6]] }
+  ]
+}
