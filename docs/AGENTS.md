@@ -18,6 +18,7 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 
 - New execution plan: `docs/roadmap/plano-*.md`, same header shape as `plano-execucao-F3.md` (`Status`, links to PRD/spec).
 - Unit-test refactor plan: completed (Fases 0-4) and removed; see git history for `docs/roadmap/plano-testes-unitarios.md`.
+- Core reduction + fork default branch: `docs/roadmap/plano-reducao-cores.md`.
 
 ## Verification
 

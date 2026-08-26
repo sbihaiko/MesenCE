@@ -63,6 +63,24 @@
       "scoutMs": null,
       "classification": "chore",
       "diverged": false
+    },
+    {
+      "sid": "b909cad872b0",
+      "exposed": true,
+      "status": "used",
+      "queries": 1,
+      "scoutMs": null,
+      "classification": "chore",
+      "diverged": false
+    },
+    {
+      "sid": "d662e62e2648",
+      "exposed": true,
+      "status": "used",
+      "queries": 3,
+      "scoutMs": null,
+      "classification": null,
+      "diverged": false
     }
   ]
 }

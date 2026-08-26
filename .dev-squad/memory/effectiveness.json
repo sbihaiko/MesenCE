@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-26T09:05:29.800Z",
+  "updatedAt": "2026-08-26T13:09:13.022Z",
   "byId": {
     "L-ff73acd33912-000": {
       "injected": 1,
@@ -18,6 +18,25 @@
       "lastInjectedSid": "0570161c4bd2",
       "lastUpdated": "2026-08-24T11:09:56.916Z",
       "lastExposedSid": "0570161c4bd2"
+    },
+    "L-b909cad872b0-000": {
+      "class": "refactor",
+      "status": "advisory",
+      "scope": [
+        "unit-tests.yml",
+        ".gitignore",
+        "AGENTS.md",
+        "path-cases.txt",
+        "makefile"
+      ],
+      "category": null,
+      "injected": 1,
+      "exposed": 0,
+      "recurred": 0,
+      "firstSeen": "2026-08-26T13:09:13.022Z",
+      "contentHash": "84a7e7df89c71743cd0dd194bd4171b6afd4d674b8f770c1ffcad31bab91db6a",
+      "lastInjectedSid": "d662e62e2648",
+      "lastUpdated": "2026-08-26T13:09:13.022Z"
     }
   }
 }
