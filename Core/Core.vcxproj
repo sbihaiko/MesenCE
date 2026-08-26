@@ -124,6 +124,9 @@
     <ClInclude Include="SMS\SmsTypes.h" />
     <ClInclude Include="SMS\SmsVdp.h" />
     <ClInclude Include="Shared\ArmEnums.h" />
+    <ClInclude Include="Shared\Input\SnesController.h" />
+    <ClInclude Include="Shared\Input\SnesMouse.h" />
+    <ClInclude Include="Shared\Input\SnesNttDataKeypad.h" />
     <ClInclude Include="NES\Debugger\NesCodeDataLogger.h" />
     <ClInclude Include="NES\Input\BandaiMicrophone.h" />
     <ClInclude Include="NES\Input\DatachBarcodeReader.h" />
@@ -741,6 +744,8 @@
     <ClCompile Include="NES\Mappers\VsSystem\VsControlManager.cpp" />
     <ClCompile Include="NES\NesNtscFilter.cpp" />
     <ClCompile Include="Shared\BaseControlManager.cpp" />
+    <ClCompile Include="Shared\Input\SnesController.cpp" />
+    <ClCompile Include="Shared\Input\SnesNttDataKeypad.cpp" />
     <ClCompile Include="NES\NesDefaultVideoFilter.cpp" />
     <ClCompile Include="NES\BaseMapper.cpp" />
     <ClCompile Include="NES\NesControlManager.cpp" />

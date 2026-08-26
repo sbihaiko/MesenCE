@@ -9,6 +9,9 @@
 #include "NES/Input/PachinkoController.h"
 #include "NES/Input/FcnsController.h"
 #include "NES/Input/VirtualBoyController.h"
+#include "Shared/Input/SnesController.h"
+#include "Shared/Input/SnesMouse.h"
+#include "Shared/Input/SnesNttDataKeypad.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/StringUtilities.h"
 
@@ -83,6 +86,18 @@ public:
 
 				case ControllerType::FcnsController:
 					_ports[i].reset(new FcnsController(emu, 0, controllers[i].Keys));
+					break;
+
+				case ControllerType::SnesController:
+					_ports[i].reset(new SnesController(emu, 0, controllers[i].Keys));
+					break;
+
+				case ControllerType::SnesMouse:
+					_ports[i].reset(new SnesMouse(emu, 0, controllers[i].Keys));
+					break;
+
+				case ControllerType::SnesNttDataKeypad:
+					_ports[i].reset(new SnesNttDataKeypad(emu, 0, controllers[i].Keys));
 					break;
 			}
 		}

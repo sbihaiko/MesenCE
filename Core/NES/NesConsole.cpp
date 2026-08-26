@@ -839,6 +839,10 @@ void NesConsole::InitializeInputDevices(GameInputType inputType, GameSystem syst
 	} else if(inputType == GameInputType::PowerPadSideB) {
 		log("[Input] Power Pad connected (Side B)");
 		port2 = ControllerType::PowerPadSideB;
+	} else if(inputType == GameInputType::SnesControllers) {
+		log("[Input] 2 SNES controllers connected");
+		port1 = ControllerType::SnesController;
+		port2 = ControllerType::SnesController;
 	} else if(inputType == GameInputType::FcnsController) {
 		log("[Input] FCNS controller connected");
 		expDevice = ControllerType::FcnsController;

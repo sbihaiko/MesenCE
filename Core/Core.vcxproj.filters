@@ -416,6 +416,21 @@
     <ClCompile Include="Shared\BaseControlManager.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\Input\SnesController.cpp">
+      <Filter>Shared\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="Shared\Input\SnesNttDataKeypad.cpp">
+      <Filter>Shared\Input</Filter>
+    </ClCompile>
+    <ClInclude Include="Shared\Input\SnesController.h">
+      <Filter>Shared\Input</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\Input\SnesMouse.h">
+      <Filter>Shared\Input</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\Input\SnesNttDataKeypad.h">
+      <Filter>Shared\Input</Filter>
+    </ClInclude>
     <ClInclude Include="Shared\BaseControlManager.h">
       <Filter>Shared</Filter>
     </ClInclude>
@@ -1367,6 +1382,9 @@
     </Filter>
     <Filter Include="Shared\Video">
       <UniqueIdentifier>0f929ae6-fb17-42e9-8d14-a51a3d7fe699</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shared\Input">
+      <UniqueIdentifier>c8e4a1b0-7d2f-4e9a-91c3-6b5d0f2a8e11</UniqueIdentifier>
     </Filter>
       <UniqueIdentifier>b3cb27d8-27d6-4d71-8798-ccb247257a3d</UniqueIdentifier>
     </Filter>

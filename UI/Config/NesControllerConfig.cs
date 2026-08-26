@@ -112,6 +112,7 @@ namespace Mesen.Config
 				ControllerType.OekaKidsTablet => Enum.GetValues<NesOekakidsButtons>().Select(val => new CustomKeyMapping(ResourceHelper.GetEnumText(val), buttonMappings, (int)val)).ToList(),
 				ControllerType.BandaiHyperShot => Enum.GetValues<NesZapperButtons>().Select(val => new CustomKeyMapping(ResourceHelper.GetEnumText(val), buttonMappings, (int)val)).ToList(),
 				ControllerType.BandaiMicrophone => Enum.GetValues<NesBandaiMicrophoneButtons>().Select(val => new CustomKeyMapping(ResourceHelper.GetEnumText(val), buttonMappings, (int)val)).ToList(),
+				ControllerType.SnesNttDataKeypad => Enum.GetValues<SnesNttDataKeypadButtons>().Select(val => new CustomKeyMapping(ResourceHelper.GetEnumText(val), buttonMappings, (int)val)).ToList(),
 				_ => new()
 			};
 
@@ -548,4 +549,6 @@ namespace Mesen.Config
 		Up, Down, Left, Right,
 		Unknown1, Unknown2, Unknown3,
 	};
+
+	public enum SnesNttDataKeypadButtons { Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, Star, Pound, Period, C, EndComunication };
 }

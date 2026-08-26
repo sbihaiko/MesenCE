@@ -28,6 +28,8 @@ namespace Mesen.Views
 					ControllerType.HoriTrack => new NesControllerView(),
 					ControllerType.GameboyController => new NesControllerView(),
 					ControllerType.GbaController => new GbaControllerView(),
+					ControllerType.SnesController or ControllerType.SnesRumbleController or ControllerType.SnesBlueRetroController => new SnesControllerView(),
+					ControllerType.SnesNttDataKeypad => new SnesNttDataKeypadControllerView(),
 					ControllerType.SmsController => new SmsControllerView(),
 					_ => new DefaultControllerView()
 				};
