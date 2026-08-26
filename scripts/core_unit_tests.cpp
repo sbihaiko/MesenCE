@@ -1,7 +1,9 @@
 //Fase 4 (docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
 //test harness - no MesenCore/emulator/ROM. Bloco A exercises
 //ChannelRoleClassifier; Bloco B exercises MepPack::NormalizeRelativePath
-//(driven by docs/specs/golden/mep/path-cases.txt) and MepPack::Parse. No
+//(driven by docs/specs/golden/mep/path-cases.txt) and MepPack::Parse; Bloco C
+//(ADR-0120) exercises MepPack::FindFallbackSubfolder, the pure last-priority
+//zip-fallback search PrepareZip consults, with literal fixtures. No
 //framework: cases print PASS/FAIL, exit is non-zero on any failure (see
 //roles_probe.cpp). Run from the repo root so the golden paths resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
@@ -12,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -184,6 +187,54 @@ namespace
 		MepPack::Parse("[1, 2, 3]", pack, error);
 		Check(error.find("object") != std::string::npos, "BlocoB: Parse's non-object error names the reason", error);
 	}
+
+	//--- Bloco C: MepPack::FindFallbackSubfolder (ADR-0120) -------------------
+
+	void TestFallbackSubfolderContra80sResolves()
+	{
+		//Release-zip wrapper one level deep, exactly the TasticHacks/Contra80s
+		//shape described in the ADR: <wrapper>/<ROM name>/hires.txt (depth 3)
+		std::vector<std::string> entries = {
+			"Contra80s-v1.1/readme.txt",
+			"Contra80s-v1.1/Contra (U) [!]/hires.txt",
+		};
+		std::string prefix = MepPack::FindFallbackSubfolder(entries, "Contra (U) [!]");
+		Check(prefix == "Contra80s-v1.1/Contra (U) [!]", "BlocoC: FindFallbackSubfolder resolves the Contra80s-shaped wrapper", "got '" + prefix + "'");
+
+		//Literal "<ROM name>/hires.txt" shape (no extra wrapper level, depth 2)
+		std::vector<std::string> flatEntries = { "Contra (U) [!]/hires.txt" };
+		std::string flatPrefix = MepPack::FindFallbackSubfolder(flatEntries, "Contra (U) [!]");
+		Check(flatPrefix == "Contra (U) [!]", "BlocoC: FindFallbackSubfolder resolves a bare '<ROM name>/hires.txt' entry", "got '" + flatPrefix + "'");
+	}
+
+	void TestFallbackSubfolderAmbiguousIsEmpty()
+	{
+		//Two distinct subfolders both named after the ROM: fails closed
+		//rather than guessing which one is the real pack root
+		std::vector<std::string> entries = {
+			"WrapperA/Contra (U) [!]/hires.txt",
+			"WrapperB/Contra (U) [!]/hires.txt",
+		};
+		std::string prefix = MepPack::FindFallbackSubfolder(entries, "Contra (U) [!]");
+		Check(prefix.empty(), "BlocoC: FindFallbackSubfolder is ambiguous/empty for two ROM-named subfolders", "got '" + prefix + "'");
+	}
+
+	void TestFallbackSubfolderDepthAndEntryCaps()
+	{
+		//Depth cap (kMepFallbackMaxDepth=4): a 5-segment entry is refused
+		//even though its shape would otherwise resolve
+		std::vector<std::string> tooDeep = { "a/b/c/Contra (U) [!]/hires.txt" };
+		Check(MepPack::FindFallbackSubfolder(tooDeep, "Contra (U) [!]").empty(), "BlocoC: FindFallbackSubfolder rejects entries past the depth cap");
+
+		//Entry-count cap (kMepFallbackMaxEntries=2000): an oversized list is
+		//refused outright, fail-closed
+		std::vector<std::string> tooMany(MepPack::kMepFallbackMaxEntries + 1, "Contra (U) [!]/hires.txt");
+		Check(MepPack::FindFallbackSubfolder(tooMany, "Contra (U) [!]").empty(), "BlocoC: FindFallbackSubfolder rejects an oversized entry list");
+
+		//No candidate at all: unrelated entries, no match
+		std::vector<std::string> noMatch = { "SomeOtherGame/hires.txt", "pack.json" };
+		Check(MepPack::FindFallbackSubfolder(noMatch, "Contra (U) [!]").empty(), "BlocoC: FindFallbackSubfolder is empty when no candidate matches");
+	}
 }
 
 int main()
@@ -196,6 +247,10 @@ int main()
 	TestNormalizeRelativePathGolden();
 	TestParseValidPackJson();
 	TestParseFailureCases();
+
+	TestFallbackSubfolderContra80sResolves();
+	TestFallbackSubfolderAmbiguousIsEmpty();
+	TestFallbackSubfolderDepthAndEntryCaps();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;
