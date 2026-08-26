@@ -61,6 +61,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   in `docs/roadmap/plano-execucao-F5.md`'s header Status line: a done (✅)
   marker paired with `F5.4b` and no leftover instance of the pre-fix pending
   phrasing.
+- `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
+  runs (one script per AC, invoked directly by its AC's Verification
+  command). Same PASS/FAIL-and-exit-code convention as the top-level shell
+  checks above; no shared test framework. `checks/verify_claude_md_section.sh`
+  guards `CLAUDE.md` (AC-10): the pre-existing "Rastreamento de bugs (GitHub
+  Project)" section must stay byte-for-byte untouched (checked as an exact
+  file prefix) while a new "Triagem de Community HD/MEP Packs (GitHub
+  Project)" section is appended after it.
 
 ## Verification
 
@@ -75,4 +83,6 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Child DOX Index
 
-(none - no subfolders)
+- `checks/` - dev-squad acceptance-criteria verifier scripts; no dedicated
+  AGENTS.md yet (covered by this Work Guidance entry above), promote to a
+  child AGENTS.md if the folder grows its own distinct rules.
