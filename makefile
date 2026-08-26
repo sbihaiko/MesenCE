@@ -224,6 +224,18 @@ ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
+#Fase 4 (docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
+#tests for ChannelRoleClassifier + MepPack. No `core` prerequisite - links
+#only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
+#then runs the binary; a failing case exits non-zero.
+core-unit-tests:
+	$(CXX) -std=c++17 -O2 -w -I . -I Core scripts/core_unit_tests.cpp \
+	  Core/Shared/Audio/ChannelRoleClassifier.cpp \
+	  Core/Shared/EnhancementPacks/MepPack.cpp \
+	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
+	  -o scripts/core_unit_tests
+	scripts/core_unit_tests
+
 #F5.4g level-2 validation harness (channel roles / SFX classifier) - see scripts/roles_probe.cpp
 roles-probe: core
 	$(CXX) -std=c++17 -O2 -w -I . -I Core -Wl,-headerpad_max_install_names scripts/roles_probe.cpp Core/Shared/Audio/ChannelRoleClassifier.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/roles_probe
