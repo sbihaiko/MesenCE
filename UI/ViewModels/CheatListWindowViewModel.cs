@@ -9,6 +9,7 @@ using Mesen.Config;
 using Mesen.Debugger;
 using Mesen.Debugger.Utilities;
 using Mesen.Interop;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.Windows;
 using System;
@@ -107,7 +108,7 @@ namespace Mesen.ViewModels
 							CheatCode newCheat = new CheatCode();
 							newCheat.Description = cheatEntry.Desc;
 							newCheat.Enabled = false;
-							newCheat.Type = GetCheatType(consoleType, cheatEntry.Code);
+							newCheat.Type = CheatTypeDetector.FromCode(consoleType, cheatEntry.Code);
 							newCheat.Codes = string.Join(Environment.NewLine, cheatEntry.Code.Split(";", StringSplitOptions.RemoveEmptyEntries));
 
 							string key = newCheat.Description + newCheat.Codes + newCheat.Type.ToString();
@@ -124,20 +125,6 @@ namespace Mesen.ViewModels
 			ToolbarActions = toolbarActions;
 
 			AddDisposables(DebugShortcutManager.CreateContextMenu(parent, GetActions(parent)));
-		}
-
-		private CheatType GetCheatType(ConsoleType consoleType, string code)
-		{
-			switch(consoleType) {
-				case ConsoleType.Snes:
-					return code.Contains("-") ? CheatType.SnesGameGenie : CheatType.SnesProActionReplay;
-
-				case ConsoleType.Nes:
-					return code.Contains(":") ? CheatType.NesCustom : CheatType.NesGameGenie;
-
-				default:
-					throw new Exception("Unsupported cheat type");
-			}
 		}
 
 		private List<ContextMenuAction> GetActions(Control parent)
