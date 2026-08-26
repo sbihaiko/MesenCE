@@ -21,11 +21,17 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
     build (SDL2/native dependency, Windows-only publish flags) and breaks
     the "cheap, cross-platform `dotnet test`" contract this project exists
     for.
-  - `EnableDefaultCompileItems=false` with two explicit `<Compile Include>`
-    globs: this project's own `**/*.cs`, and `../UI/Logic/**/*.cs`. The
-    second glob dual-compiles `UI/Logic/*.cs` into this assembly instead of
-    referencing `UI.csproj` — any file under `UI/Logic/` that accidentally
-    pulls in `Avalonia`/`EmuApi` fails `dotnet test` immediately.
+  - `EnableDefaultCompileItems=false` with three explicit `<Compile Include>`
+    entries: this project's own `**/*.cs`, `../UI/Logic/**/*.cs`, and the
+    single file `../UI/Interop/InteropEnums.cs`. The `UI/Logic/` glob
+    dual-compiles that folder into this assembly instead of referencing
+    `UI.csproj` — any file under `UI/Logic/` that accidentally pulls in
+    `Avalonia`/`EmuApi` fails `dotnet test` immediately. The `InteropEnums.cs`
+    include is a single named file, not a folder glob, because it is the
+    only host-free file inside the otherwise Avalonia/EmuApi-tainted
+    `UI/Interop/` (it holds the `ConsoleType`/`CheatType` enums moved out of
+    `EmuApi.cs`, Fase 2 of `docs/roadmap/plano-testes-unitarios.md`) — a
+    folder glob there would risk pulling in an Avalonia-tainted file later.
 - Every `UI/Logic/*.cs` file must stay free of `Avalonia` and `EmuApi`
   references (BCL + `System.IO.Compression` only) — that constraint lives in
   `UI/AGENTS.md` (nearest owner of `UI/Logic/`) but is enforced here by the

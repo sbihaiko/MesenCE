@@ -24,6 +24,10 @@
 		     to UI.csproj) so any accidental Avalonia/EmuApi dependency breaks `dotnet test`
 		     instead of only being caught by review. -->
 		<Compile Include="../UI/Logic/**/*.cs" />
+		<!-- ConsoleType/CheatType (Fase 2): host-free enums split out of the Avalonia-tainted
+		     UI/Interop/EmuApi.cs into UI/Interop/InteropEnums.cs. Included by exact file, not
+		     a folder glob, since the rest of UI/Interop/ still references Avalonia/EmuApi. -->
+		<Compile Include="../UI/Interop/InteropEnums.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
