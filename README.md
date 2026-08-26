@@ -1,22 +1,48 @@
-# MesenCE — sbihaiko's fork
+<div align="center">
 
-**A focused emulator, not a checklist of consoles.** A personal fork of [MesenCE](https://github.com/nesdev-org/MesenCE) (itself a fork of [Mesen](https://github.com/SourMesen/Mesen2)) for Windows, Linux, and macOS, covering **NES, Game Boy / Game Boy Color / GBS, Master System / Game Gear / SG-1000, and Game Boy Advance** — the systems where a mature, community-built enhancement ecosystem (HD texture packs, music extraction, chip-accurate register logs) already exists and actually moves the needle. This fork does **not** emulate SNES (including Super Game Boy), PC Engine, WonderSwan, or ColecoVision.
+# MesenCE · Enhancement Edition
 
-That's deliberate, not a gap. For SNES specifically, dedicated projects like [ZSNES](https://www.zsnes.com/), [snes9x](https://github.com/snes9x/snes9x), and [bsnes](https://github.com/bsnes-emu/bsnes) already do that job better than a bolted-on core in a multi-system emulator ever could. Every console a generalist emulator carries is another core to keep accurate, another surface to regression-test, another place "enhancement" has to be reinvented from scratch. Dropping four systems didn't shrink this project — it freed the effort that used to be spread across ten cores into three things a general-purpose emulator can't easily have: audio that upgrades every game **automatically and on by default**, a **standardized pack format** for textures + audio + presets shared across consoles, and a real **CI-gated test layer** instead of "it compiled, it booted a ROM." Less surface, more depth.
+**Your NES, Game Boy, Master System and GBA games — with modern instruments, HD art and one pack format that ties it all together. Automatically. On by default.**
 
-## Why this fork, and not a generalist emulator
+[![Build](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
+[![Unit tests](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml?query=branch%3Amain)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-555.svg)](#download)
+[![Systems](https://img.shields.io/badge/systems-NES%20%7C%20GB%2FGBC%20%7C%20SMS%2FGG%2FSG--1000%20%7C%20GBA-8a2be2.svg)](#what-it-runs)
+[![Specs: CC0](https://img.shields.io/badge/open%20specs-CC0-lightgrey.svg)](docs/specs/)
 
-| | Generalist multi-system emulators | MesenCE (this fork) |
+**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)
+
+</div>
+
+---
+
+## The 30-second pitch
+
+Most emulators stop at *faithful*. This one starts there and keeps going:
+
+- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files. Ships **on**.
+- **HD art on three families, not one.** Mesen's proven NES HD Pack pipeline now runs on **Game Boy and Master System** too, and the emulator starts **building a starter pack for you** (upscaled tiles, extracted music) the first time you play a game nobody has packed yet.
+- **One pack format for everything.** Textures + music + synth presets in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it in a folder; the emulator finds it. Every layer toggles independently.
+- **Kept honest by CI.** Unit tests gate every push — not just "it compiled".
+
+Built on [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead and rewind. This fork adds the enhancement layer on top.
+
+## Download
+
+Fresh builds from the latest `main` — no install, unzip and run:
+
+| Platform | Build | Notes |
 |---|---|---|
-| **Console list** | Broad — often 10+ systems, uneven depth | **4** systems, chosen because their enhancement packs already exist and matter: NES, Game Boy, SMS-family, GBA |
-| **Audio** | Faithful chip emulation, full stop | Faithful emulation **+ automatic, on-by-default modern re-synthesis** ([Enhanced Audio](#enhanced-audio-nes-game-boy-sms-game-gear-sg-1000)) — swappable per game, tunable without recompiling |
-| **HD art / packs** | Per-project, bespoke pack formats if any | One **standardized, hash-keyed pack format** ([MEP](docs/specs/MEP-v1.md)) unifying textures, audio, and synth presets — with a folder auto-bootstrapped per ROM, no manual authoring required to start |
-| **Correctness** | Usually "it compiles, it plays a ROM" | **CI-gated unit tests** on every push — [see below](#built-to-stay-correct) |
-| **Development speed** | Slow, contributor- and review-bottlenecked | **AI-accelerated** — [see below](#built-with-ai-on-purpose) — tools ship in days, iterated in the open |
+| **Windows** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Windows%20-%20net10.0%20-%20AoT%29.zip) | Windows 7 SP1 or newer |
+| **Linux x64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04%20-%20clang_aot%29.zip) | requires **SDL2** |
+| **Linux ARM64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04-arm%20-%20clang_aot%29.zip) | requires **SDL2** |
+| **macOS Apple Silicon** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15%20-%20clang_aot%29.zip) | requires **SDL2**; self-signed — allow it once in Gatekeeper |
+| **macOS Intel** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15-intel%20-%20clang_aot%29.zip) | requires **SDL2**; self-signed — allow it once in Gatekeeper |
 
-This isn't an attempt at "the best SNES emulator" — that's already solved elsewhere. It's the best **enhancement platform** for the systems where community packs already prove the concept, kept trustworthy by automated tests while it iterates fast.
+Per-commit builds live in the [Actions](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain) tab. Building from source: [COMPILING.md](COMPILING.md).
 
-## 🎧 Hear it — before / after
+## Hear it
 
 *Mega Man 3, Shadow Man stage. Same game, same notes, same timing — only the instruments change.*
 
@@ -25,78 +51,108 @@ This isn't an attempt at "the best SNES emulator" — that's already solved else
 | **Before** — original NES chip (2A03) | ▶ [shadowman-before.mp3](https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/media/shadowman-before.mp3) |
 | **After** — Enhanced Audio, **Studio** style | ▶ [shadowman-enhanced.mp3](https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/media/shadowman-enhanced.mp3) |
 
-Melody and timing come straight from the game's own APU register log — the *after* track is the reference mix the built-in **Studio** style is a verbatim port of. Enhanced Audio never re-composes; it re-*voices*: listen for the square-wave lead becoming a detuned-saw lead and the whole mix gaining body while every note stays exactly where the game put it.
+![Spectrogram: original NES chip audio vs. Enhanced Audio remaster](docs/media/shadowman-spectrogram.png)
 
-![Spectrogram: original NES chip audio vs. resynthesized mix vs. Enhanced Audio remaster](docs/media/shadowman-spectrogram.png)
+Melody and timing come straight from the game's own APU register log. Enhanced Audio never re-composes — it re-*voices*: the square-wave lead becomes a detuned-saw lead, the mix gains body, and every note stays exactly where the game put it. More demos (Game Boy, SMS FM) will land here as presets get ear-tuned.
 
-*Same passage, three renderings: the thin harmonic lines of the raw 2A03 versus the full-spectrum enhanced mix. More before/after demos (Game Boy, SMS FM) will land here as presets get ear-tuned.*
+## See it
 
-## 🖼 See it — where this is going
+Enhanced Audio is the sound half. The visual half is what the HD-pack community already achieves on NES with the same engine this fork ships:
 
-Enhanced Audio is the sound half of the story. The visual half already exists on NES through Mesen's HD pack pipeline — this is the level of transformation the community reaches today, on the same engine this fork ships:
-
-<!-- Images hotlinked from the pack author's own repository, with credit — not redistributed here.
-     TODO: replace with our own same-frame before/after captures (original vs. HD pack) once recorded. -->
-<p>
+<!-- Images hotlinked from the pack author's own repository, with credit — not redistributed here. -->
+<p align="center">
   <a href="https://github.com/TasticHacks/Contra80s"><img src="https://raw.githubusercontent.com/TasticHacks/Contra80s/main/screenshots/Contra80s-Screenshot-Larger-1.png" width="49%" alt="Contra 80s — NES Contra rendered with full HD textures via a Mesen HD Pack"></a>
   <a href="https://github.com/TasticHacks/Contra80s"><img src="https://raw.githubusercontent.com/TasticHacks/Contra80s/main/screenshots/Contra80s-Screenshot-Larger-4.png" width="49%" alt="Contra 80s — HD pack gameplay, jungle stage reimagined"></a>
 </p>
 
-*Contra (NES, 1988) running through **[Contra 80s](https://github.com/TasticHacks/Contra80s)**, an HD pack by **Tastic** — original 8-bit graphics replaced in real time with hand-made HD art ([launch trailer](https://www.youtube.com/watch?v=Ho1-30w41RU) shows the before/after in motion). More community packs: [lyonhrt's projects](https://github.com/lyonhrt/hdnes-projects) · [NESDev HD pack thread](https://forums.nesdev.org/viewtopic.php?t=17110).*
+<p align="center"><sub><i>Contra</i> (NES, 1988) through <b><a href="https://github.com/TasticHacks/Contra80s">Contra 80s</a></b>, an HD pack by <b>Tastic</b> — 8-bit graphics replaced in real time with hand-made HD art (<a href="https://www.youtube.com/watch?v=Ho1-30w41RU">trailer</a>). More packs: <a href="https://github.com/lyonhrt/hdnes-projects">lyonhrt</a> · <a href="https://forums.nesdev.org/viewtopic.php?t=17110">NESDev thread</a>.</sub></p>
 
-This fork takes that same authoring pipeline and extends it to **Game Boy and SMS**, unifies it with Enhanced Audio in a single hash-keyed pack format ([details below](#enhancement-packs--one-format-not-five)), and makes it discoverable from inside the emulator — every layer individually toggleable, and increasingly generated automatically rather than hand-authored.
+This fork takes that pipeline to **Game Boy and Master System**, bundles it with Enhanced Audio in one pack format, and makes packs discoverable from inside the emulator.
 
-## Enhanced Audio (NES, Game Boy, SMS, Game Gear, SG-1000)
+## What you get
 
-This fork adds an experimental **Enhanced Audio** mode for the NES (2A03 APU), Game Boy (GB/GBC APU, handheld) and SMS-family (SN76489 PSG, shared by SMS, Game Gear, SG-1000) cores: an alternative synthesizer that reinterprets the live chip channel state (frequency, volume, and duty on the NES) with modern instrument timbres in real time, on any ROM, with zero per-game assets. The original chip stays the source of truth — the synth only reads its state and mixes on top of (or replaces) the original chip output. **It's on by default** (Style: Studio). Since the setting applies across every supported console, it lives in one place: **Settings → Audio → General tab → "Enhanced audio (experimental)"**, where you can toggle it, pick a Style, and adjust the synth volume and original chip mix. Each console runs its own synth mapping and its own set of built-in styles tuned for that chip (on top of one shared DSP engine), but they share this single on/off switch. **Only the NES, Game Boy and SMS-family cores actually implement it** — on GBA the checkbox is visible but has no effect. The per-console *channel volume* settings (e.g. Settings → NES/SMS → Audio) apply to the synth voices as well — muting a chip channel also mutes its enhanced voice.
+| | Stock Mesen / MesenCE | **This fork** |
+|---|---|---|
+| **Audio** | Faithful chip emulation | Faithful emulation **+ real-time modern re-synthesis**, on by default, 5 styles, optional General MIDI SoundFont, tunable via a text file |
+| **HD textures** | NES only | **NES, Game Boy/GBC, SMS/Game Gear/SG-1000** |
+| **Starter packs** | Hand-authored from a blank canvas | **Auto-bootstrapped** beside the ROM: xBRZ-upscaled tiles, static screens, extracted music |
+| **Pack format** | `hires.txt` per game | **MEP**: one hash-keyed pack for textures + audio + synth presets, folder or `.zip`, per-layer toggles |
+| **Music export** | — | **Record Music (MIDI/VGM)** while you play |
+| **Correctness** | Build check | **CI-gated unit tests** on every push |
+| **Consoles** | 10+ systems | **4 families**, chosen because their enhancement ecosystems already exist ([why](#why-this-fork)) |
 
-On SMS-family titles that switch their soundtrack over to the optional YM2413 FM add-on (e.g. *After Burner*, *Shadow Dancer*) and mute the PSG entirely, the SMS engine also reinterprets the FM chip's own live register state (frequency, volume, key-on, up to 9 simultaneous notes) so those games get enhanced music too, not just PSG-only titles like *Fantasy Zone*. When a game mutes the PSG through the audio control port, the synth stops reinterpreting the PSG registers as well, so stale notes/noise never play under the FM voices. FM's rhythm/percussion mode is mapped onto the synth's drum voice (bass drum/tom as drum body and low thump, snare/cymbal/hi-hat as the bright top), rather than emulated.
+### What it runs
 
-Five built-in styles are included per engine: Synthwave, Chip Deluxe, Orchestral Lite, Dry, and Studio (a port of an offline remaster mix, with a fixed detuned-saw lead and a light bus compressor). Every instrument parameter can also be tuned without recompiling, via an `EnhancedAudioPresets.cfg` file placed in the Mesen home folder — the NES engine reads sections like `[Studio]`, the Game Boy engine `[Studio.Gb]`, and the SMS-family engine `[Studio.Sms]`, so each can be tuned independently from the same file. Edits to the file are picked up on console reset / ROM load (the file is never read from the audio path). A fully documented template with every field and the built-in defaults is included at [docs/EnhancedAudioPresets.example.cfg](docs/EnhancedAudioPresets.example.cfg) — the SMS and Game Boy tunings are inherited from the NES engine and still need ear-calibration, so that's the place to start.
+**NES / Famicom** · **Game Boy / Game Boy Color / GBS** · **Master System / Game Gear / SG-1000** (incl. YM2413 FM) · **Game Boy Advance**
 
-This feature was originally proposed upstream as [PR #262](https://github.com/nesdev-org/MesenCE/pull/262). It was built with the help of AI tools, which the upstream project's contribution policy does not allow, so the PR was closed and this work now lives here instead, for personal use.
+Not included: SNES (incl. Super Game Boy), PC Engine, WonderSwan, ColecoVision — see [FAQ](#faq).
+
+## Quick start
+
+1. **[Download](#download)**, unzip, run `Mesen`.
+2. **File → Open** a ROM. Enhanced Audio is already on (Style: *Studio*).
+3. Want it different? **Settings → Audio → General → "Enhanced audio (experimental)"** — toggle, pick a style (Synthwave, Chip Deluxe, Orchestral Lite, Dry, Studio), balance synth vs. original chip.
+4. Got an HD pack or MEP pack? Drop the folder or `.zip` into `EnhancementPacks/` (or a folder named like the ROM, beside it) and open **Tools → HD Packs → Enhancement Packs (MEP)…** to toggle textures / audio / synth per pack.
+5. Want a MIDI or VGM of the soundtrack? **Tools → Record Music (MIDI/VGM)** while the game plays.
+
+## Enhanced Audio
+
+An alternative synthesizer that reads the **live chip state** — frequency, volume, duty, key-on — and re-voices it with modern instruments in real time, on any ROM, with zero per-game assets. The original chip stays the source of truth; the synth mixes on top of (or replaces) its output.
+
+- **Supported cores:** NES (2A03), Game Boy/GBC APU, SMS-family (SN76489 PSG **and** YM2413 FM — *After Burner*, *Shadow Dancer* and other FM soundtracks are covered, with FM rhythm mode mapped to drum voices). On GBA the checkbox is visible but has no effect yet.
+- **Smart voicing:** a channel-role classifier separates melody, bass and SFX so sound effects don't get orchestrated along with the music.
+- **Styles:** Synthwave, Chip Deluxe, Orchestral Lite, Dry, Studio — each console has its own tuning on a shared DSP engine.
+- **Bring your own instruments:** point it at any General MIDI **SoundFont (.sf2)** (Settings → Audio) or drop `EnhancedAudio.sf2` in the Mesen folder.
+- **Tune without recompiling:** `EnhancedAudioPresets.cfg` in the Mesen home folder, with `[Studio]`, `[Studio.Gb]`, `[Studio.Sms]` sections. Documented template: [docs/EnhancedAudioPresets.example.cfg](docs/EnhancedAudioPresets.example.cfg). Format spec: [ESP v1](docs/specs/ESP-v1.md).
+- Per-console channel volumes apply to the synth voices too — muting a chip channel mutes its enhanced voice.
+
+## Enhancement Packs (MEP)
+
+Textures, music and synth presets ship as **one hash-keyed pack**, matched to your ROM by its No-Intro hash — no per-game config.
+
+- **Install:** a folder or `.zip` in `EnhancementPacks/`, or a folder named like the ROM right beside it (the sibling folder always wins).
+- **Toggle per layer:** textures / audio (OGG) / synth / ROM patches, from **Tools → HD Packs → Enhancement Packs (MEP)…**.
+- **Never start from nothing:** with *Bootstrap* on, playing a game with no pack writes `<Game>/auto/` beside the ROM — xBRZ 4× tiles, static screens as backgrounds and (NES) fingerprinted music ready for `scripts/mep_render_audio.py`. An artist gets a real starting point; a player gets something better than raw pixels immediately.
+- **Built on existing standards** (No-Intro hashes, HDNes `hires.txt`, VGM/GD3, SMF/GM, OGG, BPS) — and where a gap exists, small **CC0 specs anyone can implement**: [MEP v1](docs/specs/MEP-v1.md) (pack) · [ESP v1](docs/specs/ESP-v1.md) (presets) · [MEI v1](docs/specs/MEI-v1.md) (federated discovery) · [hires.txt GB/SMS](docs/specs/hires-gbsms-v1-draft.md) (draft).
+- **Tooling:** `scripts/mep_lint.py` validates a pack offline; **Tools → HD Packs → HD Pack Builder** records tiles while you play.
+
+Current limits: the `audio` layer is applied on NES only (GB/SMS wait for the hires.txt extension to freeze). Roadmap and design notes: [docs/enhancement-ecosystem.md](docs/enhancement-ecosystem.md).
+
+**Legal footing:** the project ships tools, mappings and specs — never other people's game assets. Extraction happens on your machine and stays there.
 
 ## Built to stay correct
 
-*"AI-accelerated" only means something if there's a harness catching what it gets wrong.* Every push runs through CI-gated automated tests, not just a build check:
+Every push and PR runs [`unit-tests.yml`](.github/workflows/unit-tests.yml) in addition to the native build:
 
-- **`core-unit-tests`** — a dependency-free C++ harness (`scripts/core_unit_tests.cpp`, `make core-unit-tests`) that exercises core logic directly: the Enhanced Audio channel-role classifier, MEP pack parsing, and other logic pulled out of the emulator core specifically so it *can* be tested without booting a ROM or a GUI.
-- **`UI.Tests`** — a C# xUnit suite (`UI.Tests/`) covering the UI/host logic layer: cheat-code parsing, disabled-pack-list handling, and the MEP pack-list parser and zip validator that back the enhancement-pack UI.
+- **`core-unit-tests`** — dependency-free C++ harness (`scripts/core_unit_tests.cpp`, `make core-unit-tests`) for core logic: Enhanced Audio channel-role classifier, MEP parsing, and other logic deliberately factored out so it can be tested without a ROM or GUI.
+- **`UI.Tests`** — C# xUnit suite (`UI.Tests/`) for the host layer: cheat parsing, pack-list handling, MEP parser and zip validator.
 
-Both run on every push and pull request via GitHub Actions ([`unit-tests.yml`](.github/workflows/unit-tests.yml)), independent of the native build — no SDL2, no full emulator core, results in seconds. It isn't exhaustive coverage of every console's core emulation; it's real, growing coverage of the logic this fork actually adds and changes, so refactors and new features get caught before they ship instead of trusted on faith.
+No SDL2, no full core, results in seconds. It's not full-core coverage — it's real, growing coverage of what this fork adds and changes, so regressions get caught before they ship.
 
-## Enhancement Packs — one format, not five
+## Why this fork
 
-Textures, music, and synth presets ship as a single hash-keyed pack (**MEP**), matched to your ROM automatically by its No-Intro hash — no manual setup, no per-game config. Drop a folder or `.zip` into `EnhancementPacks/`, and every layer (textures / audio / synth) can be toggled independently from the *HD Packs* menu.
+**Focused, not generalist.** Every console a multi-system emulator carries is another core to keep accurate, another regression surface, another place "enhancement" has to be reinvented. Dropping SNES, PCE, WonderSwan and ColecoVision freed the effort for three things a generalist can't easily have: audio that upgrades every game automatically, a shared pack format across consoles, and a real test layer. The four remaining families are exactly the ones where community HD packs and music extraction already prove the concept.
 
-And you don't have to wait for someone to build one: loading a game with no pack installed already starts building a starter pack for you next to the ROM — upscaled textures from what's actually on screen, with automatic music extraction landing the same way — so there's always something better than raw pixels and raw chip audio to fall back on, and an artist has a real starting point instead of a blank canvas.
+**Built with AI, on purpose.** Implementation, review and the test suite are AI-assisted. That's what lets a small project move four cores, a synth engine and a pack ecosystem forward at once — with tests, not manual review alone, as the safety net. It's also why this is an independent fork: upstream's contribution policy doesn't accept AI-assisted PRs (Enhanced Audio was proposed as [PR #262](https://github.com/nesdev-org/MesenCE/pull/262) and closed for exactly that reason). Design decisions are recorded as an [ADR trail](.dev-squad/adr/), so the *why* stays reviewable. Upstream accuracy fixes from MesenCE/Mesen2 are ported in regularly, so enhancement doesn't mean drifting from accuracy.
 
-Built on existing community formats wherever one already exists (No-Intro hashes, HDNes `hires.txt`, VGM/GD3, SMF/General MIDI, MSU-1/OGG) rather than inventing new ones — and where a gap remains, we publish small, open, CC0 specs so any pack author or emulator can adopt them too: [ESP v1](docs/specs/ESP-v1.md) (synth presets) · [MEP v1](docs/specs/MEP-v1.md) (the pack format) · [MEI v1](docs/specs/MEI-v1.md) (pack discovery).
+## FAQ
 
-Extraction stays local and the project only ever ships tools, mappings, and specs — never other people's game assets — so using it, or building packs with it, stays on solid legal ground.
+**Where's SNES?** Not here, deliberately. [bsnes](https://github.com/bsnes-emu/bsnes), [snes9x](https://github.com/snes9x/snes9x) and [ZSNES](https://www.zsnes.com/) already do it better than a bolted-on core would.
 
-## Built with AI, on purpose
+**Does Enhanced Audio change the music?** No. It changes the *instruments*. Notes, timing and dynamics come from the game's own registers, frame by frame.
 
-This fork is developed with heavy use of AI tooling — implementation, code review, and the automated test suite described above are all AI-assisted. That's a deliberate trade, not a shortcut: it's what makes it realistic for a small, personal project to keep four emulation cores, an audio synthesis engine, and a pack-format ecosystem moving at the same time, with tests gating every change instead of manual review being the only net.
+**Can I turn it all off?** Yes — one checkbox in Settings → Audio, and you have stock Mesen accuracy.
 
-It's also why this lives as an independent fork rather than a series of upstream pull requests: MesenCE/Mesen2's contribution policy doesn't allow AI-assisted PRs (the [Enhanced Audio feature itself was closed upstream for exactly this reason](#enhanced-audio-nes-game-boy-sms-game-gear-sg-1000)). Rather than fight that policy, this fork develops in the open under its own roadmap, with an [ADR trail](.dev-squad/adr/) recording the reasoning behind each significant decision — so the "why," not just the "what," stays reviewable even without upstream code review.
+**Do existing NES HD packs work?** Yes, the HDNes `hires.txt` format is unchanged; drop them in `HdPacks/` as always, or wrap them in a MEP pack.
 
-Being a fork of free software cuts both ways, and AI is what makes the upside actually pay off: core accuracy fixes, timing corrections, and other improvements landed upstream in [MesenCE](https://github.com/nesdev-org/MesenCE) or [Mesen2](https://github.com/SourMesen/Mesen2) can be reviewed and ported into this fork quickly instead of piling up as a merge backlog — so diverging for the sake of enhancement features doesn't mean drifting away from upstream's own emulation-accuracy work.
+**Will you host packs?** No. The emulator can consume any [MEI](docs/specs/MEI-v1.md) index; packs stay with their authors and the existing community hubs.
 
-## Development Builds
+## Contributing & community
 
-[![Mesen](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
+- **Found a game that sounds wrong / a pack that doesn't load?** [Open an issue](https://github.com/sbihaiko/MesenCE/issues) with the ROM's No-Intro name — never the ROM.
+- **Made a pack?** Publish it in your own repo and open an issue so it can be listed.
+- **Tuned a style by ear?** Presets are just `.cfg` files — PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-* [Windows](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Windows%20-%20net10.0%20-%20AoT%29.zip)
-  * Windows 7 or higher is required. Windows 7 users must use SP1 and have all updates installed.
-* [Linux x64](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04%20-%20clang_aot%29.zip)  (requires **SDL2**)  
-* [Linux ARM64](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04-arm%20-%20clang_aot%29.zip)  (requires **SDL2**)  
-* [macOS - Intel](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15-intel%20-%20clang_aot%29.zip)  (requires **SDL2**)  
-* [macOS - Apple Silicon](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15%20-%20clang_aot%29.zip)  (requires **SDL2**)  
+## Credits & license
 
-Other builds (per-commit) are available in the [Actions](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain) tab. macOS builds are self-signed and require approval via Gatekeeper before they can run.
-
-## License
-
-Mesen is available under the GPL V3 license.  Full text here: <http://www.gnu.org/licenses/gpl-3.0.en.html>
-Copyright (C) 2014-2026 Sour, 2026 contributors
+Built on [Mesen2](https://github.com/SourMesen/Mesen2) by Sour and [MesenCE](https://github.com/nesdev-org/MesenCE) by the nesdev.org community. GPL v3 — full text: <http://www.gnu.org/licenses/gpl-3.0.en.html>. Copyright (C) 2014-2026 Sour, 2026 contributors. Open specs in `docs/specs/` are CC0.
