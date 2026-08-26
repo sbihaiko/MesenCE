@@ -204,7 +204,8 @@ DOTNET ?= dotnet
 
 all: ui
 
-#Fase 0 (docs/roadmap/plano-testes-unitarios.md): host-free C# unit tests.
+#Fase 0 of the now-completed unit-test plan (see git history for
+#docs/roadmap/plano-testes-unitarios.md): host-free C# unit tests.
 #Deliberately has no dependency on the `core`/`ui` targets - runs on any OS
 #without SDL2 or the native MesenCore library.
 unit-tests:
@@ -224,7 +225,8 @@ ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
-#Fase 4 (docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
+#Fase 4 of the now-completed unit-test plan (see git history for
+#docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
 #tests for ChannelRoleClassifier + MepPack. No `core` prerequisite - links
 #only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
 #then runs the binary; a failing case exits non-zero.
