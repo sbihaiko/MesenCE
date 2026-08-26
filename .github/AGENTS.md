@@ -24,12 +24,14 @@ what CI actually runs; this doc records why they're split the way they are.
   touched by the unit-tests workflow below.
 - `workflows/unit-tests.yml` — Fase 0 of the now-completed unit-test plan
   (see git history for `docs/roadmap/plano-testes-unitarios.md`):
-  `ubuntu-latest` job that runs `dotnet test UI.Tests/UI.Tests.csproj`.
-  Deliberately independent of `tests.yml`: no native build, no SDL2, no
-  `MesenCore`, so it stays fast and runs on every push/PR regardless of the
-  Windows ROM suite's state. `UI.Tests.csproj` is intentionally NOT a member
-  of `Mesen.sln`, so this workflow does not go through `dotnet-format-check.yml`
-  or `build.yml`'s restore/publish flow either.
+  `ubuntu-latest` job that runs `dotnet test UI.Tests/UI.Tests.csproj` and
+  then `make core-unit-tests` (the framework-free C++ harness in
+  `scripts/core_unit_tests.cpp`). Deliberately independent of `tests.yml`:
+  no native build, no SDL2, no `MesenCore`, so it stays fast and runs on
+  every push/PR regardless of the Windows ROM suite's state. `UI.Tests.csproj`
+  is intentionally NOT a member of `Mesen.sln`, so this workflow does not go
+  through `dotnet-format-check.yml` or `build.yml`'s restore/publish flow
+  either.
 
 ## Work Guidance
 
@@ -44,6 +46,7 @@ what CI actually runs; this doc records why they're split the way they are.
 ## Verification
 
 - `grep -E "dotnet test" .github/workflows/unit-tests.yml`
+- `grep -E "make core-unit-tests" .github/workflows/unit-tests.yml`
 - `grep -E "exclude-regex" .github/workflows/clang-format-check.yml`
 
 ## Child DOX Index
