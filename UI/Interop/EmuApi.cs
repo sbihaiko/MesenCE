@@ -193,17 +193,6 @@ namespace Mesen.Interop
 		Ws
 	}
 
-	public enum ConsoleType
-	{
-		Snes = 0,
-		Gameboy = 1,
-		Nes = 2,
-		PcEngine = 3,
-		Sms = 4,
-		Gba = 5,
-		Ws = 6,
-	}
-
 	public enum ByteCodeFormat
 	{
 		Bytes,
@@ -333,21 +322,6 @@ namespace Mesen.Interop
 		Play,
 		StartRecord,
 		StopRecord
-	}
-
-	public enum CheatType : byte
-	{
-		NesGameGenie = 0,
-		NesProActionRocky,
-		NesCustom,
-		GbGameGenie,
-		GbGameShark,
-		SnesGameGenie,
-		SnesProActionReplay,
-		PceRaw,
-		PceAddress,
-		SmsProActionReplay,
-		SmsGameGenie
 	}
 
 	public static class CheatTypeExtensions
