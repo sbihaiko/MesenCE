@@ -4,13 +4,14 @@
 
 .NET (Avalonia) desktop UI application — windows, ViewModels, config, and
 the native interop bridge to Core via `EmuApi`. `UI/Logic/` is a carved-out,
-host-free subset consumed by `UI.Tests` (Fase 0/1,
+host-free subset consumed by `UI.Tests` (delivered in Fase 0/1 of the
+now-completed unit-test plan — see git history for
 `docs/roadmap/plano-testes-unitarios.md`).
 
 ## Ownership
 
 The main UI/ViewModel codebase is owned by the application as a whole.
-`UI/Logic/` specifically is owned by the `plano-testes-unitarios.md`
+`UI/Logic/` specifically is owned by the completed unit-test
 test-infrastructure effort: it exists so ViewModel parsing/validation logic
 can be exercised by real xunit tests without Avalonia or the native
 `MesenCore` library.

@@ -22,7 +22,8 @@ what CI actually runs; this doc records why they're split the way they are.
 - `workflows/tests.yml` — Windows-only ROM regression suite (PGOHelper +
   the private `MesenTests` repo). Requires a full native + UI build. Not
   touched by the unit-tests workflow below.
-- `workflows/unit-tests.yml` — Fase 0 (`docs/roadmap/plano-testes-unitarios.md`):
+- `workflows/unit-tests.yml` — Fase 0 of the now-completed unit-test plan
+  (see git history for `docs/roadmap/plano-testes-unitarios.md`):
   `ubuntu-latest` job that runs `dotnet test UI.Tests/UI.Tests.csproj`.
   Deliberately independent of `tests.yml`: no native build, no SDL2, no
   `MesenCore`, so it stays fast and runs on every push/PR regardless of the

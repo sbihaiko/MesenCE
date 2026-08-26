@@ -3,13 +3,14 @@
 ## Purpose
 
 xunit test project for the "host-free logic" carved out of the Avalonia UI
-under `UI/Logic/` (docs/roadmap/plano-testes-unitarios.md, Fase 0/1). Exists
+under `UI/Logic/` (Fase 0/1 of the now-completed unit-test plan — see git
+history for `docs/roadmap/plano-testes-unitarios.md`). Exists
 so `dotnet test` can run without SDL2, the native `MesenCore` shared library,
 or Avalonia being present — on any OS, in CI or locally.
 
 ## Ownership
 
-Owned by this test-infrastructure effort (`plano-testes-unitarios.md`). Not
+Owned by this test-infrastructure effort (plan completed and removed). Not
 part of the shipped application; excluded from `Mesen.sln`'s Windows-only
 AOT/publish flow (see `.github/AGENTS.md` for the CI split).
 
@@ -30,7 +31,7 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
     include is a single named file, not a folder glob, because it is the
     only host-free file inside the otherwise Avalonia/EmuApi-tainted
     `UI/Interop/` (it holds the `ConsoleType`/`CheatType` enums moved out of
-    `EmuApi.cs`, Fase 2 of `docs/roadmap/plano-testes-unitarios.md`) — a
+    `EmuApi.cs`, Fase 2 of the now-completed unit-test plan) — a
     folder glob there would risk pulling in an Avalonia-tainted file later.
 - Every `UI/Logic/*.cs` file must stay free of `Avalonia` and `EmuApi`
   references (BCL + `System.IO.Compression` only) — that constraint lives in
