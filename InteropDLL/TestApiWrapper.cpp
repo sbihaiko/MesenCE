@@ -84,7 +84,8 @@ extern "C"
 		}
 
 		//GBA tests can't run without the GBA BIOS, skip all of them
-		vector<string> foldersToSkip = { "GBA/" };
+		//SNES, PC Engine and WonderSwan cores were dropped from this fork, skip their tests
+		vector<string> foldersToSkip = { "GBA/", "SNES/", "PCE/", "WS/" };
 
 		unordered_set<string> testsToSkip = {
 			//These GB tests fail because the test runner can't use the official GB boot rom
