@@ -211,7 +211,8 @@ def main(argv):
 
     stats = dict(
         name=name,
-        auto=dict(folder=str(auto.folder), scale=auto.scale, tiles=len(a_keys), shapes=len(a_shapes)),
+        auto=dict(folder=str(auto.folder), scale=auto.scale, tiles=len(a_keys), shapes=len(a_shapes),
+                  palettes_per_shape=round(len(a_keys) / max(1, len(a_shapes)), 2)),
         artist=dict(folder=str(artist.folder), scale=artist.scale, tiles=len(r_keys), shapes=len(r_shapes),
                     lines=artist.total_lines, conditioned_lines=artist.conditioned,
                     conditions=artist.conditions, backgrounds=artist.backgrounds,

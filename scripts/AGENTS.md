@@ -43,6 +43,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `make_gb_test_rom.py`,
   `validate_hdpack_dump.py` - Python spec/golden/pack validators and
   test-ROM/test-pack generators; no emulator dependency.
+- `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
+  small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
+  `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
+  alongside `stats["artist"]`.
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh` - repo-hygiene shell checks run from `make`
   or CI.
@@ -54,6 +58,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `make roles-probe` / `make capture-tool` / `make spike-sound-driver` -
   each depends on `make core` first.
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
+- `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
+  `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
+  only if all pass.
 
 ## Child DOX Index
 
