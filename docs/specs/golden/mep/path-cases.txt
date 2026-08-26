@@ -1,0 +1,49 @@
+# docs/specs/golden/mep/path-cases.txt
+#
+# Shared zip-slip fixture (Fase 1 + Fase 4B, docs/roadmap/plano-testes-unitarios.md).
+# Consumed today by UI.Tests/Mep/MepZipValidatorTests.cs (C#, UI/Logic/MepZipValidator.cs);
+# a later Fase 4B C++ suite reads this same file against MepPack's own path
+# normalization, so the format below must stay stable.
+#
+# Format: one case per line, TAB-separated: <path><TAB>ok|bad
+#   - Blank lines and lines starting with '#' are ignored by consumers.
+#   - "ok"  = a zip entry name that MUST be accepted (safe, no traversal/escape).
+#   - "bad" = a zip entry name that MUST be rejected (zip-slip / path escape).
+#   - Paths use '/' but a consumer must also normalize '\' to '/' before
+#     checking, since a zip built on Windows may use either separator.
+
+# --- safe paths -------------------------------------------------------
+pack.json	ok
+textures/hires.txt	ok
+audio/hires.txt	ok
+audio/fingerprints.json	ok
+synth/preset.cfg	ok
+auto/textures/hires.txt	ok
+auto/audio/hires.txt	ok
+auto/audio/fingerprints.json	ok
+auto/synth/preset.cfg	ok
+textures/Tiles_00_0.png	ok
+audio/bgm/track01.ogg	ok
+audio/midi/track01.mid	ok
+nested/folder/file.txt	ok
+a..b/file.txt	ok
+file...txt	ok
+
+# --- zip-slip: absolute paths -----------------------------------------
+/abs/etc/passwd	bad
+/absolute/evil.txt	bad
+/pack.json	bad
+
+# --- zip-slip: parent directory traversal ------------------------------
+../x	bad
+../../etc/passwd	bad
+..	bad
+textures/../../escape.txt	bad
+a/b/../../../c.txt	bad
+textures/..\hack.txt	bad
+..\..\windows\system32\evil.dll	bad
+
+# --- zip-slip: drive letters / alternate data streams (':' anywhere) ---
+C:/Windows/System32/evil.dll	bad
+C:\Windows\System32\evil.dll	bad
+audio/track:alt.txt	bad
