@@ -49,7 +49,7 @@ https://github.com/users/sbihaiko/projects/3
   reutilizável `.github/workflows/community-pack-validate.yml`, que:
   - baixa o pack restrito a um allow-list de hosts (`github.com/*/releases/*`,
     `raw.githubusercontent.com`, `gist.githubusercontent.com`,
-    `gist.github.com`) com limite de 50MB;
+    `gist.github.com`) com limite de 300MB;
   - roda `python3 scripts/mep_lint.py` sem modificações contra o pack
     baixado;
   - calcula o `sha256` do conteúdo e grava no campo "Pack Hash"

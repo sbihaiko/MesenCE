@@ -59,7 +59,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   structural checker for `.github/workflows/community-pack-validate.yml`
   (AC-2, AC-6 validate-side of the community-pack triage task): parses the
   reusable workflow's `workflow_call` inputs, the exact Project/Status/
-  option/Pack-Hash ids, the host allow-list, the 50MB cap, the always-write
+  option/Pack-Hash ids, the host allow-list, the 300MB cap, the always-write
   `sha256` step, the unmodified `mep_lint.py` call, the Claude Code Action
   tool restriction + data-not-instruction prompt clause, the secret-name
   comment, and — by literal `uses:`/string match against this workflow's

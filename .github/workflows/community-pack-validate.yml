@@ -41,7 +41,7 @@ env:
   STATUS_ACEITO_PARCIAL: 39e4f3a1
   STATUS_ACEITO_COMPLETO: cd763737
   PACK_HASH_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhge9Is
-  MAX_PACK_BYTES: 52428800 # 50MB pre-download cap (50 * 1024 * 1024)
+  MAX_PACK_BYTES: 314572800 # 300MB pre-download cap (300 * 1024 * 1024)
 
 permissions:
   contents: read
@@ -97,9 +97,9 @@ jobs:
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
-      # 50MB cap: rejected on declared Content-Length before the transfer
+      # 300MB cap: rejected on declared Content-Length before the transfer
       # starts, and via curl --max-filesize mid-stream — never after.
-      - name: Download pack (50MB cap enforced before/during the transfer)
+      - name: Download pack (300MB cap enforced before/during the transfer)
         id: download
         if: steps.host-check.outputs.allowed == '1'
         continue-on-error: true
@@ -110,7 +110,7 @@ jobs:
           URL="$PACK_URL"
           DECLARED=$(curl -fsSIL "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{v=$2} END{print v+0}')
           if [ "${DECLARED:-0}" -gt "$MAX_PACK_BYTES" ]; then
-            echo "Content-Length ($DECLARED) exceeds the 50MB cap." >&2
+            echo "Content-Length ($DECLARED) exceeds the 300MB cap." >&2
             exit 1
           fi
           curl -fsSL --max-filesize "$MAX_PACK_BYTES" -o pack_download.bin "$URL"
@@ -122,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body \
-            "Não foi possível baixar o pack dentro do limite de 50MB (ou o download falhou)."
+            "Não foi possível baixar o pack dentro do limite de 300MB (ou o download falhou)."
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid-other
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null

@@ -102,8 +102,8 @@ def check_host_allowlist(text):
 
 
 def check_size_cap(text):
-    if "52428800" not in text:
-        fail("50MB cap constant (52428800 bytes) not found")
+    if "314572800" not in text:
+        fail("300MB cap constant (314572800 bytes) not found")
     if "max-filesize" not in text:
         fail("curl --max-filesize (during-download cap) not found")
     if "content-length" not in text.lower():

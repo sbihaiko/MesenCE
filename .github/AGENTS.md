@@ -47,7 +47,7 @@ what CI actually runs; this doc records why they're split the way they are.
   created/rediscovered: Project node id, the Status field's five option
   ids, and the Pack Hash field id. Enforces a host allow-list
   (`github.com/*/releases/*`, `raw.githubusercontent.com`,
-  `gist.githubusercontent.com`, `gist.github.com`) and a 50MB cap before
+  `gist.githubusercontent.com`, `gist.github.com`) and a 300MB cap before
   and during the download, always records the pack's `sha256` to Pack
   Hash, calls `scripts/mep_lint.py` unmodified, and — only on lint
   success — classifies the pack via `anthropics/claude-code-action`
