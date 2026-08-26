@@ -43,11 +43,6 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `make_gb_test_rom.py`,
   `validate_hdpack_dump.py` - Python spec/golden/pack validators and
   test-ROM/test-pack generators; no emulator dependency.
-- `mep_compare_pack.py` - `Pack` parsing/rendering helpers extracted from
-  `mep_compare.py` to keep both files under the size limits; imported via
-  plain `import mep_compare_pack` (relies on Python auto-adding a directly
-  run script's own directory to `sys.path`) - only ever run through
-  `mep_compare.py`, has no standalone CLI of its own.
 - `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
