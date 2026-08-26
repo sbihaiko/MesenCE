@@ -1,0 +1,117 @@
+# .github/workflows/community-pack-drift-check.yml
+#
+# Verificação diária de drift dos packs comunitários já aceitos no Project 3
+# ("MesenCE Community Packs", node id PVT_kwHOB1MsbM4BhjpN, owner sbihaiko).
+# Para cada item aceito, re-baixa o `pack_url` guardado e recalcula o hash com
+# `curl`+`sha256sum` (sem chamar o Claude Code Action nesta pré-checagem); só
+# quando o hash mudou é que este workflow comenta na issue e chama o workflow
+# reutilizável `community-pack-validate.yml` com `mode: revalidate`.
+#
+# O `GITHUB_TOKEN` padrão do Actions NÃO tem permissão de leitura/escrita em
+# Projects v2 numa conta pessoal — este workflow precisa de um PAT com escopo
+# `project` fornecido manualmente no secret de repositório `PROJECT_PAT`
+# (mesma exigência documentada em `community-pack-validate.yml`; este
+# workflow não cria esse secret, apenas o consome).
+#
+# --- Proveniência gh project (ver AC-5) -------------------------------------
+# CONFIRMADO ao vivo, fonte primária, na sessão de Scout deste run
+# (`gh project field-list 3 --owner sbihaiko --format json`):
+#   - campo Status:    PVTSSF_lAHOB1MsbM4BhjpNzhge86c
+#     opções: 5173b5cd (Novo envio), 51951f52 (Em validação),
+#             227e4623 (Inválido), 39e4f3a1 (Aceito parcial HD Mesen),
+#             cd763737 (Aceito MEP completo)
+#   - campo Pack Hash: PVTF_lAHOB1MsbM4BhjpNzhge9Is
+#
+# NÃO CONFIRMADO - gap de cobertura explícito, não uma suposição apresentada
+# como fato: `gh project item-list 3 --owner sbihaiko --format json`, na
+# mesma sessão, devolveu `{"items":[],"totalCount":0}` - o Project 3 tinha
+# ZERO itens. Os nomes de chave JSON por item (como o valor de Status
+# aparece aninhado, como o texto de Pack Hash aparece, como o número da
+# issue de origem aparece) nunca foram observados em dado real - o gap está
+# no datastore em si (não existe item populado para inspecionar), não
+# apenas numa view em cache. Qualquer conclusão de "esta chave não existe"
+# a seguir é necessariamente provisória, não definitiva, e o parsing abaixo
+# é propositalmente defensivo (múltiplas chaves candidatas, fallback `//
+# empty`, nunca indexação direta) para falhar de forma visível - não
+# silenciosa - se o esquema real divergir das chaves tentadas aqui.
+# -----------------------------------------------------------------------------
+
+name: Community Pack Drift Check
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  detect-drift:
+    runs-on: ubuntu-latest
+    outputs:
+      mismatched: ${{ steps.diff.outputs.mismatched }}
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+      REPO: sbihaiko/MesenCE
+      STATUS_ACCEPTED_PARTIAL: "Aceito parcial (HD Mesen)"
+      STATUS_ACCEPTED_FULL: "Aceito (MEP completo)"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: List accepted project items
+        run: |
+          set -euo pipefail
+          gh project item-list 3 --owner sbihaiko --format json > items.json
+
+      - name: Recompute hash and diff against Pack Hash (curl + sha256sum only)
+        id: diff
+        run: |
+          set -euo pipefail
+          mismatched="[]"
+          while IFS= read -r item; do
+            # Chaves candidatas defensivas: o esquema por item nunca foi
+            # observado em dado real (ver bloco de proveniência acima), então
+            # tentamos as variações plausíveis com fallback `//` em vez de
+            # indexar direto - uma chave ausente vira string vazia, não crash.
+            status=$(jq -r '.status // .["Status"] // empty' <<<"$item")
+            case "$status" in
+              "$STATUS_ACCEPTED_PARTIAL"|"$STATUS_ACCEPTED_FULL") ;;
+              *) continue ;;
+            esac
+
+            issue_number=$(jq -r '.content.number // .number // empty' <<<"$item")
+            stored_hash=$(jq -r '.["Pack Hash"] // .packHash // .pack_hash // empty' <<<"$item")
+            if [ -z "$issue_number" ] || [ -z "$stored_hash" ]; then
+              echo "::warning::item sem issue_number ou Pack Hash reconhecível nas chaves candidatas - pulando defensivamente"
+              continue
+            fi
+
+            body=$(gh issue view "$issue_number" --repo "$REPO" --json body -q '.body')
+            pack_url=$(printf '%s\n' "$body" | grep -Eo 'https?://[^ ")]+' | head -n1 || true)
+            if [ -z "$pack_url" ]; then
+              echo "::warning::issue #$issue_number sem URL de pack detectável no corpo - pulando"
+              continue
+            fi
+
+            fresh_hash=$(curl -fsSL --max-time 120 "$pack_url" | sha256sum | cut -d' ' -f1)
+            if [ "$fresh_hash" != "$stored_hash" ]; then
+              gh issue comment "$issue_number" --repo "$REPO" \
+                --body "o conteúdo do pack mudou desde a última validação — revalidando automaticamente"
+              mismatched=$(jq -c --arg n "$issue_number" --arg u "$pack_url" \
+                '. + [{"issue_number": ($n | tonumber), "pack_url": $u}]' <<<"$mismatched")
+            fi
+          done < <(jq -c '.items[]' items.json)
+
+          echo "mismatched=$mismatched" >> "$GITHUB_OUTPUT"
+
+  revalidate:
+    needs: detect-drift
+    if: needs.detect-drift.outputs.mismatched != '[]'
+    strategy:
+      matrix:
+        item: ${{ fromJson(needs.detect-drift.outputs.mismatched) }}
+    uses: ./.github/workflows/community-pack-validate.yml
+    with:
+      issue_number: ${{ matrix.item.issue_number }}
+      pack_url: ${{ matrix.item.pack_url }}
+      mode: revalidate
+    secrets: inherit
