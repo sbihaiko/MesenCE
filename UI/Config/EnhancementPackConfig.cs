@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Mesen.Interop;
-using System;
+using Mesen.Logic;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
@@ -41,10 +41,7 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 
 	public void SetPackEnabled(string container, bool enabled)
 	{
-		DisabledPacks.RemoveAll(x => string.Equals(x, container, StringComparison.OrdinalIgnoreCase));
-		if(!enabled) {
-			DisabledPacks.Add(container);
-		}
+		DisabledPackList.Set(DisabledPacks, container, enabled);
 		EmuApi.SetMepPackEnabled(container, enabled);
 	}
 }
