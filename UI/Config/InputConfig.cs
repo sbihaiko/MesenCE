@@ -437,7 +437,6 @@ namespace Mesen.Config
 				case ControllerType.HoriTrack:
 				case ControllerType.BandaiHyperShot:
 				case ControllerType.SmsController:
-				case ControllerType.ColecoVisionController:
 				case ControllerType.WsController:
 				case ControllerType.WsControllerVertical:
 				case ControllerType.Pcv2Controller:
@@ -517,7 +516,6 @@ namespace Mesen.Config
 				case ControllerType.BandaiMicrophone:
 				case ControllerType.SmsController:
 				case ControllerType.SmsLightPhaser:
-				case ControllerType.ColecoVisionController:
 				case ControllerType.WsController:
 				case ControllerType.WsControllerVertical:
 				case ControllerType.Pcv2Controller:

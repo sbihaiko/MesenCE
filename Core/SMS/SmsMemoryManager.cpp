@@ -41,9 +41,8 @@ void SmsMemoryManager::Init(Emulator* emu, SmsConsole* console, vector<uint8_t>&
 
 	_model = _console->GetModel();
 	bool isSg1000 = _model == SmsModel::Sg;
-	bool isCv = _model == SmsModel::ColecoVision;
 
-	_workRamSize = isCv ? SmsMemoryManager::CvWorkRamSize : SmsMemoryManager::SmsWorkRamSize;
+	_workRamSize = SmsMemoryManager::SmsWorkRamSize;
 
 	_workRam = new uint8_t[_workRamSize];
 	console->InitializeRam(_workRam, _workRamSize);
@@ -55,9 +54,7 @@ void SmsMemoryManager::Init(Emulator* emu, SmsConsole* console, vector<uint8_t>&
 		memcpy(_biosRom, biosRom.data(), _biosRomSize);
 		_state.BiosEnabled = true;
 		_emu->RegisterMemory(MemoryType::SmsBootRom, _biosRom, _biosRomSize);
-		if(!isCv) {
-			_biosMapper.reset(new SmsBiosMapper(this));
-		}
+		_biosMapper.reset(new SmsBiosMapper(this));
 	} else {
 		if(isSg1000) {
 			_state.CardEnabled = true;
@@ -78,8 +75,6 @@ void SmsMemoryManager::Init(Emulator* emu, SmsConsole* console, vector<uint8_t>&
 
 	if(isSg1000) {
 		_cartRamSize = DetectSgCartRam(romData);
-	} else if(isCv) {
-		_cartRamSize = 0;
 	} else {
 		_cartRamSize = SmsMemoryManager::CartRamMaxSize;
 	}
@@ -88,7 +83,7 @@ void SmsMemoryManager::Init(Emulator* emu, SmsConsole* console, vector<uint8_t>&
 	console->InitializeRam(_cartRam, _cartRamSize);
 	_emu->RegisterMemory(MemoryType::SmsCartRam, _cartRam, _cartRamSize);
 
-	if(!isSg1000 && !isCv) {
+	if(!isSg1000) {
 		LoadBattery();
 		_originalCartRam = new uint8_t[_cartRamSize];
 		memcpy(_originalCartRam, _cartRam, _cartRamSize);
@@ -108,34 +103,24 @@ void SmsMemoryManager::RefreshMappings()
 {
 	Unmap(0, 0xFFFF);
 	MapRegisters(0, 0xFFFF, SmsRegisterAccess::None);
-	if(_model == SmsModel::ColecoVision) {
-		Map(0x0000, 0x1FFF, MemoryType::SmsBootRom, 0, true);
-		for(int i = 0; i < 8; i++) {
-			Map(0x6000 + i * 0x400, 0x63FF + i * 0x400, MemoryType::SmsWorkRam, 0, false);
-		}
+	if(_state.CartridgeEnabled && _model != SmsModel::Sg) {
+		_cart->RefreshMappings();
+	}
 
-		//Don't mirror rom (Sammy Lightfoot breaks if mirrored)
-		Map(0x8000, std::min<int>(0x8000 + _prgRomSize - 1, 0xFFFF), MemoryType::SmsPrgRom, 0, true);
-	} else {
-		if(_state.CartridgeEnabled && _model != SmsModel::Sg) {
-			_cart->RefreshMappings();
+	if(_state.CardEnabled && _model == SmsModel::Sg) {
+		Map(0x0000, 0xBFFF, MemoryType::SmsPrgRom, 0, true);
+		if(_sgRamMapAddress >= 0 && _cartRamSize > 0) {
+			Map(_sgRamMapAddress, _sgRamMapAddress + _cartRamSize - 1, MemoryType::SmsCartRam, 0, false);
 		}
+	}
 
-		if(_state.CardEnabled && _model == SmsModel::Sg) {
-			Map(0x0000, 0xBFFF, MemoryType::SmsPrgRom, 0, true);
-			if(_sgRamMapAddress >= 0 && _cartRamSize > 0) {
-				Map(_sgRamMapAddress, _sgRamMapAddress + _cartRamSize - 1, MemoryType::SmsCartRam, 0, false);
-			}
-		}
+	if(_state.WorkRamEnabled) {
+		Map(0xC000, 0xFFFF, MemoryType::SmsWorkRam, 0, false);
+	}
 
-		if(_state.WorkRamEnabled) {
-			Map(0xC000, 0xFFFF, MemoryType::SmsWorkRam, 0, false);
-		}
-
-		if(_biosMapper && _state.BiosEnabled && (_model == SmsModel::GameGear || !_state.CartridgeEnabled)) {
-			bool enableCart = _model == SmsModel::GameGear;
-			_biosMapper->RefreshMappings(enableCart);
-		}
+	if(_biosMapper && _state.BiosEnabled && (_model == SmsModel::GameGear || !_state.CartridgeEnabled)) {
+		bool enableCart = _model == SmsModel::GameGear;
+		_biosMapper->RefreshMappings(enableCart);
 	}
 }
 
@@ -313,7 +298,6 @@ uint8_t SmsMemoryManager::InternalReadPort(uint8_t port)
 {
 	uint8_t value;
 	switch(_model) {
-		case SmsModel::ColecoVision: value = ReadColecoVisionPort<isPeek>(port); break;
 		case SmsModel::GameGear: value = ReadGameGearPort<isPeek>(port); break;
 		default: value = ReadSmsPort<isPeek>(port);
 	}
@@ -328,7 +312,6 @@ void SmsMemoryManager::WritePort(uint8_t port, uint8_t value)
 {
 	_emu->ProcessMemoryAccess<CpuType::Sms, MemoryType::SmsPort, MemoryOperationType::Write>(port, value);
 	switch(_model) {
-		case SmsModel::ColecoVision: WriteColecoVisionPort(port, value); break;
 		case SmsModel::GameGear: WriteGameGearPort(port, value); break;
 		default: WriteSmsPort(port, value); break;
 	}
@@ -374,16 +357,6 @@ void SmsMemoryManager::WriteSmsPort(uint8_t port, uint8_t value)
 				_fmAudio->Write(port, value);
 			}
 			break;
-	}
-}
-
-void SmsMemoryManager::WriteColecoVisionPort(uint8_t port, uint8_t value)
-{
-	switch(port & 0xE0) {
-		case 0x80: _controlManager->WriteControlPort(0); break;
-		case 0xC0: _controlManager->WriteControlPort(1); break;
-		case 0xE0: _psg->Write(value); break;
-		case 0xA0: _vdp->WritePort(port, value); break;
 	}
 }
 
@@ -441,16 +414,6 @@ uint8_t SmsMemoryManager::ReadSmsPort(uint8_t port)
 		case 0xC1: return _state.IoEnabled ? _controlManager->ReadPort(1) : GetOpenBus(); //Port DD (IO Port B/Misc)
 
 		default: return GetOpenBus();
-	}
-}
-
-template<bool isPeek>
-uint8_t SmsMemoryManager::ReadColecoVisionPort(uint8_t port)
-{
-	switch(port & 0xE0) {
-		case 0xA0: return isPeek ? _vdp->PeekPort(port) : _vdp->ReadPort(port);
-		case 0xE0: return _controlManager->ReadPort((port >> 1) & 0x01);
-		default: return 0xFF;
 	}
 }
 

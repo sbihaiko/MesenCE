@@ -378,25 +378,6 @@ public:
 		return false;
 	}
 
-	static bool LoadColecoVisionBios(Emulator* emu, vector<uint8_t>& biosRom)
-	{
-		string filename = "bios.col";
-		uint32_t size = 0x2000;
-		if(AttemptLoadFirmware(biosRom, filename, size)) {
-			return true;
-		}
-
-		MissingFirmwareMessage msg(filename.c_str(), FirmwareType::ColecoVision, size);
-		emu->GetNotificationManager()->SendNotification(ConsoleNotificationType::MissingFirmware, &msg);
-
-		if(AttemptLoadFirmware(biosRom, filename, size)) {
-			return true;
-		}
-
-		MessageManager::DisplayMessage("Error", "Could not find firmware file for the ColecoVision");
-		return false;
-	}
-
 	static bool LoadWsBootRom(Emulator* emu, vector<uint8_t>& bootRom, WsModel model)
 	{
 		string filename;

@@ -148,10 +148,10 @@ void SmsEnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sam
 	//registers either, or stale notes/noise would play under the FM voices.
 	bool psgMuted = _console->IsPsgAudioMuted();
 	if(!psgMuted) {
-		//Per-channel volume settings (Settings > SMS/ColecoVision > Audio)
+		//Per-channel volume settings (Settings > SMS > Audio)
 		//apply to the synth voices too, so muting a chip channel also mutes
 		//its enhanced voice - same indexing as SmsPsg::Run()
-		uint32_t* chVol = _console->GetModel() == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().ChannelVolumes : _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
+		uint32_t* chVol = _emu->GetSettings()->GetSmsConfig().ChannelVolumes;
 		for(int i = 0; i < 3; i++) {
 			raw[i].Freq = toneFreq(psg.Tone[i].ReloadValue);
 			raw[i].Vol = toneVol(psg.Tone[i].Volume) * chVol[i] / 100.0;

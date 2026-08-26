@@ -62,7 +62,7 @@
 							<CheckBox Grid.Row="3" Content="{l:Translate chkSnesMusicFiles}" IsChecked="{Binding Config.AssociateSnesMusicFiles}" />
 							<CheckBox Grid.Row="4" Content="{l:Translate chkSmsRomFiles}" IsChecked="{Binding Config.AssociateSmsRomFiles}" />
 							<CheckBox Grid.Row="5" Content="{l:Translate chkGameGearRomFiles}" IsChecked="{Binding Config.AssociateGameGearRomFiles}" />
-							<CheckBox Grid.Row="6" Content="{l:Translate chkCvRomFiles}" IsChecked="{Binding Config.AssociateCvRomFiles}" />
+
 							<CheckBox Grid.Row="0" Grid.Column="2" Content="{l:Translate chkGbRomFiles}" IsChecked="{Binding Config.AssociateGbRomFiles}" />
 							<CheckBox Grid.Row="1" Grid.Column="2" Content="{l:Translate chkGbMusicFiles}" IsChecked="{Binding Config.AssociateGbMusicFiles}" />
 							<CheckBox Grid.Row="2" Grid.Column="2" Content="{l:Translate chkGbaRomFiles}" IsChecked="{Binding Config.AssociateGbaRomFiles}" />

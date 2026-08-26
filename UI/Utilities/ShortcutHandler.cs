@@ -302,16 +302,9 @@ namespace Mesen.Utilities
 					break;
 
 				case ConsoleType.Sms:
-					if(MainWindowViewModel.Instance.RomInfo.Format == RomFormat.ColecoVision) {
-						switch(layer) {
-							case VideoLayer.Bg1: return (() => ConfigManager.Config.Cv.DisableBackground, (val) => ConfigManager.Config.Cv.DisableBackground = val);
-							case VideoLayer.Sprite1: return (() => ConfigManager.Config.Cv.DisableSprites, (val) => ConfigManager.Config.Cv.DisableSprites = val);
-						}
-					} else {
-						switch(layer) {
-							case VideoLayer.Bg1: return (() => ConfigManager.Config.Sms.DisableBackground, (val) => ConfigManager.Config.Sms.DisableBackground = val);
-							case VideoLayer.Sprite1: return (() => ConfigManager.Config.Sms.DisableSprites, (val) => ConfigManager.Config.Sms.DisableSprites = val);
-						}
+					switch(layer) {
+						case VideoLayer.Bg1: return (() => ConfigManager.Config.Sms.DisableBackground, (val) => ConfigManager.Config.Sms.DisableBackground = val);
+						case VideoLayer.Sprite1: return (() => ConfigManager.Config.Sms.DisableSprites, (val) => ConfigManager.Config.Sms.DisableSprites = val);
 					}
 					break;
 
@@ -378,7 +371,6 @@ namespace Mesen.Utilities
 			ConfigManager.Config.Gba.ApplyConfig();
 			ConfigManager.Config.PcEngine.ApplyConfig();
 			ConfigManager.Config.Sms.ApplyConfig();
-			ConfigManager.Config.Cv.ApplyConfig();
 			ConfigManager.Config.Ws.ApplyConfig();
 		}
 

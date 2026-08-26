@@ -7,8 +7,7 @@ enum class SmsModel
 {
 	Sms,
 	GameGear,
-	Sg,
-	ColecoVision
+	Sg
 };
 
 struct SmsCpuState : public BaseState

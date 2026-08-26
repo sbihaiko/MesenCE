@@ -91,8 +91,6 @@ namespace Mesen.Config
 			CreateMimeType("x-mesen-sms", "sms", "Master System ROM", mimeTypes, cfg.AssociateSmsRomFiles);
 			CreateMimeType("x-mesen-gg", "gg", "Game Gear ROM", mimeTypes, cfg.AssociateGameGearRomFiles);
 			CreateMimeType("x-mesen-sg", "sg", "SG-1000 ROM", mimeTypes, cfg.AssociateSgRomFiles);
-			CreateMimeType("x-mesen-col", "col", "ColecoVision ROM", mimeTypes, cfg.AssociateCvRomFiles);
-
 			CreateMimeType("x-mesen-ws", "ws", "WonderSwan ROM", mimeTypes, cfg.AssociateWsRomFiles);
 			CreateMimeType("x-mesen-wsc", "wsc", "WonderSwan Color ROM", mimeTypes, cfg.AssociateWsRomFiles);
 			CreateMimeType("x-mesen-pc2", "pc2", "Pocket Challenge V2 ROM", mimeTypes, cfg.AssociateWsRomFiles);
@@ -217,7 +215,6 @@ namespace Mesen.Config
 			FileAssociationHelper.UpdateFileAssociation("sms", cfg.AssociateSmsRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("gg", cfg.AssociateGameGearRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("sg", cfg.AssociateSgRomFiles);
-			FileAssociationHelper.UpdateFileAssociation("col", cfg.AssociateCvRomFiles);
 
 			FileAssociationHelper.UpdateFileAssociation("ws", cfg.AssociateWsRomFiles);
 			FileAssociationHelper.UpdateFileAssociation("wsc", cfg.AssociateWsRomFiles);

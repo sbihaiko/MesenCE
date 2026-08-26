@@ -202,7 +202,6 @@ public class CommandLineHelper
 		result["PC Engine"] = GetSwichesForObject("pcEngine.", typeof(PcEngineConfig));
 		result["SMS"] = GetSwichesForObject("sms.", typeof(SmsConfig));
 		result["WS"] = GetSwichesForObject("ws.", typeof(WsConfig));
-		result["CV"] = GetSwichesForObject("cv.", typeof(CvConfig));
 
 		return result;
 	}

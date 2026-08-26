@@ -15,7 +15,7 @@ namespace Mesen.Utilities
 			".gb", ".gbc", ".gbx",
 			".nes", ".unif", ".unf", ".fds", ".qd", ".studybox",
 			".pce", ".sgx", ".cue",
-			".sms", ".gg", ".sg", ".col",
+			".sms", ".gg", ".sg",
 			".gba",
 			".ws", ".wsc", ".pc2"
 		};

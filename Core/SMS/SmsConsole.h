@@ -41,7 +41,7 @@ private:
 	void UpdateRegion(bool forceUpdate);
 
 public:
-	static vector<string> GetSupportedExtensions() { return { ".sms", ".gg", ".sg", ".col" }; }
+	static vector<string> GetSupportedExtensions() { return { ".sms", ".gg", ".sg" }; }
 	static vector<string> GetSupportedSignatures() { return {}; }
 
 	SmsConsole(Emulator* emu);

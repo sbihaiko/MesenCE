@@ -57,9 +57,6 @@ LoadRomResult SmsConsole::LoadRom(VirtualFile& romFile)
 		if(isGameGear) {
 			_romFormat = RomFormat::GameGear;
 			_model = SmsModel::GameGear;
-		} else if(ext == ".col") {
-			_romFormat = RomFormat::ColecoVision;
-			_model = SmsModel::ColecoVision;
 		} else if(ext == ".sg") {
 			_romFormat = RomFormat::Sg;
 			_model = SmsModel::Sg;
@@ -79,11 +76,7 @@ LoadRomResult SmsConsole::LoadRom(VirtualFile& romFile)
 		InitCart(romData);
 
 		vector<uint8_t> biosRom;
-		if(_model == SmsModel::ColecoVision) {
-			FirmwareHelper::LoadColecoVisionBios(_emu, biosRom);
-		} else {
-			FirmwareHelper::LoadSmsBios(_emu, biosRom, isGameGear);
-		}
+		FirmwareHelper::LoadSmsBios(_emu, biosRom, isGameGear);
 
 		_memoryManager->Init(_emu, this, romData, biosRom, _vdp.get(), _controlManager.get(), _cart.get(), _psg.get(), _fmAudio.get());
 		_vdp->Init(_emu, this, _cpu.get(), _controlManager.get(), _memoryManager.get());
@@ -198,7 +191,6 @@ void SmsConsole::UpdateRegion(bool forceUpdate)
 		default:
 		case SmsModel::Sms: region = _emu->GetSettings()->GetSmsConfig().Region; break;
 		case SmsModel::GameGear: region = _emu->GetSettings()->GetSmsConfig().GameGearRegion; break;
-		case SmsModel::ColecoVision: region = _emu->GetSettings()->GetCvConfig().Region; break;
 	}
 
 	if(region == ConsoleRegion::Auto) {
@@ -243,7 +235,7 @@ BaseControlManager* SmsConsole::GetControlManager()
 
 SmsRevision SmsConsole::GetRevision()
 {
-	if(_model == SmsModel::Sg || _model == SmsModel::ColecoVision) {
+	if(_model == SmsModel::Sg) {
 		return SmsRevision::Sms1;
 	} else if(_model == SmsModel::GameGear) {
 		return SmsRevision::Sms2;
@@ -379,7 +371,7 @@ void SmsConsole::GetConsoleState(BaseState& state, ConsoleType consoleType)
 void SmsConsole::InitializeRam(void* data, uint32_t length)
 {
 	EmuSettings* settings = _emu->GetSettings();
-	RamState ramState = _model == SmsModel::ColecoVision ? settings->GetCvConfig().RamPowerOnState : settings->GetSmsConfig().RamPowerOnState;
+	RamState ramState = settings->GetSmsConfig().RamPowerOnState;
 	settings->InitializeRam(ramState, data, length);
 }
 

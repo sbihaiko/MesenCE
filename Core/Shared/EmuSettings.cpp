@@ -468,9 +468,7 @@ OverscanDimensions EmuSettings::GetOverscan()
 		case ConsoleType::Nes: return _emu->GetRegion() == ConsoleRegion::Ntsc ? _nes.NtscOverscan : _nes.PalOverscan;
 		case ConsoleType::PcEngine: return _pce.Overscan;
 		case ConsoleType::Sms:
-			if(romFormat == RomFormat::ColecoVision) {
-				return { 0, 0, 24, 24 };
-			} else if(romFormat == RomFormat::GameGear) {
+			if(romFormat == RomFormat::GameGear) {
 				return _sms.GameGearOverscan;
 			} else {
 				return _emu->GetRegion() == ConsoleRegion::Ntsc ? _sms.NtscOverscan : _sms.PalOverscan;

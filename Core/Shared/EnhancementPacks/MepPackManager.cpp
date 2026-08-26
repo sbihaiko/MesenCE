@@ -227,8 +227,6 @@ string MepPackManager::SystemFromExtension(const string& lowerExt)
 		return "gg";
 	} else if(lowerExt == ".sg") {
 		return "sg1000";
-	} else if(lowerExt == ".col") {
-		return "coleco";
 	} else if(lowerExt == ".sfc" || lowerExt == ".smc" || lowerExt == ".swc" || lowerExt == ".fig" || lowerExt == ".bs" || lowerExt == ".st") {
 		return "snes";
 	}

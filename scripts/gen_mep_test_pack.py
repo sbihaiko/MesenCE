@@ -45,7 +45,7 @@ def no_intro_sha1(rom: Path) -> str:
 def system_for(rom: Path) -> str:
     return {
         ".nes": "nes", ".gb": "gb", ".gbc": "gbc", ".sms": "sms", ".gg": "gg",
-        ".sg": "sg1000", ".col": "coleco", ".sfc": "snes", ".smc": "snes",
+        ".sg": "sg1000", ".sfc": "snes", ".smc": "snes",
     }.get(rom.suffix.lower(), "nes")
 
 

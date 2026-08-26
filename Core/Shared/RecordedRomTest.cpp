@@ -241,7 +241,6 @@ void RecordedRomTest::UpdateSettings()
 	settings->GetGameboyConfig().RamPowerOnState = RamState::AllZeros;
 	settings->GetPcEngineConfig().RamPowerOnState = RamState::AllZeros;
 	settings->GetSmsConfig().RamPowerOnState = RamState::AllZeros;
-	settings->GetCvConfig().RamPowerOnState = RamState::AllZeros;
 	settings->GetGbaConfig().RamPowerOnState = RamState::AllZeros;
 
 	settings->GetSnesConfig().DisableFrameSkipping = true;

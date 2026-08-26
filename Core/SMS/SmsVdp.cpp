@@ -57,10 +57,6 @@ void SmsVdp::Init(Emulator* emu, SmsConsole* console, SmsCpu* cpu, SmsControlMan
 		for(int i = 0; i < 0x20; i++) {
 			WriteSmsPalette(i, _paletteRam[i]);
 		}
-	} else if(_model == SmsModel::ColecoVision) {
-		for(int i = 0; i < 0x20; i++) {
-			WriteSmsPalette(i, _paletteRam[i]);
-		}
 	} else {
 		InitGgPowerOnState();
 
@@ -104,31 +100,23 @@ void SmsVdp::Run(uint64_t runTo)
 
 void SmsVdp::UpdateConfig()
 {
-	bool useSgPalette = _model == SmsModel::ColecoVision || (_model == SmsModel::Sg && _emu->GetSettings()->GetSmsConfig().UseSgPalette);
+	bool useSgPalette = _model == SmsModel::Sg && _emu->GetSettings()->GetSmsConfig().UseSgPalette;
 	_activeSgPalette = useSgPalette ? _originalSgPalette : _smsSgPalette;
 
-	_disableBackground = _model == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().DisableBackground : _emu->GetSettings()->GetSmsConfig().DisableBackground;
-	_disableSprites = _model == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().DisableSprites : _emu->GetSettings()->GetSmsConfig().DisableSprites;
-	_removeSpriteLimit = _model == SmsModel::ColecoVision ? _emu->GetSettings()->GetCvConfig().RemoveSpriteLimit : _emu->GetSettings()->GetSmsConfig().RemoveSpriteLimit;
+	_disableBackground = _emu->GetSettings()->GetSmsConfig().DisableBackground;
+	_disableSprites = _emu->GetSettings()->GetSmsConfig().DisableSprites;
+	_removeSpriteLimit = _emu->GetSettings()->GetSmsConfig().RemoveSpriteLimit;
 	_revision = _console->GetRevision();
 }
 
 void SmsVdp::UpdateIrqState()
 {
 	if(_state.VerticalBlankIrqPending && _state.EnableVerticalBlankIrq) {
-		if(_model == SmsModel::ColecoVision) {
-			_cpu->SetNmiLevel(true);
-		} else {
-			_cpu->SetIrqSource(SmsIrqSource::Vdp);
-		}
+		_cpu->SetIrqSource(SmsIrqSource::Vdp);
 	} else if(_state.ScanlineIrqPending && _state.EnableScanlineIrq) {
 		_cpu->SetIrqSource(SmsIrqSource::Vdp);
 	} else {
-		if(_model == SmsModel::ColecoVision) {
-			_cpu->SetNmiLevel(false);
-		} else {
-			_cpu->ClearIrqSource(SmsIrqSource::Vdp);
-		}
+		_cpu->ClearIrqSource(SmsIrqSource::Vdp);
 	}
 }
 
@@ -1412,11 +1400,6 @@ uint16_t SmsVdp::GetPixelColor()
 
 void SmsVdp::WriteRegister(uint8_t reg, uint8_t value)
 {
-	if(reg >= 8 && _model == SmsModel::ColecoVision) {
-		//These registers don't exist on the TMS9918A
-		return;
-	}
-
 	switch(reg) {
 		case 0:
 			_state.SyncDisabled = (value & 0x01) != 0; //TODOSMS not implemented

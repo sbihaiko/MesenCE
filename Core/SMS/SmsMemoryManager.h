@@ -23,7 +23,6 @@ class SmsMemoryManager final : public ISerializable
 private:
 	static constexpr uint32_t SmsWorkRamSize = 0x2000;
 	static constexpr uint32_t CartRamMaxSize = 0x8000;
-	static constexpr uint32_t CvWorkRamSize = 0x400;
 
 	Emulator* _emu = nullptr;
 	SmsConsole* _console = nullptr;
@@ -61,11 +60,9 @@ private:
 
 	template<bool isPeek = false> __forceinline uint8_t InternalReadPort(uint8_t port);
 	template<bool isPeek> uint8_t ReadSmsPort(uint8_t port);
-	template<bool isPeek> uint8_t ReadColecoVisionPort(uint8_t port);
 	template<bool isPeek> uint8_t ReadGameGearPort(uint8_t port);
 	void WriteGameGearPort(uint8_t port, uint8_t value);
 	void WriteSmsPort(uint8_t port, uint8_t value);
-	void WriteColecoVisionPort(uint8_t port, uint8_t value);
 
 	uint32_t DetectSgCartRam(vector<uint8_t>& romData);
 

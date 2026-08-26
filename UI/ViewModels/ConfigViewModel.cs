@@ -21,7 +21,6 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial PceConfigViewModel? PcEngine { get; set; }
 		[ObservableProperty] public partial SmsConfigViewModel? Sms { get; set; }
 		[ObservableProperty] public partial WsConfigViewModel? Ws { get; set; }
-		[ObservableProperty] public partial OtherConsolesConfigViewModel? OtherConsoles { get; set; }
 
 		[ObservableProperty] public partial ConfigWindowTab SelectedIndex { get; set; }
 		public bool AlwaysOnTop { get; }
@@ -61,7 +60,6 @@ namespace Mesen.ViewModels
 				case ConfigWindowTab.PcEngine: PcEngine ??= AddDisposable(new PceConfigViewModel()); break;
 				case ConfigWindowTab.Sms: Sms ??= AddDisposable(new SmsConfigViewModel()); break;
 				case ConfigWindowTab.Ws: Ws ??= AddDisposable(new WsConfigViewModel()); break;
-				case ConfigWindowTab.OtherConsoles: OtherConsoles ??= AddDisposable(new OtherConsolesConfigViewModel()); break;
 
 				case ConfigWindowTab.Preferences: Preferences ??= AddDisposable(new PreferencesConfigViewModel()); break;
 			}
@@ -89,7 +87,6 @@ namespace Mesen.ViewModels
 			ConfigManager.Config.Gba = Gba?.OriginalConfig ?? ConfigManager.Config.Gba;
 			ConfigManager.Config.PcEngine = PcEngine?.OriginalConfig ?? ConfigManager.Config.PcEngine;
 			ConfigManager.Config.Sms = Sms?.OriginalConfig ?? ConfigManager.Config.Sms;
-			ConfigManager.Config.Cv = OtherConsoles?.CvOriginalConfig ?? ConfigManager.Config.Cv;
 			ConfigManager.Config.ApplyConfig();
 			ConfigManager.Config.Save();
 		}
@@ -108,8 +105,7 @@ namespace Mesen.ViewModels
 				Gba?.OriginalConfig.IsIdentical(ConfigManager.Config.Gba) == false ||
 				PcEngine?.OriginalConfig.IsIdentical(ConfigManager.Config.PcEngine) == false ||
 				Sms?.OriginalConfig.IsIdentical(ConfigManager.Config.Sms) == false ||
-				Ws?.OriginalConfig.IsIdentical(ConfigManager.Config.Ws) == false ||
-				OtherConsoles?.CvOriginalConfig.IsIdentical(ConfigManager.Config.Cv) == false
+				Ws?.OriginalConfig.IsIdentical(ConfigManager.Config.Ws) == false
 			);
 		}
 	}
@@ -128,7 +124,7 @@ namespace Mesen.ViewModels
 		PcEngine = 9,
 		Sms = 10,
 		Ws = 11,
-		OtherConsoles = 12,
+		// 12 was OtherConsoles (ColecoVision) — do not reuse
 		//separator
 		Preferences = 14
 	}

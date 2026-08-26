@@ -56,7 +56,6 @@ namespace Mesen.Debugger.Utilities
 				RomFormat.Pce => true,
 				RomFormat.Sms => true,
 				RomFormat.Sg => true,
-				RomFormat.ColecoVision => true,
 				RomFormat.Gba => true,
 				RomFormat.Ws => true,
 				_ => false

@@ -60,7 +60,6 @@ extern "C"
 	void InitializeEmu(const char* homeFolder, void* windowHandle, void* viewerHandle, bool softwareRenderer, bool noAudio, bool noVideo, bool noInput);
 	bool LoadRom(char* filename, char* patchFile);
 	void SetSmsConfig(SmsConfig config);
-	void SetCvConfig(CvConfig config);
 	void SetNesConfig(NesConfig config);
 	void SetGameboyConfig(GameboyConfig config);
 	void SetEnhancementPackConfig(EnhancementPackConfig config);
@@ -175,12 +174,6 @@ int main(int argc, char** argv)
 		sms.Region = ConsoleRegion::Pal;
 	}
 	SetSmsConfig(sms);
-
-	CvConfig cv = {};
-	for(int i = 0; i < 4; i++) {
-		cv.ChannelVolumes[i] = 100;
-	}
-	SetCvConfig(cv);
 
 	NesConfig nes = GetNesConfig();
 	for(int i = 0; i < 11; i++) {

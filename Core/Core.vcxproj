@@ -38,7 +38,7 @@
     <ClInclude Include="Shared\Utilities\AvMergeUtilities.h" />
     <ClInclude Include="SNES\Input\SnesBlueRetroController.h" />
     <ClInclude Include="SNES\Input\SnesNttDataKeypad.h" />
-    <ClInclude Include="SMS\Input\ColecoVisionController.h" />
+
     <ClInclude Include="Debugger\AddressInfo.h" />
     <ClInclude Include="Debugger\Base6502Assembler.h" />
     <ClInclude Include="Debugger\CdlManager.h" />

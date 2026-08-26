@@ -67,11 +67,6 @@ extern "C"
 		_emu->GetSettings()->SetEnhancementPackConfig(config);
 	}
 
-	DllExport void __stdcall SetCvConfig(CvConfig config)
-	{
-		_emu->GetSettings()->SetCvConfig(config);
-	}
-
 	DllExport void __stdcall SetWsConfig(WsConfig config)
 	{
 		_emu->GetSettings()->SetWsConfig(config);

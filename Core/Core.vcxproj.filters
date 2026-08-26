@@ -2934,9 +2934,7 @@
     <ClInclude Include="Gameboy\Carts\GbM161.h">
       <Filter>Gameboy\Carts</Filter>
     </ClInclude>
-    <ClInclude Include="SMS\Input\ColecoVisionController.h">
-      <Filter>SMS\Input</Filter>
-    </ClInclude>
+
     <ClInclude Include="WS\WsTypes.h">
       <Filter>WS</Filter>
     </ClInclude>

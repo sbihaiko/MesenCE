@@ -164,12 +164,7 @@
 						</Grid>
 					</c:OptionSection>
 
-					<c:OptionSection Header="{l:Translate lblOtherConsoles}" Icon="Assets/Drive.png" >
-						<Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*">
-							<TextBlock Text="ColecoVision - Boot ROM" />
-							<c:FirmwareSelect FirmwareType="ColecoVision" Grid.Column="1" />
-						</Grid>
-					</c:OptionSection>
+
 				</StackPanel>
 			</ScrollViewer>
 		</TabItem>

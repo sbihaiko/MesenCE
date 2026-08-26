@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
 	if(ciTestMode) {
 		return RunCiTests(romFolder) ? 0 : -1;
 	} else {
-		vector<string> testRoms = GetFilesInFolder(romFolder, { ".sfc", ".gb", ".gbc", ".gbx", ".nes", ".pce", ".cue", ".sms", ".gg", ".sg", ".gba", ".col", ".ws", ".wsc", ".pc2" });
+		vector<string> testRoms = GetFilesInFolder(romFolder, { ".sfc", ".gb", ".gbc", ".gbx", ".nes", ".pce", ".cue", ".sms", ".gg", ".sg", ".gba", ".ws", ".wsc", ".pc2" });
 		PgoRunTest(testRoms, true);
 	}
 	return 0;

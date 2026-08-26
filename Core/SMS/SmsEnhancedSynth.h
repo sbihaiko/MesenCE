@@ -6,7 +6,7 @@
 class Emulator;
 class SmsConsole;
 
-//Experimental "enhanced audio" synth for the SMS/Game Gear/SG-1000/ColecoVision
+//Experimental "enhanced audio" synth for the SMS/Game Gear/SG-1000
 //PSG (SN76489: 3 tone channels + 1 noise channel, shared by every SmsModel via
 //SmsConsole/SmsPsg). Re-interprets the PSG's live channel state (frequency,
 //4-bit volume) with modern instrument timbres, mixed on top of (or in place

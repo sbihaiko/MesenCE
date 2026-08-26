@@ -507,10 +507,6 @@ namespace Mesen.ViewModels
 					ActionType = ActionType.Ws,
 					OnClick = () => OpenConfig(wnd, ConfigWindowTab.Ws)
 				},
-				new MainMenuAction() {
-					ActionType = ActionType.OtherConsoles,
-					OnClick = () => OpenConfig(wnd, ConfigWindowTab.OtherConsoles)
-				},
 				new ContextMenuSeparator(),
 
 				new MainMenuAction() {
@@ -572,7 +568,6 @@ namespace Mesen.ViewModels
 					ConsoleType.Nes => ConfigManager.Config.Nes.Region == region,
 					ConsoleType.Sms => (
 						MainWindow.RomInfo.Format switch {
-							RomFormat.ColecoVision => ConfigManager.Config.Cv.Region,
 							RomFormat.GameGear => ConfigManager.Config.Sms.GameGearRegion,
 							_ => ConfigManager.Config.Sms.Region
 						} == region
@@ -595,10 +590,8 @@ namespace Mesen.ViewModels
 							switch(MainWindow.RomInfo.Format) {
 								default: case RomFormat.Sms: ConfigManager.Config.Sms.Region = region; break;
 								case RomFormat.GameGear: ConfigManager.Config.Sms.GameGearRegion = region; break;
-								case RomFormat.ColecoVision: ConfigManager.Config.Cv.Region = region; break;
 							}
 							ConfigManager.Config.Sms.ApplyConfig();
-							ConfigManager.Config.Cv.ApplyConfig();
 							break;
 
 						default:

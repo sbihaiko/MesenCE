@@ -12,7 +12,7 @@ SmsPsg::SmsPsg(Emulator* emu, SmsConsole* console)
 	_console = console;
 	_soundMixer = emu->GetSoundMixer();
 	_settings = emu->GetSettings();
-	_altNoiseMode = _console->GetModel() == SmsModel::ColecoVision || _console->GetModel() == SmsModel::Sg;
+	_altNoiseMode = _console->GetModel() == SmsModel::Sg;
 
 	_state.Noise.Lfsr = 0x8000;
 	_state.Noise.Volume = 0x0F;
@@ -71,7 +71,7 @@ void SmsPsg::RunNoise(SmsNoiseChannelState& noise)
 void SmsPsg::Run()
 {
 	uint64_t runTo = _console->GetMasterClock();
-	uint32_t* volumes = _console->GetModel() == SmsModel::ColecoVision ? _settings->GetCvConfig().ChannelVolumes : _settings->GetSmsConfig().ChannelVolumes;
+	uint32_t* volumes = _settings->GetSmsConfig().ChannelVolumes;
 
 	//When the enhanced synth is active, the PSG channels it replaces are
 	//scaled down to the configured mix level (0 = replaced, 100 = layered).
