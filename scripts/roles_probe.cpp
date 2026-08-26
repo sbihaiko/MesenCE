@@ -136,6 +136,11 @@ int main(int argc, char** argv)
 	double seconds = 20;
 	std::string statePath, inputScript, wavPath, sf2Path;
 	bool autoRoles = true, sfxSep = true;
+	bool enhanced = true; //--no-enhanced: play the raw APU instead of the F1 synth
+uint32_t apuMix = 0; //--apu-mix N
+bool synth = false; //--synth: enable the pack synth layer (EnableSynth) like the GUI does
+bool bootstrap = false; //--bootstrap: let the MEP bootstrap recorder run (writes beside the ROM - use a copy!)
+bool packs = false; //--packs: enable the ROM's enhancement packs (textures on, OGG off, patch off)
 	for(int i = 3; i < argc; i++) {
 		std::string a = argv[i];
 		auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
@@ -145,6 +150,11 @@ int main(int argc, char** argv)
 		else if(a == "--sf2") sf2Path = next();
 		else if(a == "--no-auto-roles") autoRoles = false;
 		else if(a == "--no-sfx") sfxSep = false;
+		else if(a == "--packs") packs = true;
+		else if(a == "--bootstrap") bootstrap = true;
+		else if(a == "--synth") synth = true;
+		else if(a == "--no-enhanced") enhanced = false;
+		else if(a == "--apu-mix") apuMix = (uint32_t)atoi(next().c_str());
 		else seconds = atof(a.c_str());
 	}
 	std::filesystem::create_directories(work);
@@ -156,10 +166,13 @@ int main(int argc, char** argv)
 	{
 		//Never write beside the user's ROM from a harness
 		EnhancementPackConfig mep = {};
-		mep.EnableMepPacks = false;
-		mep.EnableTextures = false;
-		mep.EnableSynth = false;
-		mep.BootstrapEnhancementFolder = false;
+		mep.EnableMepPacks = packs;
+		mep.EnableTextures = packs;
+		mep.EnableAudio = false;
+		mep.EnablePatches = false;
+		mep.EnableSynth = synth;
+		mep.BootstrapEnhancementFolder = bootstrap;
+		if(bootstrap) { mep.EnableMepPacks = true; }
 		SetEnhancementPackConfig(mep);
 	}
 	{
@@ -176,7 +189,11 @@ int main(int argc, char** argv)
 		//constructor.
 		AudioConfig audio = {};
 		audio.EnableAudio = true;
-		audio.EnableEnhancedAudio = true;
+		audio.MasterVolume = 100;
+		audio.EnhancedAudioVolume = 100;
+		audio.EnhancedAudioApuMix = apuMix;
+		audio.EnhancedAudioPreset = 4; //Studio
+		audio.EnableEnhancedAudio = enhanced;
 		audio.EnhancedAudioAutoRoles = autoRoles;
 		audio.EnhancedAudioSfxSeparation = sfxSep;
 		audio.EnhancedAudioSoundFontPath = sf2Path.c_str();

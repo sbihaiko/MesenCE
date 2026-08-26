@@ -7,6 +7,7 @@
 #include "Shared/EmuSettings.h"
 #include "Shared/Audio/SoundMixer.h"
 #include "Shared/Audio/MidiExporter.h"
+#include "Shared/MessageManager.h"
 
 //Built-in instrument presets. Order must match the EnhancedAudioPreset enum
 //on the UI side (Synthwave = 0, ChipDeluxe = 1, OrchestralLite = 2, Dry = 3,
@@ -186,5 +187,38 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 		midi->LogFrame("NES", cfg.EnhancedAudioPreset, in, sampleCount, sampleRate);
 	}
 
+	int32_t peakBefore = 0;
+	for(uint32_t i = 0; i < sampleCount * 2; i++) {
+		peakBefore = std::max(peakBefore, (int32_t)std::abs(out[i]));
+	}
+
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
+
+	int32_t peakAfter = 0;
+	for(uint32_t i = 0; i < sampleCount * 2; i++) {
+		peakAfter = std::max(peakAfter, (int32_t)std::abs(out[i]));
+	}
+	LogDiagnostics(in, raw, peakBefore, peakAfter, cfg, sampleCount, sampleRate);
+}
+
+void EnhancedSynth::LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg, uint32_t sampleCount, uint32_t sampleRate)
+{
+	constexpr double kDiagPeriodS = 2.0;
+	_diagTimerS += (double)sampleCount / sampleRate;
+	//"the synth is doing something" = it added level of its own to the buffer
+	int state = peakAfter > peakBefore + 64 ? 1 : 0;
+	if(state == _diagState && _diagTimerS < kDiagPeriodS) {
+		return;
+	}
+	if(state == _diagState && state == 1) {
+		//nothing to report while it keeps playing
+		_diagTimerS = 0;
+		return;
+	}
+	_diagTimerS = 0;
+	_diagState = state;
+	char buf[256];
+	snprintf(buf, sizeof(buf), "[EnhancedAudio] %s - apu vol %.2f/%.2f/%.2f, buffer peak %d -> %d (apu mix %u%%, synth volume %u%%)",
+		state ? "playing" : "silent", raw[0].Vol, raw[1].Vol, raw[2].Vol, peakBefore, peakAfter, cfg.EnhancedAudioApuMix, cfg.EnhancedAudioVolume);
+	MessageManager::Log(buf);
 }

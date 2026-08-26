@@ -5,6 +5,7 @@
 
 class Emulator;
 class NesConsole;
+struct AudioConfig;
 
 //Experimental "enhanced audio" synth.
 //Re-interprets the APU channel state (frequency/volume/duty) with modern
@@ -21,6 +22,12 @@ private:
 	ChannelRoleClassifier _roles;
 	bool _wasActive = false;
 
+	//Diagnostics: "is the synth actually producing sound?" written to mesen.log
+	//when the answer changes (and at most every kDiagPeriodS), so a silent
+	//game in the GUI can be told apart from a silent APU without a debugger.
+	double _diagTimerS = 0;
+	int _diagState = -1; //-1 = nothing logged yet, 0 = silent, 1 = sounding
+
 public:
 	EnhancedSynth(Emulator* emu, NesConsole* console);
 	virtual ~EnhancedSynth();
@@ -33,4 +40,7 @@ public:
 	void Reset();
 
 	void MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sampleRate) override;
+
+private:
+	void LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg, uint32_t sampleCount, uint32_t sampleRate);
 };
