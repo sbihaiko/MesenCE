@@ -1,9 +1,10 @@
 # docs/specs/golden/mep/path-cases.txt
 #
-# Shared zip-slip fixture (Fase 1 + Fase 4B, docs/roadmap/plano-testes-unitarios.md).
-# Consumed today by UI.Tests/Mep/MepZipValidatorTests.cs (C#, UI/Logic/MepZipValidator.cs);
-# a later Fase 4B C++ suite reads this same file against MepPack's own path
-# normalization, so the format below must stay stable.
+# Shared zip-slip fixture (Fases 1 + 4 of the now-completed unit-test plan -
+# see git history for docs/roadmap/plano-testes-unitarios.md). Consumed by
+# both UI.Tests/Mep/MepZipValidatorTests.cs (C#, UI/Logic/MepZipValidator.cs)
+# and scripts/core_unit_tests.cpp (C++, MepPack's own path normalization),
+# so the format below must stay stable.
 #
 # Format: one case per line, TAB-separated: <path><TAB>ok|bad
 #   - Blank lines and lines starting with '#' are ignored by consumers.
