@@ -47,6 +47,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
   alongside `stats["artist"]`.
+- `validate_palette_variants.py` (F5.4b) - builds `headless_record` via
+  `make capture-tool` if missing, records `roms/Zelda.nes` with the `hdpack`
+  flag, and checks that `HdPackBuilder::ProcessTile` captures more than one
+  distinct palette for at least one tile shape while never letting any single
+  shape exceed `HdPackBuilder::MaxPaletteVariantsPerTile` (the cap that bounds
+  per-shape growth from near-blank/flat tiles - see that constant's comment
+  in `Core/NES/HdPacks/HdPackBuilder.h`). Needs `make core`/a real ROM, unlike
+  the fixture-only validators above.
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh` - repo-hygiene shell checks run from `make`
   or CI.
