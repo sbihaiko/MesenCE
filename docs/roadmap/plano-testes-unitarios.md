@@ -1,6 +1,6 @@
 # Plano de execução — Testes unitários (sem reescrever MVVM)
 
-**Status:** proposto (2026-08-25, revisado 2026-08-25) — Fase 0 pendente ·
+**Status:** em execução (2026-08-25, revisado 2026-08-25) — Fase 0, Fase 1 e Fase 2 concluídas · próxima: Fase 3 ·
 **Origem:** avaliação da UI Avalonia (já MVVM) vs. o bloqueio real (estáticos `EmuApi`/`ConfigManager`, RID `win-x64`, zero `*Test*.csproj`) ·
 **Não substitui:** goldens headless (`headless_record`, `mep_lint.py`, `validate-specs.py`, `roles_probe`) nem o CI de ROM (`.github/workflows/tests.yml`).
 
