@@ -97,9 +97,11 @@ is a **name match** — a single-segment subfolder whose name equals the ROM
 name (case-insensitive), mirroring the zip-name-equals-ROM rule it extends.
 
 `MepZipValidator.Validate(ZipArchive)` (C#) and `mep_lint.py` (Python) run
-at points where no ROM name is available — `Validate` is called from the
-"install pack" UI flow (Core/Shared/EnhancementPacks/MepPack.cpp-adjacent
-plumbing has no filename context here) and `mep_lint.py`'s CLI takes only a
+at points where no ROM name is available — `Validate` is called from
+`InstallPack` in `UI/ViewModels/EnhancementPacksViewModel.cs:121`, which
+opens a generic file-picker dialog and copies the selected zip into the
+shared `PacksFolder` (`UI/ViewModels/EnhancementPacksViewModel.cs:110-133`)
+with no ROM in scope at that point, and `mep_lint.py`'s CLI takes only a
 downloaded pack path (`argv[1]`) for the community-pack CI workflow
 (`.github/workflows/community-pack-validate.yml`), not a target ROM. Their
 fallback is therefore **structural**: does a candidate subfolder, treated as
@@ -117,14 +119,20 @@ something to unify immediately, because unifying it requires giving the
 validators the one piece of context they currently lack: the ROM name.
 **Named follow-up (not this task):** add an optional ROM-name parameter to
 `MepZipValidator.Validate` and to `mep_lint.py`'s CLI (e.g. an optional
-second argument) so that, when a caller has that context (the installer
-flow already knows which ROM the user is installing a pack for; CI does not
-and would keep using the structural path), the validators can tighten to the
-same name match C++ uses instead of only the looser structural one. Until
-that lands, a validator-side accept is a *necessary* condition (the layout
-looks pack-shaped) but not the *sufficient* one C++ enforces at load time
-(the layout is also for this ROM) — this gap is intentional, not an
-oversight, and is why the validators are pre-flight checks, not the
+second argument) so that, when a caller has that context, the validators
+can tighten to the same name match C++ uses instead of only the looser
+structural one. Today **neither existing caller has that context**:
+`InstallPack` copies into the shared `PacksFolder` with no ROM selected
+(§3 above), and CI validates a downloaded pack with no ROM at all — both
+would keep using the structural path even after the parameter exists.
+Taking the tightened check therefore also requires a *new* caller — a
+per-ROM install path/UI action that knows which ROM it is installing for
+and passes that name through `Validate` — not just adding a parameter to
+the existing installer flow, which does not have a ROM to give it. Until
+that new caller exists, a validator-side accept is a *necessary* condition
+(the layout looks pack-shaped) but not the *sufficient* one C++ enforces at
+load time (the layout is also for this ROM) — this gap is intentional, not
+an oversight, and is why the validators are pre-flight checks, not the
 authority `PrepareZip` is for what actually loads.
 
 ### 4. Deferred: a standalone C++ E2E zip-pipeline test harness
