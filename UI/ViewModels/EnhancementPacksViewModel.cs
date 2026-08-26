@@ -2,12 +2,11 @@ using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Mesen.Config;
 using Mesen.Interop;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.Windows;
-using System;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace Mesen.ViewModels
@@ -40,32 +39,27 @@ namespace Mesen.ViewModels
 			SiblingFolder = EmuApi.GetMepSiblingFolder();
 			HasSiblingFolder = SiblingFolder.Length > 0;
 
+			MepPackListResult parsed = MepPackListParser.Parse(EmuApi.GetMepPackList());
+
 			var packs = new MesenList<MepPackEntry>();
-			var rejected = new System.Text.StringBuilder();
-			foreach(string line in EmuApi.GetMepPackList().Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
-				if(line.StartsWith("!")) {
-					rejected.AppendLine(line.Substring(1));
-					continue;
-				}
-				string[] parts = line.Split('\t');
-				if(parts.Length < 8) {
-					continue;
-				}
+			foreach(MepPackListEntry entry in parsed.Packs) {
 				packs.Add(new MepPackEntry() {
-					Container = parts[0],
-					Name = parts[1],
-					Version = parts[2],
-					Author = parts[3],
-					License = parts[4],
-					Sections = parts[5].Replace(",", ", "),
-					Enabled = parts[6] == "1",
-					Source = parts[7] == "2" ? "sibling" : parts[7] == "1" ? "zip" : "folder"
+					Container = entry.Container,
+					Name = entry.Name,
+					Version = entry.Version,
+					Author = entry.Author,
+					License = entry.License,
+					//Display-only formatting stays here, not in MepPackListParser
+					//(the parser hands back the raw Sections string).
+					Sections = entry.Sections.Replace(",", ", "),
+					Enabled = entry.Enabled,
+					Source = entry.Source
 				});
 			}
 			Packs = packs;
 			HasPacks = packs.Count > 0;
-			RejectedInfo = rejected.ToString().TrimEnd();
-			HasRejected = RejectedInfo.Length > 0;
+			RejectedInfo = parsed.RejectedInfo;
+			HasRejected = parsed.HasRejected;
 		}
 
 		//Persists the per-pack toggles + section flags; the core applies them
@@ -109,9 +103,11 @@ namespace Mesen.ViewModels
 			}
 		}
 
-		//Copies a .zip pack into EnhancementPacks/ after a light validation
-		//(pack.json at the zip root). The core extracts it to .cache/ on the
-		//next scan (ADR-0040). Returns null on success, a message ID otherwise.
+		//Copies a .zip pack into EnhancementPacks/ after validating its layer
+		//and entry paths via MepZipValidator (pack.json, or any convention
+		//probe per ADR-0049/ADR-0047, zip-slip rejected). The core extracts
+		//it to .cache/ on the next scan (ADR-0040). Returns null on success,
+		//a message ID otherwise.
 		public async Task<string?> InstallPack(Window wnd)
 		{
 			string? filename = await FileDialogHelper.OpenFile(null, wnd, FileDialogHelper.ZipExt);
@@ -120,21 +116,12 @@ namespace Mesen.ViewModels
 			}
 
 			try {
+				string? error;
 				using(ZipArchive zip = ZipFile.OpenRead(filename)) {
-					//pack.json, or the folder convention (ADR-0049) - any layer file
-					bool hasLayer = zip.GetEntry("pack.json") != null;
-					foreach(string probe in new[] { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg" }) {
-						hasLayer |= zip.GetEntry(probe) != null || zip.GetEntry("auto/" + probe) != null;
-					}
-					if(!hasLayer) {
-						return "InstallMepPackInvalidPack";
-					}
-					foreach(ZipArchiveEntry entry in zip.Entries) {
-						string normalized = entry.FullName.Replace('\\', '/');
-						if(normalized.StartsWith("/") || normalized.Split('/').Contains("..") || normalized.Contains(':')) {
-							return "InstallMepPackInvalidPack";
-						}
-					}
+					error = MepZipValidator.Validate(zip);
+				}
+				if(error != null) {
+					return error;
 				}
 
 				string target = Path.Combine(PacksFolder, Path.GetFileName(filename));
