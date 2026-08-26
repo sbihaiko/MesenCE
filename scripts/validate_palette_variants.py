@@ -105,46 +105,53 @@ def group_palettes_by_shape(hires: Path) -> dict:
     return shapes
 
 
+def _multi_palette_check(shapes: dict) -> tuple:
+    """At least 1 tile shape captured more than one distinct palette - the
+    pre-existing, non-regressed capability (see module docstring)."""
+    multi_palette_shapes = {k: v for k, v in shapes.items() if len(v) > 1}
+    max_variants = max((len(v) for v in shapes.values()), default=0)
+    return (
+        "pelo menos 1 tile shape com mais de 1 paleta distinta capturada "
+        f"({len(multi_palette_shapes)}/{len(shapes)} shapes com variantes, "
+        f"máximo {max_variants} paletas num único shape)",
+        len(multi_palette_shapes) > 0,
+    )
+
+
+def _cap_not_exceeded_check(variant_counts: list, cap: int) -> tuple:
+    """Discriminating check: provably false on the pre-fix build (a single
+    all-zero blank-tile shape reached 71 variants in the reproduction steps
+    in the module docstring), so passing here is real evidence the cap in
+    HdPackBuilder::CaptureOrCapPaletteVariant is actually enforced."""
+    max_variants = max(variant_counts, default=0)
+    return (
+        f"nenhum tile shape excede MaxPaletteVariantsPerTile ({cap}) "
+        f"(máximo observado: {max_variants})",
+        max_variants <= cap,
+    )
+
+
+def _cap_reached_check(variant_counts: list, cap: int) -> tuple:
+    """The cap is actually exercised by this recording (not vacuously true
+    because no shape ever gets close to it)."""
+    shapes_at_cap = sum(1 for c in variant_counts if c == cap)
+    return (
+        f"cap efetivamente atingido por pelo menos 1 shape real "
+        f"({shapes_at_cap} shape(s) com exatamente {cap} variantes)",
+        shapes_at_cap > 0,
+    )
+
+
 def run_checks(hires: Path, cap: int) -> list:
     checks = [(f"hires.txt gerado ({hires})", hires.exists())]
 
     shapes = group_palettes_by_shape(hires)
     checks.append((f"tiles capturados ({len(shapes)} shapes distintos)", len(shapes) > 0))
 
-    multi_palette_shapes = {k: v for k, v in shapes.items() if len(v) > 1}
     variant_counts = [len(v) for v in shapes.values()]
-    max_variants = max(variant_counts, default=0)
-    checks.append(
-        (
-            "pelo menos 1 tile shape com mais de 1 paleta distinta capturada "
-            f"({len(multi_palette_shapes)}/{len(shapes)} shapes com variantes, "
-            f"máximo {max_variants} paletas num único shape)",
-            len(multi_palette_shapes) > 0,
-        )
-    )
-
-    # Discriminating check: this is provably false on the pre-fix build (a
-    # single all-zero blank-tile shape reached 71 variants in the reproduction
-    # steps in the module docstring), so passing here is real evidence the cap
-    # in HdPackBuilder::CaptureOrCapPaletteVariant is actually enforced.
-    checks.append(
-        (
-            f"nenhum tile shape excede MaxPaletteVariantsPerTile ({cap}) "
-            f"(máximo observado: {max_variants})",
-            max_variants <= cap,
-        )
-    )
-
-    # And that the cap is actually exercised by this recording (not vacuously
-    # true because no shape ever gets close to it).
-    shapes_at_cap = sum(1 for c in variant_counts if c == cap)
-    checks.append(
-        (
-            f"cap efetivamente atingido por pelo menos 1 shape real "
-            f"({shapes_at_cap} shape(s) com exatamente {cap} variantes)",
-            shapes_at_cap > 0,
-        )
-    )
+    checks.append(_multi_palette_check(shapes))
+    checks.append(_cap_not_exceeded_check(variant_counts, cap))
+    checks.append(_cap_reached_check(variant_counts, cap))
     return checks
 
 
