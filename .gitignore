@@ -205,6 +205,7 @@ graphify-out/
 scripts/headless_record
 scripts/spike_sound_driver
 scripts/roles_probe
+scripts/core_unit_tests
 
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
