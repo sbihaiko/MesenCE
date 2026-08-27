@@ -99,6 +99,15 @@
       "scoutMs": null,
       "classification": "bug",
       "diverged": false
+    },
+    {
+      "sid": "45092f2ebec4",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "chore",
+      "diverged": false
     }
   ]
 }

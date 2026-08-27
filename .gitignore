@@ -209,6 +209,8 @@ scripts/core_unit_tests
 
 .env
 
+**/__pycache__/
+
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
 !.claude/guardrails/
@@ -217,4 +219,3 @@ scripts/core_unit_tests
 !.dev-squad/adr/
 !.dev-squad/memory/
 # <<< dev-squad shared team assets (managed) <<<
-**/__pycache__/

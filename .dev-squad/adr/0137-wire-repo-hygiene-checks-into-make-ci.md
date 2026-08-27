@@ -2,7 +2,7 @@
 
 - Status: accepted (2026-08-27; decision = items 1–4 below, work requested as slice H1 of `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`. Item 3's "make the doc true" half already landed the same day: `scripts/AGENTS.md` now says only `check-core-manifest.sh` is wired. `check-f5-4b-doc.sh` was deleted on 2026-08-27 with the plan header it guarded, so the target wires three scripts plus `check-file-loc.sh`, not four)
 - Date: 2026-08-27
-- Consolidates: ADR-0111, ADR-0118, ADR-0092 (rejected — premise false, target scripts never shipped)
+- Consolidates: ADR-0111, ADR-0118, ADR-0092 (rejected — premise false, target scripts never shipped); ADR-0139–0148 (review findings of the H1 run `45092f2ebec4`, folded into the Clarifications section below and deleted)
 - Related: ADR-0132 (the `check-f5-4b-doc.sh` guardrail was added by the F5.4b run and later deleted)
 
 ## Context
@@ -63,7 +63,10 @@ reworded to say the scripts are manual and listing which command runs each.
 - The remaining checks become real gates (the F5.4b header guardrail is
   gone with the plan file it guarded; ADR-0132's "repoint ADR-0050 step b"
   follow-up is now moot for that script).
-- A few seconds added to `make ui`/`make core` (shell only).
+- A few seconds added to every CI build leg that runs `make doc-checks` (shell
+  only). `doc-checks` is deliberately **not** a prerequisite of `ui`/`core`, so
+  a local `make ui` does not run it — run `make doc-checks` by hand before
+  pushing (see Clarifications).
 - `check-file-loc.sh` gains an explicit list of guarded files in the makefile,
   which is where the per-file caps stop being folklore.
 - Future dev-squad runs that add a hygiene script have a concrete wiring step
@@ -82,3 +85,32 @@ reworded to say the scripts are manual and listing which command runs each.
 - **Adopt shebang + `chmod +x` repo-wide** (ADR-0092's second option) —
   rejected: churn on fifteen files for no functional gain; `python3 scripts/…`
   is what every doc already says.
+
+## Clarifications (2026-08-27, after slice H1 shipped in `bb8f0c18`)
+
+The H1 run raised five review findings against this ADR's wording. They are
+decided here rather than as separate ADRs:
+
+1. **Scope of item 2 ("every workflow that builds the core or the UI").**
+   Read as *every `build.yml` job that invokes `make` directly* — today the
+   `linux` and `macos` jobs. `windows` (MSBuild) and `appimage` (builds
+   through `Linux/appimage/appimage.sh`) are excluded on purpose: `appimage`
+   runs on the same push/PR triggers as `linux`, so a doc/header break already
+   fails the PR through the `linux` legs. A new job that calls `make` inherits
+   the rule; a new wrapper-script job does not.
+2. **Local enforcement.** `doc-checks` stays a standalone target and is not
+   added to `ui`/`core`'s prerequisites — the checks guard docs and headers,
+   not the build, and coupling them would make an unrelated prose edit break
+   a local build. The original Consequences line claiming it costs seconds on
+   `make ui` was wrong and is corrected above.
+3. **Per-leg duplication in CI.** `make doc-checks` runs once per matrix leg
+   (~10 executions per push). Accepted for now: each leg stays
+   self-contained and the cost is seconds. A single `doc-checks` job that the
+   build jobs `needs:` is the alternative if the red-leg noise on a failure
+   becomes a problem; not adopted.
+4. **Per-file caps as makefile literals.** The `check-file-loc.sh <file>
+   <cap>` lines in the `doc-checks` recipe are the single authoritative list
+   of guarded files and caps (Consequences already says so). Prose mentions
+   of a cap (file headers, ADR-0034) are informative; when they disagree, the
+   makefile wins and the prose is fixed. A data file the script iterates is
+   not worth it for one entry.
