@@ -534,7 +534,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
         for c in used:
             base = c[1:] if c.startswith("!") else c
             if base not in conds and base not in GLOBAL_CONDS:
-                rep.warning(where, f"condition '{base}' used before being defined (or nonexistent) — HdPackLoader::ParseConditionString just logError's ('Condition not found') and omits it from the entry's condition list, it doesn't abort the file parse; the tile/background this gates just loses that one condition gate (often ends up unconditional) instead of the pack failing to load — not a blocking defect, but worth fixing upstream")
+                rep.warning(where, f"condition '{base}' not found — dropped from this entry's condition list, file parse continues (HdPackLoader::ParseConditionString)")
             elif tag == "background" and (base in GLOBAL_CONDS or cond_kinds.get(base) not in BG_ALLOWED_KINDS):
                 kind_label = cond_kinds.get(base, base)
                 rep.warning(where, f"condition '{base}' ({kind_label}) is not valid in <background> — HdPackLoader::ProcessBackgroundTag silently drops this entry (logs 'Invalid condition type for background' and falls back to the original NES graphics for it, no crash)")
@@ -582,7 +582,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             if idx not in imgs:
                 rep.error(where, f"<tile> references nonexistent <img> #{idx}")
             elif imgs[idx] and scale and (x + 8 * scale > imgs[idx][0] or y + 8 * scale > imgs[idx][1]):
-                rep.warning(where, f"<tile> at ({x},{y}) is outside image #{idx} ({imgs[idx][0]}x{imgs[idx][1]}) — HdPackTileInfo::Init guards the memcpy with a bounds check (Bitmap->PixelData.size() >= bitmapOffset + ...); when it fails, HdTileData is left all-zero, which UpdateFlags reads as fully-transparent, so DrawTile just returns early — no OOB read, no load failure, the tile simply renders as invisible — not a blocking defect, but worth fixing upstream")
+                rep.warning(where, f"<tile> at ({x},{y}) is outside image #{idx} ({imgs[idx][0]}x{imgs[idx][1]}) — renders as fully transparent, load continues (HdPackTileInfo::Init bounds check)")
             key = (tokens[1], tokens[2].upper(), tuple(sorted(used)))
             if key in tile_keys:
                 dups.append((n, tile_keys[key]))
@@ -654,7 +654,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 continue
             path = folder + tokens[2].strip()
             if not src.exists(path):
-                rep.warning(where, f"<{tag}> file does not exist: {tokens[2]} — HdPackLoader::ProcessSoundTrack logs 'OGG file not found' and this track/effect is simply never registered (PlayBgmTrack/PlaySfx just log and return false when asked to play it later), so the pack still loads fully; only that specific cue is silently unavailable — not a blocking defect, but worth fixing upstream")
+                rep.warning(where, f"<{tag}> file does not exist: {tokens[2]} — track/effect never registered, unavailable at playback, load continues (HdPackLoader::ProcessSoundTrack)")
             try:
                 album, track = int(tokens[0]), int(tokens[1])
                 if not (0 <= album <= 255 and 0 <= track <= 255):
@@ -666,14 +666,14 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 rep.error(where, "<patch> needs file,sha1")
                 continue
             if not src.exists(folder + tokens[0]):
-                rep.warning(where, f"<patch> file does not exist: {tokens[0]} — HdPackLoader::ProcessPatchTag's checkConstraint on a missing file only returns from that one function (logError, no propagated failure), so the pack still loads fully; this specific ROM patch is just never applied, not a blocking defect, but worth fixing upstream")
+                rep.warning(where, f"<patch> file does not exist: {tokens[0]} — patch not applied, load continues (HdPackLoader::ProcessPatchTag)")
             if not HEX40.match(tokens[1].strip()):
                 rep.error(where, f"<patch> invalid sha1: {tokens[1]}")
             rep.info(where, "<patch> matches by the whole ROM file's sha1; other revisions load the pack without the patch (ADR-0044)")
     if version == 0:
         rep.error(rel, "<ver> missing")
     for name, lines in sorted(missing.items(), key=lambda kv: -len(kv[1])):
-        rep.warning(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries silently dropped by the emulator; HdPackLoader::ProcessBackgroundTag logs the error and discards the entry, so the affected screen(s) just fall back to the original unmodified NES graphics for that layer (no crash, no black screen) — not a blocking defect, but worth fixing upstream")
+        rep.warning(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries dropped, falls back to original graphics (HdPackLoader::ProcessBackgroundTag)")
     for (ref, real), lines in badcase.items():
         rep.warning(f"{rel}:{lines[0]}", f"<background> {ref} only exists as '{real}' — loads on macOS/Windows, fails on Linux ({len(lines)} entry/entries)")
     if dups:
