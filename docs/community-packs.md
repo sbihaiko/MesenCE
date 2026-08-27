@@ -6,6 +6,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 
 | Link | Game | Console | Author | Category | Date |
 |---|---|---|---|---|---|
+| [link](https://github.com/sbihaiko/MesenCE/issues/50) | Contra (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/58) | Duck Hunt (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 
 ## Most popular
