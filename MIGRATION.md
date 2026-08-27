@@ -64,6 +64,31 @@ pointing at a PNG that isn't present in the release) — those are pre-existing
 content issues in the pack itself, unrelated to MEP compliance, and are not
 addressed by this migration.
 
+**Optional `pack.json`:** the folder move above is enough on its own — the
+converted pack qualifies under the folder convention (MEP-v1.md §2.1) with
+no `pack.json` at all. A maintainer who would rather use the canonical,
+non-fallback form (e.g. to add `license`/`author` metadata, or list more
+than one ROM revision under `targets`) can add this at the pack root
+instead; `<sha1>` is the No-Intro hash of the target ROM's PRG+CHR payload
+(MEP-v1.md §4) and must be filled in by whoever holds the ROM — it is not
+published here:
+
+```json
+{
+  "mep": "1.0.0",
+  "name": "Contra80s",
+  "version": "1.1.0",
+  "author": "TasticHacks",
+  "license": "<SPDX id — fill in with the license the pack author intends>",
+  "targets": [
+    { "system": "nes", "sha1": "<No-Intro SHA1 of your 'Contra (U) [!]' dump>", "name": "Contra (U) [!]" }
+  ],
+  "sections": {
+    "textures": { "path": "textures/" }
+  }
+}
+```
+
 ---
 
 ## Submitting a converted pack
