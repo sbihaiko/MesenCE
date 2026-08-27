@@ -26,6 +26,21 @@ resultado:
              usá-lo como sinal estrutural (ver o fix de segurança no
              histórico de mep_lint.py, revision cycle do T3): deve ser
              rejeitado.
+  empty-path <out>/mep-fallback-empty-section-path.zip   mesmo wrapper único,
+             pack.json válido com sections.textures.path == "" (hires.txt na
+             raiz do subdiretório descoberto, não em "textures/") + hires.txt
+             quebrado (<img> referenciando um PNG ausente). Regressão: o
+             root_prefix + path("") vazio produzia uma barra dupla ao montar
+             "<rel>/hires.txt", o hires.txt nunca era encontrado e o pack
+             era aceito sem essa camada ter sido validada — deve ser
+             rejeitado.
+  root-hires <out>/mep-fallback-root-hires.zip   wrapper único sem pack.json,
+             com synth/preset.cfg (válido) + hires.txt na raiz do
+             subdiretório descoberto (layout "HD pack legado", <img>
+             referenciando um PNG ausente) — mesma regressão do item acima,
+             mas sem manifest: o branch que reconhece hires.txt solto na
+             raiz do container não era espelhado sob o prefixo do fallback,
+             então a camada textures ficava muda; deve ser rejeitado.
 
 Uso:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
@@ -36,7 +51,13 @@ import zipfile
 from pathlib import Path
 
 HIRES_TXT = "<ver>106\n<scale>1\n"
+BROKEN_HIRES_TXT = "<ver>106\n<scale>1\n<img>missing.png\n"
 PRESET_CFG = "[Studio]\nCompThreshold=0.5\n"
+VALID_PACK_JSON = (
+    '{"mep":"1.0.0","name":"Contra80s","version":"1.0.0","license":"MIT",'
+    '"targets":[{"system":"nes","sha1":"' + "a" * 40 + '"}],'
+    '"sections":{"textures":{"path":""}}}'
+)
 
 # Formato típico de um zip de release do GitHub: "<Repo>-<tag>/<Jogo>/..."
 ACCEPT_WRAPPER = "Contra80s-v1.1/Contra (U) [!]"
@@ -81,6 +102,27 @@ def write_malformed_manifest_zip(path: Path):
     ])
 
 
+def write_empty_section_path_zip(path: Path):
+    """Wrapper único, pack.json válido com sections.textures.path == "" e um
+    hires.txt quebrado na raiz do subdiretório descoberto: prova que o
+    root_prefix não vazio + path("") não deixa a camada textures muda."""
+    _write_zip(path, [
+        (f"{ACCEPT_WRAPPER}/pack.json", VALID_PACK_JSON),
+        (f"{ACCEPT_WRAPPER}/hires.txt", BROKEN_HIRES_TXT),
+    ])
+
+
+def write_root_hires_zip(path: Path):
+    """Wrapper único sem pack.json: synth/preset.cfg válido (é o único
+    marcador que torna o subdiretório candidato) + hires.txt quebrado solto
+    na raiz do subdiretório descoberto (layout HD pack legado): prova que o
+    branch de hires.txt-na-raiz é espelhado sob o prefixo do fallback."""
+    _write_zip(path, [
+        (f"{ACCEPT_WRAPPER}/synth/preset.cfg", PRESET_CFG),
+        (f"{ACCEPT_WRAPPER}/hires.txt", BROKEN_HIRES_TXT),
+    ])
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -96,6 +138,10 @@ def main() -> int:
             write_reject_zip(out / "mep-fallback-reject.zip")
         elif kind == "malformed":
             write_malformed_manifest_zip(out / "mep-fallback-malformed-manifest.zip")
+        elif kind == "empty-path":
+            write_empty_section_path_zip(out / "mep-fallback-empty-section-path.zip")
+        elif kind == "root-hires":
+            write_root_hires_zip(out / "mep-fallback-root-hires.zip")
         else:
             print(f"kind desconhecido: {kind}")
             return 1

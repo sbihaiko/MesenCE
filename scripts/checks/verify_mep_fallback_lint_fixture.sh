@@ -16,6 +16,14 @@
 #     pack.json is one of the FALLBACK_SUFFIXES accept markers, so this
 #     proves the discovered manifest is fully linted (not just used as an
 #     unchecked structural signal) once the fallback resolves a prefix.
+#   - rejects a fallback-discovered pack.json whose sections.textures.path
+#     is "" (hires.txt at the discovered subfolder's own root, not under
+#     "textures/"): regression for the root_prefix + empty-path double-slash
+#     bug that silently dropped that layer's hires.txt from linting.
+#   - rejects a fallback-discovered subfolder with a loose root hires.txt
+#     (HD-pack-legado layout, no pack.json at all): regression for the
+#     container-root-only "hires.txt na raiz" branch not being mirrored
+#     under the discovered prefix, which left the textures layer mute.
 # No mocks: runs the real mep_lint.py CLI against real generated zip files.
 set -euo pipefail
 
@@ -112,4 +120,30 @@ grep -qF "$ACCEPT_WRAPPER_PACK_JSON" <<<"$RUN_OUT" \
   || fail "o erro de JSON inválido não referencia o pack.json dentro do prefixo descoberto (deveria, não o da raiz do container):
 $RUN_OUT"
 
-echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, e não muda a classificação de um pack.json-root pack existente"
+# --- fixture 5: sections.textures.path == "" under a fallback prefix -------
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" empty-path >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'empty-path'"
+EMPTY_PATH_ZIP="$WORK/fallback/mep-fallback-empty-section-path.zip"
+[ -f "$EMPTY_PATH_ZIP" ] || fail "fixture 'empty-path' não foi gerada: $EMPTY_PATH_ZIP"
+
+run_lint "$EMPTY_PATH_ZIP"
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack com sections.textures.path==\"\" e hires.txt quebrado sob o prefixo do fallback (esperava exit != 0 — a barra dupla root_prefix+path vazio não pode silenciar a camada textures):
+$RUN_OUT"
+grep -q "não existe: missing.png" <<<"$RUN_OUT" \
+  || fail "o hires.txt quebrado (path==\"\") sob o prefixo do fallback não foi lintado (nenhum erro <img> reportado):
+$RUN_OUT"
+
+# --- fixture 6: loose root hires.txt under a fallback prefix, no pack.json -
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" root-hires >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'root-hires'"
+ROOT_HIRES_ZIP="$WORK/fallback/mep-fallback-root-hires.zip"
+[ -f "$ROOT_HIRES_ZIP" ] || fail "fixture 'root-hires' não foi gerada: $ROOT_HIRES_ZIP"
+
+run_lint "$ROOT_HIRES_ZIP"
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um hires.txt quebrado solto na raiz do subdiretório descoberto (sem pack.json, esperava exit != 0 — o branch de hires.txt-na-raiz precisa ser espelhado sob o prefixo do fallback):
+$RUN_OUT"
+grep -q "não existe: missing.png" <<<"$RUN_OUT" \
+  || fail "o hires.txt legado (raiz do fallback) não foi lintado (nenhum erro <img> reportado):
+$RUN_OUT"
+
+echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, rejeita sections.textures.path==\"\" com hires.txt quebrado sob o fallback, rejeita um hires.txt legado quebrado solto na raiz do fallback, e não muda a classificação de um pack.json-root pack existente"

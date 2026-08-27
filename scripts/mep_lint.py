@@ -272,7 +272,13 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
             probe = rel if name == "synth" else (f"{rel}/hires.txt" if rel else "hires.txt")
             if not src.exists(f"{root_prefix}{probe}"):
                 rep.error(where, f"seção '{name}': '{probe}' não existe")
-            found[name] = f"{root_prefix}{rel}"
+            # rstrip: quando `rel` é "" (path "" == raiz do container/fallback)
+            # e `root_prefix` não é vazio, a concatenação nua deixaria uma
+            # barra final ("Rel-v1/Game/") que o loop em main() trataria como
+            # verdadeira e duplicaria a barra ao montar "<rel>/hires.txt" —
+            # o hires.txt daquela seção nunca seria encontrado/lintado e o
+            # pack seria aceito sem essa camada ter sido validada.
+            found[name] = f"{root_prefix}{rel}".rstrip("/")
         if not found:
             rep.error(where, "'sections' precisa de textures/audio/synth")
     return found
@@ -647,6 +653,15 @@ def main(argv):
                 # via scan_convention_sections abaixo).
                 sections = lint_pack_json(src, rep, root_prefix=fb_root)
             scan_convention_sections(src, rep, sections, root_prefix=fb_root)
+            if src.exists(f"{fb_root}hires.txt"):
+                # espelha o branch de HD pack legado (linha ~628, hires.txt na
+                # raiz do container) sob o prefixo descoberto: o mesmo layout
+                # solto pode estar embrulhado dentro do fallback (ex.: zip com
+                # só "Rel-v1/Game/synth/preset.cfg" + "Rel-v1/Game/hires.txt",
+                # sem pack.json e sem textures/hires.txt) — sem este espelho a
+                # camada textures fica muda: nunca é lintada nem reportada.
+                rep.info(f"{fb_root}hires.txt", "HD pack legado (hires.txt na raiz do fallback) — carregável como seção textures com path \"\"")
+                sections.setdefault("textures", fb_prefix)
 
     if not sections:
         rep.error(".", "nenhuma seção encontrada (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")
