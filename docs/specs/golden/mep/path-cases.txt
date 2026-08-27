@@ -12,6 +12,18 @@
 #   - "bad" = a zip entry name that MUST be rejected (zip-slip / path escape).
 #   - Paths use '/' but a consumer must also normalize '\' to '/' before
 #     checking, since a zip built on Windows may use either separator.
+#
+# Scope: control character cases (bytes below 0x20, e.g. NUL, 0x01, a literal
+# TAB inside a path) are deliberately NOT encoded in this file - the TAB
+# column format cannot carry them literally without breaking the format
+# above. Control character parity is owned per-suite instead of by this
+# fixture:
+#   - C#:  the IsSafePath_RejectsControlCharacters theory in
+#          UI.Tests/Mep/MepZipValidatorTests.cs.
+#   - C++: literal control character cases in scripts/core_unit_tests.cpp
+#          Block B.
+# Both suites must be kept in sync by hand for control character coverage;
+# only the traversal/absolute-path/drive-letter cases above are shared here.
 
 # --- safe paths -------------------------------------------------------
 pack.json	ok
