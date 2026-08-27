@@ -9,6 +9,13 @@ on:
       - 'main'
   workflow_dispatch:
 
+# A newer push/PR-update on the same ref cancels whatever this workflow was
+# still building for the previous commit — no point finishing a build for a
+# revision that's already superseded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1

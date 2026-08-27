@@ -8,6 +8,10 @@ on:
     branches:
       - 'main'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dotnet-format:
     runs-on: windows-2025-vs2026
