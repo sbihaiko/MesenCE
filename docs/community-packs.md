@@ -8,6 +8,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 |---|---|---|---|---|---|
 | [link](https://github.com/sbihaiko/MesenCE/issues/50) | Contra (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/55) | Ice Climber (USA, Europe) | NES | sbihaiko | Partial HD | 2026-08-27 |
+| [link](https://github.com/sbihaiko/MesenCE/issues/60) | Pac-Man (Namco, US, 1993) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/58) | Duck Hunt (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 
 ## Most popular
