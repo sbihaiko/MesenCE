@@ -68,6 +68,18 @@ NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condit
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
 COND_TYPES = {"tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange", "positionCheckX", "positionCheckY", "originPositionCheckX", "originPositionCheckY"}
 GLOBAL_CONDS = {"hmirror", "vmirror", "bgpriority", "sppalette0", "sppalette1", "sppalette2", "sppalette3"}
+# HdPackLoader::ProcessBackgroundTag (Core/NES/HdPacks/HdPackLoader.cpp) only
+# pushes a <background>'s HdPackCondition into BackgroundInfo.Conditions when
+# its GetConditionType() is one of TileAtPos/SpriteAtPos/MemoryCheck/
+# MemoryCheckConstant/FrameRange; anything else logs "Invalid condition type
+# for background" and drops that <background> entry (same non-fatal
+# checkConstraint()+return path as a missing PNG file). tileNearby/
+# spriteNearby and every GLOBAL_CONDS name (hmirror/vmirror/bgpriority/
+# sppaletteN, each its own distinct condition type) are valid in <tile> but
+# not <background> — confirmed live against Contra80s-v1.1 (a `tileNearby`
+# condition named 'norris8' loads fine in <tile> at line 413 but is rejected
+# at lines 417/420 when reused in <background>).
+BG_ALLOWED_KINDS = {"tileAtPosition", "spriteAtPosition", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange"}
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 HEX40 = re.compile(r"^[0-9A-Fa-f]{40}$")
 
@@ -392,6 +404,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     scale = 1
     imgs = {}
     conds = {}
+    cond_kinds = {}
     tile_keys = {}
     dups = []
     missing = {}
@@ -414,6 +427,9 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             base = c[1:] if c.startswith("!") else c
             if base not in conds and base not in GLOBAL_CONDS:
                 rep.error(where, f"condition '{base}' used before being defined (or nonexistent)")
+            elif tag == "background" and (base in GLOBAL_CONDS or cond_kinds.get(base) not in BG_ALLOWED_KINDS):
+                kind_label = cond_kinds.get(base, base)
+                rep.warning(where, f"condition '{base}' ({kind_label}) is not valid in <background> — HdPackLoader::ProcessBackgroundTag silently drops this entry (logs 'Invalid condition type for background' and falls back to the original NES graphics for it, no crash)")
         if tag == "ver":
             version = int(tokens[0]) if tokens and tokens[0].isdigit() else 0
             if version < 100:
@@ -497,6 +513,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             if name in conds:
                 rep.warning(where, f"condition '{name}' redefined (first at line {conds[name]})")
             conds[name] = n
+            cond_kinds[name] = kind
             if kind in ("tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby"):
                 if len(tokens) < 6:
                     rep.error(where, f"{kind} needs >= 6 fields")
