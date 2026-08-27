@@ -40,9 +40,20 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
 - `validate-specs.py`, `mep_lint.py`, `mep_compare.py`, `mep_render_audio.py`,
-  `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `make_gb_test_rom.py`,
-  `validate_hdpack_dump.py` - Python spec/golden/pack validators and
-  test-ROM/test-pack generators; no emulator dependency.
+  `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
+  `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
+  validators and test-ROM/test-pack generators; no emulator dependency.
+  `mep_lint.py` mirrors the ADR-0120 structural (name-agnostic) last-priority
+  subfolder fallback that `Core::MepPack::FindFallbackSubfolder` (C++, name
+  match) and `MepZipValidator.FindStructuralFallbackPrefix` (C#, structural
+  match) implement, via its own `find_fallback_subfolder`/
+  `FALLBACK_MAX_DEPTH`/`FALLBACK_MAX_ENTRIES` (reusing `PROBES`/
+  `AUDIO_ALT_PROBE`); it fires only when the root-level convention scan
+  found no section, and emits an info line naming the discovered path/depth.
+  `gen_mep_fallback_test_pack.py` generates the two synthetic zip fixtures
+  (`accept`: one Contra80s-shaped release-zip wrapper; `reject`: two
+  structurally-valid, ambiguous subfolders) that exercise it, mirroring
+  `gen_mep_test_pack.py`'s CLI/docstring style.
 - `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
@@ -103,6 +114,20 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   recursion) from what was not independently re-verified (the real
   published zip's byte-for-byte structure), qualifying any "would not load
   today" claim by that gap.
+  `verify_mep_fallback_lint_fixture.sh` (AC-5) generates the two
+  `gen_mep_fallback_test_pack.py` fixtures plus one `gen_mep_test_pack.py`
+  regression fixture and runs the real `mep_lint.py` CLI against all three:
+  the Contra80s-shaped wrapper is accepted with a fallback info line naming
+  the discovered path/depth, the ambiguous two-subfolder pack is rejected
+  with no such line, and a pre-existing pack.json-root pack's classification
+  (and the absence of any fallback line) is unchanged.
+  `verify_mep_fallback_constant_parity.sh` (AC-6) extracts
+  `kMepFallbackMaxDepth`/`kMepFallbackMaxEntries` (C++, `MepPack.h`),
+  `FallbackMaxDepth`/`FallbackMaxEntries` (C#, `MepZipValidator.cs`), and
+  `FALLBACK_MAX_DEPTH`/`FALLBACK_MAX_ENTRIES` (Python, `mep_lint.py`),
+  failing loudly (naming the offending language) when a constant is missing
+  or unparseable in any of the three, and separately asserts the literal
+  values 4/2000 and three-way cross-language equality.
 
 ## Verification
 
@@ -119,6 +144,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `./scripts/checks/verify_mep_fallback_adr.sh` and
   `./scripts/checks/verify_mep_fallback_adr_provenance.sh` - see `checks/`
   above (AC-7/AC-8 of the MEP zip-fallback task).
+- `./scripts/checks/verify_mep_fallback_lint_fixture.sh` and
+  `./scripts/checks/verify_mep_fallback_constant_parity.sh` - see `checks/`
+  above (AC-5/AC-6 of the MEP zip-fallback task).
 
 ## Child DOX Index
 

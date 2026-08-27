@@ -31,6 +31,26 @@ from pathlib import Path, PurePosixPath
 SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg"}
 PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg"}
 AUDIO_ALT_PROBE = "audio/fingerprints.json"
+
+# Structural fallback search limits (ADR-0120): last-priority, name-agnostic
+# discovery of a pack root one or more levels below the container root (e.g.
+# a release zip wrapping its payload in "Contra80s-v1.1/Contra (U) [!]/").
+# Mirrored numerically (not algorithmically - see the ADR for the C++ vs
+# C#/Python asymmetry) by Core::MepPack::kMepFallbackMaxDepth/
+# kMepFallbackMaxEntries (C++) and MepZipValidator.FallbackMaxDepth/
+# FallbackMaxEntries (C#). "Depth" is the number of '/'-separated segments
+# in a normalized entry path, e.g. "Contra80s-v1.1/Contra (U) [!]/hires.txt"
+# is depth 3.
+FALLBACK_MAX_DEPTH = 4
+FALLBACK_MAX_ENTRIES = 2000
+# Every probe (human + auto/ layer) plus pack.json itself: a subfolder that
+# directly holds any one of these is a candidate fallback pack root. Reuses
+# PROBES/AUDIO_ALT_PROBE rather than duplicating the leaf names.
+FALLBACK_SUFFIXES = ["pack.json"] + [
+    variant
+    for probe in list(PROBES.values()) + [AUDIO_ALT_PROBE]
+    for variant in (probe, f"auto/{probe}")
+]
 KNOWN_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
 NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condition", "bgm", "sfx", "patch", "overscan", "options", "addition", "fallback"}
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
@@ -111,6 +131,71 @@ def png_size(data: bytes):
         return None
     w, h = struct.unpack(">II", data[16:24])
     return w, h
+
+
+def _longest_matching_suffix(normalized: str):
+    """Longest entry of FALLBACK_SUFFIXES that `normalized` ends with at a
+    path-segment boundary ('/' + suffix), or None. Longest match wins so the
+    more specific auto/ variant is preferred over the bare probe when an
+    entry sits inside both (mirrors MepZipValidator.MatchCandidatePrefix in
+    UI/Logic/MepZipValidator.cs — see its comment for why picking the bare
+    match instead would wrongly split a pack's auto/ layer into its own,
+    falsely ambiguous candidate)."""
+    best = None
+    for suffix in FALLBACK_SUFFIXES:
+        if normalized.endswith(f"/{suffix}") and (best is None or len(suffix) > len(best)):
+            best = suffix
+    return best
+
+
+def find_fallback_subfolder(names):
+    """Pure, structural (name-agnostic) last-priority fallback (ADR-0120):
+    the Python mirror of Core::MepPack::FindFallbackSubfolder (C++, matches
+    by ROM name) and MepZipValidator.FindStructuralFallbackPrefix (C#,
+    matches structurally like here — mep_lint has no ROM context either).
+    Searches `names` (the source's full entry-path set) for a single
+    subfolder that directly holds pack.json or one of PROBES/
+    AUDIO_ALT_PROBE (human or auto/ layer), depth/entry-capped by
+    FALLBACK_MAX_DEPTH/FALLBACK_MAX_ENTRIES. Returns (prefix, depth) for the
+    one unambiguous candidate found, or None when nothing matches or more
+    than one distinct candidate matches (ambiguous — fails closed rather
+    than guessing, same philosophy as the C++/C# mirrors)."""
+    if len(names) > FALLBACK_MAX_ENTRIES:
+        return None
+    candidate, candidate_depth = None, 0
+    for name in sorted(names):
+        normalized = name.replace("\\", "/")
+        segments = normalized.split("/")
+        if len(segments) > FALLBACK_MAX_DEPTH:
+            continue
+        suffix = _longest_matching_suffix(normalized)
+        if suffix is None:
+            continue
+        prefix = normalized[: -(len(suffix) + 1)]
+        if not prefix:
+            continue  # root-level match: already covered by the existing conventions
+        if candidate is not None and candidate != prefix:
+            return None
+        candidate, candidate_depth = prefix, len(segments)
+    return (candidate, candidate_depth) if candidate else None
+
+
+def scan_convention_sections(src: Source, rep: Report, sections: dict, root_prefix: str = ""):
+    """Populates `sections` from the layer convention (human + auto/) under
+    `root_prefix` — "" for the container root, or a fallback-discovered
+    subfolder ("<prefix>/") from find_fallback_subfolder. Existing entries
+    win (setdefault): a pack.json 'sections' entry is never overridden by a
+    convention probe."""
+    for name, probe in PROBES.items():
+        for layer, layer_prefix in (("humana", ""), ("auto", "auto/")):
+            probe_rel = f"{root_prefix}{layer_prefix}{probe}"
+            alt_rel = f"{root_prefix}{layer_prefix}{AUDIO_ALT_PROBE}"
+            has_alt = name == "audio" and src.exists(alt_rel)
+            if src.exists(probe_rel) or has_alt:
+                rep.info(probe_rel, f"camada {layer} de '{name}' presente")
+                sections.setdefault(f"{layer_prefix}{name}", f"{root_prefix}{layer_prefix}{SECTION_PATHS[name]}")
+            if has_alt:
+                lint_fingerprints(src, alt_rel, rep)
 
 
 def lint_pack_json(src: Source, rep: Report):
@@ -532,17 +617,22 @@ def main(argv):
         rep.info("pack.json", "ausente — pack pela convenção de pasta (ADR-0049): identidade = nome/local")
 
     # camadas da convenção (também valem para packs com pack.json)
-    for name, probe in PROBES.items():
-        for layer, prefix in (("humana", ""), ("auto", "auto/")):
-            if src.exists(prefix + probe) or (name == "audio" and src.exists(prefix + AUDIO_ALT_PROBE)):
-                rep.info(prefix + probe, f"camada {layer} de '{name}' presente")
-                sections.setdefault(f"{prefix}{name}", prefix + SECTION_PATHS[name])
-            if name == "audio" and src.exists(prefix + AUDIO_ALT_PROBE):
-                lint_fingerprints(src, prefix + AUDIO_ALT_PROBE, rep)
+    scan_convention_sections(src, rep, sections)
     if src.exists("hires.txt"):
         # HD pack HDNes solto (HdPacks/<rom>/): o hires.txt fica na raiz
         rep.info("hires.txt", "HD pack legado (hires.txt na raiz) — carregável como HdPacks/<rom>/ ou como seção textures com path \"\"")
         sections.setdefault("textures", "")
+
+    if not sections:
+        # ADR-0120: nenhuma convenção casou na raiz — última tentativa antes
+        # de rejeitar: procura um subdiretório estrutural (ver
+        # find_fallback_subfolder) que sozinho contenha a convenção.
+        fallback = find_fallback_subfolder(src.names)
+        if fallback:
+            fb_prefix, fb_depth = fallback
+            rep.info(fb_prefix, f"fallback estrutural (ADR-0120): raiz do pack descoberta em '{fb_prefix}' (depth {fb_depth})")
+            scan_convention_sections(src, rep, sections, root_prefix=f"{fb_prefix}/")
+
     if not sections:
         rep.error(".", "nenhuma seção encontrada (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")
 
