@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-26T13:09:13.022Z",
+  "updatedAt": "2026-08-26T16:45:05.308Z",
   "byId": {
     "L-ff73acd33912-000": {
-      "injected": 1,
+      "injected": 2,
       "exposed": 1,
       "recurred": 0,
       "class": "new-feature",
@@ -15,11 +15,14 @@
       "category": "code-quality",
       "firstSeen": "2026-08-24T11:09:56.916Z",
       "contentHash": "a9d8ef5fd8ea0c13a78c527c3ac0ad1df1b445688ce9af4ea3473b26429d6671",
-      "lastInjectedSid": "0570161c4bd2",
-      "lastUpdated": "2026-08-24T11:09:56.916Z",
+      "lastInjectedSid": "282110275400",
+      "lastUpdated": "2026-08-26T16:45:05.308Z",
       "lastExposedSid": "0570161c4bd2"
     },
     "L-b909cad872b0-000": {
+      "injected": 3,
+      "exposed": 0,
+      "recurred": 0,
       "class": "refactor",
       "status": "advisory",
       "scope": [
@@ -30,13 +33,10 @@
         "makefile"
       ],
       "category": null,
-      "injected": 1,
-      "exposed": 0,
-      "recurred": 0,
       "firstSeen": "2026-08-26T13:09:13.022Z",
       "contentHash": "84a7e7df89c71743cd0dd194bd4171b6afd4d674b8f770c1ffcad31bab91db6a",
-      "lastInjectedSid": "d662e62e2648",
-      "lastUpdated": "2026-08-26T13:09:13.022Z"
+      "lastInjectedSid": "282110275400",
+      "lastUpdated": "2026-08-26T16:45:05.308Z"
     }
   }
 }

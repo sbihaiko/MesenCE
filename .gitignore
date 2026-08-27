@@ -207,6 +207,8 @@ scripts/spike_sound_driver
 scripts/roles_probe
 scripts/core_unit_tests
 
+.env
+
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
 !.claude/guardrails/

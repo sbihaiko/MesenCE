@@ -81,6 +81,24 @@
       "scoutMs": null,
       "classification": null,
       "diverged": false
+    },
+    {
+      "sid": "a4420a72f7ae",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "new-feature",
+      "diverged": false
+    },
+    {
+      "sid": "282110275400",
+      "exposed": true,
+      "status": "skipped-absent",
+      "queries": 0,
+      "scoutMs": null,
+      "classification": "bug",
+      "diverged": false
     }
   ]
 }
