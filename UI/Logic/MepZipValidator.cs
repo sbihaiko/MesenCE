@@ -110,6 +110,17 @@ namespace Mesen.Logic
 		//Returns the leading path prefix of entryFullName when it ends with one
 		//of the given probe suffixes and its own segment depth is within
 		//FallbackMaxDepth, or null when it does not match / is too deep.
+		//Every bare probe suffix ("textures/hires.txt") is itself a trailing
+		//substring of its `auto/` counterpart ("auto/textures/hires.txt"), so an
+		//entry inside the auto/ layer matches both - e.g.
+		//"W/auto/textures/hires.txt" ends with "/textures/hires.txt" too. Taking
+		//the bare match alone would wrongly return "W/auto" as the pack root
+		//instead of "W". Picking the LONGEST matching suffix fixes that: the
+		//more specific auto/ suffix wins and strips down to "W", which also
+		//makes a pack root that carries both layers of the same section
+		//(MEP-v1.md's human+auto layering, ADR-0047/ADR-0049) resolve every
+		//entry to the same candidate "W" instead of splitting into "W" and
+		//"W/auto" and tripping the ambiguity check below.
 		private static string? MatchCandidatePrefix(string entryFullName, string[] suffixes)
 		{
 			string normalized = entryFullName.Replace('\\', '/');
@@ -117,13 +128,16 @@ namespace Mesen.Logic
 				return null;
 			}
 
+			string? bestPrefix = null;
+			int bestSuffixLength = -1;
 			foreach(string suffix in suffixes) {
-				if(normalized.EndsWith("/" + suffix)) {
-					return normalized.Substring(0, normalized.Length - suffix.Length - 1);
+				if(suffix.Length > bestSuffixLength && normalized.EndsWith("/" + suffix)) {
+					bestSuffixLength = suffix.Length;
+					bestPrefix = normalized.Substring(0, normalized.Length - suffix.Length - 1);
 				}
 			}
 
-			return null;
+			return bestPrefix;
 		}
 
 		//Rejects zip-slip entry names: absolute paths (leading '/'), a colon

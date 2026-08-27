@@ -9,7 +9,9 @@ using Xunit;
 namespace Mesen.Tests.Mep
 {
 	//Fase 1 (docs/roadmap/plano-testes-unitarios.md): exercises UI/Logic/MepZipValidator.cs entirely in-memory - no filesystem zip, no host, no Avalonia/EmuApi.
-	public class MepZipValidatorTests
+	//Split across this file and MepZipValidatorStructuralFallbackTests.cs (same partial class, ADR-0120 structural
+	//fallback cases) purely to stay under the 200-line-per-file cap - BuildZip/FindRepoRoot below are shared by both.
+	public partial class MepZipValidatorTests
 	{
 		//Every convention-layout probe MepPack::DetectConventionLayout recognizes (Core/Shared/EnhancementPacks/MepPack.cpp
 		//kConventionProbe), plus the audio/fingerprints.json alternative (ADR-0047), each also checked in its `auto/` form.
@@ -64,31 +66,9 @@ namespace Mesen.Tests.Mep
 			Assert.Equal("InstallMepPackInvalidPack", MepZipValidator.Validate(zip));
 		}
 
-		//ADR-0120 structural fallback (no ROM name here, unlike Core's MepPackManager::FindFallbackSubfolder): accepts one
-		//unambiguous subfolder holding a layer probe, depth/entry-capped via FallbackMaxDepth/FallbackMaxEntries. Root-level
-		//regressions (pack.json, synth/preset.cfg standing in for zip-named-as-ROM) already run via
-		//Validate_AcceptsEveryDocumentedLayerProbe above.
-		public static IEnumerable<object[]> StructuralFallbackCases()
-		{
-			yield return new object[] { new[] { ("P/readme.txt", "n"), ("P/Game/textures/hires.txt", "x") }, true };
-			yield return new object[] { new[] { ("A/textures/hires.txt", "x"), ("B/textures/hires.txt", "x") }, false }; //ambiguous
-			yield return new object[] { new[] { ("A/B/C/textures/hires.txt", "x") }, false }; //depth 5 > FallbackMaxDepth (4)
-
-			var overCap = new List<(string, string)>();
-			for(int i = 0; i < 2001; i++) {
-				overCap.Add(($"filler/decoy{i}.txt", "x"));
-			}
-			overCap.Add(("P/Game/textures/hires.txt", "x"));
-			yield return new object[] { overCap.ToArray(), false }; //2001 entries > FallbackMaxEntries (2000)
-		}
-
-		[Theory]
-		[MemberData(nameof(StructuralFallbackCases))]
-		public void Validate_HandlesStructuralFallbackCases((string, string)[] entries, bool expectedAccept)
-		{
-			using ZipArchive zip = BuildZip(entries);
-			Assert.Equal(expectedAccept, MepZipValidator.Validate(zip) == null);
-		}
+		//ADR-0120 structural fallback cases (StructuralFallbackCases, Validate_HandlesStructuralFallbackCases,
+		//FindStructuralFallbackPrefix_ReturnsPackRootNotAutoLayerFolder) live in
+		//MepZipValidatorStructuralFallbackTests.cs, a second file of this same partial class.
 
 		public static IEnumerable<object[]> FixtureCases()
 		{
