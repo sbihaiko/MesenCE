@@ -70,6 +70,13 @@ env:
   ROM_SHA1_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmrU
   ROM_MD5_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmrY
   MAX_PACK_BYTES: 314572800 # 300MB pre-download cap (300 * 1024 * 1024)
+  # Temporarily off per user request (2026-08-27): the SDL2 install + full
+  # Mesen core build this gates takes ~7+ min per submission and has been
+  # the source of most of today's pipeline bugs (SDL2 missing, the git-push
+  # auth chain for the autofix PR). Flip back to 'true' once that path is
+  # solid again — mep_lint.py-only validation (lint + classify) still runs
+  # either way, this only skips the live-core cross-check and its autofix.
+  LIVE_VALIDATION_ENABLED: 'false'
 
 permissions:
   contents: read
@@ -298,10 +305,10 @@ jobs:
       # existence-gated: it's a second-opinion cross-check, never allowed to
       # block the existing lint-based verdict that follows it.
       - name: Install SDL2 dev headers
-        if: steps.download.outcome == 'success'
+        if: steps.download.outcome == 'success' && env.LIVE_VALIDATION_ENABLED == 'true'
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: Cache Mesen core build
-        if: steps.download.outcome == 'success'
+        if: steps.download.outcome == 'success' && env.LIVE_VALIDATION_ENABLED == 'true'
         id: core-cache
         uses: actions/cache@v4
         with:
@@ -317,7 +324,7 @@ jobs:
             scripts/headless_record
           key: capture-tool-${{ runner.os }}-${{ hashFiles('Core/**', 'Utilities/**', 'Sdl/**', 'Linux/**', 'InteropDLL/**', 'SevenZip/**', 'Lua/**', 'Makefile', 'scripts/headless_record.cpp') }}
       - name: Build live-validation tooling (capture-tool)
-        if: steps.download.outcome == 'success' && steps.core-cache.outputs.cache-hit != 'true'
+        if: steps.download.outcome == 'success' && env.LIVE_VALIDATION_ENABLED == 'true' && steps.core-cache.outputs.cache-hit != 'true'
         continue-on-error: true
         run: make capture-tool
       # Reuses mep_lint.py's own pack-root discovery (imported, not
@@ -333,7 +340,7 @@ jobs:
       # of erroring on a missing binary.
       - name: Run live core validation (synthetic ROM)
         id: live-validate
-        if: steps.download.outcome == 'success' && hashFiles('scripts/headless_record') != ''
+        if: steps.download.outcome == 'success' && env.LIVE_VALIDATION_ENABLED == 'true' && hashFiles('scripts/headless_record') != ''
         continue-on-error: true
         env:
           GAME: ${{ steps.rename-title.outputs.game }}
@@ -349,7 +356,7 @@ jobs:
       # different severity than the live loader's own log wording implies.
       - name: Detect drift between mep_lint.py and the real core
         id: drift-check
-        if: steps.live-validate.outcome == 'success' && steps.live-validate.outputs.live_errors != '0'
+        if: env.LIVE_VALIDATION_ENABLED == 'true' && steps.live-validate.outcome == 'success' && steps.live-validate.outputs.live_errors != '0'
         run: |
           set -euo pipefail
           LINT_LINES=$(grep -oE ':[0-9]+' mep_lint_output.txt 2>/dev/null | tr -d ':' | sort -u || true)
@@ -373,7 +380,7 @@ jobs:
       # nothing here for a malicious pack author to inject into.
       - name: Autofix mep_lint.py drift (Claude Code Action)
         id: autofix
-        if: steps.drift-check.outputs.drift == '1'
+        if: env.LIVE_VALIDATION_ENABLED == 'true' && steps.drift-check.outputs.drift == '1'
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.PROJECT_PAT }}
@@ -419,7 +426,7 @@ jobs:
       # unconverged attempt is logged, never opened as a PR for a human to
       # triage blind.
       - name: Publish autofix as a PR (if converged)
-        if: steps.autofix.outcome == 'success'
+        if: env.LIVE_VALIDATION_ENABLED == 'true' && steps.autofix.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           STRUCTURED_OUTPUT: ${{ steps.autofix.outputs.structured_output }}
