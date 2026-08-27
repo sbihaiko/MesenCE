@@ -3,7 +3,7 @@
 - Status: accepted (F5.1, 2026-08-25)
 - Date: 2026-08-25
 - Phase 5 (docs/roadmap/plano-execucao-F5.md). Supersedes the manifest-heavy
-  drafts of ADR-0045/0046/0048 (kept as `superseded`, see each file).
+  drafts of ADR-0045/0046/0048 (deleted 2026-08-27; their text lives in git history, the surviving substance is summarised here).
 
 ## Context
 Two real packs (Contra80s, Zelda Remastered) showed authors fighting text
