@@ -9,6 +9,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | [link](https://github.com/sbihaiko/MesenCE/issues/35) | The Legend of Zelda (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/39) | Ice Climber (USA, Europe) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/41) | Super Mario Bros. 2 (USA) (Lost Levels / Famicom Disk System conversion) | NES | sbihaiko | Partial HD | 2026-08-27 |
+| [link](https://github.com/sbihaiko/MesenCE/issues/43) | Yie Ar Kung-Fu (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/45) | Super Mario Bros. (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 
 ## Most popular
