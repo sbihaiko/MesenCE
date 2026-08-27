@@ -20,6 +20,10 @@ LABELS=(
   "pack:invalid-other|D93F0B|Rejected for another content/policy reason"
   "pack:partial-hd|FBCA04|Partially accepted — standard Mesen HD assets only"
   "pack:mep-full|0E8A16|Accepted — full MEP (textures + audio/synth)"
+  "asset:textures|5319E7|Pack declares <img>/<tile>/<background> (graphics) content"
+  "asset:audio|5319E7|Pack declares <bgm>/<sfx> (audio) content"
+  "asset:ips|5319E7|Pack bundles an IPS-format ROM patch"
+  "asset:bps|5319E7|Pack bundles a BPS-format ROM patch"
 )
 
 for entry in "${LABELS[@]}"; do
