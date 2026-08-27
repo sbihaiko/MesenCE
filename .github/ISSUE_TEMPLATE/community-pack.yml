@@ -1,7 +1,7 @@
-name: "Submissão de Community HD/MEP Pack"
+name: "Community HD/MEP Pack Submission"
 description: >-
-  Envie um HD Pack ou MEP Pack (texturas, áudio e/ou synth) feito pela
-  comunidade para triagem no board "MesenCE Community Packs".
+  Submit a community-made HD Pack or MEP Pack (textures, audio, and/or
+  synth) for triage on the "MesenCE Community Packs" board.
 title: "[Community Pack] "
 labels:
   - community-pack
@@ -9,69 +9,62 @@ body:
   - type: markdown
     attributes:
       value: |
-        Antes de enviar, leia o guia de autoria de packs:
+        Before submitting, read the pack authoring guide:
         https://github.com/sbihaiko/MesenCE/blob/main/docs/hd-pack-authoring.md
-        (`docs/hd-pack-authoring.md`) — ele explica o que diferencia um pack
-        "Aceito (MEP completo)" de um "Aceito parcial (HD Mesen)" e o que
-        causa rejeição ("Inválido").
+        (`docs/hd-pack-authoring.md`) — it explains what makes a pack
+        "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)", and what
+        causes a rejection ("Inválido").
 
-        Após a abertura, um workflow automático baixa o link informado,
-        valida a estrutura do pack e classifica a submissão. Comentar
-        `/revalidate` nesta issue depois de atualizar o pack dispara uma
-        nova validação.
+        After you open the issue, an automated workflow downloads the
+        linked pack, validates its structure, and classifies the
+        submission. Comment `/revalidate` on this issue after updating the
+        pack to trigger a new validation pass.
   - type: input
     id: pack_link
     attributes:
-      label: "Link do pack"
+      label: "Pack link"
       description: >-
-        URL de download direto do pack (release do GitHub, gist ou raw
-        githubusercontent). Ex.: https://github.com/<user>/<repo>/releases/...
+        Direct download URL for the pack (GitHub release, gist, or raw
+        githubusercontent). E.g.: https://github.com/<user>/<repo>/releases/...
       placeholder: "https://github.com/<user>/<repo>/releases/download/..."
     validations:
       required: true
   - type: input
     id: rom_target
     attributes:
-      label: "Jogo/ROM alvo e região"
-      description: "Nome do jogo e região da ROM à qual o pack se aplica."
-      placeholder: "Ex.: After Burner (World)"
+      label: "Target game/ROM and region"
+      description: "Name of the game and ROM region this pack applies to."
+      placeholder: "E.g.: After Burner (World)"
     validations:
       required: true
   - type: dropdown
     id: console
     attributes:
       label: "Console"
-      description: "Sistema de destino do pack."
+      description: "Target system for the pack."
       options:
         - NES
         - SNES
         - GB
         - GBC
         - SMS
-        - Outro
+        - Other
     validations:
       required: true
   - type: input
     id: author_credits
     attributes:
-      label: "Autor/créditos"
-      description: "Autor(es) do pack e créditos de terceiros, se houver."
-      placeholder: "Ex.: seu-usuario-github, com texturas de fulano"
+      label: "Author/credits"
+      description: "Pack author(s) and any third-party credits."
+      placeholder: "E.g.: your-github-username, with textures by someone-else"
     validations:
       required: true
-  - type: checkboxes
-    id: rights_confirmation
-    attributes:
-      label: "Direitos de distribuição"
-      options:
-        - label: "Confirmo que tenho direito de distribuir esses assets."
-          required: true
   - type: textarea
     id: description
     attributes:
-      label: "Descrição (opcional)"
+      label: "Description (optional)"
       description: >-
-        Qualquer detalhe adicional: o que o pack cobre, ferramentas usadas,
-        instruções especiais de instalação, etc.
+        Any additional details: what the pack covers, tools used, special
+        installation instructions, etc.
     validations:
       required: false

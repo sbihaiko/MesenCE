@@ -89,8 +89,7 @@ the criteria difference described above.
 
 - **Distribution rights.** The pack MUST NOT contain ROM bytes or assets
   extracted from it without distribution rights — this is the pack
-  author's responsibility (MEP-v1.md §1). This is why the confirmation
-  checkbox in the submission form is mandatory.
+  author's responsibility (MEP-v1.md §1).
 - **Valid `pack.json`.** Check it against the example in MEP-v1.md §3: the
   `mep`, `name`, `version`, `targets` (with the ROM's No-Intro `sha1`), and
   `sections` fields are required.
