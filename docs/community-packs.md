@@ -15,6 +15,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | [link](https://github.com/sbihaiko/MesenCE/issues/43) | Yie Ar Kung-Fu (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/44) | Duck Hunt (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/45) | Super Mario Bros. (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
+| [link](https://github.com/sbihaiko/MesenCE/issues/47) | Zelda II: The Adventure of Link (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 
 ## Most popular
 
