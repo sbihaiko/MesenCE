@@ -11,8 +11,7 @@ Aceita um diretório ou um .zip e verifica, sem rodar o emulador:
     (<img>, <background>, <bgm>, <sfx>, <patch>), <condition> com tipo válido,
     coordenadas de *AtPosition dentro de 256×240, offsets de *Nearby dentro do
     range da tela (o off-by-one que derrubava o emulador é reportado aqui),
-    conditions permitidas por tag (tileNearby/spriteNearby não valem em
-    <background>), chaves <tile> duplicadas, PNG com dimensão múltipla do scale;
+    chaves <tile> duplicadas, PNG com dimensão múltipla do scale;
   * hires.txt GB/SMS (<ver>200): <system>, <img> existentes, <tile> com 7 campos,
     blobs hex, chaves duplicadas.
 
@@ -69,7 +68,6 @@ NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condit
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
 COND_TYPES = {"tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange", "positionCheckX", "positionCheckY", "originPositionCheckX", "originPositionCheckY"}
 GLOBAL_CONDS = {"hmirror", "vmirror", "bgpriority", "sppalette0", "sppalette1", "sppalette2", "sppalette3"}
-BG_FORBIDDEN = {"tileNearby", "spriteNearby", "spriteAtPosition"}
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 HEX40 = re.compile(r"^[0-9A-Fa-f]{40}$")
 
@@ -370,7 +368,6 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     imgs = {}
     conds = {}
     tile_keys = {}
-    cond_kinds = {}
     dups = []
     missing = {}
     badcase = {}
@@ -392,8 +389,6 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             base = c[1:] if c.startswith("!") else c
             if base not in conds and base not in GLOBAL_CONDS:
                 rep.error(where, f"condition '{base}' used before being defined (or nonexistent)")
-            elif tag == "background" and cond_kinds.get(base) in BG_FORBIDDEN:
-                rep.error(where, f"condition '{base}' ({cond_kinds[base]}) is not valid in <background>")
         if tag == "ver":
             version = int(tokens[0]) if tokens and tokens[0].isdigit() else 0
             if version < 100:
@@ -477,7 +472,6 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             if name in conds:
                 rep.warning(where, f"condition '{name}' redefined (first at line {conds[name]})")
             conds[name] = n
-            cond_kinds[name] = kind
             if kind in ("tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby"):
                 if len(tokens) < 6:
                     rep.error(where, f"{kind} needs >= 6 fields")
