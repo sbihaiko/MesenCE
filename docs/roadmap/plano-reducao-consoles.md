@@ -1,140 +1,140 @@
-# Plano — produto do fork: `main` + consoles reduzidos
+# Plan — fork product: `main` + reduced consoles
 
-**Status:** concluída (2026-08-26) — `main` é a default; NES, GB/GBC/GBS, SMS/GG/SG-1000 e GBA restam. SNES (incl. SGB), PC Engine, WonderSwan e ColecoVision estão fora. ·
-**PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES já estava fora das fases) ·
-**Fora de spec:** corte de emulação, não de formato de pack.
+**Status:** done (2026-08-26) — `main` is the default; NES, GB/GBC/GBS, SMS/GG/SG-1000, and GBA remain. SNES (incl. SGB), PC Engine, WonderSwan, and ColecoVision are out. ·
+**PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) (SNES was already out of the phases) ·
+**Out of spec:** cutting emulation, not the pack format.
 
-Este fork não tem fluxo de PR para [nesdev-org/MesenCE](https://github.com/nesdev-org/MesenCE) (`CONTRIBUTING.md`). Depois de cortar SNES / PC Engine / WonderSwan / ColecoVision, um `git merge upstream/master` (ou o botão **Sync fork** do GitHub) reintroduz os consoles. Por isso a troca da branch principal vem **antes** de apagar código.
+This fork has no PR flow to [nesdev-org/MesenCE](https://github.com/nesdev-org/MesenCE) (`CONTRIBUTING.md`). After cutting SNES / PC Engine / WonderSwan / ColecoVision, a `git merge upstream/master` (or GitHub's **Sync fork** button) reintroduces the consoles. That's why switching the main branch comes **before** deleting code.
 
-## Critério de sucesso
+## Success criterion
 
-O default do `sbihaiko/MesenCE` é `main`. Nela o emulador carrega só:
+The default for `sbihaiko/MesenCE` is `main`. On it, the emulator only loads:
 
 - NES (iNES / UNIF / FDS / NSF / VS)
-- Game Boy / GBC / GBS (handheld; **sem** Super Game Boy)
+- Game Boy / GBC / GBS (handheld; **without** Super Game Boy)
 - Master System / Game Gear / SG-1000
 - GBA
 
-ColecoVision, SNES (emulação: SGB, MSU-1, coprocessors), PC Engine (incl. CD) e WonderSwan não carregam ROM, não aparecem no file dialog e não têm tela de settings de sistema. CI (clang-format, unit tests, Run tests, Build) verde em `main`. Badges e nightly.link apontam para `main`.
+ColecoVision, SNES (emulation: SGB, MSU-1, coprocessors), PC Engine (incl. CD), and WonderSwan don't load ROMs, don't appear in the file dialog, and don't have a system settings screen. CI (clang-format, unit tests, Run tests, Build) green on `main`. Badges and nightly.link point to `main`.
 
-**Input SNES fica.** Pad, mouse e NTT Data Keypad (`ControllerType::SnesController` e afins) continuam como dispositivos de porta nos corconsoleses vivos — no NES o dropdown já os lista; um USB/Bluetooth com layout SNES mapeia no host como qualquer outro pad. Não voltar o core, o Super Scope, Multitap, rumble/BlueRetro (dependiam de `SnesConsole`), nem `.sfc`/`.spc`.
+**SNES input stays.** Pad, mouse, and NTT Data Keypad (`ControllerType::SnesController` and related) remain as port devices on the surviving consoles — on NES the dropdown already lists them; a USB/Bluetooth pad with an SNES layout maps on the host like any other pad. Not bringing back the core, Super Scope, Multitap, rumble/BlueRetro (which depended on `SnesConsole`), or `.sfc`/`.spc`.
 
-## Decisão de branch — sim, mudar a default
+## Branch decision — yes, change the default
 
-| Branch | Papel |
+| Branch | Role |
 |---|---|
-| **`main`** | Default do GitHub. Produto. Todo o trabalho novo. Cortes de core acontecem aqui. |
-| **`master`** | Congelada no último snapshot *full-console* (estado atual). Histórico + ponto de comparação. Sem commits novos. |
-| **`upstream`** (opcional, origin) | Fast-forward **somente** de `nesdev-org/MesenCE/master`. Nunca mergear de uma vez em `main`. Cherry-pick de bugfix, arquivo a arquivo. |
+| **`main`** | GitHub default. Product. All new work. Core cuts happen here. |
+| **`master`** | Frozen at the last *full-console* snapshot (current state). History + comparison point. No new commits. |
+| **`upstream`** (optional, origin) | Fast-forward **only** from `nesdev-org/MesenCE/master`. Never merge wholesale into `main`. Cherry-pick bugfixes, file by file. |
 
-Não chamar o produto de `master`: o hábito `merge upstream/master` e o **Sync fork** do GitHub (sincroniza a default do fork com a default do parent) recolocam SNES/PCE/WS no tree.
+Don't call the product `master`: the habit of `merge upstream/master` and GitHub's **Sync fork** (syncs the fork's default with the parent's default) put SNES/PCE/WS back into the tree.
 
-Nome `main` (não `community`): é o default que o GitHub, o `nightly.link` e o `actions/checkout` esperam; o README já explica que isto é o fork de enhancement.
+Name `main` (not `community`): it's the default that GitHub, `nightly.link`, and `actions/checkout` expect; the README already explains that this is the enhancement fork.
 
-**Não desforkar agora.** O parent continua visível. Documentar em `CONTRIBUTING.md`: nunca usar Sync fork. Desforkar (sair da fork network) fica como follow-up se o Sync fork virar acidente real.
+**Don't defork now.** The parent stays visible. Document in `CONTRIBUTING.md`: never use Sync fork. Deforking (leaving the fork network) remains a follow-up if Sync fork ever becomes a real accident.
 
-### Passos (F0) — branch, sem apagar core
+### Steps (F0) — branch, without deleting core
 
-1. A partir do `master` atual: `git branch main && git push -u origin main`.
+1. From the current `master`: `git branch main && git push -u origin main`.
 2. GitHub: default branch → `main` (`gh repo edit sbihaiko/MesenCE --default-branch main`).
-3. CI: `clang-format-check.yml` hoje dispara só em `push` para `master` — passar a `main`. Os outros workflows já são `on: [push, pull_request]`.
-4. README: badges `branch%3Amaster` e URLs `nightly.link/.../master/` → `main`.
-5. Proteger `master` contra push (settings do GitHub) ou simplesmente parar de commitar nela.
-6. Feature branches abertas (`feature/enhanced-audio-*`, `feature/hdpack-*`, etc.): históricas; trabalho novo sai de `main`.
+3. CI: `clang-format-check.yml` currently triggers only on `push` to `master` — switch it to `main`. The other workflows are already `on: [push, pull_request]`.
+4. README: badges `branch%3Amaster` and URLs `nightly.link/.../master/` → `main`.
+5. Protect `master` against push (GitHub settings) or simply stop committing to it.
+6. Open feature branches (`feature/enhanced-audio-*`, `feature/hdpack-*`, etc.): historical; new work branches off `main`.
 
-## O que fica / o que sai
+## What stays / what goes
 
-Fica o host (`Core/Shared/`, debugger shell, netplay, MEP, HD packs, Enhanced Synth) e os quatro cores acima. SMS **não** é Coleco: `SmsConsole` tem `SmsModel::{Sms, GameGear, Sg, ColecoVision}` — Coleco é uma fatia (BIOS + portas + controller). SG-1000 fica.
+The host stays (`Core/Shared/`, debugger shell, netplay, MEP, HD packs, Enhanced Synth) along with the four cores above. SMS is **not** Coleco: `SmsConsole` has `SmsModel::{Sms, GameGear, Sg, ColecoVision}` — Coleco is a slice (BIOS + ports + controller). SG-1000 stays.
 
-SNES é o único acoplamento com um core que fica: Super Game Boy (`BaseCartridge` instancia `Gameboy(..., true)`; `GbPpu` / `GbControlManager` incluem `SuperGameboy.h`). Cortar SNES exige limpar esses ganchos no GB, não apagar o GB.
+SNES is the only coupling with a core that stays: Super Game Boy (`BaseCartridge` instantiates `Gameboy(..., true)`; `GbPpu` / `GbControlManager` include `SuperGameboy.h`). Cutting SNES requires cleaning up these hooks in GB, not deleting GB.
 
-### Enums — não renumerar
+### Enums — do not renumber
 
-`ConsoleType` já tem valores explícitos (`Snes=0`, `Gameboy=1`, `Nes=2`, `PcEngine=3`, `Sms=4`, `Gba=5`, `Ws=6`). Apagar nomes sem os números explícitos nos que restam quebra settings/savestate dos cores vivos.
+`ConsoleType` already has explicit values (`Snes=0`, `Gameboy=1`, `Nes=2`, `PcEngine=3`, `Sms=4`, `Gba=5`, `Ws=6`). Deleting names without keeping explicit numbers on the ones that remain breaks settings/savestates of the live cores.
 
-`CpuType` hoje é sequencial (`Gameboy=7`, `Nes=8`, `Sms=10`, `Gba=11`). **Atribuir valores explícitos iguais aos atuais** nos que restam. Buracos (0–6 SNES/coprocessors, 9 PCE, 12 WS) não se reutilizam. O mesmo para `MemoryType` / `DebuggerFlags` / `RomFormat` / `FirmwareType`: ou enumerant morto com comentário, ou valor explícito estável. Nunca compactar.
+`CpuType` today is sequential (`Gameboy=7`, `Nes=8`, `Sms=10`, `Gba=11`). **Assign explicit values equal to the current ones** on the ones that remain. Gaps (0–6 SNES/coprocessors, 9 PCE, 12 WS) are not reused. The same for `MemoryType` / `DebuggerFlags` / `RomFormat` / `FirmwareType`: either a dead enumerant with a comment, or a stable explicit value. Never compact.
 
-## Cortes — um PR por fatia, nesta ordem
+## Cuts — one PR per slice, in this order
 
-Cada PR na `main`. Verde: compile (pelo menos uma plataforma), `clang-format`, `dotnet test UI.Tests`, `make unit-tests` / `core-unit-tests` se existirem no tree. Não misturar fatias.
+Each PR on `main`. Green: compile (at least one platform), `clang-format`, `dotnet test UI.Tests`, `make unit-tests` / `core-unit-tests` if they exist in the tree. Don't mix slices.
 
-### F1 — ColecoVision (barato)
+### F1 — ColecoVision (cheap)
 
-Não muda `ConsoleType`. `SmsModel::ColecoVision` some; `.col` deixa de carregar.
+Doesn't change `ConsoleType`. `SmsModel::ColecoVision` disappears; `.col` stops loading.
 
-- Core: `SMS/Input/ColecoVisionController.h`, ramo `.col` em `SmsConsole::LoadRom`, `FirmwareHelper::LoadColecoVisionBios`, `RomFormat::ColecoVision`.
+- Core: `SMS/Input/ColecoVisionController.h`, `.col` branch in `SmsConsole::LoadRom`, `FirmwareHelper::LoadColecoVisionBios`, `RomFormat::ColecoVision`.
 - Interop: `SetCvConfig`.
 - UI: `CvConfig*`, `CvConfigView*`, `CvInputConfigViewModel`.
-- Scripts: `SetCvConfig` em `headless_record.cpp`.
-- Docs: README (Enhanced Audio “SMS-family” deixa de citar Coleco).
+- Scripts: `SetCvConfig` in `headless_record.cpp`.
+- Docs: README (Enhanced Audio "SMS-family" no longer mentions Coleco).
 
-SMS / GG / SG-1000 e o synth SMS continuam.
+SMS / GG / SG-1000 and the SMS synth continue.
 
 ### F2 — WonderSwan
 
-Pasta isolada. Fora de `Core/WS/` só `Emulator.cpp`, `Debugger.cpp` e `ExpressionEvaluator.Ws.cpp`.
+Isolated folder. Outside `Core/WS/` only `Emulator.cpp`, `Debugger.cpp`, and `ExpressionEvaluator.Ws.cpp`.
 
-- Apagar `Core/WS/` (~23 cpp, 55 entradas no `Core.vcxproj`).
-- Debugger: includes/switches `CpuType::Ws` em `Debugger.cpp`, `DebugUtilities.h`, `Disassembler.cpp`, `MemoryDumper.cpp`, `ExpressionEvaluator.Ws.cpp`.
+- Delete `Core/WS/` (~23 cpp, 55 entries in `Core.vcxproj`).
+- Debugger: includes/switches for `CpuType::Ws` in `Debugger.cpp`, `DebugUtilities.h`, `Disassembler.cpp`, `MemoryDumper.cpp`, `ExpressionEvaluator.Ws.cpp`.
 - Interop: `SetWsConfig`, `WsState`.
 - UI: `WsConfig*`, `Ws*View*`, `WsDebuggerConfig`, `WsEventViewer*`, `WsStatusView*`, `WsRegisterViewer`, `WsDocumentation.json`, `WsIcon.png`.
 - File dialog: `*.ws` / `*.wsc`.
 
 ### F3 — PC Engine
 
-Core próprio (HuC6280, VDC/VCE, CD em `PCE/CdRom/`). Não compartilha CPU de runtime com o NES; só `Base6502Assembler<PceAddrMode>` no debugger.
+Own core (HuC6280, VDC/VCE, CD in `PCE/CdRom/`). Doesn't share a runtime CPU with NES; only `Base6502Assembler<PceAddrMode>` in the debugger.
 
-- Apagar `Core/PCE/` (~27 cpp, 61 entradas no vcxproj).
-- Debugger: `PceDebugger`, `ExpressionEvaluator.Pce.cpp`, `Base6502Assembler` template PCE (o de NES fica).
+- Delete `Core/PCE/` (~27 cpp, 61 entries in the vcxproj).
+- Debugger: `PceDebugger`, `ExpressionEvaluator.Pce.cpp`, `Base6502Assembler` PCE template (the NES one stays).
 - Interop: `SetPcEngineConfig`, `PceState`.
-- UI: `Pce*` / `PcEngine*` (config, input Avenue Pad, debugger, `Pceas*` importers, `CheatDb` se houver PCE).
+- UI: `Pce*` / `PcEngine*` (config, Avenue Pad input, debugger, `Pceas*` importers, `CheatDb` if there's a PCE one).
 - File dialog: `*.pce` / CD.
 
-### F4 — SNES + SGB (o grande)
+### F4 — SNES + SGB (the big one)
 
-- Apagar emulação SNES (`SnesConsole`, PPU/APU, coprocessors SA-1, GSU, CX4, DSP, MSU-1, BS-X, ST018, SGB, SPC7110, SDD1, OBC1, Sufami). **Não** apagar o pad SNES: `SnesController` / `SnesMouse` / `SnesNttDataKeypad` passam a `Core/Shared/Input/` para o NES e o `ControllerHub`.
-- `Emulator.cpp`: tirar `TryLoadRom<SnesConsole>` e o include.
-- Debugger: `SnesDebugger` e os `CpuType::{Snes,Spc,NecDsp,Sa1,Gsu,Cx4,St018}` nos switches de `Debugger.cpp` / `DebugUtilities.h` / disassembler / memory dumper / `ExpressionEvaluator.Snes.cpp` (e Cx4/Gsu/Spc/St018 se existirem).
-- **GB:** remover `SuperGameboy.h`, `IsSgb()` / `GetSgb()` / `RunSgb` / `GameboyModel::SuperGameboy` / `AutoFavorSgb` / firmware SGB. GB handheld permanece.
+- Delete SNES emulation (`SnesConsole`, PPU/APU, coprocessors SA-1, GSU, CX4, DSP, MSU-1, BS-X, ST018, SGB, SPC7110, SDD1, OBC1, Sufami). **Don't** delete the SNES pad: `SnesController` / `SnesMouse` / `SnesNttDataKeypad` move to `Core/Shared/Input/` for NES and the `ControllerHub`.
+- `Emulator.cpp`: remove `TryLoadRom<SnesConsole>` and the include.
+- Debugger: `SnesDebugger` and the `CpuType::{Snes,Spc,NecDsp,Sa1,Gsu,Cx4,St018}` in the switches in `Debugger.cpp` / `DebugUtilities.h` / disassembler / memory dumper / `ExpressionEvaluator.Snes.cpp` (and Cx4/Gsu/Spc/St018 if present).
+- **GB:** remove `SuperGameboy.h`, `IsSgb()` / `GetSgb()` / `RunSgb` / `GameboyModel::SuperGameboy` / `AutoFavorSgb` / SGB firmware. GB handheld remains.
 - Interop: `SetSnesConfig`, `SnesState`, Save SPC.
-- UI de sistema: settings SNES, debugger SPC/GSU/SA-1, `SaveSpcFile*`, `CheatDb.Snes.json`, ícone de console. **Fica** `SnesControllerView` / `SnesNttDataKeypadControllerView` (mapping do pad).
+- System UI: SNES settings, SPC/GSU/SA-1 debugger, `SaveSpcFile*`, `CheatDb.Snes.json`, console icon. `SnesControllerView` / `SnesNttDataKeypadControllerView` **stay** (pad mapping).
 - File dialog: `*.sfc` / `*.smc` / `*.spc`.
 
-### F5 — docs e contrato do fork
+### F5 — docs and fork contract
 
-- `CONTRIBUTING.md`: deixar de prometer “merges stay cheap” no sentido de merge wholesale; estilo clang-format/dotnet format **continua** (cherry-picks). Proibir Sync fork.
-- README: lista de sistemas = os quatro que restam; Enhanced Audio sem Coleco/SGB.
-- Este plano → `Status: concluída` quando o F4 estiver verde na `main`.
-- DOX: `docs/AGENTS.md` já aponta para este arquivo; se o corte mudar ownership de `Core/`, atualizar o índice raiz.
+- `CONTRIBUTING.md`: stop promising "merges stay cheap" in the wholesale-merge sense; clang-format/dotnet format style **continues** (cherry-picks). Prohibit Sync fork.
+- README: system list = the four that remain; Enhanced Audio without Coleco/SGB.
+- This plan → `Status: done` when F4 is green on `main`.
+- DOX: `docs/AGENTS.md` already points to this file; if the cut changes ownership of `Core/`, update the root index.
 
-## Superfície compartilhada (todo PR mexe nisto, no pedaço da fatia)
+## Shared surface (every PR touches this, for the slice's piece)
 
-Não é “apagar a pasta e pronto”:
+It's not "delete the folder and done":
 
-| Lugar | O que cortar por fatia |
+| Place | What to cut per slice |
 |---|---|
-| `Emulator.cpp` `TryLoadRom<T>` | Snes / Pce / Ws (Coleco não) |
-| `Core.vcxproj` + `.filters` | entradas `SNES\` `PCE\` `WS\` + Coleco header |
+| `Emulator.cpp` `TryLoadRom<T>` | Snes / Pce / Ws (not Coleco) |
+| `Core.vcxproj` + `.filters` | `SNES\` `PCE\` `WS\` entries + Coleco header |
 | `InteropDLL/*ApiWrapper.cpp` | `SetSnesConfig` / `SetPcEngineConfig` / `SetWsConfig` / `SetCvConfig` |
-| `UI/Interop/ConfigApi.cs` + `ConsoleTypeExtensions.cs` + `CpuTypeExtensions.cs` + `FirmwareTypeExtensions.cs` | cases mortos |
-| `FileDialogHelper.cs` | extensões |
-| `EmuSettings` / `SettingTypes.h` | structs `SnesConfig`, `PcEngineConfig`, `WsConfig`, `CvConfig` — podem ficar vazias uma versão se o serialize exigir; preferível tombstone estável |
-| `Debugger.cpp` | o switch gigante por `CpuType` |
+| `UI/Interop/ConfigApi.cs` + `ConsoleTypeExtensions.cs` + `CpuTypeExtensions.cs` + `FirmwareTypeExtensions.cs` | dead cases |
+| `FileDialogHelper.cs` | extensions |
+| `EmuSettings` / `SettingTypes.h` | `SnesConfig`, `PcEngineConfig`, `WsConfig`, `CvConfig` structs — can be left empty for one version if serialization requires it; a stable tombstone is preferable |
+| `Debugger.cpp` | the giant switch by `CpuType` |
 
-## Fora de escopo
+## Out of scope
 
-- Não cortar GBA (core isolado, fora do synth/HD pack, mas barato comparado a SNES).
-- Não cortar SG-1000.
-- Não compactar enums.
-- Não mergear `upstream` em `main`.
-- Não reformatar o tree inteiro “já que estamos aqui”.
+- Don't cut GBA (isolated core, outside synth/HD pack, but cheap compared to SNES).
+- Don't cut SG-1000.
+- Don't compact enums.
+- Don't merge `upstream` into `main`.
+- Don't reformat the whole tree "while we're at it".
 
-## Verificação por fatia
+## Verification per slice
 
 ```
-# depois de cada PR, do root:
+# after each PR, from the repo root:
 grep -R "ColecoVision\|ConsoleType::Snes\|ConsoleType::PcEngine\|ConsoleType::Ws\|TryLoadRom<Snes\|TryLoadRom<Pce\|TryLoadRom<Ws" --include='*.cpp' --include='*.h' --include='*.cs' Core UI InteropDLL
-# F1: ColecoVision deve zerar; os ConsoleType dos outros só zeram na fatia correspondente.
+# F1: ColecoVision should go to zero; the other ConsoleTypes only go to zero in their corresponding slice.
 ```
 
-Mais: file dialog não lista a extensão cortada; um ROM NES + um GB + um SMS + um GBA ainda carregam; clang-format + unit tests + Run tests na `main`.
+Also: the file dialog doesn't list the cut extension; an NES ROM + a GB + an SMS + a GBA still load; clang-format + unit tests + Run tests on `main`.

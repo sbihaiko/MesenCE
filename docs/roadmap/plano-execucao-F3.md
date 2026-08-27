@@ -1,173 +1,183 @@
-# Plano de execução — Fase 3: Formato de pack unificado (MEP v1)
+# Execution plan — Phase 3: Unified pack format (MEP v1)
 
-**Status:** concluída (2026-08-24; validação GUI manual da janela pendente do usuário). Depois disto o fork cortou SNES/PCE/WS/Coleco (`plano-reducao-cores.md`): MSU-1 e hash Coleco/SNES deste documento são histórico da fase, não do produto. — F3.0 ✅ (ADR-0038…0042 em `.dev-squad/adr/`), F3.1 ✅ (núcleo validado headless em 2026-08-24: dir+zip casam em NES/GB, badhash ignorado, badjson/major/zip-slip rejeitados), F3.2 ✅ (delegações validadas headless: GB textures via MEP → screenshot 1:1 com o baseline; HdPacks/ solto vence com log; NES textures+audio(1 BGM/1 SFX)+synth; ESP do pack aplicado em NES/GB — log `[MEP] synth`), F3.3 ✅ (EnhancementPackConfig + espelho C#, exports GetMepPackList/GetMepRomSha1/SetMepPackEnabled, janela "Enhancement Packs" no menu HD Packs; toggles validados headless via flags `mep-*` do harness; dotnet build 0 warnings), F3.4 ✅ (golden tree, E2E zip NES textures+bgm+synth, regressões F1/F2, README) ·
-**PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Fase 3 ·
-**Spec:** [MEP-v1.md](../specs/MEP-v1.md) (publicada) ·
-**Processo:** resolver os ADRs da fase (F3.0) antes de qualquer código, como nas fases 1 e 2.
+**Status:** done (2026-08-24; manual GUI validation of the window pending from the user). After this the fork dropped SNES/PCE/WS/Coleco (`plano-reducao-cores.md`): MSU-1 and Coleco/SNES hashing in this document are phase history, not part of the product. — F3.0 ✅ (ADR-0038…0042 in `.dev-squad/adr/`), F3.1 ✅ (core validated headless on 2026-08-24: dir+zip match on NES/GB, badhash ignored, badjson/major/zip-slip rejected), F3.2 ✅ (delegations validated headless: GB textures via MEP → screenshot 1:1 against the baseline; loose HdPacks/ wins with log; NES textures+audio(1 BGM/1 SFX)+synth; pack ESP applied on NES/GB — log `[MEP] synth`), F3.3 ✅ (EnhancementPackConfig + C# mirror, exports GetMepPackList/GetMepRomSha1/SetMepPackEnabled, "Enhancement Packs" window in the HD Packs menu; toggles validated headless via the harness's `mep-*` flags; dotnet build 0 warnings), F3.4 ✅ (golden tree, E2E zip NES textures+bgm+synth, F1/F2 regressions, README) ·
+**PRD:** [PRD-ecossistema-enhancement-comunitario.md](PRD-ecossistema-enhancement-comunitario.md) §Phase 3 ·
+**Spec:** [MEP-v1.md](../specs/MEP-v1.md) (published) ·
+**Process:** resolve the phase's ADRs (F3.0) before any code, as in phases 1 and 2.
 
-## Critério de sucesso (PRD)
+## Success criteria (PRD)
 
-> Um único `.zip` liga texturas + trilha OGG + preset de synth para um jogo,
-> com cada peça desligável separadamente.
+> A single `.zip` links textures + OGG track + synth preset for a game,
+> with each piece independently toggleable.
 
-Alvo de validação: um jogo NES (ex.: Mega Man 3) — texturas hires.txt + BGM
-OGG (via tags `<bgm>` do próprio hires.txt, já suportadas pelo `HdPackLoader`)
-+ preset ESP, num só pack MEP, com toggles independentes por seção. OGG para
-GB/SMS depende do freeze da extensão hires-gbsms (§3.4 do draft, em review na
-issue #1) e fica explicitamente **fora** desta fase (ver ADR-0041 proposto).
+Validation target: an NES game (e.g., Mega Man 3) — hires.txt textures + OGG
+BGM (via the `<bgm>` tags in hires.txt itself, already supported by
+`HdPackLoader`) + ESP preset, in a single MEP pack, with independent toggles
+per section. OGG for GB/SMS depends on the freeze of the hires-gbsms
+extension (draft §3.4, under review in issue #1) and is explicitly **out**
+of this phase (see proposed ADR-0041).
 
-## Estado do terreno (verificado no código em 2026-08-24)
+## State of the ground (verified in code on 2026-08-24)
 
-| Ponto de integração | Situação |
+| Integration point | Status |
 |---|---|
-| Parse de JSON no core C++ | **Não existe** parser JSON em Core/Utilities — decisão necessária (ADR-0038) |
-| Hash No-Intro | **Não existe**: `Emulator::GetHash(Sha1)` hasheia o arquivo inteiro; `NesConsole::GetHash(Sha1Cheat)` só PRG. NES No-Intro = arquivo menos header iNES (16B) e menos trainer (512B, flags6 bit 2) — calculável direto do arquivo, sem console montado |
-| Texturas NES | `HdPackLoader::LoadHdNesPack(string definitionFile, ...)` já aceita path arbitrário de hires.txt e lê de **zip** (ZipReader) — delegação trivial |
-| Texturas GB/SMS | `HdTilePack::LoadFromFolder(folder, ...)` já existe (criado na consolidação pós-F2) — só diretório, sem zip |
-| Áudio OGG NES | tags `<bgm>`/`<sfx>` no hires.txt via `OggMixer` — já funciona |
-| Áudio OGG GB/SMS | loader v1 ignora as tags (log "not supported yet") — fora da F3 |
-| MSU-1 | era SNES-only; o core SNES saiu depois (`plano-reducao-cores.md`). Fora da F3 e fora do produto |
-| Preset ESP | `EnhancedSynthPreset` lê `EnhancedAudioPresets.cfg` do home no reset/load — precisa de camada de override intermediária (defaults < pack < arquivo do usuário, spec MEP §5.3) |
-| Zip | `Utilities/ZipReader` (miniz) disponível |
-| Validação de spec | `scripts/validate-specs.py` já valida o golden `pack.json` |
+| JSON parsing in the C++ core | **Does not exist**: no JSON parser in Core/Utilities — decision needed (ADR-0038) |
+| No-Intro hash | **Does not exist**: `Emulator::GetHash(Sha1)` hashes the whole file; `NesConsole::GetHash(Sha1Cheat)` is PRG only. NES No-Intro = file minus the iNES header (16B) and minus the trainer (512B, flags6 bit 2) — computable directly from the file, without a mounted console |
+| NES textures | `HdPackLoader::LoadHdNesPack(string definitionFile, ...)` already accepts an arbitrary hires.txt path and reads from **zip** (ZipReader) — trivial delegation |
+| GB/SMS textures | `HdTilePack::LoadFromFolder(folder, ...)` already exists (created in the post-F2 consolidation) — directory only, no zip |
+| NES OGG audio | `<bgm>`/`<sfx>` tags in hires.txt via `OggMixer` — already works |
+| GB/SMS OGG audio | the v1 loader ignores the tags (log "not supported yet") — out of F3 |
+| MSU-1 | was SNES-only; the SNES core was later dropped (`plano-reducao-cores.md`). Out of F3 and out of the product |
+| ESP preset | `EnhancedSynthPreset` reads `EnhancedAudioPresets.cfg` from the home directory on reset/load — needs an intermediate override layer (defaults < pack < user file, MEP spec §5.3) |
+| Zip | `Utilities/ZipReader` (miniz) available |
+| Spec validation | `scripts/validate-specs.py` already validates the golden `pack.json` |
 
-## F3.0 — ADRs da fase (bloqueia o resto) ✅
+## F3.0 — Phase ADRs (blocks the rest) ✅
 
-1. **ADR-0038 — Parser JSON do core.** Não há parser no core. Opções:
-   (a) parser mínimo próprio em `Utilities/` (~200 linhas, JSON estrito,
-   objetos/arrays/strings/números/bool/null, erro = pack inválido);
-   (b) lib header-only (nlohmann, ~25k linhas). Recomendação: (a) — o repo
-   evita dependências, o pack.json é pequeno e o golden file vira teste.
-2. **ADR-0039 — Hash No-Intro por console.** Novo `HashType::Sha1NoIntro`
-   resolvido pelo host a partir do *arquivo* (tabela da spec MEP §4): NES
-   pula header/trainer; GB/GBC/SMS/GG/SG = arquivo inteiro (Coleco/SNES
-   estavam na tabela da ADR; saíram do produto depois). Onde vive: função estática no manager MEP (não exige
-   console montado — o matching roda antes do `console->LoadRom`).
-3. **ADR-0040 — Armazenamento, descoberta e precedência.** Pasta central
-   `EnhancementPacks/` no home; cada pack = subdiretório `<nome>/pack.json`
-   **ou** `<nome>.zip` solto. Matching por `targets[].sha1` (case-insensitive).
-   Precedência (spec §5.1): HD Pack solto em `HdPacks/<rom>/` **vence** a seção
-   textures de qualquer MEP; entre MEPs, definir e documentar a ordem
-   determinística (proposta: ordem lexicográfica case-insensitive do nome do
-   contêiner — reprodutível entre máquinas, diferente da sugestão "ordem de
-   instalação" da spec, que depende de mtime). Zip para GB/SMS: leitura direta
-   via ZipReader no `HdTilePack` **ou** extração transparente para cache na
-   instalação — decidir aqui.
-4. **ADR-0041 — Escopo de áudio do v1.** Seção `audio` no v1 = OGG por
-   hires.txt (NES). GB/SMS adiado até o freeze da extensão draft; MSU-1
-   adiado (SNES fora das fases e, depois, fora do host). Documentar no README/spec como limitação de
-   host (a spec MEP permanece como está — a limitação é da implementação).
-5. **ADR-0042 — Camada de override ESP.** Ordem de aplicação: defaults
-   embutidos → preset do pack (seção `synth`) → `EnhancedAudioPresets.cfg`
-   do usuário (usuário sempre ganha, spec §5.3). Mecanismo: passo extra em
-   `EnhancedSynthPreset::LoadOverrides` com path/conteúdo vindos do manager.
+1. **ADR-0038 — Core JSON parser.** There is no parser in the core. Options:
+   (a) a minimal in-house parser in `Utilities/` (~200 lines, strict JSON,
+   objects/arrays/strings/numbers/bool/null, error = invalid pack);
+   (b) a header-only lib (nlohmann, ~25k lines). Recommendation: (a) — the repo
+   avoids dependencies, pack.json is small, and the golden file becomes a test.
+2. **ADR-0039 — Per-console No-Intro hash.** New `HashType::Sha1NoIntro`
+   resolved by the host from the *file* (MEP spec §4 table): NES skips the
+   header/trainer; GB/GBC/SMS/GG/SG = whole file (Coleco/SNES were in the ADR's
+   table; they were dropped from the product afterward). Where it lives: a static
+   function in the MEP manager (does not require a mounted console — matching
+   runs before `console->LoadRom`).
+3. **ADR-0040 — Storage, discovery, and precedence.** Central folder
+   `EnhancementPacks/` in the home directory; each pack = subdirectory
+   `<name>/pack.json` **or** a loose `<name>.zip`. Matching by
+   `targets[].sha1` (case-insensitive). Precedence (spec §5.1): a loose HD
+   Pack in `HdPacks/<rom>/` **wins over** the textures section of any MEP;
+   among MEPs, define and document the deterministic order (proposal:
+   case-insensitive lexicographic order of the container name — reproducible
+   across machines, unlike the spec's "install order" suggestion, which
+   depends on mtime). Zip for GB/SMS: direct reading via ZipReader in
+   `HdTilePack` **or** transparent extraction to a cache on install — decide
+   here.
+4. **ADR-0041 — v1 audio scope.** The `audio` section in v1 = OGG via
+   hires.txt (NES). GB/SMS deferred until the draft extension freezes; MSU-1
+   deferred (SNES out of the phases and, later, out of the host). Document in
+   the README/spec as a host limitation (the MEP spec stays as is — the
+   limitation is in the implementation).
+5. **ADR-0042 — ESP override layer.** Application order: built-in defaults →
+   pack preset (`synth` section) → the user's `EnhancedAudioPresets.cfg`
+   (the user always wins, spec §5.3). Mechanism: an extra step in
+   `EnhancedSynthPreset::LoadOverrides` with the path/content coming from the
+   manager.
 
-## F3.1 — Núcleo: parse, matching e carregamento por hash ✅
+## F3.1 — Core: parsing, matching, and hash-based loading ✅
 
-**Entrega:** abrir uma ROM carrega automaticamente os packs MEP aplicáveis.
+**Delivery:** opening a ROM automatically loads the applicable MEP packs.
 
-- `Utilities/JsonReader.{h,cpp}` (novo, conforme ADR-0038) + uso no golden.
-- `Core/Shared/EnhancementPacks/MepPack.{h,cpp}`: parse/validação do
-  `pack.json` (campos MUST, semver, formatos de hash, rejeição de `..`/path
-  absoluto — zip-slip, spec §2.3/§6; campos desconhecidos ignorados §3.2;
-  major desconhecido de `mep` recusado §3.1).
-- `Core/Shared/EnhancementPacks/MepPackManager.{h,cpp}`: scan da pasta
-  central (diretórios + zips), matching por sha1 No-Intro (ADR-0039),
-  lista ordenada por precedência (ADR-0040), API para os consoles:
-  `GetTexturesPath(system)`, `GetSynthPreset()`, flags de seção.
-- `Emulator::LoadRom`: instanciar/rescanear o manager **antes** de
-  `console->LoadRom` (os consoles carregam HD packs dentro do LoadRom deles).
-- vcxproj/filters + **limpar todos os `.o`** (SettingTypes.h e headers novos —
-  makefile sem header deps; sintoma de esquecimento: heap corruption).
-- **Validação:** teste headless com pack de diretório e pack zip (gerados por
-  script python novo `scripts/gen_mep_test_pack.py`), matching por hash
-  correto (NES com/sem header iNES), pack inválido rejeitado com log.
-  **Feito:** `scripts/headless_record <rom> 1 <prefixo> screenshot log` com os
-  packs gerados em `<prefixo-dir>/mesen-home/EnhancementPacks/` — o log do
-  core (`[MEP] ...`, novo flag `log` do harness) mostra matches e rejeições.
-  Nota: o export `GetLog` já existia; F3.3 adiciona `GetMepPackList`.
+- `Utilities/JsonReader.{h,cpp}` (new, per ADR-0038) + usage in the golden test.
+- `Core/Shared/EnhancementPacks/MepPack.{h,cpp}`: parsing/validation of
+  `pack.json` (MUST fields, semver, hash formats, rejection of `..`/absolute
+  paths — zip-slip, spec §2.3/§6; unknown fields ignored §3.2; unknown `mep`
+  major rejected §3.1).
+- `Core/Shared/EnhancementPacks/MepPackManager.{h,cpp}`: scans the central
+  folder (directories + zips), matching by No-Intro sha1 (ADR-0039), a list
+  ordered by precedence (ADR-0040), API for the consoles:
+  `GetTexturesPath(system)`, `GetSynthPreset()`, section flags.
+- `Emulator::LoadRom`: instantiate/rescan the manager **before**
+  `console->LoadRom` (the consoles load HD packs inside their own LoadRom).
+- vcxproj/filters + **clean all `.o` files** (SettingTypes.h and new headers —
+  the makefile has no header deps; symptom of forgetting this: heap corruption).
+- **Validation:** headless test with a directory pack and a zip pack
+  (generated by the new python script `scripts/gen_mep_test_pack.py`),
+  correct hash matching (NES with/without iNES header), invalid pack rejected
+  with a log entry.
+  **Done:** `scripts/headless_record <rom> 1 <prefix> screenshot log` with
+  the packs generated in `<prefix-dir>/mesen-home/EnhancementPacks/` — the
+  core log (`[MEP] ...`, new harness flag `log`) shows matches and
+  rejections. Note: the `GetLog` export already existed; F3.3 adds
+  `GetMepPackList`.
 
-## F3.2 — Delegação de seções (textures + synth + audio-NES) ✅
+## F3.2 — Section delegation (textures + synth + audio-NES) ✅
 
-**Entrega:** o conteúdo do pack chega aos subsistemas existentes.
+**Delivery:** pack content reaches the existing subsystems.
 
-- **textures/NES:** em `NesConsole::LoadRom` (linha ~256), quando não houver
-  `HdPacks/<rom>/hires.txt` solto (precedência!), pedir ao manager o path e
-  chamar `HdPackLoader::LoadHdNesPack(definitionFile, ...)`.
-- **textures/GB/SMS:** idem em `Gameboy::LoadRom` / `SmsConsole::LoadRom`,
-  via `HdTilePack::LoadFromFolder` (com a resposta do ADR-0040 para zip).
-- **synth:** aplicar ADR-0042 nos três engines (NES/GB/SMS EnhancedSynth).
-- **audio/NES:** OGG entra pelas tags do hires.txt da seção textures (ou de
-  um hires.txt de áudio-somente na seção audio — forma final no ADR-0041).
-- **Validação headless:** pack MEP com hires GB neutro → screenshot 1:1
-  (reusa o harness `screenshot`); pack com preset ESP → capturar MIDI e
-  verificar mudança de programa GM vs default; precedência: HdPacks solto +
-  MEP simultâneos → o solto vence.
-  **Feito** (2026-08-24): `gen_mep_test_pack.py ... dir --textures=<rec-hdpack>`
-  + `headless_record ... screenshot log`; PNG idêntico byte a byte ao
-  baseline com e sem pack solto. O ESP do pack não muda notas/programas MIDI
-  (só DSP), então a verificação é pelo log `[MEP] synth: applied ESP
-  overrides` — F3.3 pode expor o preset efetivo via interop se necessário.
-  SMS não testado (sem ROM de teste), mas usa o mesmo `HdTilePack::LoadForRom`.
+- **textures/NES:** in `NesConsole::LoadRom` (line ~256), when there is no
+  loose `HdPacks/<rom>/hires.txt` (precedence!), ask the manager for the path
+  and call `HdPackLoader::LoadHdNesPack(definitionFile, ...)`.
+- **textures/GB/SMS:** same idea in `Gameboy::LoadRom` / `SmsConsole::LoadRom`,
+  via `HdTilePack::LoadFromFolder` (with ADR-0040's answer for zip).
+- **synth:** apply ADR-0042 across the three engines (NES/GB/SMS EnhancedSynth).
+- **audio/NES:** OGG comes in through the textures section's hires.txt tags
+  (or an audio-only hires.txt in the audio section — final form in ADR-0041).
+- **Headless validation:** MEP pack with neutral GB hires → screenshot 1:1
+  (reuses the `screenshot` harness); pack with ESP preset → capture MIDI and
+  check for a GM program change vs. default; precedence: loose HdPacks +
+  MEP simultaneously → the loose one wins.
+  **Done** (2026-08-24): `gen_mep_test_pack.py ... dir --textures=<rec-hdpack>`
+  + `headless_record ... screenshot log`; PNG byte-identical to the baseline
+  with and without the loose pack. The pack's ESP does not change MIDI
+  notes/programs (DSP only), so verification is via the log `[MEP] synth:
+  applied ESP overrides` — F3.3 can expose the effective preset via interop
+  if needed. SMS not tested (no test ROM available), but it uses the same
+  `HdTilePack::LoadForRom`.
 
-## F3.3 — Toggles granulares + UI (F3.2 do PRD) ✅
+## F3.3 — Granular toggles + UI (PRD's F3.2) ✅
 
-**Entrega:** cada seção desligável na UI; packs visíveis e gerenciáveis.
+**Delivery:** each section toggleable in the UI; packs visible and manageable.
 
-- `SettingTypes.h`: `EnhancementPackConfig` (EnableMepPacks global +
-  EnableTextures/EnableAudio/EnableSynth por seção; desabilitar pack
-  individual por nome persiste em config). Campos novos **no fim** das
-  structs + espelho C# interop (`[MarshalAs(I1)]`, append no fim).
-- UI: janela "Enhancement Packs" (lista packs aplicáveis à ROM aberta,
-  checkbox por pack e por seção, botão Install que extrai zip para a pasta
-  central — reusar o fluxo do `InstallHdPack`); item de menu visível para
-  NES/GB/SMS. Mudança de toggle = reload do subsistema afetado
-  (`ForceFilterUpdate` para texturas; reset para synth).
-- InteropDLL: exports `GetMepPackList`/`SetMepPackEnabled` (ou equivalente).
-- **Validação:** dotnet build 0 warnings; toggles refletidos headless via
-  config (harness pode setar EnhancementPackConfig pelo struct real).
+- `SettingTypes.h`: `EnhancementPackConfig` (global EnableMepPacks +
+  EnableTextures/EnableAudio/EnableSynth per section; disabling an individual
+  pack by name persists in config). New fields **at the end** of the structs
+  + the C# interop mirror (`[MarshalAs(I1)]`, appended at the end).
+- UI: "Enhancement Packs" window (lists packs applicable to the open ROM,
+  a checkbox per pack and per section, an Install button that extracts a zip
+  into the central folder — reusing the `InstallHdPack` flow); menu item
+  visible for NES/GB/SMS. A toggle change = reload of the affected subsystem
+  (`ForceFilterUpdate` for textures; reset for synth).
+- InteropDLL: exports `GetMepPackList`/`SetMepPackEnabled` (or equivalent).
+- **Validation:** dotnet build 0 warnings; toggles reflected headless via
+  config (the harness can set EnhancementPackConfig through the real struct).
 
-## F3.4 — Fecho da fase ✅
+## F3.4 — Phase close-out ✅
 
-- Golden/exemplo: pack MEP de demonstração em `docs/specs/golden/mep/`
-  completo (já existe o pack.json; adicionar árvore de exemplo mínima).
-- E2E do critério de sucesso: um zip com textures + `<bgm>` OGG + preset ESP
-  para um jogo NES, cada seção desligável — validado headless + GUI manual.
-- Regressões F1/F2 (suite headless existente), clang-format, DOX pass,
-  README (Fase 3 ✅), atualização da memória de projeto.
+- Golden/example: a demonstration MEP pack in `docs/specs/golden/mep/`,
+  complete (the pack.json already exists; add a minimal example tree).
+- E2E for the success criterion: a zip with textures + `<bgm>` OGG + ESP
+  preset for an NES game, each section toggleable — validated headless +
+  manual GUI.
+- F1/F2 regressions (existing headless suite), clang-format, DOX pass,
+  README (Phase 3 ✅), project memory update.
 
-**Feito (2026-08-24):** `docs/specs/golden/mep/` ganhou `textures/` (pack GB
-neutro gravado da F1 Test Tone), `synth/preset.cfg` (cópia do golden ESP) e
-`audio/README.md` (GB fora do host v1 — ADR-0041); o golden carrega no host
-(log `[MEP] textures ... 78 tiles` + `[MEP] synth`). E2E do critério: zip NES
-com textures + hires.txt `<bgm>`/`<sfx>` + preset ESP → as três seções
-aplicadas e cada uma desligável (`mep-notextures`, `mep-nosynth`,
-`mep-disable=`). Regressão: MIDI/VGM GB e NES sem packs OK. **Pendente do
-usuário:** abrir a janela na GUI (`! open -a ...`) e conferir a lista/Install.
-Toggles em runtime seguem a regra do `EnableHdPacks` (próximo power cycle);
-`ForceFilterUpdate` para texturas ficou fora (v1).
+**Done (2026-08-24):** `docs/specs/golden/mep/` gained `textures/` (neutral
+GB pack recorded from the F1 Test Tone), `synth/preset.cfg` (a copy of the
+golden ESP), and `audio/README.md` (GB out of the v1 host — ADR-0041); the
+golden loads in the host (log `[MEP] textures ... 78 tiles` + `[MEP]
+synth`). E2E for the criterion: an NES zip with textures + hires.txt
+`<bgm>`/`<sfx>` + ESP preset → all three sections applied and each one
+toggleable (`mep-notextures`, `mep-nosynth`, `mep-disable=`). Regression:
+GB and NES MIDI/VGM without packs OK. **Pending from the user:** open the
+window in the GUI (`! open -a ...`) and check the list/Install. Runtime
+toggles follow the same rule as `EnableHdPacks` (next power cycle);
+`ForceFilterUpdate` for textures was left out (v1).
 
-## Riscos e mitigações
+## Risks and mitigations
 
-| Risco | Mitigação |
+| Risk | Mitigation |
 |---|---|
-| Ordem de init no `Emulator::LoadRom` (manager precisa do hash antes do console) | hash No-Intro calculado do arquivo (ADR-0039), sem depender do console montado |
-| `.o` velho após mudar SettingTypes.h/headers novos | limpar `Core/`, `Utilities/`, `InteropDLL/` antes de todo `make core` da fase |
-| Interop C#↔C++ desalinhado (structs de config) | campos sempre apendados no fim; harness inclui `SettingTypes.h` real (drift quebra em compile) |
-| Zip-slip / pack malicioso | validação central no MepPack (spec §6), teste negativo dedicado |
-| Toggle em runtime destabilizar console | v1: toggles aplicam no próximo load/reset (igual ao EnableHdPacks atual), exceto texturas (ForceFilterUpdate é seguro) |
+| Init order in `Emulator::LoadRom` (the manager needs the hash before the console) | No-Intro hash computed from the file (ADR-0039), without depending on a mounted console |
+| Stale `.o` after changing SettingTypes.h/new headers | clean `Core/`, `Utilities/`, `InteropDLL/` before every `make core` in the phase |
+| C#↔C++ interop misaligned (config structs) | fields always appended at the end; the harness includes the real `SettingTypes.h` (drift breaks the compile) |
+| Zip-slip / malicious pack | central validation in MepPack (spec §6), dedicated negative test |
+| Runtime toggle destabilizing the console | v1: toggles apply on the next load/reset (same as the current EnableHdPacks), except textures (ForceFilterUpdate is safe) |
 
-## Sequência sugerida de sessões
+## Suggested session sequence
 
-1. **Sessão A:** F3.0 (ADRs 0038–0042) + F3.1 (núcleo headless-validado).
-2. **Sessão B:** F3.2 (delegações + validação de precedência).
-3. **Sessão C:** F3.3 (config/interop/UI) + F3.4 (fecho, E2E, README).
+1. **Session A:** F3.0 (ADRs 0038–0042) + F3.1 (headless-validated core).
+2. **Session B:** F3.2 (delegations + precedence validation).
+3. **Session C:** F3.3 (config/interop/UI) + F3.4 (close-out, E2E, README).
 
-## Adendo (2026-08-25) — Export ROM Tiles (fora do escopo F3, pedido do usuário)
+## Addendum (2026-08-25) — Export ROM Tiles (out of F3 scope, requested by the user)
 
-Botão **Export ROM Tiles** no HD Pack Builder (`ExportRomTilesHdPack`): NES
-dumpa o CHR ROM inteiro como `defaultTile` (8192 tiles no Mega Man 3; Zelda
-recusado por usar CHR RAM); GB/SMS varrem a ROM por tiles não comprimidos
-(cobertura parcial; F1 Test Tone: 12 bitmaps, nenhum dos 26 exibidos — são
-gerados em runtime). Regravar por cima faz merge preservando os defaults
-(GB 24→102, NES 8192→8300). Harness: flag `romtiles`. ADR-0043.
+**Export ROM Tiles** button in the HD Pack Builder (`ExportRomTilesHdPack`):
+NES dumps the entire CHR ROM as `defaultTile` (8192 tiles for Mega Man 3;
+Zelda refused because it uses CHR RAM); GB/SMS scan the ROM for uncompressed
+tiles (partial coverage; F1 Test Tone: 12 bitmaps, none of the 26 displayed
+— they're generated at runtime). Re-recording on top merges while preserving
+the defaults (GB 24→102, NES 8192→8300). Harness: `romtiles` flag. ADR-0043.

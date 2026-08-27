@@ -1,25 +1,24 @@
 # MEI v1 — MesenCE Enhancement Index
 
-**Status:** v1 (estável) ·
-**Licença desta spec:** CC0-1.0 (domínio público) ·
-**Versionamento:** semver — campo novo opcional = minor; mudança de semântica = major ·
+**Status:** v1 (stable) ·
+**License for this spec:** CC0-1.0 (public domain) ·
+**Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mei/manifest.json`](golden/mei/manifest.json) ·
-**Validação:** `scripts/validate-specs.py`
+**Validation:** `scripts/validate-specs.py`
 
-As palavras-chave MUST, MUST NOT, SHOULD e MAY seguem a RFC 2119.
+The keywords MUST, MUST NOT, SHOULD, and MAY follow RFC 2119.
 
-## 1. Escopo
+## 1. Scope
 
-MEI é o manifest de **descoberta** de packs MEP: um `manifest.json` estático
-(hospedável em qualquer HTTP server ou repositório GitHub) listando packs com
-nome, jogo, hash No-Intro, URL do artefato e checksum. Índices são
-**federados**: qualquer pessoa MAY publicar um MEI e o usuário aponta o
-emulador para ele; o índice oficial de um projeto é apenas mais um MEI, sem
-privilégio de protocolo.
+MEI is the **discovery** manifest for MEP packs: a static `manifest.json`
+(hostable on any HTTP server or GitHub repository) listing packs with name,
+game, No-Intro hash, artifact URL, and checksum. Indexes are **federated**:
+anyone MAY publish an MEI and point the emulator at it; a project's official
+index is just another MEI, with no protocol privilege.
 
-Um índice MUST listar apenas conteúdo que seu mantenedor pode distribuir
-(presets, mapeamentos, composições originais licenciadas); conteúdo derivado
-de terceiros circula fora do índice, em hubs próprios.
+An index MUST list only content its maintainer is able to distribute
+(presets, mappings, licensed original compositions); third-party derivative
+content circulates outside the index, in its own hubs.
 
 ## 2. `manifest.json`
 
@@ -40,62 +39,61 @@ de terceiros circula fora do índice, em hubs próprios.
       "license": "CC0-1.0",
       "url": "https://example.org/packs/after-burner-studio-1.2.0.zip",
       "size": 18342,
-      "sha256": "a3f1c2… (64 hex minúsculos do artefato .zip)"
+      "sha256": "a3f1c2… (64 lowercase hex chars of the .zip artifact)"
     }
   ]
 }
 ```
 
-### 2.1 Campos do índice
+### 2.1 Index fields
 
-| Campo | Obrigação | Semântica |
+| Field | Requirement | Semantics |
 |---|---|---|
-| `mei` | MUST | versão da spec MEI (semver); major desconhecido MUST ser recusado |
-| `name` | MUST | nome humano do índice |
-| `maintainer` | SHOULD | responsável |
-| `updated` | SHOULD | data ISO 8601 da última atualização |
-| `packs` | MUST | lista (possivelmente vazia) de entradas |
+| `mei` | MUST | MEI spec version (semver); an unknown major MUST be rejected |
+| `name` | MUST | human-readable name of the index |
+| `maintainer` | SHOULD | person/entity responsible |
+| `updated` | SHOULD | ISO 8601 date of the last update |
+| `packs` | MUST | list (possibly empty) of entries |
 
-### 2.2 Campos de cada pack
+### 2.2 Fields of each pack
 
-| Campo | Obrigação | Semântica |
+| Field | Requirement | Semantics |
 |---|---|---|
-| `name`, `version` | MUST | espelham o `pack.json` do artefato |
-| `game`, `system` | MUST | jogo alvo e sistema (valores de `system` como no MEP §4) |
-| `rom` | MUST | `sha1` (40 hex maiúsculos, faixa No-Intro do MEP §4) e opcionalmente `crc32` |
-| `mep` | MUST | versão da spec MEP do artefato |
-| `license` | MUST | SPDX do conteúdo |
-| `url` | MUST | URL do artefato `.zip` — **HTTPS obrigatório** |
-| `size` | SHOULD | tamanho em bytes do artefato |
-| `sha256` | MUST | SHA-256 do artefato, 64 hex (case-insensitive na leitura; produtores SHOULD escrever minúsculas) |
+| `name`, `version` | MUST | mirror the artifact's `pack.json` |
+| `game`, `system` | MUST | target game and system (`system` values as in MEP §4) |
+| `rom` | MUST | `sha1` (40 uppercase hex, No-Intro range from MEP §4) and optionally `crc32` |
+| `mep` | MUST | MEP spec version of the artifact |
+| `license` | MUST | SPDX of the content |
+| `url` | MUST | URL of the `.zip` artifact — **HTTPS required** |
+| `size` | SHOULD | size of the artifact in bytes |
+| `sha256` | MUST | SHA-256 of the artifact, 64 hex (case-insensitive on read; producers SHOULD write lowercase) |
 
-Campos desconhecidos MUST ser ignorados.
+Unknown fields MUST be ignored.
 
-## 3. Modelo de confiança (normativo — ADR-0006)
+## 3. Trust model (normative — ADR-0006)
 
-Clientes MEI (o browser de packs de um emulador, ou qualquer outro):
+MEI clients (an emulator's pack browser, or any other):
 
-1. MUST verificar o `sha256` declarado **antes** de extrair, ativar ou
-   persistir o artefato, e MUST rejeitar a instalação em caso de mismatch.
-2. MUST exigir HTTPS tanto na URL do manifest quanto nas URLs de artefato;
-   `http:` MUST ser recusado (sem downgrade com aviso).
-3. MUST rejeitar, após normalização de caminho, qualquer entrada de zip que
-   escape do diretório de instalação do pack (zip-slip).
-4. MUST exigir confirmação explícita do usuário ao adicionar/instalar a
-   partir de um manifest que não seja o índice default do host.
-5. SHOULD apresentar `license` e `maintainer` antes da instalação.
+1. MUST verify the declared `sha256` **before** extracting, activating, or
+   persisting the artifact, and MUST reject the installation on mismatch.
+2. MUST require HTTPS for both the manifest URL and artifact URLs; `http:`
+   MUST be refused (no downgrade-with-warning).
+3. MUST reject, after path normalization, any zip entry that escapes the
+   pack's installation directory (zip-slip).
+4. MUST require explicit user confirmation when adding/installing from a
+   manifest that is not the host's default index.
+5. SHOULD present `license` and `maintainer` before installation.
 
-Essas regras são **contrato da spec**, não detalhe de implementação: clientes
-de terceiros herdam as mesmas obrigações.
+These rules are the **spec's contract**, not an implementation detail:
+third-party clients inherit the same obligations.
 
-## 4. Ranking e telemetria
+## 4. Ranking and telemetry
 
-MEI não define telemetria. Hosts MAY ordenar por sinais públicos da
-hospedagem (downloads/estrelas de release do GitHub, por exemplo). Clientes
-MUST NOT enviar dados do usuário ao mantenedor do índice além do próprio GET.
+MEI does not define telemetry. Hosts MAY order by public hosting signals
+(GitHub release downloads/stars, for example). Clients MUST NOT send user
+data to the index's maintainer beyond the GET request itself.
 
 ## 5. Golden file
 
-[`golden/mei/manifest.json`](golden/mei/manifest.json) — validado por
-`scripts/validate-specs.py` (campos obrigatórios, semver, HTTPS, formatos de
-hash).
+[`golden/mei/manifest.json`](golden/mei/manifest.json) — validated by
+`scripts/validate-specs.py` (required fields, semver, HTTPS, hash formats).

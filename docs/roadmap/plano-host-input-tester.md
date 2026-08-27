@@ -1,134 +1,154 @@
-# Plano — tester de input host
+# Plan — host input tester
 
-**Status:** rascunho (2026-08-26) ·
-**PRD:** fora (UX de host; não é pack/enhancement) ·
-**Referência:** [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) ·
-**Fora de spec:** diagnóstico do gamepad no host, não formato de pack.
-**Processo:** contrato do interop vive neste plano até divergir do código. Sem ADR obrigatório.
+**Status:** draft (2026-08-26) ·
+**PRD:** none (host UX; not a pack/enhancement) ·
+**Reference:** [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) ·
+**Out of spec:** gamepad diagnostics on the host, not a pack format.
+**Process:** the interop contract lives in this plan until it diverges from the code. No ADR required.
 
-Os cores restantes (NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA) são digitais. Analog no Mesen é D-pad, tilt/acelerômetro e rumble — não FPS. Copiar o Hardware Tester **por inteiro** é fora de escopo. Copiar o que fecha o diagnóstico do host.
+The remaining cores (NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA) are digital. Analog in Mesen means D-pad, tilt/accelerometer, and rumble — not FPS. Copying the Hardware Tester **in its entirety** is out of scope. Copy what closes the gap in host diagnostics.
 
-Pad físico com layout SNES (USB, 8BitDo, BlueRetro no **host**) é um gamepad como qualquer outro nesta aba. O tipo de console `SnesController` (protocolo de 12 botões na porta do NES) é outra camada — ver `plano-reducao-cores.md`. O tester não precisa de emulação SNES.
+A physical pad with an SNES layout (USB, 8BitDo, BlueRetro on the **host**) is a gamepad like any other in this tab. The `SnesController` console type (the 12-button protocol on the NES port) is a different layer — see `plano-reducao-cores.md`. The tester does not need SNES emulation.
 
-## Critério de sucesso
+## Success criteria
 
-Um usuário com pad USB/Bluetooth conectado, **sem ROM carregada**, abre Settings → Input → aba Test e vê:
+A user with a USB/Bluetooth pad connected, **with no ROM loaded**, opens
+Settings → Input → the Test tab and sees:
 
-- quais dispositivos o Mesen enxerga (nome, backend, slot `PadN` / `JoyN`);
-- cada botão e eixo ao vivo, com o **mesmo nome de keycode** usado no mapping (`Pad1 A`, `Pad1 LT Up`);
-- o anel da deadzone atual sobre os sticks, e aviso se o stick parado não está em (0,0);
-- um botão que dispara rumble naquele pad.
+- which devices Mesen can see (name, backend, `PadN` / `JoyN` slot);
+- every button and axis live, with the **same keycode name** used in
+  mapping (`Pad1 A`, `Pad1 LT Up`);
+- the current deadzone ring over the sticks, and a warning if a resting
+  stick isn't at (0,0);
+- a button that triggers rumble on that pad.
 
-A janela de mapping (`ControllerConfigWindow`) acende o botão do **console** cujo keycode está pressionado. Drift, deadzone errada e “o Mesen não vê meu pad” deixam de exigir o site externo.
+The mapping window (`ControllerConfigWindow`) lights up the **console**
+button whose keycode is pressed. Drift, wrong deadzone, and "Mesen doesn't
+see my pad" no longer require the external site.
 
-O HUD in-game (`InputHud`) continua sendo a verdade do **console**. Este plano não o substitui.
+The in-game HUD (`InputHud`) remains the source of truth for the
+**console**. This plan does not replace it.
 
-## Três camadas (não misturar)
+## Three layers (do not mix)
 
-| Camada | Onde | O que mostra | Hoje |
+| Layer | Where | What it shows | Today |
 |---|---|---|---|
-| 1. Host | XInput / DInput / evdev / GameController | Pad físico, eixos crus, rumble | Só logs `[Input Connected]` |
-| 2. Binarização | `IsPressed` + `ControllerDeadzoneSize` | `Pad1 X+` etc. depois da deadzone | Invisível na UI |
-| 3. Console | `KeyMapping` → NES/GB/SMS/GBA | A/B/Start do sistema | HUD in-game + janela de mapping cega |
+| 1. Host | XInput / DInput / evdev / GameController | Physical pad, raw axes, rumble | Only `[Input Connected]` logs |
+| 2. Binarization | `IsPressed` + `ControllerDeadzoneSize` | `Pad1 X+` etc. after the deadzone | Invisible in the UI |
+| 3. Console | `KeyMapping` → NES/GB/SMS/GBA | The system's A/B/Start | In-game HUD + a blind mapping window |
 
-O Hardware Tester é a camada 1. O Mesen só expõe a 3. O tester deste plano é a 1 + a 2 (keycode Mesen), lado a lado.
+The Hardware Tester is layer 1. Mesen only exposes layer 3. The tester in
+this plan is layer 1 + layer 2 (Mesen keycode), side by side.
 
-## Estado do terreno (verificado no código em 2026-08-26)
+## State of the ground (verified in code on 2026-08-26)
 
-| Ponto | Situação |
+| Point | Status |
 |---|---|
-| Mapping UI | `ControllerConfigWindow` + `KeyBindingButton` + modal `GetKeyWindow` (poll 25 ms, single-key pega o maior scancode) |
-| HUD console | `Core/Shared/InputHud.cpp` — botões digitais do dispositivo emulado, overlay opcional por porta |
-| Deadzone | Slider global 0–4 (`InputConfig.ControllerDeadzoneSize` → `GetControllerDeadzoneRatio()`), aplicada no host ao binarizar |
-| Analog cru | `IKeyManager::GetAxisPosition` existe; uso só em `GbMbc7Accelerometer` e `GbaTiltSensor` (ambos `TODO add configuration in UI`) |
-| Pressed keys → UI | `InputApi.GetPressedKeys()` copia **no máximo 3** keycodes (`InputApiWrapper.cpp` + buffer de 3 em `InputApi.cs`) |
-| Identidade do pad | Nome/vendor só em `MessageManager::Log`; bindings por **slot** (`Pad1`…), não por VID/PID |
-| Rumble | `SetForceFeedback` no host; intensidade global; só no pad que já mandou input (`_enableForceFeedback`) |
-| Hotplug Linux | `LinuxKeyManager::UpdateDevices()` é TODO; scan a cada 5 s |
-| macOS | Pad sem `extendedGamepad` é ignorado |
-| Presets | Xbox / PS4 / WASD / setas no setup wizard e na janela de mapping — permanece |
+| Mapping UI | `ControllerConfigWindow` + `KeyBindingButton` + `GetKeyWindow` modal (25 ms poll, single-key picks the highest scancode) |
+| Console HUD | `Core/Shared/InputHud.cpp` — digital buttons of the emulated device, optional overlay per port |
+| Deadzone | Global 0–4 slider (`InputConfig.ControllerDeadzoneSize` → `GetControllerDeadzoneRatio()`), applied on the host when binarizing |
+| Raw analog | `IKeyManager::GetAxisPosition` exists; used only in `GbMbc7Accelerometer` and `GbaTiltSensor` (both `TODO add configuration in UI`) |
+| Pressed keys → UI | `InputApi.GetPressedKeys()` copies **at most 3** keycodes (`InputApiWrapper.cpp` + a buffer of 3 in `InputApi.cs`) |
+| Pad identity | Name/vendor only in `MessageManager::Log`; bindings by **slot** (`Pad1`…), not by VID/PID |
+| Rumble | `SetForceFeedback` on the host; global intensity; only on the pad that already sent input (`_enableForceFeedback`) |
+| Linux hotplug | `LinuxKeyManager::UpdateDevices()` is a TODO; scans every 5 s |
+| macOS | A pad without `extendedGamepad` is ignored |
+| Presets | Xbox / PS4 / WASD / arrow keys in the setup wizard and the mapping window — stays as is |
 
-## O que não copiar
+## What not to copy
 
-- Coleta de stats da indústria.
-- Gamepad API do browser — backends nativos já existem.
-- Tester como substituto do mapping.
-- Precisão analógica de fighting game / circularidade como entrega do primeiro corte.
-- Giroscópio, adaptive triggers DualSense.
+- Industry stats collection.
+- Browser Gamepad API — native backends already exist.
+- Tester as a replacement for mapping.
+- Fighting-game-grade analog precision / circularity as a first-cut deliverable.
+- Gyroscope, DualSense adaptive triggers.
 
-## Fases
+## Phases
 
-### I.0 — Contrato de host na UI (bloqueia o resto)
+### I.0 — Host contract in the UI (blocks the rest)
 
-Não dá para montar o tester em cima de `GetPressedKeys` de 3 slots. Expor estado **antes** da binarização, sem mudar o modelo de mapping.
+The tester can't be built on top of the 3-slot `GetPressedKeys`. Expose
+state **before** binarization, without changing the mapping model.
 
-**Entrega:** a UI consulta a lista de pads e o estado live sem truncar.
+**Delivery:** the UI queries the pad list and live state without truncation.
 
-Interop novo (nomes provisórios — ajustar ao estilo de `InputApi`):
+New interop (provisional names — adjust to match `InputApi`'s style):
 
 - `GetConnectedGamepadCount()` / `GetConnectedGamepadInfo(index, out InteropGamepadInfo)`
   - `Name`, `Backend` (`XInput` / `DirectInput` / `Evdev` / `GameController`), `SlotLabel` (`Pad1` / `Joy2`), `VendorId`, `ProductId`, `HasRumble`
 - `GetGamepadState(index, out InteropGamepadState)`
-  - botões digitais (pressed + keycode + `GetKeyName`)
-  - eixos `int16` **crus** (sticks LX/LY/RX/RY, triggers L2/R2), sem deadzone
-- `TestForceFeedback(index, durationMs)` — ignora `_enableForceFeedback` para o teste
+  - digital buttons (pressed + keycode + `GetKeyName`)
+  - **raw** `int16` axes (sticks LX/LY/RX/RY, triggers L2/R2), no deadzone
+- `TestForceFeedback(index, durationMs)` — ignores `_enableForceFeedback` for the test
 
-Arquivos: `IKeyManager` (+ impls `Windows` / `Linux` / `MacOS`), `InteropDLL/InputApiWrapper.cpp`, `UI/Interop/InputApi.cs`.
+Files: `IKeyManager` (+ `Windows` / `Linux` / `MacOS` impls), `InteropDLL/InputApiWrapper.cpp`, `UI/Interop/InputApi.cs`.
 
-Não quebrar `GetPressedKeys` (Lua, `GetKeyWindow`, `ShortcutKeyHandler`, `StateGrid`). Estender ou adicionar API paralela.
+Don't break `GetPressedKeys` (Lua, `GetKeyWindow`, `ShortcutKeyHandler`,
+`StateGrid`). Extend it or add a parallel API.
 
-Eixos crus **não** passam pela deadzone. A UI desenha o anel usando o slider atual.
+Raw axes **do not** go through the deadzone. The UI draws the ring using
+the current slider.
 
-### I.1 — Aba Test na config de Input
+### I.1 — Test tab in the Input config
 
-**Entrega:** Settings → Input ganha aba **Test** (ao lado de General / Display). Sem ROM. Sem modal.
+**Delivery:** Settings → Input gains a **Test** tab (next to General /
+Display). No ROM. No modal.
 
-Por pad conectado:
+Per connected pad:
 
-- identidade (nome, backend, slot Mesen, VID/PID se houver);
-- silhueta genérica / Xbox com botões acendendo;
-- dois círculos de stick + ponto ao vivo + anel da deadzone (`ControllerDeadzoneSize`);
-- barras L2/R2;
-- lista dos keycodes Mesen ativos (`Pad1 A`, `Pad1 X+`);
-- aviso se stick parado fora de ~0 (drift);
-- botão Test rumble.
+- identity (name, backend, Mesen slot, VID/PID if available);
+- a generic/Xbox silhouette with buttons lighting up;
+- two stick circles + a live dot + the deadzone ring (`ControllerDeadzoneSize`);
+- L2/R2 bars;
+- a list of the active Mesen keycodes (`Pad1 A`, `Pad1 X+`);
+- a warning if a resting stick is off ~0 (drift);
+- a Test rumble button.
 
-ViewModel novo: dados via `Refresh(...)` injetado pelo code-behind / timer — construtor **não** chama `InputApi` (contrato Fase 3 de `UI/AGENTS.md`). Não extrair para `UI/Logic/` (depende de interop nativo). Timer ~16–33 ms só com a aba visível.
+New ViewModel: data via `Refresh(...)` injected by the code-behind / timer
+— the constructor **does not** call `InputApi` (Phase 3 contract from
+`UI/AGENTS.md`). Do not extract into `UI/Logic/` (depends on native
+interop). Timer ~16–33 ms only while the tab is visible.
 
-Poll: `InputApi.UpdateInputDevices()` no open da aba.
+Poll: `InputApi.UpdateInputDevices()` on tab open.
 
-### I.2 — Highlight live na janela de mapping
+### I.2 — Live highlight in the mapping window
 
-**Entrega:** com `ControllerConfigWindow` aberta, o `KeyBindingButton` cujo `KeyBinding` está em `GetPressedKeys` (ou na nova API) acende. Continua sendo preciso clicar para rebind.
+**Delivery:** with `ControllerConfigWindow` open, the `KeyBindingButton`
+whose `KeyBinding` is in `GetPressedKeys` (or the new API) lights up.
+Clicking to rebind is still required.
 
-Não substitui o `GetKeyWindow`. Complementa: o usuário vê *qual* botão do console o pad está acionando **antes** de rebindar.
+Does not replace `GetKeyWindow`. It complements it: the user sees *which*
+console button the pad is triggering **before** rebinding.
 
-### I.3 — Follow-ups (fora do primeiro corte)
+### I.3 — Follow-ups (out of the first cut)
 
-Ordem sugerida, cada um isolável:
+Suggested order, each one independent:
 
-1. Deadzone per-device (o preview da I.1 já justifica o slider global).
-2. Binding por VID/PID em vez de slot `Pad1` (hotplug deixa de quebrar mapping).
-3. UI dos eixos MBC7 / GBA tilt (os dois TODOs).
-4. Teste de circularidade (stick que nunca sai da deadzone).
-5. Linux: `UpdateDevices()` de verdade. macOS: não descartar pad sem `extendedGamepad`.
+1. Per-device deadzone (the I.1 preview already justifies the global slider).
+2. Binding by VID/PID instead of slot `Pad1` (hotplug stops breaking mapping).
+3. UI for the MBC7 / GBA tilt axes (the two TODOs).
+4. Circularity test (a stick that never leaves the deadzone).
+5. Linux: a real `UpdateDevices()`. macOS: don't discard a pad without
+   `extendedGamepad`.
 
-## Fora deste plano
+## Out of this plan
 
-- Redesign dos presets Xbox/PS4/WASD.
-- Overlay HUD in-game (camada 3).
-- Dispositivos especiais (Zapper, Power Pad, Phaser, tablet) — o tester é de **gamepad host**.
-- Remap automático a partir do tester.
+- Redesign of the Xbox/PS4/WASD presets.
+- In-game HUD overlay (layer 3).
+- Special devices (Zapper, Power Pad, Phaser, tablet) — the tester is for
+  **host gamepads**.
+- Automatic remapping from the tester.
 
-## Verificação
+## Verification
 
-Planos não têm check automático (`docs/AGENTS.md`). Fechar cada fase com:
+Plans have no automated check (`docs/AGENTS.md`). Close each phase with:
 
-| Fase | Check |
+| Phase | Check |
 |---|---|
-| I.0 | Build Core+Interop+UI nas três plataformas alvo; Lua `emu.getPressedKeys` e atalho de teclado inalterados; `GetGamepadState` devolve eixos com o stick no canto (não só 0/1) |
-| I.1 | Manual: 0 pads → empty state; 1 pad Xbox/generic → botões, sticks, deadzone, rumble; 2 pads → dois painéis; slider de deadzone move o anel ao vivo |
-| I.2 | Manual: mapping NES/GB/GBA/SMS — apertar o pad acende o botão do console já bound; rebind pelo modal continua funcionando |
-| Drift | Stick com drift visível no tester em repouso; se dentro da deadzone, HUD in-game **não** acende D-pad |
+| I.0 | Build Core+Interop+UI on the three target platforms; Lua `emu.getPressedKeys` and the keyboard shortcut unchanged; `GetGamepadState` returns axes with the stick in the corner (not just 0/1) |
+| I.1 | Manual: 0 pads → empty state; 1 Xbox/generic pad → buttons, sticks, deadzone, rumble; 2 pads → two panels; the deadzone slider moves the ring live |
+| I.2 | Manual: NES/GB/GBA/SMS mapping — pressing the pad lights up the already-bound console button; rebinding via the modal still works |
+| Drift | Stick with visible drift in the tester at rest; if within the deadzone, the in-game HUD **does not** light up the D-pad |
 
-Não há ROM de teste para I.0–I.2. I.3 tilt/MBC7 usa ROM com sensor quando essa fase entrar.
+There is no test ROM for I.0–I.2. I.3 tilt/MBC7 uses a ROM with a sensor
+when that phase starts.

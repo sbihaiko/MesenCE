@@ -30,7 +30,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Work Guidance
 
-- `core_unit_tests.cpp` - Fase 4 of the now-completed unit-test plan (see
+- `core_unit_tests.cpp` - Phase 4 of the now-completed unit-test plan (see
   git history for `docs/roadmap/plano-testes-unitarios.md`): exercises
   `ChannelRoleClassifier` (role/SFX decisions) and
   `MepPack::NormalizeRelativePath` / `MepPack::Parse` (zip-slip fixture +

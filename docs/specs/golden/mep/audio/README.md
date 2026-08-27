@@ -1,10 +1,10 @@
-# Seção `audio` do pack de exemplo
+# `audio` section of the example pack
 
-O alvo deste golden é um jogo Game Boy (`F1 Test Tone`). A seção `audio`
-para GB/SMS depende do freeze da extensão
-[`hires-gbsms-v1-draft.md`](../../../hires-gbsms-v1-draft.md) e **ainda não
-é aplicada pelo host MesenCE** (ADR-0041 — no v1 só `nes` recebe áudio, via
-um `hires.txt` com tags `<bgm>`/`<sfx>` apontando para arquivos OGG nesta
-pasta). A pasta existe para que o pack.json golden aponte para um caminho
-real; quando a extensão congelar, o conteúdo entra aqui sem mudar o
-`pack.json`.
+This golden's target is a Game Boy game (`F1 Test Tone`). The `audio`
+section for GB/SMS depends on the freeze of the
+[`hires-gbsms-v1-draft.md`](../../../hires-gbsms-v1-draft.md) extension and
+**is not yet applied by the MesenCE host** (ADR-0041 — in v1 only `nes`
+receives audio, via a `hires.txt` with `<bgm>`/`<sfx>` tags pointing to OGG
+files in this folder). The folder exists so the golden pack.json points to
+a real path; when the extension freezes, content will go here without
+changing the `pack.json`.

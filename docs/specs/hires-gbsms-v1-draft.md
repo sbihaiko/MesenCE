@@ -1,99 +1,100 @@
-# Extensão hires.txt para GB/SMS — v1-draft (proposta)
+# hires.txt extension for GB/SMS — v1-draft (proposal)
 
-**Status:** **v1-draft / proposta — pendente de revisão pela comunidade
-HDNes/Mesen antes de qualquer congelamento** (ADR-0004). Nada aqui é final;
-mudanças a partir de feedback são revisões do draft, não breaking changes. ·
-**Licença desta spec:** CC0-1.0 ·
+**Status:** **v1-draft / proposal — pending review by the HDNes/Mesen
+community before any freeze** (ADR-0004). Nothing here is final; changes
+based on feedback are draft revisions, not breaking changes. ·
+**License for this spec:** CC0-1.0 ·
 **Golden file:** [`golden/hires-gbsms/hires.txt`](golden/hires-gbsms/hires.txt) ·
-**Validação:** `scripts/validate-specs.py`
+**Validation:** `scripts/validate-specs.py`
 
-As palavras-chave MUST/SHOULD/MAY (RFC 2119) expressam a *intenção da
-proposta*, condicionada ao status de draft acima.
+The keywords MUST/SHOULD/MAY (RFC 2119) express the *intent of the
+proposal*, conditioned on the draft status above.
 
-## 1. Motivação
+## 1. Motivation
 
-O formato HDNes `hires.txt` (implementação de referência: Mesen,
-`Core/NES/HdPacks/`, versão de formato corrente `<ver>109`) cobre apenas o
-PPU do NES. GB e SMS são igualmente tile-based e não têm padrão de HD pack;
-replacement de áudio OGG para GB/SMS também não tem padrão (MSU-MD cobre só
-Mega Drive). Esta proposta estende o formato existente de forma
-**retrocompatível**, usando o campo `<ver>` que o formato já possui, em vez
-de criar um formato novo.
+The HDNes `hires.txt` format (reference implementation: Mesen,
+`Core/NES/HdPacks/`, current format version `<ver>109`) covers only the
+NES PPU. GB and SMS are equally tile-based and have no HD pack standard;
+OGG audio replacement for GB/SMS also has no standard (MSU-MD covers only
+the Mega Drive). This proposal extends the existing format in a
+**backward-compatible** way, using the `<ver>` field the format already
+has, instead of creating a new format.
 
-## 2. Estratégia de compatibilidade
+## 2. Compatibility strategy
 
-1. A extensão é sinalizada por `<ver>200` ou maior (faixa 2xx reservada aos
-   sistemas não-NES; a linha 1xx continua pertencendo ao NES/HDNes clássico).
-2. Um novo tag obrigatório `<system>` declara o PPU alvo. Loaders NES antigos
-   já rejeitam `<ver>` acima do que conhecem — nenhum pack antigo quebra e
-   nenhum pack novo é meio-carregado por um loader velho.
-3. Todos os tags existentes mantêm sintaxe e semântica
+1. The extension is signaled by `<ver>200` or higher (the 2xx range is
+   reserved for non-NES systems; the 1xx line continues to belong to
+   classic NES/HDNes).
+2. A new mandatory `<system>` tag declares the target PPU. Old NES loaders
+   already reject a `<ver>` above what they know — no old pack breaks, and
+   no new pack is half-loaded by an old loader.
+3. All existing tags keep their syntax and semantics
    (`<scale>`, `<img>`, `<tile>`, `<background>`, `<condition>`, `<bgm>`,
    `<sfx>`, `<options>`, `<overscan>`, `<patch>`, `<addition>`,
-   `<fallback>`), reinterpretados apenas onde o hardware difere (§3).
+   `<fallback>`), reinterpreted only where the hardware differs (§3).
 
-## 3. Tags novos / reinterpretados
+## 3. New / reinterpreted tags
 
-### 3.1 `<system>` (novo, MUST em `<ver>` ≥ 200)
+### 3.1 `<system>` (new, MUST when `<ver>` ≥ 200)
 
 ```
 <system>gb | gbc | sms | gg | sg1000 | coleco
 ```
 
-### 3.2 `<tile>` — chave de tile por sistema
+### 3.2 `<tile>` — per-system tile key
 
-A chave de identidade do tile (hoje: dados do tile NES + paleta) passa a ser
-definida por sistema. Decisão registrada em ADR-0036 (GB/GBC) e ADR-0037
-(SMS/GG): a chave usa sempre os **valores** de paleta aplicados no momento da
-captura (nunca índices/slots, que são realocados dinamicamente pelos jogos),
-seguindo o precedente do formato NES — é isso que garante replacement 1:1.
+The tile identity key (today: NES tile data + palette) becomes defined per
+system. Decision recorded in ADR-0036 (GB/GBC) and ADR-0037 (SMS/GG): the
+key always uses the palette **values** applied at capture time (never
+indices/slots, which are dynamically reallocated by games), following the
+precedent of the NES format — this is what guarantees 1:1 replacement.
 
-| Sistema | Dados do tile | Chave de paleta (campo hex único) |
+| System | Tile data | Palette key (single hex field) |
 |---|---|---|
-| `gb` (DMG) | 16 bytes 2bpp | `TTPP` — TT: `00`=BG, `01`=OBJ; PP: valor do registrador BGP/OBPx aplicado |
-| `gbc` | 16 bytes 2bpp | `TT` + 4×RGB555 big-endian da paleta CGB aplicada (18 hex) |
-| `sms` | 32 bytes 4bpp (VDP mode 4) | `TT` + base CRAM (`00`/`10`) + snapshot das 16 entradas CRAM RGB222 (36 hex) |
-| `gg` | 32 bytes 4bpp (VDP mode 4) | `TT` + base CRAM (`00`/`10`) + snapshot das 16 entradas CRAM RGB444 big-endian (68 hex) |
-| `sg1000`/`coleco` | 8 bytes 1bpp (TMS9918) | par cor-frente/cor-fundo do pattern (draft; fora da v1 do builder) |
+| `gb` (DMG) | 16 bytes 2bpp | `TTPP` — TT: `00`=BG, `01`=OBJ; PP: value of the applied BGP/OBPx register |
+| `gbc` | 16 bytes 2bpp | `TT` + 4×RGB555 big-endian of the applied CGB palette (18 hex) |
+| `sms` | 32 bytes 4bpp (VDP mode 4) | `TT` + CRAM base (`00`/`10`) + snapshot of the 16 CRAM RGB222 entries (36 hex) |
+| `gg` | 32 bytes 4bpp (VDP mode 4) | `TT` + CRAM base (`00`/`10`) + snapshot of the 16 CRAM RGB444 big-endian entries (68 hex) |
+| `sg1000`/`coleco` | 8 bytes 1bpp (TMS9918) | foreground/background color pair of the pattern (draft; outside the builder's v1) |
 
-Notas normativas (MUST): banco VRAM (GBC) e espelhamento H/V ficam **fora**
-da chave de identidade — banco só organiza as folhas PNG dumpeadas e
-espelhamento é atributo de exibição, como no NES. Os dados do tile são
-gravados na orientação canônica (sem espelhos).
+Normative notes (MUST): VRAM bank (GBC) and H/V mirroring stay **outside**
+the identity key — the bank only organizes the dumped PNG sheets, and
+mirroring is a display attribute, as in NES. Tile data is recorded in the
+canonical orientation (without mirrors).
 
-Formato textual: os mesmos campos separados por vírgula do formato atual —
-`<tile>png,dadosHex,chavePaletaHex,x,y,brilho,defaultTile` — com os dados do
-tile em hex e a chave de paleta conforme a tabela.
+Text format: the same comma-separated fields as the current format —
+`<tile>png,dadosHex,chavePaletaHex,x,y,brilho,defaultTile` — with the tile
+data in hex and the palette key as in the table.
 
 ### 3.3 `<background>` / `<condition>`
 
-Mantidos. Condições dependentes de endereço de PPU NES ganham equivalentes
-por sistema (ex.: `spriteNearby`, `memoryCheck` sobre o barramento do
-sistema alvo). Draft: a lista exata de condições portáveis será fechada com
-a comunidade.
+Kept. Conditions dependent on NES PPU addresses gain per-system equivalents
+(e.g., `spriteNearby`, `memoryCheck` over the target system's bus). Draft:
+the exact list of portable conditions will be finalized with the
+community.
 
-### 3.4 `<bgm>` / `<sfx>` (áudio OGG para GB/SMS — o vão do PRD §4.1)
+### 3.4 `<bgm>` / `<sfx>` (OGG audio for GB/SMS — the gap in PRD §4.1)
 
-Sintaxe idêntica à atual (`<bgm>id,arquivo.ogg[,loopPoint]`), com o gatilho
-definido por sistema: endereço+valor de RAM/registrador que identifica a
-faixa corrente (mesmo mecanismo `memoryCheck` das condições). O host toca o
-OGG via seu mixer nativo (OggMixer no MesenCE), duckando o chip conforme já
-faz no NES.
+Syntax identical to the current one (`<bgm>id,arquivo.ogg[,loopPoint]`),
+with the trigger defined per system: RAM/register address+value that
+identifies the current track (the same `memoryCheck` mechanism as the
+conditions). The host plays the OGG through its native mixer (OggMixer in
+MesenCE), ducking the chip as it already does on NES.
 
-## 4. Fora de escopo deste draft
+## 4. Out of scope for this draft
 
-- Modos não-tile (SMS mode 0-3 legado além do TMS9918 básico).
-- Normal/texture maps e shaders (território do SUPER ZSNES; ver PRD §6).
-- Qualquer mudança no pipeline NES existente.
+- Non-tile modes (legacy SMS mode 0-3 beyond basic TMS9918).
+- Normal/texture maps and shaders (SUPER ZSNES territory; see PRD §6).
+- Any change to the existing NES pipeline.
 
-## 5. Processo
+## 5. Process
 
-Discussão pública (issue no fork MesenCE + thread na comunidade
-HDNes/Mesen) antes de congelar como `hires-gbsms-v1.md`. Implementações
-experimentais MUST tratar `<ver>2xx` como instável até o congelamento.
+Public discussion (issue on the MesenCE fork + thread in the HDNes/Mesen
+community) before freezing as `hires-gbsms-v1.md`. Experimental
+implementations MUST treat `<ver>2xx` as unstable until the freeze.
 
 ## 6. Golden file
 
-[`golden/hires-gbsms/hires.txt`](golden/hires-gbsms/hires.txt) — exemplo
-canônico mínimo de um pack GB (validado sintaticamente por
-`scripts/validate-specs.py`; a semântica permanece draft).
+[`golden/hires-gbsms/hires.txt`](golden/hires-gbsms/hires.txt) — minimal
+canonical example of a GB pack (syntactically validated by
+`scripts/validate-specs.py`; semantics remain draft).

@@ -1,108 +1,109 @@
-# Autoria de HD/MEP Packs para submissão comunitária
+# Authoring HD/MEP Packs for community submission
 
-Este guia é para quem vai preencher o formulário "Submissão de Community
-HD/MEP Pack" (`.github/ISSUE_TEMPLATE/community-pack.yml`). Ele resume o que
-faz um pack ser aceito, aceito parcialmente, ou rejeitado na triagem
-automática do board "MesenCE Community Packs".
+This guide is for anyone filling out the "Community HD/MEP Pack Submission"
+form (`.github/ISSUE_TEMPLATE/community-pack.yml`). It summarizes what makes
+a pack get accepted, partially accepted, or rejected during the automatic
+triage on the "MesenCE Community Packs" board.
 
-A especificação normativa completa é [`docs/specs/MEP-v1.md`](specs/MEP-v1.md)
-(RFC 2119, licença CC0-1.0). Este documento não substitui a spec — só traduz
-as seções relevantes para quem está preparando uma submissão.
+The full normative specification is [`docs/specs/MEP-v1.md`](specs/MEP-v1.md)
+(RFC 2119, CC0-1.0 license). This document does not replace the spec — it
+just translates the sections relevant to someone preparing a submission.
 
-## O que a triagem verifica
+## What triage checks
 
-Ao abrir a issue de submissão, um workflow baixa o pack pelo link informado,
-roda `scripts/mep_lint.py` sobre ele e classifica o conteúdo declarado em
-`pack.json` (seção `sections`, ver MEP-v1.md §3). O veredito final é um dos
-três abaixo.
+When the submission issue is opened, a workflow downloads the pack from the
+provided link, runs `scripts/mep_lint.py` on it, and classifies the declared
+content in `pack.json` (the `sections` field, see MEP-v1.md §3). The final
+verdict is one of the three below.
 
 ### Aceito (MEP completo)
 
-O pack traz, além de texturas, pelo menos uma seção de `synth` ou `audio`:
+The pack includes, in addition to textures, at least one `synth` or `audio`
+section:
 
-- **`synth`** (MEP-v1.md §5.3) — um arquivo no formato **ESP v1**, aplicado
-  acima dos defaults embutidos e abaixo do ESP local do usuário.
-- **`audio`** (MEP-v1.md §5.2) — um diretório de replacement de áudio em
-  formato já suportado pelo sistema alvo (OGG por HD pack, ou MSU-1 no SNES).
+- **`synth`** (MEP-v1.md §5.3) — a file in **ESP v1** format, applied above
+  the built-in defaults and below the user's local ESP.
+- **`audio`** (MEP-v1.md §5.2) — an audio replacement directory in a format
+  already supported by the target system (OGG for HD pack, or MSU-1 on SNES).
 
 ### Aceito parcial (HD Mesen)
 
-O pack só declara a seção **`textures`** (MEP-v1.md §5.1): um diretório
-apontando para um HD Pack no formato HDNes `hires.txt`. É uma submissão
-válida e completa dentro do escopo de texturas, mas não cobre áudio/synth,
-então recebe o rótulo `pack:partial-hd` em vez de `pack:mep-full`.
+The pack only declares the **`textures`** section (MEP-v1.md §5.1): a
+directory pointing to an HD Pack in HDNes `hires.txt` format. This is a
+valid and complete submission within the scope of textures, but it does not
+cover audio/synth, so it receives the `pack:partial-hd` label instead of
+`pack:mep-full`.
 
 ### Inválido
 
-A submissão é rejeitada quando:
+The submission is rejected when:
 
-- o link não está no allow-list de hosts aceitos, ou o download excede o
-  limite de tamanho;
-- `scripts/mep_lint.py` falha (estrutura do `pack.json`, seções ou caminhos
-  inválidos);
-- o pack viola a seção de segurança da spec (MEP-v1.md §6): entradas de zip
-  que escapam do diretório do pack (zip-slip), ou qualquer indício de que o
-  pack tenta empacotar bytes de execução em vez de dados declarativos;
-- há um problema óbvio de conteúdo/licenciamento (ex.: assets extraídos da
-  ROM sem direito de distribuição, ou créditos claramente ausentes).
+- the link is not on the allow-list of accepted hosts, or the download
+  exceeds the size limit;
+- `scripts/mep_lint.py` fails (invalid `pack.json` structure, sections, or
+  paths);
+- the pack violates the spec's security section (MEP-v1.md §6): zip entries
+  that escape the pack directory (zip-slip), or any indication that the pack
+  attempts to package executable bytes instead of declarative data;
+- there is an obvious content/licensing problem (e.g. assets extracted from
+  the ROM without distribution rights, or credits clearly missing).
 
-## Zips de release com pasta de wrapper/promoção
+## Release zips with a wrapper/promo folder
 
-Alguns lançamentos empacotam o pack dentro de uma subpasta de nome livre
-(ex.: `Contra80s-v1.1/...`), às vezes junto com material que não faz parte do
-pack (screenshots, README de divulgação). Isso não casa nenhuma convenção de
-primeira classe: não há `pack.json` na raiz do zip nem o zip é nomeado
-exatamente como a ROM (MEP-v1.md §2.1, regras 5-6).
+Some releases package the pack inside a freely-named subfolder (e.g.
+`Contra80s-v1.1/...`), sometimes alongside material that is not part of the
+pack (screenshots, a promotional README). This does not match any
+first-class convention: there is no `pack.json` at the zip root, and the zip
+is not named exactly like the ROM (MEP-v1.md §2.1, rules 5-6).
 
-Para esse caso existe um **caminho de compatibilidade de última prioridade**
-(MEP-v1.md §2.1, regra 9), mas a triagem automática e o host MesenCE
-localizam a subpasta candidata por critérios diferentes — a assimetria
-motor-vs-validadores documentada em MEP-v1.md §2.1:
+For this case there is a **last-resort compatibility path**
+(MEP-v1.md §2.1, rule 9), but automatic triage and the MesenCE host locate
+the candidate subfolder using different criteria — the engine-vs-validators
+asymmetry documented in MEP-v1.md §2.1:
 
-- **Host MesenCE (`PrepareZip`, quem decide se o pack carrega no jogo)**
-  busca, dentro do zip, a subpasta cujo **nome casa o nome da ROM**
-  (case-insensitive, sem extensão) — o mesmo critério da regra 5. Para que
-  seu pack funcione no host através desse fallback, **nomeie a subpasta
-  interna exatamente como a ROM**.
-- **Triagem automática (`mep_lint.py`) e o validador da UI
-  (`MepZipValidator.cs`)** usam em vez disso um critério **estrutural**
-  (name-agnostic): aceitam a subpasta cujo conteúdo bate o layout fixo
-  (`textures/hires.txt`, `audio/hires.txt`, `audio/fingerprints.json` e/ou
-  `synth/preset.cfg`), sem olhar o nome. Um pack pode passar na triagem
-  estrutural e ainda assim não carregar no host se a subpasta não estiver
-  nomeada como a ROM.
+- **MesenCE host (`PrepareZip`, which decides whether the pack loads in the
+  game)** looks, inside the zip, for the subfolder whose **name matches the
+  ROM's name** (case-insensitive, no extension) — the same criterion as
+  rule 5. For your pack to work in the host through this fallback, **name
+  the internal subfolder exactly like the ROM**.
+- **Automatic triage (`mep_lint.py`) and the UI validator
+  (`MepZipValidator.cs`)** instead use a **structural** (name-agnostic)
+  criterion: they accept the subfolder whose contents match the fixed
+  layout (`textures/hires.txt`, `audio/hires.txt`,
+  `audio/fingerprints.json` and/or `synth/preset.cfg`), without looking at
+  the name. A pack can pass structural triage and still fail to load in the
+  host if the subfolder is not named like the ROM.
 
-Em ambos os casos, o fallback só roda depois que as convenções normais
-falham, e se o zip tiver **mais de uma** subpasta candidata, a submissão é
-rejeitada por ambiguidade — então evite empacotar mais de uma pasta de
-conteúdo por zip.
+In both cases, the fallback only runs after the normal conventions fail,
+and if the zip has **more than one** candidate subfolder, the submission is
+rejected for ambiguity — so avoid packaging more than one content folder
+per zip.
 
-Esse fallback é um recurso de última instância, não a forma recomendada de
-publicar: sempre que possível, coloque pack.json na raiz do zip ou nomeie o
-próprio arquivo/pasta de release exatamente como a ROM (sem extensão), para
-que a submissão seja aceita pela primeira convenção sem depender do
-fallback nem da diferença de critério acima.
+This fallback is a last-resort feature, not the recommended way to publish:
+whenever possible, put `pack.json` at the zip root, or name the release
+file/folder itself exactly like the ROM (no extension), so the submission
+is accepted by the first convention without depending on the fallback or
+the criteria difference described above.
 
-## Antes de enviar
+## Before submitting
 
-- **Direitos de distribuição.** O pack MUST NOT conter bytes da ROM nem
-  assets extraídos dela sem direito de distribuição — a responsabilidade é
-  do autor do pack (MEP-v1.md §1). É por isso que a caixa de confirmação no
-  formulário de submissão é obrigatória.
-- **`pack.json` válido.** Confira contra o exemplo em MEP-v1.md §3: campos
-  `mep`, `name`, `version`, `targets` (com `sha1` No-Intro da ROM) e
-  `sections` são obrigatórios.
-- **Rode o lint localmente antes de submeter**, se possível:
-  `python3 scripts/mep_lint.py <pasta-ou-zip-do-pack>`.
-- **Link de download direto**, hospedado em um dos hosts aceitos: release
-  do GitHub, `raw.githubusercontent.com`, ou gist. Links para páginas HTML
-  (não para o arquivo em si) não são aceitos automaticamente.
+- **Distribution rights.** The pack MUST NOT contain ROM bytes or assets
+  extracted from it without distribution rights — this is the pack
+  author's responsibility (MEP-v1.md §1). This is why the confirmation
+  checkbox in the submission form is mandatory.
+- **Valid `pack.json`.** Check it against the example in MEP-v1.md §3: the
+  `mep`, `name`, `version`, `targets` (with the ROM's No-Intro `sha1`), and
+  `sections` fields are required.
+- **Run the lint locally before submitting**, if possible:
+  `python3 scripts/mep_lint.py <pack-folder-or-zip>`.
+- **Direct download link**, hosted on one of the accepted hosts: a GitHub
+  release, `raw.githubusercontent.com`, or a gist. Links to HTML pages (not
+  to the file itself) are not accepted automatically.
 
-## Depois de enviar
+## After submitting
 
-Um comentário automático na issue registra o veredito, a seção da spec que
-o embasa, e move o item no board. Se você atualizar o pack no mesmo link
-depois de um veredito, comente `/revalidate` na issue para disparar uma
-nova checagem — o hash do conteúdo é sempre recomputado, então uma
-mudança real no pack é detectada mesmo sem esse comando (checagem
-periódica de drift).
+An automatic comment on the issue records the verdict, the spec section it
+is based on, and moves the item on the board. If you update the pack at the
+same link after a verdict, comment `/revalidate` on the issue to trigger a
+new check — the content hash is always recomputed, so an actual change to
+the pack is detected even without this command (periodic drift check).

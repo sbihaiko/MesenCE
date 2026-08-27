@@ -35,9 +35,10 @@ what CI actually runs; this doc records why they're split the way they are.
   through `dotnet-format-check.yml` or `build.yml`'s restore/publish flow
   either.
 - `ISSUE_TEMPLATE/community-pack.yml` — GitHub Issue Form for community
-  HD/MEP pack submissions (not a free-text issue): pack link, jogo/ROM alvo
-  + região, console dropdown, autor/créditos, a required rights-confirmation
-  checkbox, and an optional description. Sets `labels: [community-pack]`
+  HD/MEP pack submissions (not a free-text issue): pack link, target
+  game/ROM + region, console dropdown, author/credits, a required
+  rights-confirmation checkbox, and an optional description. Sets
+  `labels: [community-pack]`
   and links `docs/hd-pack-authoring.md`. Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
 - `workflows/community-pack-validate.yml` — reusable (`workflow_call` only,

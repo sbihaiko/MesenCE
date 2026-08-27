@@ -1,6 +1,6 @@
 # MesenCE Community Enhancement Ecosystem
 
-*Status: draft / roadmap — the full PRD (pt-BR) lives at
+*Status: draft / roadmap — the full PRD lives at
 [docs/roadmap/PRD-ecossistema-enhancement-comunitario.md](roadmap/PRD-ecossistema-enhancement-comunitario.md).*
 
 Enhanced Audio is step one of a larger plan: turning MesenCE into a platform for

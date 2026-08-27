@@ -20,12 +20,12 @@ runtime behavior.
   port devices) stay as input for remaining cores. See `plano-reducao-cores.md`.
 - Completed plans stay as the record of what shipped; if a later cut makes a
   path or foundation vanish, say so in one line and point here — do not leave
-  "já suportado" pointing at deleted trees.
+  "already supported" pointing at deleted trees.
 
 ## Work Guidance
 
 - New plan: `plano-*.md` in this folder.
-- Core reduction: `plano-reducao-cores.md` (concluída).
+- Core reduction: `plano-reducao-cores.md` (completed).
 - Host gamepad tester: `plano-host-input-tester.md`.
 
 ## Verification

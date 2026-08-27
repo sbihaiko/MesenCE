@@ -1,196 +1,196 @@
-# PRD — Ecossistema de Enhancement Comunitário (MesenCE)
+# PRD — Community Enhancement Ecosystem (MesenCE)
 
-**Status:** rascunho · 
-**Autor:** sbihaiko · 
-**Data:** 2026-08-23
-**Escopo:** fork MesenCE
+**Status:** draft ·
+**Author:** sbihaiko ·
+**Date:** 2026-08-23
+**Scope:** MesenCE fork
 
 ---
 
-## 1. Contexto e motivação
+## 1. Context and motivation
 
-O MesenCE já possui o **Enhanced Audio** (synth paralelo ao APU acurado, presets por jogo em `EnhancedAudioPresets.cfg`, cobertura NES / GB / SMS+FM). O relançamento do **SUPER ZSNES** (zsnes.com, v0.300, 2026) validou comercialmente a mesma tese com seu
-"Super Enhancement Engine": melhorias curadas jogo a jogo (hi-res manual, texture/normal maps, widescreen, overclock, replacement de áudio), todas individualmente desativáveis,
-com dados de enhancement separados e livres de conteúdo copyrighted.
+MesenCE already has **Enhanced Audio** (a synth running in parallel to the accurate APU, per-game presets in `EnhancedAudioPresets.cfg`, coverage for NES / GB / SMS+FM). The relaunch of **SUPER ZSNES** (zsnes.com, v0.300, 2026) commercially validated the same thesis with its
+"Super Enhancement Engine": curated improvements game by game (manual hi-res, texture/normal maps, widescreen, overclock, audio replacement), all individually toggleable,
+with enhancement data kept separate and free of copyrighted content.
 
-Este PRD define a evolução natural dessa tese no MesenCE: transformar o emulador em
-**plataforma de extração, autoria e consumo de packs de enhancement**, com a comunidade
-produzindo o conteúdo — mantendo o projeto juridicamente limpo.
+This PRD defines the natural evolution of that thesis in MesenCE: turning the emulator into
+a **platform for extracting, authoring, and consuming enhancement packs**, with the community
+producing the content — while keeping the project legally clean.
 
-O Mesen já traz fundações prontas nos cores que este fork mantém (NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA — ver `plano-reducao-cores.md`):
+Mesen already has ready-made foundations in the cores this fork keeps (NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA — see `plano-reducao-cores.md`):
 
-| Fundação | Onde | O que dá de graça |
+| Foundation | Where | What it gives for free |
 |---|---|---|
-| NES HD Packs (formato HDNes) | `Core/NES/HdPacks/` | Replacement de tiles + áudio OGG (`OggMixer`), condições por contexto, **HD Pack Builder** (gravador de tiles) |
-| HD tiles GB/SMS | `Core/Shared/HdPacks/` + `HdTilePack` | Mesmo envelope de tiles para handheld/SMS; OGG nesses sistemas ainda depende da extensão hires-gbsms |
-| Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | Tap que já converte estado de registradores em abstrações de nota/voz — ~90% de um exportador MIDI |
+| NES HD Packs (HDNes format) | `Core/NES/HdPacks/` | Tile replacement + OGG audio (`OggMixer`), context conditions, **HD Pack Builder** (tile recorder) |
+| GB/SMS HD tiles | `Core/Shared/HdPacks/` + `HdTilePack` | Same tile envelope for handheld/SMS; OGG on these systems still depends on the hires-gbsms extension |
+| Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | Tap that already converts register state into note/voice abstractions — ~90% of a MIDI exporter |
 
-Este fork **não** emula SNES. MSU-1 (`Core/SNES/Coprocessors/MSU1/`) saiu com o core; não é fundação do produto.
+This fork does **not** emulate SNES. MSU-1 (`Core/SNES/Coprocessors/MSU1/`) left with the core; it's not a foundation of the product.
 
-## 2. Objetivos
+## 2. Goals
 
-1. Permitir que qualquer usuário **extraia localmente** os assets visuais e musicais do
-   jogo que está rodando (tiles → PNG; música → MIDI/VGM).
-2. Definir um **formato de pack unificado** (texturas + áudio + preset de synth),
-   identificado por hash da ROM, editável pela comunidade.
-3. Oferecer **descoberta e instalação de packs dentro da UI** (browser de packs), com
-   ranking por uso, consumindo manifests configuráveis.
-4. Disponibilizar um **pipeline offline de AI** que gere o primeiro rascunho de packs
-   (upscale de tiles, afinação assistida de presets), para a comunidade refinar à mão.
+1. Let any user **extract locally** the visual and music assets of the
+   game currently running (tiles → PNG; music → MIDI/VGM).
+2. Define a **unified pack format** (textures + audio + synth preset),
+   identified by ROM hash, editable by the community.
+3. Provide **pack discovery and installation inside the UI** (pack browser), with
+   usage-based ranking, consuming configurable manifests.
+4. Provide an **offline AI pipeline** that generates a first draft of packs
+   (tile upscaling, assisted preset tuning), for the community to refine by hand.
 
-### Não-objetivos (explícitos)
+### Non-goals (explicit)
 
-- **Não** hospedar, embutir ou distribuir conteúdo derivado (MIDIs extraídos, covers,
-  texturas redesenhadas de terceiros) em nenhum repositório do projeto.
-- **Não** embutir qualquer mecanismo P2P/torrent de compartilhamento no emulador
-  (risco de responsabilidade por indução — *MGM v. Grokster*, 2005; precedente Yuzu, 2024).
-- **Não** monetizar packs ou o canal de distribuição.
-- **Não** enviar nada para upstream (trabalho vive só no fork).
+- **Not** hosting, bundling, or distributing derivative content (extracted MIDIs, covers,
+  third-party redrawn textures) in any project repository.
+- **Not** embedding any P2P/torrent sharing mechanism in the emulator
+  (inducement liability risk — *MGM v. Grokster*, 2005; Yuzu precedent, 2024).
+- **Not** monetizing packs or the distribution channel.
+- **Not** sending anything upstream (work lives only in the fork).
 
-## 3. Princípios de arquitetura legal
+## 3. Legal architecture principles
 
-O copyright musical tem duas camadas: a **gravação/código** (escapamos: MIDI gerado não
-contém bytes da ROM) e a **composição** (não há escape por formato: MIDI extraído é
-transcrição da obra, como partitura). O mesmo vale para tiles extraídos. Logo:
+Music copyright has two layers: the **recording/code** (we escape this: generated MIDI
+doesn't contain ROM bytes) and the **composition** (there's no escaping this by format: extracted MIDI is
+a transcription of the work, like sheet music). The same applies to extracted tiles. Therefore:
 
-1. **Distribuir a ferramenta, nunca os arquivos.** Extratores são legais
-   (interoperabilidade); os outputs ficam na máquina do usuário.
-2. **Canal oficial só com conteúdo limpo:** presets de synth, mapeamentos por hash,
-   manifests, ferramentas, composições originais licenciadas (CC).
-3. **Conteúdo derivado circula nos hubs comunitários existentes** (VGMusic p/ MIDIs,
-   GitHub individual + romhack.ing p/ texturas; Zeldix continua existindo para MSU-1
-   noutros emuladores, não neste host), que já absorvem o
-   risco de takedown há décadas. O emulador só consome manifests apontados pelo usuário.
-4. **O emulador é burro em relação a conteúdo:** nenhum endosso, bundle ou default que
-   aponte para material derivado.
-5. Fatores de risco a policiar em qualquer hub associado: monetização, ROMs
-   pré-patcheadas, assets originais empacotados, marcas no nome.
+1. **Distribute the tool, never the files.** Extractors are legal
+   (interoperability); the outputs stay on the user's machine.
+2. **Official channel only carries clean content:** synth presets, hash mappings,
+   manifests, tools, licensed original compositions (CC).
+3. **Derivative content circulates in existing community hubs** (VGMusic for MIDIs,
+   individual GitHub repos + romhack.ing for textures; Zeldix continues to exist for MSU-1
+   on other emulators, not on this host), which have already absorbed
+   takedown risk for decades. The emulator only consumes manifests the user points it to.
+4. **The emulator is content-dumb:** no endorsement, bundling, or default that
+   points to derivative material.
+5. Risk factors to police in any associated hub: monetization, pre-patched
+   ROMs, bundled original assets, trademarks in the name.
 
-## 4. Padrões
+## 4. Standards
 
-Regra geral: **adotar padrão comunitário existente sempre que houver; formalizar como spec aberta apenas o que não existe** — para que outros emuladores e autores de packs possam implementar sem depender do MesenCE.
+General rule: **adopt an existing community standard whenever one exists; formalize as an open spec only what doesn't exist** — so other emulators and pack authors can implement it without depending on MesenCE.
 
-### 4.1 Padrões existentes adotados
+### 4.1 Existing standards adopted
 
-| Área | Padrão | Aplicação | Benefício |
+| Area | Standard | Application | Benefit |
 |---|---|---|---|
-| Identificação de ROM | No-Intro (DATs Logiqx XML, CRC32/MD5/SHA-1) | Chave de packs e manifests (F3/F4) | Interop com RetroArch, coleções e bancos existentes |
-| Hash por sistema | rcheevos `rhash` | Cálculo do hash quando o sistema hasheia só parte do arquivo | Compatibilidade futura com RetroAchievements |
-| Log de áudio | VGM v1.71+ com tags GD3 | Exportador F1.1 | Toca em qualquer player VGM (foobar2000, in_vgm); metadados no padrão do vgmrips |
-| Partitura/notas | SMF tipo 1 + General MIDI | Exportador F1.2 | Abre em MuseScore/DAWs sem conversão |
-| Texturas | HDNes `hires.txt` (Mesen é a implementação de referência) | F2/F3 | Autores e ferramentas existentes já dominam o formato |
-| Áudio NES | OGG via HD pack (`OggMixer`) | F3 | Já suportado; parte do padrão HDNes |
-| Patches | BPS (beat) | Se packs incluírem patches de ROM | Valida checksum da ROM fonte — casa com o modelo keyed-por-hash |
+| ROM identification | No-Intro (Logiqx XML DATs, CRC32/MD5/SHA-1) | Key for packs and manifests (F3/F4) | Interop with RetroArch, existing collections and databases |
+| Per-system hash | rcheevos `rhash` | Hash calculation when the system hashes only part of the file | Future compatibility with RetroAchievements |
+| Audio log | VGM v1.71+ with GD3 tags | F1.1 exporter | Plays in any VGM player (foobar2000, in_vgm); metadata in the vgmrips standard |
+| Score/notes | SMF type 1 + General MIDI | F1.2 exporter | Opens in MuseScore/DAWs without conversion |
+| Textures | HDNes `hires.txt` (Mesen is the reference implementation) | F2/F3 | Existing authors and tools already master the format |
+| NES audio | OGG via HD pack (`OggMixer`) | F3 | Already supported; part of the HDNes standard |
+| Patches | BPS (beat) | If packs include ROM patches | Validates the source ROM's checksum — fits the hash-keyed model |
 
-Único vão sem padrão consolidado: áudio de replacement para **GB/SMS** (MSU-MD cobre só Mega Drive) — coberto pela extensão proposta em 4.2.3.
+The only gap without an established standard: replacement audio for **GB/SMS** (MSU-MD covers only Mega Drive) — covered by the extension proposed in 4.2.3.
 
-### 4.2 Novos padrões a formalizar (specs abertas)
+### 4.2 New standards to formalize (open specs)
 
-Cada spec vive em `docs/specs/<sigla>-v<N>.md`, licenciada **CC0** (domínio público — qualquer emulador pode implementar), contendo: campos normativos em linguagem RFC 2119 (MUST/SHOULD/MAY), versionamento semver, arquivos-exemplo canônicos ("golden files") e script de validação. Mudanças via issue/PR no repositório da spec; breaking change = bump de versão maior.
+Each spec lives in `docs/specs/<sigla>-v<N>.md`, licensed **CC0** (public domain — any emulator can implement it), containing: normative fields in RFC 2119 language (MUST/SHOULD/MAY), semver versioning, canonical example files ("golden files"), and a validation script. Changes go through issue/PR in the spec's repository; breaking change = major version bump.
 
-**4.2.1 ESP — Enhanced Synth Preset (v1).** Formalização do atual `EnhancedAudioPresets.cfg`: gramática do arquivo, parâmetros de voz por chip (NES APU, GB APU, SMS PSG, YM2413), faixas válidas de cada parâmetro, comportamento default de campos omitidos e regras de fallback (por jogo → por chip → global). É o único formato 100% novo do ecossistema — não há equivalente no mercado.
+**4.2.1 ESP — Enhanced Synth Preset (v1).** Formalization of the current `EnhancedAudioPresets.cfg`: the file's grammar, per-chip voice parameters (NES APU, GB APU, SMS PSG, YM2413), valid ranges for each parameter, default behavior for omitted fields, and fallback rules (per game → per chip → global). It's the only 100% new format in the ecosystem — there's no market equivalent.
 
-**4.2.2 MEP — MesenCE Enhancement Pack (v1).** O envelope da Fase 3: um `.zip` com `pack.json` na raiz. Casca fina que só **compõe** padrões existentes: identificação por hash No-Intro, metadados (nome, autor, licença, versão semver) e seções opcionais apontando para formatos já padronizados — `textures/` (hires.txt), `audio/` (OGG no host NES; GB/SMS via extensão 4.2.3), `synth/` (ESP). Cada seção declara-se individualmente desativável (toggle granular, F3.2). Este host não carrega MSU-1.
+**4.2.2 MEP — MesenCE Enhancement Pack (v1).** The Phase 3 envelope: a `.zip` with `pack.json` at the root. A thin shell that only **composes** existing standards: identification by No-Intro hash, metadata (name, author, license, semver version), and optional sections pointing to already-standardized formats — `textures/` (hires.txt), `audio/` (OGG on the NES host; GB/SMS via the 4.2.3 extension), `synth/` (ESP). Each section declares itself individually toggleable (granular toggle, F3.2). This host doesn't load MSU-1.
 
-**4.2.3 Extensão hires.txt para GB/SMS (proposta).** Extensão retrocompatível do formato HDNes usando o campo `<ver>` existente: novas tags para os PPUs de GB/SMS (paletas CGB, modos do VDP) e para replacement de áudio OGG nesses sistemas (o vão identificado em 4.1). A proposta deve ser discutida com a comunidade HDNes/Mesen antes de congelar a v1.
+**4.2.3 hires.txt extension for GB/SMS (proposal).** Backward-compatible extension of the HDNes format using the existing `<ver>` field: new tags for GB/SMS PPUs (CGB palettes, VDP modes) and for OGG audio replacement on those systems (the gap identified in 4.1). The proposal should be discussed with the HDNes/Mesen community before freezing v1.
 
-**4.2.4 MEI — MesenCE Enhancement Index (v1).** O manifest de descoberta da Fase 4: `manifest.json` com a lista de packs (nome, jogo, hash No-Intro, URL, checksum do artefato, licença). Índices são **federados**: qualquer um pode publicar um MEI e o usuário aponta o emulador para ele (F4.3) — o índice oficial é só mais um MEI.
+**4.2.4 MEI — MesenCE Enhancement Index (v1).** The Phase 4 discovery manifest: `manifest.json` with the list of packs (name, game, No-Intro hash, URL, artifact checksum, license). Indexes are **federated**: anyone can publish a MEI and the user points the emulator at it (F4.3) — the official index is just one more MEI.
 
-## 5. Fases
+## 5. Phases
 
-Cada fase entrega valor sozinha e não depende da seguinte.
+Each phase delivers value on its own and doesn't depend on the next one.
 
-### Fase 1 — Exportador MIDI/VGM (Enhanced Synth tap)
+### Phase 1 — MIDI/VGM exporter (Enhanced Synth tap)
 
-*A peça mais barata e mais única do mercado.*
+*The cheapest and most unique piece in the market.*
 
-- **F1.1** Exportar VGM v1.71+ com tags GD3 (padrões da comunidade chiptune/vgmrips —
-  ver 4.1): log bruto de escritas de registrador por chip. NES, GB, SMS (PSG + YM2413).
-- **F1.2** Exportar MIDI (SMF tipo 1 + General MIDI — ver 4.1): reaproveitar as
-  abstrações nota/voz do `EnhancedSynthEngine` (note-on/off, pitch, canal → track MIDI;
-  mapear vozes do synth → programas GM aproximados a partir do preset ativo).
-- **F1.3** UI: ação "Gravar música (MIDI/VGM)" no menu de áudio; grava enquanto joga.
-- **Critério de sucesso:** MIDI de uma música do Mega Man 3 abre no MuseScore com
-  pistas separadas por canal e notas corretas.
+- **F1.1** Export VGM v1.71+ with GD3 tags (chiptune community/vgmrips standards —
+  see 4.1): raw log of per-chip register writes. NES, GB, SMS (PSG + YM2413).
+- **F1.2** Export MIDI (SMF type 1 + General MIDI — see 4.1): reuse the
+  note/voice abstractions from `EnhancedSynthEngine` (note-on/off, pitch, channel → MIDI track;
+  map synth voices → approximate GM programs based on the active preset).
+- **F1.3** UI: "Record music (MIDI/VGM)" action in the audio menu; records while you play.
+- **Success criterion:** MIDI of a Mega Man 3 song opens in MuseScore with
+  tracks separated by channel and correct notes.
 
-### Fase 2 — Generalizar o HD Pack Builder (GB / SMS)
+### Phase 2 — Generalize the HD Pack Builder (GB / SMS)
 
-- **F2.1** Portar o padrão `HdBuilderPpu` (gravação de tiles durante gameplay) para os
-  PPUs de GB e SMS (ambos tile-based).
-- **F2.2** Dump organizado: PNG folheados por bank/paleta + `hires.txt` compatível com
-  o formato HDNes existente, estendido conforme a proposta 4.2.3 (retrocompatível via
-  campo `<ver>`).
-- **Critério de sucesso:** rodar um jogo de GB por 10 min gera um pack-esqueleto que,
-  reinstalado, renderiza idêntico ao original (replacement 1:1 neutro).
+- **F2.1** Port the `HdBuilderPpu` pattern (tile recording during gameplay) to the
+  GB and SMS PPUs (both tile-based).
+- **F2.2** Organized dump: PNGs sheeted by bank/palette + `hires.txt` compatible with
+  the existing HDNes format, extended per proposal 4.2.3 (backward-compatible via
+  the `<ver>` field).
+- **Success criterion:** running a GB game for 10 min generates a skeleton pack that,
+  when reinstalled, renders identical to the original (neutral 1:1 replacement).
 
-### Fase 3 — Formato de pack unificado
+### Phase 3 — Unified pack format
 
-- **F3.1** Implementar a spec **MEP v1** (4.2.2): `pack.json` com hash(es) No-Intro da
-  ROM, versão, autor, licença, e seções opcionais `textures/` (hires.txt), `audio/`
-  (OGG via OggMixer no NES), `synth/` (preset ESP embutido).
-- **F3.2** Toggles granulares: cada seção — e cada voz/camada dentro dela —
-  individualmente desativável na UI (lição SUPER ZSNES: "to suit your play style").
-- **F3.3** Carregamento por hash ao abrir a ROM; múltiplos packs com precedência.
-- **Critério de sucesso:** um único .zip liga texturas + trilha OGG + preset de synth
-  para um jogo, com cada peça desligável separadamente.
+- **F3.1** Implement the **MEP v1** spec (4.2.2): `pack.json` with No-Intro hash(es) of the
+  ROM, version, author, license, and optional sections `textures/` (hires.txt), `audio/`
+  (OGG via OggMixer on NES), `synth/` (embedded ESP preset).
+- **F3.2** Granular toggles: each section — and each voice/layer within it —
+  individually toggleable in the UI (SUPER ZSNES lesson: "to suit your play style").
+- **F3.3** Loading by hash when opening the ROM; multiple packs with precedence.
+- **Success criterion:** a single .zip bundles textures + OGG soundtrack + synth preset
+  for a game, with each piece separately toggleable.
 
-### Fase 4 — Browser de packs na UI + canal oficial
+### Phase 4 — Pack browser in the UI + official channel
 
-- **F4.1** Manifest remoto no formato **MEI v1** (4.2.4), hospedado em repo GitHub:
-  lista de packs limpos (presets/mapeamentos/originais CC) com nome, jogo, hash
-  No-Intro, URL, checksum e downloads.
-- **F4.2** UI de descoberta: listar, instalar, atualizar; ranking por contagem de
-  downloads/estrelas do GitHub (sem telemetria própria).
-- **F4.3** URLs de manifest **configuráveis pelo usuário** (o default aponta só para o
-  repo oficial limpo; a comunidade pode manter índices próprios em org separada).
-- **F4.4** Contribuição = PR no repo do índice (curadoria via review).
-- **Critério de sucesso:** instalar um preset de Enhanced Audio para After Burner em
-  2 cliques a partir da UI, sem sair do emulador.
+- **F4.1** Remote manifest in the **MEI v1** format (4.2.4), hosted in a GitHub repo:
+  list of clean packs (presets/mappings/CC originals) with name, game, No-Intro
+  hash, URL, checksum, and download counts.
+- **F4.2** Discovery UI: list, install, update; ranked by GitHub
+  download counts/stars (no in-house telemetry).
+- **F4.3** Manifest URLs **configurable by the user** (the default points only to the
+  clean official repo; the community can maintain its own indexes in a separate org).
+- **F4.4** Contribution = PR to the index repo (curation via review).
+- **Success criterion:** installing an Enhanced Audio preset for After Burner in
+  2 clicks from the UI, without leaving the emulator.
 
-### Fase 5 — Pipeline offline de AI
+### Phase 5 — Offline AI pipeline
 
-*Ferramentas externas (scripts), nunca embutidas no emulador.*
+*External tools (scripts), never embedded in the emulator.*
 
-- **F5.1** Upscale de tiles: batch ESRGAN (modelos treinados p/ pixel art) sobre o dump
-  da Fase 2 → pack-rascunho 4x para refino manual da comunidade.
-- **F5.2** Afinação assistida de presets: usar o template de ear-tuning
-  (`docs/EnhancedAudioPresets.example.cfg`) como prompt — LLM recebe dump de
-  registradores/VGM e propõe parâmetros de voz para revisão humana.
-- **F5.3** (exploratório) Seleção/geração de samples de instrumento para vozes do synth.
-- **Critério de sucesso:** do load do jogo ao pack-rascunho publicável em < 1h de
-  trabalho humano.
+- **F5.1** Tile upscaling: batch ESRGAN (models trained for pixel art) over the
+  Phase 2 dump → 4x draft pack for manual refinement by the community.
+- **F5.2** Assisted preset tuning: use the ear-tuning template
+  (`docs/EnhancedAudioPresets.example.cfg`) as a prompt — the LLM receives a dump of
+  registers/VGM and proposes voice parameters for human review.
+- **F5.3** (exploratory) Selection/generation of instrument samples for synth voices.
+- **Success criterion:** from game load to a publishable draft pack in < 1h of
+  human work.
 
-> **Adendo (25/08/2026).** A Fase 5 foi re-escopada em
-> `docs/roadmap/plano-execucao-F5.md` como *bootstrap por convenção* (pasta irmã da
-> ROM = pack, `auto/` = máquina, fora dela = humano; ADR-0049) — o "como" vive lá,
-> este PRD segue como "porquê". Em áudio a escada ficou: **nível 2 automático** =
-> cover GM em tempo real a partir do estado do APU (papel do canal por janela, SFX
-> separados, arpejo→acorde, SoundFont — F5.4g/ADR-0052), que é o que todo usuário
-> ouve no primeiro load de qualquer ROM; **3a** = faixas identificadas pela máquina
-> (fingerprint + MIDI-semente, jogando ou dirigindo o driver de som do jogo —
-> F5.3/F5.4f/ADR-0051), que só alimenta o **3b** = orquestração humana
-> (`audio/bgm/<faixa>.ogg`, trocada no momento certo pelo host). Os itens F5.1–F5.3
-> acima (ESRGAN, LLM para presets, samples) continuam válidos como ferramentas
-> externas opcionais sobre esse bootstrap.
+> **Addendum (2026-08-25).** Phase 5 was re-scoped in
+> `docs/roadmap/plano-execucao-F5.md` as *convention-based bootstrap* (a folder next to the
+> ROM = the pack, `auto/` = machine, outside it = human; ADR-0049) — the "how" lives there,
+> this PRD remains the "why". On the audio side, the ladder ended up: **automatic level 2** =
+> real-time GM cover from APU state (per-window channel role, separated SFX,
+> arpeggio→chord, SoundFont — F5.4g/ADR-0052), which is what every user
+> hears on the first load of any ROM; **3a** = tracks identified by the machine
+> (fingerprint + seed MIDI, by playing or by driving the game's sound driver —
+> F5.3/F5.4f/ADR-0051), which only feeds **3b** = human orchestration
+> (`audio/bgm/<track>.ogg`, swapped in at the right moment by the host). The F5.1–F5.3
+> items above (ESRGAN, LLM for presets, samples) remain valid as optional
+> external tools on top of this bootstrap.
 
-## 6. Riscos e mitigações
+## 6. Risks and mitigations
 
-| Risco | Prob. | Mitigação |
+| Risk | Prob. | Mitigation |
 |---|---|---|
-| Takedown do repo de índice | baixa | Índice contém só conteúdo limpo (princípio 2); derivados vivem em hubs externos |
-| Projeto enquadrado como facilitador (padrão Yuzu) | baixa | Não-objetivos: sem P2P, sem hosting de derivados, sem monetização; emulador agnóstico a conteúdo |
-| Formato SUPER ZSNES tentar virar alvo de compat. | — | Decidido: **não perseguir** — formato fechado, em fluxo, acoplado ao renderer deles |
-| Escopo explodir (virar "segundo produto") | alta | Fases independentes; F4 usa GitHub como backend, sem servidor próprio |
-| Comunidade pequena (fork pessoal) | média | Cada fase é útil solo p/ o autor; F1 (MIDI export) tem apelo além do fork |
-| Specs novas não serem adotadas por terceiros | média | Specs em CC0, federadas e finas (MEP/MEI só compõem padrões existentes); ESP é útil mesmo só no MesenCE |
+| Takedown of the index repo | low | Index contains only clean content (principle 2); derivatives live in external hubs |
+| Project framed as a facilitator (Yuzu pattern) | low | Non-goals: no P2P, no hosting derivatives, no monetization; content-agnostic emulator |
+| SUPER ZSNES format becoming a compatibility target | — | Decided: **not pursuing it** — closed format, still in flux, coupled to their renderer |
+| Scope exploding (becoming a "second product") | high | Independent phases; F4 uses GitHub as the backend, no dedicated server |
+| Small community (personal fork) | medium | Each phase is useful solo for the author; F1 (MIDI export) has appeal beyond the fork |
+| New specs not being adopted by third parties | medium | Specs are CC0, federated, and thin (MEP/MEI only compose existing standards); ESP is useful even if only within MesenCE |
 
-## 7. Referências
+## 7. References
 
-- SUPER ZSNES — https://www.zsnes.com/ (modelo de curadoria e claim legal dos dados)
-- Zeldix (hub MSU-1, outros emuladores) — https://www.zeldix.net/
-- VGMusic (MIDIs desde 1996) — https://www.vgmusic.com/
-- romhack.ing / RetroGameTalk (sucessores do RHDN); acervo RHDN no Internet Archive
-- Formato VGM + tags GD3 — https://vgmrips.net/ · Formato HD Pack (hires.txt) — docs do Mesen
-- No-Intro (DATs Logiqx XML) — https://no-intro.org/ · rcheevos `rhash` — https://github.com/RetroAchievements/rcheevos
-- Formato de patch BPS — spec do beat (byuu/Near) · MSU-1 — spec do bsnes
-- Precedentes: *MGM v. Grokster* (2005); acordo Yuzu/Nintendo (2024)
+- SUPER ZSNES — https://www.zsnes.com/ (curation model and legal data claim)
+- Zeldix (MSU-1 hub, other emulators) — https://www.zeldix.net/
+- VGMusic (MIDIs since 1996) — https://www.vgmusic.com/
+- romhack.ing / RetroGameTalk (RHDN successors); RHDN archive on the Internet Archive
+- VGM format + GD3 tags — https://vgmrips.net/ · HD Pack format (hires.txt) — Mesen docs
+- No-Intro (Logiqx XML DATs) — https://no-intro.org/ · rcheevos `rhash` — https://github.com/RetroAchievements/rcheevos
+- BPS patch format — beat spec (byuu/Near) · MSU-1 — bsnes spec
+- Precedents: *MGM v. Grokster* (2005); Yuzu/Nintendo settlement (2024)
