@@ -214,6 +214,15 @@ unit-tests:
 check-manifest:
 	./scripts/check-core-manifest.sh
 
+#ADR-0137: repo-hygiene guardrails wired into one make target so CI fails
+#the PR instead of relying on someone running these checks by hand.
+#Depends on check-manifest (kept separate, not duplicated) then runs the
+#three orphaned shell checks in order, failing on the first non-zero exit.
+doc-checks: check-manifest
+	./scripts/verify-fase0-1-dox.sh
+	./scripts/verify-ui-logic-firewall.sh
+	./scripts/check-file-loc.sh Core/Shared/Audio/MidiExporter.cpp 200
+
 ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p $(OUTFOLDER)/Dependencies
 	rm -fr $(OUTFOLDER)/Dependencies/*
