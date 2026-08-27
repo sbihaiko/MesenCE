@@ -215,4 +215,3 @@ scripts/core_unit_tests
 !.dev-squad/adr/
 !.dev-squad/memory/
 # <<< dev-squad shared team assets (managed) <<<
-__pycache__/
