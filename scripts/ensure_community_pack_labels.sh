@@ -24,6 +24,11 @@ LABELS=(
   "asset:audio|5319E7|Pack declares <bgm>/<sfx> (audio) content"
   "asset:ips|5319E7|Pack bundles an IPS-format ROM patch"
   "asset:bps|5319E7|Pack bundles a BPS-format ROM patch"
+  "nes|5319E7|Pack targets the NES console"
+  "snes|5319E7|Pack targets the SNES console (gamepad input only, no SNES core on main)"
+  "gb|5319E7|Pack targets the GB/GBC console"
+  "gbc|5319E7|Pack targets the GB/GBC console"
+  "sms|5319E7|Pack targets the SMS/GG/SG-1000 console"
 )
 
 for entry in "${LABELS[@]}"; do
