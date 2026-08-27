@@ -46,6 +46,43 @@ A submissão é rejeitada quando:
 - há um problema óbvio de conteúdo/licenciamento (ex.: assets extraídos da
   ROM sem direito de distribuição, ou créditos claramente ausentes).
 
+## Zips de release com pasta de wrapper/promoção
+
+Alguns lançamentos empacotam o pack dentro de uma subpasta de nome livre
+(ex.: `Contra80s-v1.1/...`), às vezes junto com material que não faz parte do
+pack (screenshots, README de divulgação). Isso não casa nenhuma convenção de
+primeira classe: não há `pack.json` na raiz do zip nem o zip é nomeado
+exatamente como a ROM (MEP-v1.md §2.1, regras 5-6).
+
+Para esse caso existe um **caminho de compatibilidade de última prioridade**
+(MEP-v1.md §2.1, regra 9), mas a triagem automática e o host MesenCE
+localizam a subpasta candidata por critérios diferentes — a assimetria
+motor-vs-validadores documentada em MEP-v1.md §2.1:
+
+- **Host MesenCE (`PrepareZip`, quem decide se o pack carrega no jogo)**
+  busca, dentro do zip, a subpasta cujo **nome casa o nome da ROM**
+  (case-insensitive, sem extensão) — o mesmo critério da regra 5. Para que
+  seu pack funcione no host através desse fallback, **nomeie a subpasta
+  interna exatamente como a ROM**.
+- **Triagem automática (`mep_lint.py`) e o validador da UI
+  (`MepZipValidator.cs`)** usam em vez disso um critério **estrutural**
+  (name-agnostic): aceitam a subpasta cujo conteúdo bate o layout fixo
+  (`textures/hires.txt`, `audio/hires.txt`, `audio/fingerprints.json` e/ou
+  `synth/preset.cfg`), sem olhar o nome. Um pack pode passar na triagem
+  estrutural e ainda assim não carregar no host se a subpasta não estiver
+  nomeada como a ROM.
+
+Em ambos os casos, o fallback só roda depois que as convenções normais
+falham, e se o zip tiver **mais de uma** subpasta candidata, a submissão é
+rejeitada por ambiguidade — então evite empacotar mais de uma pasta de
+conteúdo por zip.
+
+Esse fallback é um recurso de última instância, não a forma recomendada de
+publicar: sempre que possível, coloque pack.json na raiz do zip ou nomeie o
+próprio arquivo/pasta de release exatamente como a ROM (sem extensão), para
+que a submissão seja aceita pela primeira convenção sem depender do
+fallback nem da diferença de critério acima.
+
 ## Antes de enviar
 
 - **Direitos de distribuição.** O pack MUST NOT conter bytes da ROM nem
