@@ -1,8 +1,8 @@
 # Open specs for the Enhancement Ecosystem (MesenCE)
 
 Specs planned in the PRD
-([`docs/roadmap/PRD-ecossistema-enhancement-comunitario.md`](../roadmap/PRD-ecossistema-enhancement-comunitario.md),
-§4.2). All licensed **CC0-1.0** — any emulator or tool can implement them
+([`docs/roadmap/PRD-mesence-enhancement-ecosystem.md`](../roadmap/PRD-mesence-enhancement-ecosystem.md),
+§2). All licensed **CC0-1.0** — any emulator or tool can implement them
 without depending on MesenCE. Normative language per RFC 2119, semver
 versioning, canonical golden files in [`golden/`](golden/), and automated
 validation via `python3 scripts/validate-specs.py` (repo root).

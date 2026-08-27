@@ -1,6 +1,6 @@
 # ADR-0121: Legacy loose hires.txt as fallback discovery signal in MEP zip wrapper folders
 
-- Status: proposed (open: extend structural fallback to bare legacy hires.txt vs. reject and require re-zip)
+- Status: accepted (2026-08-27 — option A chosen by the user; already shipped in `805cb10d` across Python, C# and C++; remaining doc item: MEP-v1 §2.1 rule 9 wording, folded into roadmap slice F6.1)
 - Date: 2026-08-27
 - Extends ADR-0120 §2/§3 (subfolder fallback for wrapped zips). Motivated by issues #46, #47, #48.
 
@@ -23,11 +23,9 @@ Confirmed by reading current source in-session (not inferred):
 ADR-0120 §3 explicitly lists "add optional ROM-name parameter to MepZipValidator.Validate and mep_lint.py" as a deferred follow-up but does not mention legacy root-level hires.txt as a valid fallback indicator; its existing fallback logic across all three implementations (C++, C#, Python) is scoped only to the textures/audio/synth convention-probe shape.
 
 ## Decision
-**Not yet taken.** The open question is whether the structural (Python/C#) and/or name-anchored (all three: C++, C#, Python) fallback subfolder discovery should also accept a bare legacy-probe-basename match (hires.txt / preset.cfg / fingerprints.json with no textures//audio//synth/ wrapper required) as a valid discovery signal — and if so, under what ambiguity and resource-cap rules, consistent with ADR-0120 §2's existing fail-closed-on-ambiguity, depth-4/entry-cap-2000 discipline enforced in lockstep by verify_mep_fallback_constant_parity.sh.
+**Option A.** The structural (Python/C#) and name-anchored (C++, C#, Python) fallback subfolder discovery also accept a bare legacy-probe-basename match (`hires.txt` / `preset.cfg` / `fingerprints.json` with no `textures/`/`audio/`/`synth/` wrapper) as a valid discovery signal, under the same fail-closed-on-ambiguity and depth-4/entry-cap-2000 rules as ADR-0120 §2, enforced in lockstep by `verify_mep_fallback_constant_parity.sh`. Implemented in `805cb10d` across `scripts/mep_lint.py`, `Core/Shared/EnhancementPacks/MepPack.cpp` and `UI/Logic/MepZipValidator.cs`; the 2026-08-27 re-triage of the community packs (#62–#73, all legacy HD Mesen shape, several in GitHub `/archive/` wrappers) validated through it.
 
-The two options on the table are described under Alternatives; their trade-offs under Consequences. Whichever is chosen must also be recorded in MEP-v1: a bare root `hires.txt` (no `textures/`) is not a container shape defined anywhere in §2/§2.1 today, yet `mep_lint.py` already accepts it at the container root as a "legacy loose-pack signal", so the spec (or `docs/community-packs.md`/CLAUDE.md) needs to state that legacy HD Mesen packs are an accepted submission class with their own shape rule before either option is implemented.
-
-Prerequisite when option A is chosen: scope the implementation consistently across scripts/mep_lint.py, Core/Shared/EnhancementPacks/MepPack.cpp, and UI/Logic/MepZipValidator.cs, keep any new depth/entry-cap constants in lockstep via verify_mep_fallback_constant_parity.sh, and re-validate issues #46 and #47 against the new logic to confirm they move from "Inválido" to "Aceito parcial (HD Mesen)".
+Legacy HD Mesen packs (bare root `hires.txt`, no `pack.json`) are therefore an accepted submission class. The spec still lacks the sentence: MEP-v1 §2.1 rule 9 must describe the bare-basename acceptance path — this doc item is part of roadmap slice F6.1 (`docs/roadmap/PRD-mesence-enhancement-ecosystem.md`), which touches §2.1/§6 anyway.
 
 ## Consequences
 Option A — extend the structural fallback to bare legacy basenames:

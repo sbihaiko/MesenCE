@@ -1,6 +1,6 @@
 # ADR-0131: unit-tests.yml contract stated as invariants; clang-only C++ step; dotnet-version parity
 
-- Status: proposed (documentation edits to `.github/AGENTS.md` pending)
+- Status: accepted (2026-08-27, work requested via docs/roadmap/PRD-mesence-enhancement-ecosystem.md; was: documentation edits to `.github/AGENTS.md` pending)
 - Date: 2026-08-27
 - Consolidates: ADR-0086, ADR-0087, ADR-0088, ADR-0089, ADR-0090, ADR-0091
 

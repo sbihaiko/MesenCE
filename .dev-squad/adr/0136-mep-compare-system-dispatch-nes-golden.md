@@ -1,6 +1,6 @@
 # ADR-0136: mep_compare.py system dispatch and an NES-shaped golden fixture
 
-- Status: proposed (small, actionable; not implemented — `render_original` is still NES-only and the only golden texture pack is GB)
+- Status: accepted (2026-08-27, work requested via docs/roadmap/PRD-mesence-enhancement-ecosystem.md; was: small, actionable; not implemented — `render_original` is still NES-only and the only golden texture pack is GB)
 - Date: 2026-08-27
 - Consolidates: ADR-0107, ADR-0117
 - Related: ADR-0050 (uses `mep_compare.py` as its NES evidence tool), ADR-0132 (F5.4b evidence)

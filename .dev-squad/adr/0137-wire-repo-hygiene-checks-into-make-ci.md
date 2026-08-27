@@ -1,9 +1,9 @@
 # ADR-0137: Wire repo-hygiene shell checks into make/CI or stop claiming they run
 
-- Status: proposed (doc claim and wiring still disagree at HEAD `e5d36bb0`; trivially accepted once either fix lands)
+- Status: accepted (2026-08-27; decision = items 1–4 below, work requested as slice H1 of `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`. Item 3's "make the doc true" half already landed the same day: `scripts/AGENTS.md` now says only `check-core-manifest.sh` is wired. `check-f5-4b-doc.sh` was deleted on 2026-08-27 with the plan header it guarded, so the target wires three scripts plus `check-file-loc.sh`, not four)
 - Date: 2026-08-27
 - Consolidates: ADR-0111, ADR-0118, ADR-0092 (rejected — premise false, target scripts never shipped)
-- Related: ADR-0132 (the `check-f5-4b-doc.sh` guardrail was added by the F5.4b run)
+- Related: ADR-0132 (the `check-f5-4b-doc.sh` guardrail was added by the F5.4b run and later deleted)
 
 ## Context
 
@@ -34,8 +34,9 @@ rejected; the only surviving point is a one-line convention (below).
 ## Decision
 
 1. **Wire the checks.** Add a `make doc-checks` target that runs, in order,
-   `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh` and
-   `check-f5-4b-doc.sh`, failing on the first non-zero exit. `check-file-loc.sh`
+   `verify-fase0-1-dox.sh` and `verify-ui-logic-firewall.sh` (and
+   `check-f5-4b-doc.sh` while it existed — deleted 2026-08-27), failing on
+   the first non-zero exit. `check-file-loc.sh`
    takes `<file> <max-lines>` arguments and encodes no list of its own, so
    `doc-checks` must call it once per guarded file with the cap the owning
    doc states (e.g. the 200-line cap on `Core/Shared/Audio/MidiExporter.cpp`
@@ -59,9 +60,9 @@ reworded to say the scripts are manual and listing which command runs each.
 
 ## Consequences
 
-- The five checks become real gates; `check-f5-4b-doc.sh` actually protects
-  the header contract it was written for (ADR-0132's doc-only follow-up to
-  repoint "ADR-0050 step b" must keep that check green).
+- The remaining checks become real gates (the F5.4b header guardrail is
+  gone with the plan file it guarded; ADR-0132's "repoint ADR-0050 step b"
+  follow-up is now moot for that script).
 - A few seconds added to `make ui`/`make core` (shell only).
 - `check-file-loc.sh` gains an explicit list of guarded files in the makefile,
   which is where the per-file caps stop being folklore.

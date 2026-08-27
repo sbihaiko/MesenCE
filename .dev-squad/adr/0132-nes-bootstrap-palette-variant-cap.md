@@ -14,7 +14,10 @@ variant capture fix", and both the plan and `scripts/check-f5-4b-doc.sh`
 `<background>` screen capture and contains no palette-variant item and no
 per-shape cap (ADR-0114). ADR-0050 must therefore not be amended for palette
 matters — the "ADR-0050 step (b)" wording in the plan file and in
-`scripts/check-f5-4b-doc.sh` should be repointed to this ADR.
+`scripts/check-f5-4b-doc.sh` should be repointed to this ADR. *(Update
+2026-08-27: both files were deleted when the roadmap was consolidated into
+`docs/roadmap/PRD-mesence-enhancement-ecosystem.md`; this ADR is the only
+record of F5.4b now, and the follow-ups below are listed there.)*
 
 The spec's premise was also false (ADR-0106, ADR-0108, ADR-0110, ADR-0112):
 the "`DefaultTile` wildcard funnel" in `HdPackBuilder::ProcessTile` was dead

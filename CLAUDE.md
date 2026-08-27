@@ -63,11 +63,15 @@ comment in `mep_lint.py` — were converted that day).
   ADRs into runs. There is no `rejected`: a retired ADR is marked
   `superseded` with a "Superseded by" line naming its successor (or the
   reason, when it has none).
-- `accepted` means "decided and reflected in the code/docs today". An ADR
-  whose Decision is an open question, an either/or, or a checklist of work
-  not yet done stays `proposed` until a human accepts it — the autonomous
-  dev-squad task implements accepted ADRs on its own, so accepting one is
-  a request for work.
+- `accepted` means "decided" — either already reflected in the code/docs,
+  or decided and listed as a slice in
+  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (the only roadmap
+  document; each ADR's Status line says which). An ADR whose Decision is
+  still an open question or an either/or stays `proposed` until a human
+  picks — the autonomous dev-squad task implements accepted ADRs on its
+  own, so accepting one is a request for work; stop that daemon
+  (`.claude/scheduled_tasks.lock`) while another agent works on the same
+  ADR.
 - ADR ids are never reused (ADR-0035): ids 0009–0010, 0015–0020 and
   0022–0032 are permanently retired.
 - Review findings that the dev-squad run auto-mints as ADRs (truncated

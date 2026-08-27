@@ -1,7 +1,7 @@
 # MesenCE Community Enhancement Ecosystem
 
 *Status: draft / roadmap — the full PRD lives at
-[docs/roadmap/PRD-ecossistema-enhancement-comunitario.md](roadmap/PRD-ecossistema-enhancement-comunitario.md).*
+[docs/roadmap/PRD-mesence-enhancement-ecosystem.md](roadmap/PRD-mesence-enhancement-ecosystem.md).*
 
 Enhanced Audio is step one of a larger plan: turning MesenCE into a platform for
 **extracting, authoring and consuming community enhancement packs** — textures, music
@@ -77,7 +77,7 @@ version.
 ## Roadmap phases
 
 Five self-contained phases — each delivers value on its own (details, requirements and
-success criteria in the [PRD](roadmap/PRD-ecossistema-enhancement-comunitario.md)):
+success criteria in the [PRD](roadmap/PRD-mesence-enhancement-ecosystem.md)):
 
 1. **MIDI/VGM music exporter** built on the Enhanced Synth tap — record a game's music
    to VGM (+GD3) or MIDI (SMF/GM) while playing.

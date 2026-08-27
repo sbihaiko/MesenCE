@@ -16,11 +16,10 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 
 ## Work Guidance
 
-- New execution plan: `docs/roadmap/plano-*.md`, same header shape as `plano-execucao-F3.md` (`Status`, links to PRD/spec).
-- Unit-test refactor plan: completed (Fases 0-4) and removed; see git history for `docs/roadmap/plano-testes-unitarios.md`.
-- Core reduction + fork default branch: `docs/roadmap/plano-reducao-cores.md`.
-- Host gamepad tester (Settings → Input → Test): `docs/roadmap/plano-host-input-tester.md`.
-- Roadmap local contract (product consoles after the core cut): `docs/roadmap/AGENTS.md`.
+- Planning: a single document, `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`
+  (vision, standards, shipped record, pending slices incl. the host gamepad
+  tester and the console reduction). No separate `plano-*.md` files — see
+  `docs/roadmap/AGENTS.md` for the contract. Earlier plans live in git history.
 - `hd-pack-authoring.md` - human-facing guide for community HD/MEP pack
   submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
   summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.
@@ -35,4 +34,4 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 ## Child DOX Index
 
 - specs/ — ESP, MEP, MEI, hires-gbsms drafts and `golden/`
-- roadmap/ — PRD and phase / refactoring plans (product consoles: NES, GB, SMS-family, GBA)
+- roadmap/ — the single consolidated PRD (product consoles: NES, GB, SMS-family, GBA)

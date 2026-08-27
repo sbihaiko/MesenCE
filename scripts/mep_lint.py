@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mep_lint — offline pack validation (F5.1, docs/roadmap/plano-execucao-F5.md).
+"""mep_lint — offline pack validation (F5.1; roadmap: docs/roadmap/PRD-mesence-enhancement-ecosystem.md).
 
 Accepts a directory or a .zip and checks, without running the emulator:
 
