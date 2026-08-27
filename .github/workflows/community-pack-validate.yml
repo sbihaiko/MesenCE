@@ -81,9 +81,12 @@ jobs:
       # Runs unconditionally (before host/lint/classify even start) since the
       # game name is submitter-declared Issue Form metadata, not a
       # validation result — useful for browsing the issue list regardless of
-      # eventual verdict. Idempotent against /revalidate re-runs: only
-      # appends when the title doesn't already end with "— <game>".
-      - name: Rename issue title to include the target game (from the Issue Form)
+      # eventual verdict. Replaces the whole title (not just the Issue
+      # Form's pre-filled default — a submitter can freely edit that box)
+      # with a fixed "[Pack] <game>" shape, so every community-pack issue is
+      # titled consistently regardless of what was typed. Idempotent against
+      # /revalidate re-runs: a no-op once the title already matches.
+      - name: Rename issue title to "[Pack] <game>" (from the Issue Form)
         id: rename-title
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
@@ -93,11 +96,11 @@ jobs:
           BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body -q '.body')
           GAME=$(python3 -c "import re, sys; body = sys.stdin.read(); m = re.search(r'^###\s+Target game/ROM and region\s*\n+(.*?)(?=\n###\s|\Z)', body, re.M | re.S); value = (m.group(1).strip() if m else '').splitlines(); print(value[0].strip() if value else '')" <<<"$BODY")
           if [ -n "$GAME" ]; then
-            TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title -q '.title')
-            case "$TITLE" in
-              *"— $GAME") ;; # already renamed on an earlier run — skip
-              *) gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "${TITLE} — ${GAME}" ;;
-            esac
+            NEW_TITLE="[Pack] $GAME"
+            CURRENT_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title -q '.title')
+            if [ "$CURRENT_TITLE" != "$NEW_TITLE" ]; then
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
+            fi
           fi
       - name: Enforce host allow-list (github.com/*/releases/*, raw/gist githubusercontent, gist.github.com)
         id: host-check

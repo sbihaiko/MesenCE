@@ -2,7 +2,7 @@ name: "Community HD/MEP Pack Submission"
 description: >-
   Submit a community-made HD Pack or MEP Pack (textures, audio, and/or
   synth) for triage on the "MesenCE Community Packs" board.
-title: "[Community Pack] "
+title: "[Pack] "
 labels:
   - community-pack
 body:
