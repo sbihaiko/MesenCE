@@ -547,6 +547,12 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             rep.warning(where, f"unrecognized line: {line[:60]}")
             continue
         used, tag, params = parsed
+        # Windows-authored hires.txt files commonly use backslash path
+        # separators; normalize before any path lookup so file existence
+        # checks match HdPackLoader.cpp, which normalizes the same way
+        # when parsing a pack definition line (both must agree, or a pack
+        # that loads fine could still fail lint, or vice versa).
+        params = params.replace("\\", "/")
         tokens = params.split(",") if params else []
         if tag not in NES_TAGS:
             rep.warning(where, f"unknown tag <{tag}>")
@@ -727,6 +733,8 @@ def lint_gbsms_hires(src: Source, rel: str, rep: Report):
             rep.warning(where, f"unrecognized line: {line[:60]}")
             continue
         _, tag, params = parsed
+        # See the matching normalization in lint_nes_hires above.
+        params = params.replace("\\", "/")
         tokens = params.split(",") if params else []
         if tag not in GBSMS_TAGS:
             rep.warning(where, f"unknown tag for GB/SMS: <{tag}>")

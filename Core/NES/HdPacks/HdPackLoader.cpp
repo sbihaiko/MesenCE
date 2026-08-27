@@ -225,6 +225,11 @@ bool HdPackLoader::LoadPack()
 				lineContent = lineContent.substr(0, lineContent.size() - 1);
 			}
 
+			//Windows-authored hires.txt files commonly use backslash path separators; normalize
+			//before any tag is parsed, since FolderUtilities::CombinePath does not (it just
+			//concatenates with '/'), and a backslash is a literal filename character on Linux/macOS.
+			std::replace(lineContent.begin(), lineContent.end(), '\\', '/');
+
 			vector<HdPackCondition*> conditions;
 			if(lineContent.substr(0, 1) == "[") {
 				size_t endOfCondition = lineContent.find_first_of(']', 1);

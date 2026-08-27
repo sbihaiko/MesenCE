@@ -176,6 +176,9 @@ bool HdTilePack::LoadFile(string definitionPath)
 			continue;
 		}
 
+		//See the matching normalization in HdPackLoader::LoadPack (NES loader).
+		std::replace(line.begin(), line.end(), '\\', '/');
+
 		if(line.substr(0, 5) == "<ver>") {
 			int version = atoi(line.substr(5).c_str());
 			if(version < 200 || version >= 300) {
