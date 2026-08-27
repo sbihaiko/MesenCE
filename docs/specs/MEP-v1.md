@@ -1,6 +1,6 @@
 # MEP v1 — MesenCE Enhancement Pack
 
-**Status:** v1.1 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer — all optional and backward-compatible) ·
+**Status:** v1.2 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer; 1.2 adds optional `targets[].md5` — all optional and backward-compatible) ·
 **License of this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mep/pack.json`](golden/mep/pack.json) ·
@@ -146,9 +146,12 @@ implementation's utilities — MesenCE's `SHA1::GetHash`/`CRC32::GetCRC`):
   Observed example: `2A4E126D0286BEA0BF503C80A12352C57539F76B`.
 - `crc32` (SHOULD): 8 **uppercase** hex digits, textual big-endian (the
   value `0x1C851C7E` is written `1C851C7E`).
+- `md5` (MAY, v1.2): 32 **uppercase** hex digits. Not part of the matching
+  key — purely a convenience for cross-referencing the target ROM against
+  external tools/databases that index by MD5 instead of the No-Intro SHA-1.
 - Matching: `sha1` decides; `crc32` MAY be used as a cheap pre-filter.
-  Comparisons MUST be case-insensitive on input, but producers MUST write
-  uppercase.
+  `md5` MUST NOT be used for matching. Comparisons MUST be case-insensitive
+  on input, but producers MUST write uppercase.
 
 > Implementation note (MesenCE): `VirtualFile::GetSha1Hash()` hashes the
 > **entire** file; for `nes` the host needs to hash the No-Intro range

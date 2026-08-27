@@ -12,6 +12,7 @@ SPECS = Path(__file__).resolve().parent.parent / "docs" / "specs"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SHA1_UPPER = re.compile(r"^[0-9A-F]{40}$")
 CRC32_UPPER = re.compile(r"^[0-9A-F]{8}$")
+MD5_UPPER = re.compile(r"^[0-9A-F]{32}$")
 SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
 
@@ -72,6 +73,9 @@ def validate_rom_id(entry, where):
     if "crc32" in entry:
         check(bool(CRC32_UPPER.match(entry["crc32"])),
               f"{where}: crc32 deve ter 8 hex MAIÚSCULOS")
+    if "md5" in entry:
+        check(bool(MD5_UPPER.match(entry["md5"])),
+              f"{where}: md5 deve ter 32 hex MAIÚSCULOS")
 
 def safe_relative_path(p):
     return not p.startswith("/") and ".." not in p.split("/")
