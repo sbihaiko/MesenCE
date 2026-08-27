@@ -1,6 +1,6 @@
 # ADR-0138: MEP Recipe v1 — declarative re-packaging of split-distribution packs, issue-held metadata and client auto-install from the web catalog
 
-- Status: proposed (design agreed with the user on 2026-08-27; nothing implemented yet — accepting this ADR is a request for the work listed in Consequences)
+- Status: accepted (design agreed with the user on 2026-08-27; implementation pending — see Consequences for the ordered work list; the user runs the implementation outside the autonomous dev-squad task)
 - Date: 2026-08-27
 - Related: ADR-0040 (central per-ROM pack storage and discovery precedence), ADR-0044 (per-hash `patches[]`, hash gate on patches), ADR-0049 (sibling-folder convention), ADR-0120/ADR-0121 (zip fallback discovery, legacy `hires.txt`), ADR-0039 (No-Intro hash from the ROM file)
 - Spec impact: `docs/specs/MEP-v1.md` §6 (security wording), new `docs/specs/MEP-recipe-v1.md`
