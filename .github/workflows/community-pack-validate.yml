@@ -287,7 +287,13 @@ jobs:
       # capture-tool`) so the next steps can drive it against the actual
       # submitted pack — a second, independent check beyond mep_lint.py's
       # Python mirror. Cached on the core sources' hash: a cold run compiles
-      # the whole core (a few minutes); most runs hit cache.
+      # the whole core (a few minutes); most runs hit cache. Every step in
+      # this whole live-validation subsystem is continue-on-error /
+      # existence-gated: it's a second-opinion cross-check, never allowed to
+      # block the existing lint-based verdict that follows it.
+      - name: Install SDL2 dev headers
+        if: steps.download.outcome == 'success'
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: Cache Mesen core build
         if: steps.download.outcome == 'success'
         id: core-cache
@@ -306,6 +312,7 @@ jobs:
           key: capture-tool-${{ runner.os }}-${{ hashFiles('Core/**', 'Utilities/**', 'Sdl/**', 'Linux/**', 'InteropDLL/**', 'SevenZip/**', 'Lua/**', 'Makefile', 'scripts/headless_record.cpp') }}
       - name: Build live-validation tooling (capture-tool)
         if: steps.download.outcome == 'success' && steps.core-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
         run: make capture-tool
       # Reuses mep_lint.py's own pack-root discovery (imported, not
       # reimplemented) so this tests exactly the layer mep_lint.py graded.
@@ -315,12 +322,12 @@ jobs:
       # validation never needs real PRG/CHR bytes (confirmed live against
       # Contra80s v1.1 with both a real ROM and the synthetic one, byte-
       # identical "[HDPack] Loaded with N errors" log both times).
-      # continue-on-error: this is a second-opinion cross-check, not a
-      # verdict gate by itself — a harness failure (e.g. a pack shape it
-      # can't install) must never block the existing lint-based verdict.
+      # Existence-gated (not just continue-on-error on the build step
+      # above) since a build failure must skip straight past this instead
+      # of erroring on a missing binary.
       - name: Run live core validation (synthetic ROM)
         id: live-validate
-        if: steps.download.outcome == 'success'
+        if: steps.download.outcome == 'success' && hashFiles('scripts/headless_record') != ''
         continue-on-error: true
         env:
           GAME: ${{ steps.rename-title.outputs.game }}
