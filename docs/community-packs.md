@@ -6,8 +6,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 
 | Link | Game | Console | Author | Category | Date |
 |---|---|---|---|---|---|
-| [link](https://github.com/sbihaiko/MesenCE/issues/9) | Contra (U) [!] | NES | sbihaiko | Full MEP | 2026-08-27 |
-| [link](https://github.com/sbihaiko/MesenCE/issues/10) | Contra (U) [!] | NES | sbihaiko | Full MEP | 2026-08-27 |
+| [link](https://github.com/sbihaiko/MesenCE/issues/18) | Contra (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 
 ## Most popular
 
