@@ -200,6 +200,23 @@ def find_fallback_subfolder(names):
     return (candidate, candidate_depth) if candidate else None
 
 
+_TRAILING_TAG_RE = re.compile(r"\s*[\(\[][^()\[\]]*[\)\]]\s*$")
+
+
+def normalize_rom_core_name(name):
+    """Strips trailing (region)/[flag] tags repeatedly and lowercases, so a
+    submitter's human-typed game name ("Contra (USA)") can anchor against the
+    pack's internal goodtools/no-intro-style ROM name ("Contra (U) [!]") --
+    exact-string matching alone practically never bridges that gap, since
+    submitters describe the game, not the ROM filename convention."""
+    prev = None
+    stripped = name.strip()
+    while stripped != prev:
+        prev = stripped
+        stripped = _TRAILING_TAG_RE.sub("", stripped)
+    return stripped.lower()
+
+
 def find_fallback_subfolder_by_name(names, rom_name):
     """Name-anchored last-priority fallback (ADR-0120 §3's named follow-up):
     the Python mirror of MepPack::FindFallbackSubfolder's C++ ROM-name match,
@@ -209,11 +226,15 @@ def find_fallback_subfolder_by_name(names, rom_name):
     (hires.txt/preset.cfg/fingerprints.json) directly under any subfolder
     segment matching rom_name case-insensitively — it does not require the
     textures/ or synth/ wrapper the structural check needs, because the ROM
-    name anchor already makes the match unambiguous. Same depth/entry-cap
-    bounds and fail-closed-on-ambiguity philosophy as find_fallback_subfolder."""
+    name anchor already makes the match unambiguous. Falls back to a
+    region/flag-tag-normalized comparison when the exact-lowercase match
+    fails, since the Issue Form's rom_name is a human description, not the
+    ROM's actual internal filename. Same depth/entry-cap bounds and
+    fail-closed-on-ambiguity philosophy as find_fallback_subfolder."""
     if not rom_name or len(names) > FALLBACK_MAX_ENTRIES:
         return None
     lower_rom_name = rom_name.lower()
+    normalized_rom_name = normalize_rom_core_name(rom_name)
     candidate, candidate_depth = None, 0
     for name in sorted(names):
         normalized = safe_rel(name)
@@ -226,7 +247,11 @@ def find_fallback_subfolder_by_name(names, rom_name):
             continue
         anchor = None
         for i in range(len(segments) - 2, -1, -1):
-            if segments[i].lower() == lower_rom_name:
+            segment_lower = segments[i].lower()
+            if segment_lower == lower_rom_name:
+                anchor = i
+                break
+            if len(normalized_rom_name) >= 2 and normalize_rom_core_name(segments[i]) == normalized_rom_name:
                 anchor = i
                 break
         if anchor is None:
