@@ -92,6 +92,11 @@ does not exist.
   `805cb10d`).
 - **Unit tests / CI**: `UI.Tests` + core unit tests (ADR-0122, 0126, 0127,
   0129, 0130).
+- **H1 — `make doc-checks`** (ADR-0137): wires `check-core-manifest.sh`,
+  `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh`, and
+  `check-file-loc.sh` (against `Core/Shared/Audio/MidiExporter.cpp`, 200
+  lines) into one `make` target that the Linux and macOS `build.yml` jobs
+  run before their build step.
 
 ## 4. Roadmap — pending work, by slice
 
