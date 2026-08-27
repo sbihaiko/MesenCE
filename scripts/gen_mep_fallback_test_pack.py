@@ -50,6 +50,22 @@ outcome:
              this candidate instead of discovering it as the pack root —
              must be rejected with "no section found", same as the 'reject'
              fixture.
+  loose-legacy <out>/mep-fallback-loose-legacy.zip   ADR-0121: a classic
+             Mesen HD pack (hires.txt loose at a wrapper folder's own root,
+             no textures/ wrapper at all) whose wrapper is named after a
+             release/repo, not the ROM/game — the real shape of a raw
+             GitHub `/archive/refs/heads/<branch>.zip` download (see
+             community-pack issues #46 PepCodes/HDNes-Graphics-Pac and #47
+             ModernRetroDesign/ZII-mesen). No ROM name is passed to
+             mep_lint.py in this CI fixture (mirrors mep_lint.py's own
+             CLI usage when the Issue Form's rom_name argument is absent),
+             so only the structural (name-agnostic) fallback's new bare-
+             basename acceptance can discover it — must be accepted.
+  loose-legacy-ambiguous <out>/mep-fallback-loose-legacy-ambiguous.zip   two
+             distinct wrapper folders, each with its own loose root
+             hires.txt — two structurally valid bare-basename candidates,
+             ambiguous, must be rejected (no section found), same
+             fail-closed philosophy as 'reject'.
 
 Usage:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
@@ -143,6 +159,33 @@ def write_traversal_zip(path: Path):
     _write_zip(path, [
         ("../evil/textures/hires.txt", HIRES_TXT),
         ("../evil/synth/preset.cfg", PRESET_CFG),
+    ])
+
+
+# GitHub-archive-style wrapper: "<Repo>-<branch>/..." — named after the repo,
+# never the ROM, so no ROM-name anchor can ever match it (ADR-0121).
+LOOSE_LEGACY_WRAPPER = "HDNes-Graphics-Pac-master"
+
+
+def write_loose_legacy_zip(path: Path):
+    """A single wrapper folder named after a repo (not the ROM), holding
+    nothing but a loose hires.txt at its own root — no textures/ wrapper, no
+    pack.json. The real shape of issues #46/#47's raw GitHub archive
+    downloads. Only ADR-0121's bare-basename structural fallback can find
+    this; must be accepted."""
+    _write_zip(path, [
+        (f"{LOOSE_LEGACY_WRAPPER}/hires.txt", HIRES_TXT),
+        (f"{LOOSE_LEGACY_WRAPPER}/Chr_00_0.png", "not really a png, unchecked by discovery"),
+    ])
+
+
+def write_loose_legacy_ambiguous_zip(path: Path):
+    """Two distinct repo-named wrappers, each with its own loose root
+    hires.txt: two structurally valid bare-basename candidates, ambiguous,
+    must be rejected rather than guessed at."""
+    _write_zip(path, [
+        ("RepoA-main/hires.txt", HIRES_TXT),
+        ("RepoB-master/hires.txt", HIRES_TXT),
     ])
 
 
