@@ -48,6 +48,13 @@ jobs:
       pack_url: ${{ steps.extract.outputs.pack_url }}
       mode: ${{ steps.mode.outputs.mode }}
     steps:
+      # TEMP DEBUG (to be removed once the self-trigger guard is confirmed
+      # correct): dumps the raw event action/changes so we can see exactly
+      # what GitHub sends for our own automation's title-only edits.
+      - name: DEBUG - dump event action/changes
+        run: |
+          echo "action=${{ github.event.action }}"
+          echo "changes=${{ toJSON(github.event.changes) }}"
       - name: Extract pack URL from issue body
         id: extract
         env:
