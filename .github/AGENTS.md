@@ -33,7 +33,10 @@ what CI actually runs; this doc records why they're split the way they are.
   every push/PR regardless of the Windows ROM suite's state. `UI.Tests.csproj`
   is intentionally NOT a member of `Mesen.sln`, so this workflow does not go
   through `dotnet-format-check.yml` or `build.yml`'s restore/publish flow
-  either.
+  either. This file's Work Guidance section (ADR-0131) is the normative
+  contract for the job's invariants and toolchain/version policy — the
+  workflow file itself carries no restatement of them, so read them here,
+  not there, and keep this doc in sync when either side changes.
 - `ISSUE_TEMPLATE/community-pack.yml` — GitHub Issue Form for community
   HD/MEP pack submissions (not a free-text issue): pack link, target
   game/ROM + region, console dropdown, author/credits, a required
@@ -68,18 +71,37 @@ what CI actually runs; this doc records why they're split the way they are.
 
 ## Work Guidance
 
-- Keep `unit-tests.yml` cheap: it must never require the native
-  `InteropDLL`/`MesenCore` build or SDL2. If a future `UI.Tests` addition
-  needs either, that addition belongs in `tests.yml`/`build.yml` instead,
-  not here.
-- `actions/setup-dotnet` version and the `dotnet-version` value should track
-  `dotnet-format-check.yml`'s (currently `10.0.x`) unless there's a
-  documented reason to diverge.
+- `unit-tests.yml` must never link `InteropDLL`/`MesenCore`, never require
+  SDL2, and never require a platform SDK or ROM corpus. A self-contained
+  compile of explicitly listed `Core/`/`Utilities/` sources (as
+  `make core-unit-tests` does) is in scope; anything that needs the `core`
+  makefile target belongs in `build.yml`/`tests.yml`.
+- The `ui-tests` job id now covers both the C# and the C++ host-free
+  suites (steps `Run unit tests` and `Run core unit tests`), so a later
+  rename (e.g. to something like `host-free-tests`) is a known, deliberate
+  option, not a surprise — see ADR-0131 for why it isn't done now.
+- `make core-unit-tests` in this workflow is intentionally clang-only
+  (makefile default `CXX := clang++`) for cheapness; gcc and arm64
+  coverage of the `Core/` sources it compiles is `build.yml`'s job via
+  `CORESRC`. Only `scripts/core_unit_tests.cpp` itself is clang-gated.
+- `actions/setup-dotnet`'s `dotnet-version` pins `10.x` in
+  `unit-tests.yml`, matching `build.yml`'s `10.x`; `dotnet-format-check.yml`
+  pins `10.0.x` for its own, separate Windows-only `dotnet format` check.
+  These are two independent pins, not one tracking the other — keep
+  `unit-tests.yml` aligned with `build.yml`'s `10.x`, not with
+  `dotnet-format-check.yml` (ADR-0131 item 4, option A: the doc matches the
+  files as they are).
 
 ## Verification
 
 - `grep -E "dotnet test" .github/workflows/unit-tests.yml`
 - `grep -E "make core-unit-tests" .github/workflows/unit-tests.yml`
+- `grep -cE "InteropDLL|SDL2" .github/workflows/unit-tests.yml` (expected: 1,
+  the explanatory comment line only — 0 actual build/link steps)
+- `grep -E "dotnet-version: 10" .github/workflows/unit-tests.yml
+  .github/workflows/build.yml .github/workflows/dotnet-format-check.yml`
+- `grep -E "ADR-0131" .github/AGENTS.md` (this file's own invariant
+  section cites the ADR; the workflow file does not need to)
 - `grep -E "exclude-regex" .github/workflows/clang-format-check.yml`
 - `python3 scripts/checks/verify_community_pack_issue_template.py`
 

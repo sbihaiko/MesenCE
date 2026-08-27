@@ -97,6 +97,12 @@ does not exist.
   `check-file-loc.sh` (against `Core/Shared/Audio/MidiExporter.cpp`, 200
   lines) into one `make` target that the Linux and macOS `build.yml` jobs
   run before their build step.
+- **H2 — `unit-tests.yml` contract as invariants** (ADR-0131): the
+  `.github/AGENTS.md` Work Guidance bullets state what the workflow must
+  never do (link `InteropDLL`/`MesenCore`, need SDL2/SDK/ROMs), note that the
+  `ui-tests` job covers both host-free suites, record the clang-only C++
+  step and the `10.x` dotnet pin, with grep lines in Verification. Doc-only;
+  the workflow file was already compliant.
 
 ## 4. Roadmap — pending work, by slice
 
