@@ -24,9 +24,21 @@ jobs:
     # Only issues (not PRs) carrying the community-pack label, and only an
     # exact "/revalidate" comment body (no partial/contains match) on such
     # an issue.
+    # The "edited" branch is also fired by this very pipeline's own
+    # "Rename issue title" / Project-field-writing steps further downstream
+    # (gh issue edit --title triggers an issues.edited webhook like any
+    # other edit) — without this guard, every validated submission
+    # retriggers a second full validation of itself, forever converging
+    # after 2 runs only because the rename becomes a no-op the second time
+    # (confirmed live: issue #10 spawned overlapping runs #29/#31 from its
+    # own title-rename). `changes.body` is only present on the webhook
+    # payload when the issue's body actually changed, so a title-only (or
+    # label-only) edit — anything our own automation does — is skipped;
+    # a submitter editing their pack link/description still goes through.
     if: >
       (github.event_name == 'issues' &&
-       contains(github.event.issue.labels.*.name, 'community-pack')) ||
+       contains(github.event.issue.labels.*.name, 'community-pack') &&
+       (github.event.action != 'edited' || github.event.changes.body != null)) ||
       (github.event_name == 'issue_comment' &&
        !github.event.issue.pull_request &&
        github.event.comment.body == '/revalidate' &&
