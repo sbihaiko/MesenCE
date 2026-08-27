@@ -29,7 +29,7 @@ immediately"):
    with strict settings and found 0 warnings/0 errors, so nothing is broken
    today — the guarantee is nominal, not false in effect.
 2. Scan set (ADR-0067/0071). The script hardcodes `logicDir="UI/Logic"`, but
-   the csproj also dual-compiles `../UI/Interop/InteropEnums.cs` (Fase 2:
+   the csproj also dual-compiles `../UI/Interop/InteropEnums.cs` (Phase 2:
    `ConsoleType`/`CheatType` split out of the Avalonia-tainted `EmuApi.cs`).
    That file sits in a folder where `DllImport`/Avalonia usage is the norm and
    is not scanned (it currently contains 0 `DllImport`). Blast radius is

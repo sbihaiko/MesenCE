@@ -5,7 +5,7 @@
 - Consolidates: ADR-0074, ADR-0076, ADR-0079, ADR-0085 (rejected per ADR-0088)
 
 ## Context
-Fase 4 of the unit-test plan added `scripts/core_unit_tests.cpp`, a
+Phase 4 of the unit-test plan added `scripts/core_unit_tests.cpp`, a
 framework-free C++ harness (ChannelRoleClassifier, `MepPack::NormalizeRelativePath`
 / `MepPack::Parse`, later `FindFallbackSubfolder` and `DetectConventionLayout`
 via ADR-0120/0121), built by the makefile target `core-unit-tests`
@@ -21,7 +21,7 @@ regression gate nothing ran automatically (ADR-0076).
 ADR-0076 proposed adding a new `unit-tests.yml` workflow, inheriting a stale
 line from the plan doc ("the new unit-tests.yml job is what is missing today").
 ADR-0079 corrected this: `.github/workflows/unit-tests.yml` already existed
-since Fase 0 (`ubuntu-latest`, `setup-dotnet` `10.x`, `dotnet test
+since Phase 0 (`ubuntu-latest`, `setup-dotnet` `10.x`, `dotnet test
 UI.Tests/UI.Tests.csproj`), so the gap was a missing step, not a missing file,
 and the fix was to append `run: make core-unit-tests` to the existing
 `ui-tests` job after verifying the standalone compile on Linux. ADR-0085 then
@@ -56,7 +56,7 @@ entry is created for it. Failure attribution relies on the step name.
 - Add a new `unit-tests.yml` workflow running `make unit-tests` +
   `make core-unit-tests` on macOS/Linux (ADR-0076): rejected per ADR-0079 —
   the file already existed; this would duplicate or silently rewrite the
-  Fase 0 job.
+  Phase 0 job.
 - Defer the CI decision to a later phase (ADR-0074): superseded — done in the
   same clean-up pass once the Linux compile was confirmed.
 - Second job or matrix entry with its own `name:` for the C++ harness

@@ -8,7 +8,7 @@
 `make core-unit-tests` writes the compiled harness to `scripts/core_unit_tests`
 (about 200 KB). Its three sibling harness binaries — `scripts/headless_record`,
 `scripts/spike_sound_driver`, `scripts/roles_probe` — were already listed by
-name in the root `.gitignore`. When Fase 4's T1 landed, its `.gitignore` edit
+name in the root `.gitignore`. When Phase 4's T1 landed, its `.gitignore` edit
 was dropped for scope reasons (commit 2fdd41a2, "drop unrelated memory-metrics
 commit and .gitignore edit from T1 branch"), and `scripts/AGENTS.md` then
 documented the gap as a Local Contract requiring a hand-exclusion or

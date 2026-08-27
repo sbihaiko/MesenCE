@@ -6,7 +6,7 @@
 
 ## Context
 `scripts/core_unit_tests.cpp` reads two golden fixtures through cwd-relative
-literals: `"docs/specs/golden/mep/path-cases.txt"` (line 126, Bloco B path
+literals: `"docs/specs/golden/mep/path-cases.txt"` (line 126, Block B path
 normalization) and `"docs/specs/golden/mep/pack.json"` (line 154,
 `MepPack::Parse`). The file header (line 11) states the precondition: "Run
 from the repo root so the golden paths resolve." Launched from any other

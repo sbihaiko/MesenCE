@@ -5,7 +5,7 @@
 - Consolidates: ADR-0069, ADR-0070
 
 ## Context
-Fase 2 extracted the cheat-code type detection into
+Phase 2 extracted the cheat-code type detection into
 `UI/Logic/CheatTypeDetector.FromCode(ConsoleType, string)`. The extraction was a
 behaviour-parity move (spec Risk Areas: assert current behaviour, do not fix
 gaps), so the pre-existing quirk survived: unsupported consoles signal failure

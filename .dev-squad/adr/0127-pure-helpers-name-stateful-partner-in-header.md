@@ -5,7 +5,7 @@
 - Consolidates: ADR-0068, ADR-0072
 
 ## Context
-Fase 2 extracted only the list-mutation half of
+Phase 2 extracted only the list-mutation half of
 `EnhancementPackConfig.SetPackEnabled` into `UI/Logic/DisabledPackList.Set`
 (case-insensitive de-duplication of `DisabledPacks`), leaving the other half —
 keeping the native core in sync via `EmuApi.SetMepPackEnabled` — in
