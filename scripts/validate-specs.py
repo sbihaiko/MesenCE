@@ -128,16 +128,37 @@ def validate_hires_draft(path):
     check(system_line[8:] in ("gb", "gbc", "sms", "gg", "sg1000", "coleco"),
           f"{path.name}: invalid <system>: {system_line[8:]}")
 
+PATH_CASE_LINE = re.compile(r"^[^\t]+\t(ok|bad)$")
+
+def validate_path_cases(path):
+    """Format-only guard: every non-blank, non-'#' line of the zip-slip
+    fixture must be exactly one TAB-separated <path><TAB>ok|bad case. This
+    does not interpret paths semantically (see ADR-0124) -- that is owned
+    by the fixture's two real consumers, UI.Tests/Mep/MepZipValidatorTests.cs
+    and scripts/core_unit_tests.cpp."""
+    case_count = 0
+    for n, raw in enumerate(path.read_text().splitlines(), 1):
+        line = raw.strip("\n")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        check(bool(PATH_CASE_LINE.match(line)),
+              f"{path.name}:{n}: expected '<path><TAB>ok|bad', got: {line!r}")
+        if PATH_CASE_LINE.match(line):
+            case_count += 1
+    check(case_count > 0, f"{path.name}: no path case recognized")
+
 def main():
     validate_esp(SPECS / "golden" / "esp" / "EnhancedAudioPresets.cfg")
     validate_mep(SPECS / "golden" / "mep" / "pack.json")
     validate_mei(SPECS / "golden" / "mei" / "manifest.json")
     validate_hires_draft(SPECS / "golden" / "hires-gbsms" / "hires.txt")
+    validate_path_cases(SPECS / "golden" / "mep" / "path-cases.txt")
     if _failures:
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
-    print("validate-specs: all golden files conform (ESP, MEP, MEI, hires-gbsms draft)")
+    print("validate-specs: all golden files conform "
+          "(ESP, MEP, MEI, hires-gbsms draft, path-cases format)")
 
 if __name__ == "__main__":
     main()
