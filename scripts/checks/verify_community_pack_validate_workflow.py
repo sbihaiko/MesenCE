@@ -23,6 +23,8 @@ WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2]
     / ".github" / "workflows" / "community-pack-validate.yml"
 )
+ALLOWLIST_PATH = Path(__file__).resolve().parents[2] / "scripts" / "pack_host_allowlist.json"
+FETCH_PACK_PATH = Path(__file__).resolve().parents[2] / "scripts" / "fetch_pack.py"
 
 REQUIRED_IDS = {
     "PVT_kwHOB1MsbM4BhjpN": "Project node id",
@@ -94,20 +96,44 @@ def check_project_number_only(text):
 
 
 def check_host_allowlist(text):
+    # The allow-list itself lives in scripts/pack_host_allowlist.json (a
+    # config file, not inline workflow YAML) so a new host is a config
+    # change; this check follows it there instead of grepping this file.
+    if "scripts/pack_host_allowlist.json" not in text:
+        fail("workflow does not reference scripts/pack_host_allowlist.json")
+    if not ALLOWLIST_PATH.is_file():
+        fail(f"missing file: {ALLOWLIST_PATH}")
+        return
+    import json
+
+    try:
+        allowlist_hosts = {h["host"] for h in json.loads(ALLOWLIST_PATH.read_text())["hosts"]}
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        fail(f"scripts/pack_host_allowlist.json did not parse as expected: {exc}")
+        return
     for host in HOST_ALLOWLIST:
-        if host not in text:
+        if host not in allowlist_hosts:
             fail(f"host allow-list missing host: {host}")
-    if "/releases/" not in text:
+    allowlist_text = ALLOWLIST_PATH.read_text()
+    if "/releases/" not in allowlist_text:
         fail("host allow-list missing github.com /releases/ path restriction")
+    if not FETCH_PACK_PATH.is_file():
+        fail(f"missing file: {FETCH_PACK_PATH}")
+        return
+    fetch_text = FETCH_PACK_PATH.read_text()
+    if "redirect" not in fetch_text.lower():
+        fail("fetch_pack.py does not appear to re-validate redirects")
+    if "is_private" not in fetch_text or "is_loopback" not in fetch_text:
+        fail("fetch_pack.py does not appear to reject private/loopback resolved addresses")
 
 
 def check_size_cap(text):
     if "314572800" not in text:
         fail("300MB cap constant (314572800 bytes) not found")
-    if "max-filesize" not in text:
-        fail("curl --max-filesize (during-download cap) not found")
-    if "content-length" not in text.lower():
-        fail("pre-download Content-Length check not found")
+    if "--max-bytes" not in text:
+        fail("fetch_pack.py --max-bytes invocation (during-download cap) not found")
+    if not FETCH_PACK_PATH.is_file() or "Content-Length" not in FETCH_PACK_PATH.read_text():
+        fail("pre-download Content-Length check not found in fetch_pack.py")
 
 
 def check_hash_write(text):

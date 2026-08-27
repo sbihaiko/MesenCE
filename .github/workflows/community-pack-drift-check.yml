@@ -56,6 +56,7 @@ jobs:
       REPO: sbihaiko/MesenCE
       STATUS_ACCEPTED_PARTIAL: "Aceito parcial (HD Mesen)"
       STATUS_ACCEPTED_FULL: "Aceito (MEP completo)"
+      MAX_PACK_BYTES: 314572800 # 300MB, same cap as community-pack-validate.yml
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
@@ -95,7 +96,20 @@ jobs:
               continue
             fi
 
-            fresh_hash=$(curl -fsSL --max-time 120 "$pack_url" | sha256sum | cut -d' ' -f1)
+            # scripts/fetch_pack.py re-applies the same host allow-list and
+            # SSRF guard as community-pack-validate.yml's own download step
+            # (defense in depth: if a host was later removed from the
+            # allow-list, drift-check refuses to follow it too, instead of
+            # blindly curling whatever URL is sitting in the issue body) and
+            # handles host-specific quirks like Google Drive's two-step
+            # confirm-token download the plain-curl version could not.
+            rm -f drift_download.bin
+            if ! python3 scripts/fetch_pack.py "$pack_url" drift_download.bin \
+                --max-bytes "$MAX_PACK_BYTES" --allowlist scripts/pack_host_allowlist.json; then
+              echo "::warning::issue #$issue_number - could not (re)download pack_url for drift check, skipping"
+              continue
+            fi
+            fresh_hash=$(sha256sum drift_download.bin | cut -d' ' -f1)
             if [ "$fresh_hash" != "$stored_hash" ]; then
               gh issue comment "$issue_number" --repo "$REPO" \
                 --body "o conteúdo do pack mudou desde a última validação — revalidando automaticamente"

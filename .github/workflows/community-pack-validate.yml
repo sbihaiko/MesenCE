@@ -142,20 +142,25 @@ jobs:
           fi
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$PACK_URL_FIELD_ID" --text "$PACK_URL" >/dev/null
-      - name: Enforce host allow-list (github.com/*/releases/*, raw/gist githubusercontent, gist.github.com)
+      # Allowed hosts live in scripts/pack_host_allowlist.json (not inline
+      # here) so adding one is a config change, not a workflow edit -- but
+      # it's still a trust-boundary decision, review it like this file.
+      - name: Enforce host allow-list (scripts/pack_host_allowlist.json)
         id: host-check
         env:
           PACK_URL: ${{ inputs.pack_url }}
         run: |
           set -euo pipefail
-          URL="$PACK_URL"
-          HOST=$(python3 -c "import sys,urllib.parse as u; print(u.urlparse(sys.argv[1]).netloc)" "$URL")
-          URLPATH=$(python3 -c "import sys,urllib.parse as u; print(u.urlparse(sys.argv[1]).path)" "$URL")
           ALLOWED=0
-          case "$HOST" in
-            github.com) case "$URLPATH" in */releases/*) ALLOWED=1 ;; esac ;;
-            raw.githubusercontent.com|gist.githubusercontent.com|gist.github.com) ALLOWED=1 ;;
-          esac
+          if python3 -c "
+          import os, sys
+          sys.path.insert(0, 'scripts')
+          from fetch_pack import match_host, load_allowlist
+          hosts = load_allowlist('scripts/pack_host_allowlist.json')
+          sys.exit(0 if match_host(os.environ['PACK_URL'], hosts) else 1)
+          "; then
+            ALLOWED=1
+          fi
           echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"
       - name: Reject disallowed host
         if: steps.host-check.outputs.allowed != '1'
@@ -164,14 +169,20 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
+          ACCEPTED=$(python3 -c "
+          import json
+          hosts = json.load(open('scripts/pack_host_allowlist.json'))['hosts']
+          print(', '.join(h['host'] for h in hosts))
+          ")
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body \
-            "Host not allowed for pack_url. Accepted hosts: github.com/*/releases/*, raw.githubusercontent.com, gist.githubusercontent.com, gist.github.com."
+            "Host not allowed for pack_url. Accepted hosts: $ACCEPTED."
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid-other
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
-      # 300MB cap: rejected on declared Content-Length before the transfer
-      # starts, and via curl --max-filesize mid-stream — never after.
+      # scripts/fetch_pack.py re-validates the allow-list (and resolved IPs)
+      # on every redirect hop, not just this starting URL, and enforces the
+      # 300MB cap on the declared Content-Length and mid-stream.
       - name: Download pack (300MB cap enforced before/during the transfer)
         id: download
         if: steps.host-check.outputs.allowed == '1'
@@ -180,13 +191,8 @@ jobs:
           PACK_URL: ${{ inputs.pack_url }}
         run: |
           set -euo pipefail
-          URL="$PACK_URL"
-          DECLARED=$(curl -fsSIL "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{v=$2} END{print v+0}')
-          if [ "${DECLARED:-0}" -gt "$MAX_PACK_BYTES" ]; then
-            echo "Content-Length ($DECLARED) exceeds the 300MB cap." >&2
-            exit 1
-          fi
-          curl -fsSL --max-filesize "$MAX_PACK_BYTES" -o pack_download.bin "$URL"
+          python3 scripts/fetch_pack.py "$PACK_URL" pack_download.bin \
+            --max-bytes "$MAX_PACK_BYTES" --allowlist scripts/pack_host_allowlist.json
       - name: Reject oversized/failed download
         if: steps.host-check.outputs.allowed == '1' && steps.download.outcome == 'failure'
         env:
@@ -426,10 +432,17 @@ jobs:
             echo "Autofix did not converge or made no change to scripts/mep_lint.py — not opening a PR. Summary: $SUMMARY"
             exit 0
           fi
-          # actions/checkout persisted the job's read-only GITHUB_TOKEN as
-          # the git credential helper; this repoints it at PROJECT_PAT
-          # (already the identity gh itself uses via GH_TOKEN) so the push
-          # below actually has write access.
+          # actions/checkout leaves TWO things behind: a credential helper
+          # AND an http.<url>.extraheader carrying the job's read-only
+          # GITHUB_TOKEN as a Basic-auth header. `gh auth setup-git` alone
+          # only replaces the former — git prefers the extraheader when
+          # both are present, so the push below still authenticated as
+          # github-actions[bot] (confirmed live: run 33045652190, "remote:
+          # Permission ... denied to github-actions[bot]", exit 128) even
+          # with GH_TOKEN=PROJECT_PAT set on this step. Removing the
+          # leftover header first is what actually hands the push to
+          # PROJECT_PAT's identity.
+          git config --local --unset-all "http.https://github.com/.extraheader" || true
           gh auth setup-git
           BRANCH="autofix/mep-lint-drift-issue-${ISSUE_NUMBER}-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
