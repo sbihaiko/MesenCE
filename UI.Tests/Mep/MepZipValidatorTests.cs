@@ -82,6 +82,15 @@ namespace Mesen.Tests.Mep
 			yield return new object[] { new[] { ("W/audio/hires.txt", "x"), ("W/auto/audio/hires.txt", "x") }, true };
 			//Only the auto/ layer present is still one candidate root (not split into "root" and "root/auto").
 			yield return new object[] { new[] { ("W/auto/textures/hires.txt", "x") }, true };
+			//ADR-0121: a classic Mesen HD pack (hires.txt loose at a wrapper folder's own root, no textures/
+			//wrapper) whose wrapper is named after a release/repo, not the ROM - the real shape of a raw
+			//GitHub archive download (see community-pack issues #46/#47). No textures/ wrapper exists for the
+			//pre-ADR-0121 structural test to key off, so only the bare-basename acceptance finds it.
+			yield return new object[] { new[] { ("HDNes-Graphics-Pac-master/hires.txt", "x"), ("HDNes-Graphics-Pac-master/Chr_00_0.png", "x") }, true };
+			yield return new object[] { new[] { ("Wrapper/preset.cfg", "x") }, true };
+			yield return new object[] { new[] { ("Wrapper/fingerprints.json", "x") }, true };
+			//Two distinct repo-named wrappers, each with its own loose root hires.txt: ambiguous, must reject.
+			yield return new object[] { new[] { ("RepoA-main/hires.txt", "x"), ("RepoB-master/hires.txt", "x") }, false };
 		}
 
 		[Theory]

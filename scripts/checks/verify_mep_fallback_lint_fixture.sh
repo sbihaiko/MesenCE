@@ -29,6 +29,15 @@
 #     segment as a pack root instead of refusing it via safe_rel (revision
 #     cycle T3) — must fail closed exactly like the ambiguous-two-subfolder
 #     fixture, not silently accept an out-of-container path.
+#   - (ADR-0121) accepts a classic Mesen HD pack — hires.txt loose at a
+#     wrapper folder's own root, no textures/ wrapper — whose wrapper is
+#     named after a release/repo, not the ROM (a raw GitHub archive zip's
+#     real shape; see community-pack issues #46/#47): only the structural
+#     fallback's new bare-basename acceptance can discover this, since there
+#     is no textures/ wrapper for the existing structural test and no ROM
+#     name passed to this CLI invocation for the name-anchored one.
+#   - (ADR-0121) rejects two such wrappers together as ambiguous, same
+#     fail-closed philosophy as the pre-existing two-subfolder fixture.
 # No mocks: runs the real mep_lint.py CLI against real generated zip files.
 set -euo pipefail
 
@@ -167,4 +176,38 @@ grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   && fail "SECURITY: the zip-slip-shaped candidate should not emit the fallback info line (it should be refused before that):
 $RUN_OUT"
 
-echo "PASS: mep_lint.py accepts the Contra80s-shaped pack via the structural fallback (with path/depth info), rejects the ambiguous two-subfolder pack, rejects a malformed pack.json discovered via the fallback, rejects sections.textures.path==\"\" with a broken hires.txt under the fallback, rejects a broken legacy hires.txt loose at the fallback root, rejects a zip-slip-shaped candidate ('..'), and does not change the classification of an existing pack.json-root pack"
+# --- fixture 8: ADR-0121 loose-legacy wrapper (repo-named, no ROM name) ----
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" loose-legacy >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py failed generating 'loose-legacy'"
+LOOSE_LEGACY_ZIP="$WORK/fallback/mep-fallback-loose-legacy.zip"
+[ -f "$LOOSE_LEGACY_ZIP" ] || fail "'loose-legacy' fixture was not generated: $LOOSE_LEGACY_ZIP"
+
+run_lint "$LOOSE_LEGACY_ZIP"
+[ "$RUN_RC" -eq 0 ] || fail "ADR-0121: mep_lint.py rejected a classic Mesen HD pack (loose hires.txt, repo-named wrapper, no ROM name argument) (expected exit 0, got $RUN_RC):
+$RUN_OUT"
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
+  || fail "ADR-0121: the loose-legacy pack was accepted but did not emit the structural fallback info line:
+$RUN_OUT"
+grep -q "Legacy HD pack (hires.txt at the fallback root)" <<<"$RUN_OUT" \
+  || fail "ADR-0121: the loose-legacy pack's hires.txt was not recognized as the textures section under the fallback root:
+$RUN_OUT"
+grep -q "0 error(s)" <<<"$RUN_OUT" || fail "ADR-0121: loose-legacy pack accepted but the summary does not report 0 error(s):
+$RUN_OUT"
+
+# --- fixture 9: ADR-0121 two ambiguous loose-legacy wrappers ---------------
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" loose-legacy-ambiguous >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py failed generating 'loose-legacy-ambiguous'"
+LOOSE_LEGACY_AMBIGUOUS_ZIP="$WORK/fallback/mep-fallback-loose-legacy-ambiguous.zip"
+[ -f "$LOOSE_LEGACY_AMBIGUOUS_ZIP" ] || fail "'loose-legacy-ambiguous' fixture was not generated: $LOOSE_LEGACY_AMBIGUOUS_ZIP"
+
+run_lint "$LOOSE_LEGACY_AMBIGUOUS_ZIP"
+[ "$RUN_RC" -ne 0 ] || fail "ADR-0121: mep_lint.py accepted two ambiguous loose-legacy wrappers (expected exit != 0):
+$RUN_OUT"
+grep -q "no section found" <<<"$RUN_OUT" \
+  || fail "ADR-0121: the ambiguous loose-legacy pack was not rejected with 'no section found':
+$RUN_OUT"
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
+  && fail "ADR-0121: the ambiguous loose-legacy pack should not emit the fallback info line (the candidate should be refused for ambiguity):
+$RUN_OUT"
+
+echo "PASS: mep_lint.py accepts the Contra80s-shaped pack via the structural fallback (with path/depth info), rejects the ambiguous two-subfolder pack, rejects a malformed pack.json discovered via the fallback, rejects sections.textures.path==\"\" with a broken hires.txt under the fallback, rejects a broken legacy hires.txt loose at the fallback root, rejects a zip-slip-shaped candidate ('..'), does not change the classification of an existing pack.json-root pack, accepts a classic Mesen HD pack whose wrapper is named after a repo rather than the ROM (ADR-0121), and rejects two such wrappers together as ambiguous"
