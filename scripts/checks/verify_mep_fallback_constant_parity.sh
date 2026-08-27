@@ -26,9 +26,9 @@ fail() {
   exit 1
 }
 
-[ -f "$CPP_FILE" ] || fail "C++: arquivo não encontrado: $CPP_FILE"
-[ -f "$CS_FILE" ] || fail "C#: arquivo não encontrado: $CS_FILE"
-[ -f "$PY_FILE" ] || fail "Python: arquivo não encontrado: $PY_FILE"
+[ -f "$CPP_FILE" ] || fail "C++: file not found: $CPP_FILE"
+[ -f "$CS_FILE" ] || fail "C#: file not found: $CS_FILE"
+[ -f "$PY_FILE" ] || fail "Python: file not found: $PY_FILE"
 
 # extract_int <language> <file> <name-regex> <literal-name-for-errors>
 # Greps for `<name> ... = <digits>` (any C++/C#/Python declaration/assignment
@@ -40,11 +40,11 @@ extract_int() {
   local line value
   line="$(grep -m1 -E "${name_regex}[[:space:]]*=[[:space:]]*[0-9]+" "$file" || true)"
   if [ -z "$line" ]; then
-    fail "$lang: constante '$literal_name' não encontrada (ou sem valor numérico) em $file"
+    fail "$lang: constant '$literal_name' not found (or has no numeric value) in $file"
   fi
   value="$(grep -oE '=[[:space:]]*[0-9]+' <<<"$line" | head -n1 | grep -oE '[0-9]+')"
   if [ -z "$value" ]; then
-    fail "$lang: constante '$literal_name' encontrada mas não deu para parsear um inteiro em $file: $line"
+    fail "$lang: constant '$literal_name' found but could not parse an integer in $file: $line"
   fi
   echo "$value"
 }
@@ -62,20 +62,20 @@ echo "Python FALLBACK_MAX_DEPTH=$PY_DEPTH FALLBACK_MAX_ENTRIES=$PY_ENTRIES"
 
 # Literal-value assertions (independent of cross-language equality: a bug
 # that shifts all three sources to the same WRONG number must still fail).
-[ "$CPP_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "C++: kMepFallbackMaxDepth=$CPP_DEPTH, esperado $EXPECTED_DEPTH"
-[ "$CPP_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "C++: kMepFallbackMaxEntries=$CPP_ENTRIES, esperado $EXPECTED_ENTRIES"
-[ "$CS_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "C#: FallbackMaxDepth=$CS_DEPTH, esperado $EXPECTED_DEPTH"
-[ "$CS_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "C#: FallbackMaxEntries=$CS_ENTRIES, esperado $EXPECTED_ENTRIES"
-[ "$PY_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "Python: FALLBACK_MAX_DEPTH=$PY_DEPTH, esperado $EXPECTED_DEPTH"
-[ "$PY_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "Python: FALLBACK_MAX_ENTRIES=$PY_ENTRIES, esperado $EXPECTED_ENTRIES"
+[ "$CPP_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "C++: kMepFallbackMaxDepth=$CPP_DEPTH, expected $EXPECTED_DEPTH"
+[ "$CPP_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "C++: kMepFallbackMaxEntries=$CPP_ENTRIES, expected $EXPECTED_ENTRIES"
+[ "$CS_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "C#: FallbackMaxDepth=$CS_DEPTH, expected $EXPECTED_DEPTH"
+[ "$CS_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "C#: FallbackMaxEntries=$CS_ENTRIES, expected $EXPECTED_ENTRIES"
+[ "$PY_DEPTH" -eq "$EXPECTED_DEPTH" ] || fail "Python: FALLBACK_MAX_DEPTH=$PY_DEPTH, expected $EXPECTED_DEPTH"
+[ "$PY_ENTRIES" -eq "$EXPECTED_ENTRIES" ] || fail "Python: FALLBACK_MAX_ENTRIES=$PY_ENTRIES, expected $EXPECTED_ENTRIES"
 
 # Three-way cross-language equality (on top of the literal check above, in
 # case EXPECTED_* itself ever drifts from what all three sources agree on).
 if [ "$CPP_DEPTH" -ne "$CS_DEPTH" ] || [ "$CS_DEPTH" -ne "$PY_DEPTH" ]; then
-  fail "max-depth diverge entre linguagens: C++=$CPP_DEPTH C#=$CS_DEPTH Python=$PY_DEPTH"
+  fail "max-depth diverges across languages: C++=$CPP_DEPTH C#=$CS_DEPTH Python=$PY_DEPTH"
 fi
 if [ "$CPP_ENTRIES" -ne "$CS_ENTRIES" ] || [ "$CS_ENTRIES" -ne "$PY_ENTRIES" ]; then
-  fail "max-entries diverge entre linguagens: C++=$CPP_ENTRIES C#=$CS_ENTRIES Python=$PY_ENTRIES"
+  fail "max-entries diverges across languages: C++=$CPP_ENTRIES C#=$CS_ENTRIES Python=$PY_ENTRIES"
 fi
 
-echo "PASS: kMepFallbackMaxDepth/FallbackMaxDepth/FALLBACK_MAX_DEPTH=$EXPECTED_DEPTH e kMepFallbackMaxEntries/FallbackMaxEntries/FALLBACK_MAX_ENTRIES=$EXPECTED_ENTRIES em C++, C# e Python"
+echo "PASS: kMepFallbackMaxDepth/FallbackMaxDepth/FALLBACK_MAX_DEPTH=$EXPECTED_DEPTH and kMepFallbackMaxEntries/FallbackMaxEntries/FALLBACK_MAX_ENTRIES=$EXPECTED_ENTRIES in C++, C#, and Python"

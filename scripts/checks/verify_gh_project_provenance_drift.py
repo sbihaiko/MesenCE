@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Verifica a proveniência gh project documentada em community-pack-drift-check.yml (AC-5).
+"""Verifies the gh project provenance documented in community-pack-drift-check.yml (AC-5).
 
-Checa, sobre o arquivo real (sem mocks):
-  - os fatos CONFIRMADOS ao vivo (IDs do campo Status e do campo Pack Hash,
-    via `gh project field-list`) estão documentados com os IDs exatos;
-  - o gap de cobertura NÃO CONFIRMADO (nomes de chave JSON por item, porque
-    `gh project item-list` devolveu zero itens) está declarado explicitamente,
-    não apresentado como fato assentado;
-  - qualquer conclusão negativa é qualificada por esse gap (linguagem de
-    ressalva, não uma afirmação definitiva);
-  - o parsing de item usa lookups defensivos (fallback `//`), não indexação
-    direta que quebraria com uma chave ausente.
+Checks, against the real file (no mocks):
+  - the CONFIRMED (confirmed live) facts (Status field ID and Pack Hash
+    field ID, via `gh project field-list`) are documented with the exact
+    IDs;
+  - the UNCONFIRMED coverage gap (per-item JSON key names, because
+    `gh project item-list` returned zero items) is explicitly declared,
+    not presented as a settled fact;
+  - any negative conclusion is qualified by that gap (hedged language, not
+    a definitive statement);
+  - item parsing uses defensive lookups (`//` fallback), not direct
+    indexing that would break on a missing key.
 
-Uso: python3 scripts/checks/verify_gh_project_provenance_drift.py
+Usage: python3 scripts/checks/verify_gh_project_provenance_drift.py
 """
 import re
 import sys
@@ -25,33 +26,33 @@ PACK_HASH_FIELD_ID = "PVTF_lAHOB1MsbM4BhjpNzhge9Is"
 
 
 def check_confirmed_facts(text, errors):
-    if "CONFIRMADO" not in text:
-        errors.append("bloco de proveniência não marca nenhum fato como CONFIRMADO")
+    if "CONFIRMED" not in text:
+        errors.append("provenance block does not mark any fact as CONFIRMED")
     if "gh project field-list" not in text:
-        errors.append("proveniência não cita 'gh project field-list' como fonte primária")
+        errors.append("provenance does not cite 'gh project field-list' as the primary source")
     if STATUS_FIELD_ID not in text:
-        errors.append(f"ID do campo Status ({STATUS_FIELD_ID}) ausente do bloco de proveniência")
+        errors.append(f"Status field ID ({STATUS_FIELD_ID}) missing from the provenance block")
     if PACK_HASH_FIELD_ID not in text:
-        errors.append(f"ID do campo Pack Hash ({PACK_HASH_FIELD_ID}) ausente do bloco de proveniência")
+        errors.append(f"Pack Hash field ID ({PACK_HASH_FIELD_ID}) missing from the provenance block")
 
 
 def check_coverage_gap_disclosed(text, errors):
-    if "NÃO CONFIRMADO" not in text:
-        errors.append("bloco de proveniência não declara nenhum gap NÃO CONFIRMADO")
+    if "UNCONFIRMED" not in text:
+        errors.append("provenance block does not declare any UNCONFIRMED gap")
     if "gh project item-list" not in text:
-        errors.append("gap de cobertura não cita 'gh project item-list' como a chamada que revelou o gap")
-    if not re.search(r"zero itens|ZERO itens|totalCount.{0,5}0", text, re.IGNORECASE):
-        errors.append("gap de cobertura não menciona que o Project tinha zero itens no momento da spec")
-    if "gap de cobertura" not in text:
-        errors.append("texto não usa a expressão 'gap de cobertura' para o coverage gap")
+        errors.append("coverage gap does not cite 'gh project item-list' as the call that revealed the gap")
+    if not re.search(r"zero items|ZERO items|totalCount.{0,5}0", text, re.IGNORECASE):
+        errors.append("coverage gap does not mention that the Project had zero items at spec time")
+    if "coverage gap" not in text:
+        errors.append("text does not use the phrase 'coverage gap' for the coverage gap")
 
 
 def check_negative_conclusion_hedged(text, errors):
-    hedges = ["provisória", "não definitiva", "necessariamente provisória"]
+    hedges = ["provisional", "not definitive", "necessarily provisional"]
     if not any(h in text for h in hedges):
         errors.append(
-            "nenhuma conclusão negativa é qualificada como provisória/não definitiva "
-            "(deve haver ressalva explícita, não uma afirmação assentada)"
+            "no negative conclusion is qualified as provisional/non-definitive "
+            "(there must be an explicit hedge, not a settled statement)"
         )
 
 
@@ -59,16 +60,16 @@ def check_defensive_parsing(text, errors):
     fallback_lines = re.findall(r"jq -r '[^']*//[^']*'", text)
     if len(fallback_lines) < 2:
         errors.append(
-            "menos de 2 lookups jq com fallback '//' encontrados - parsing de item "
-            "não parece suficientemente defensivo (status e Pack Hash precisam de fallback)"
+            "fewer than 2 jq lookups with a '//' fallback found - item parsing "
+            "does not look defensive enough (status and Pack Hash need a fallback)"
         )
-    if "propositalmente defensivo" not in text and "defensivo" not in text:
-        errors.append("comentário não declara explicitamente que o parsing é defensivo")
+    if "deliberately defensive" not in text and "defensive" not in text:
+        errors.append("comment does not explicitly state that the parsing is defensive")
 
 
 def main():
     if not WORKFLOW.exists():
-        print(f"FAIL: {WORKFLOW} não existe")
+        print(f"FAIL: {WORKFLOW} does not exist")
         return 1
 
     text = WORKFLOW.read_text(encoding="utf-8")

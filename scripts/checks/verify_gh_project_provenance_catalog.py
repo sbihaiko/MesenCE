@@ -13,7 +13,12 @@ which per-item JSON key names remain an explicit, unconfirmed coverage gap
 merely in a cached view), and the item-parsing code must use defensive,
 non-crashing lookups rather than direct indexing on an assumed key path.
 
-Uso: python3 scripts/checks/verify_gh_project_provenance_catalog.py
+NOTE: scripts/generate_community_pack_catalog.py's own docstring was already
+in English by the time this checker was translated, so the matched string
+literals below are English-only (no pt-BR fallback needed here, unlike the
+sibling check for community-pack-drift-check.yml).
+
+Usage: python3 scripts/checks/verify_gh_project_provenance_catalog.py
 """
 import re
 import sys
@@ -29,40 +34,40 @@ GAP_CALL = "gh project item-list"
 
 def check_confirmed_facts(failures, text):
     if CONFIRMED_CALL not in text:
-        failures.append(f"comentário não cita a chamada primária confirmada ({CONFIRMED_CALL!r})")
+        failures.append(f"comment does not cite the confirmed primary-source call ({CONFIRMED_CALL!r})")
     for field_id in CONFIRMED_FIELD_IDS:
         if field_id not in text:
-            failures.append(f"comentário não confirma o field id {field_id!r} contra a API real")
-    if "CONFIRMA" not in text and "CONFIRMED" not in text.upper():
-        failures.append("comentário não usa uma marcação explícita de fato CONFIRMADO")
+            failures.append(f"comment does not confirm field id {field_id!r} against the real API")
+    if "CONFIRMED" not in text.upper():
+        failures.append("comment does not use an explicit CONFIRMED fact marker")
 
 
 def check_coverage_gap(failures, text):
     if GAP_CALL not in text:
-        failures.append(f"comentário não cita a chamada que expõe o gap ({GAP_CALL!r})")
+        failures.append(f"comment does not cite the call that exposes the gap ({GAP_CALL!r})")
     lowered = text.lower()
     if "coverage gap" not in lowered:
-        failures.append("comentário não rotula explicitamente o gap como 'coverage gap'")
-    if "zero itens" not in lowered and "zero items" not in lowered and '"totalcount":0' not in lowered:
-        failures.append("comentário não documenta que o Project tinha zero itens no momento da escrita")
-    if "qualificada" not in lowered and "qualified" not in lowered:
-        failures.append("comentário não deixa explícito que conclusões negativas são qualificadas pelo gap")
+        failures.append("comment does not explicitly label the gap as a 'coverage gap'")
+    if "zero items" not in lowered and '"totalcount":0' not in lowered:
+        failures.append("comment does not document that the Project had zero items at write time")
+    if "qualified" not in lowered:
+        failures.append("comment does not make explicit that negative conclusions are qualified by the gap")
 
 
 def check_defensive_parsing(failures, text):
     lowered = text.lower()
-    if "defensiv" not in lowered and "defensive" not in lowered:
-        failures.append("comentário não descreve o parsing como defensivo")
-    if "não-crash" not in lowered and "non-crash" not in lowered and "not crash" not in lowered:
-        failures.append("comentário não deixa explícito que o parsing não deve crashar em chave inesperada")
+    if "defensiv" not in lowered:
+        failures.append("comment does not describe the parsing as defensive")
+    if "non-crash" not in lowered and "not crash" not in lowered:
+        failures.append("comment does not make explicit that parsing must not crash on an unexpected key")
     dict_get_calls = re.findall(r"\.get\(", text)
     if len(dict_get_calls) < 3:
-        failures.append("parsing de item do Project não usa lookups defensivos (dict.get) suficientes")
+        failures.append("Project item parsing does not use enough defensive lookups (dict.get)")
 
 
 def main():
     if not SCRIPT.exists():
-        print(f"FAIL: arquivo ausente: {SCRIPT}")
+        print(f"FAIL: missing file: {SCRIPT}")
         return 1
     text = SCRIPT.read_text(encoding="utf-8")
     failures = []
@@ -70,11 +75,11 @@ def main():
     check_coverage_gap(failures, text)
     check_defensive_parsing(failures, text)
     if failures:
-        print("FAIL: AC-7 (provenance/coverage-gap do catalog script)")
+        print("FAIL: AC-7 (catalog script provenance/coverage-gap)")
         for item in failures:
             print(f" - {item}")
         return 1
-    print("PASS: AC-7 (provenance/coverage-gap do catalog script)")
+    print("PASS: AC-7 (catalog script provenance/coverage-gap)")
     return 0
 
 

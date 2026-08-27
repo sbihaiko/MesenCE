@@ -6,8 +6,8 @@
 #     construction) and emits an info line naming the discovered path and
 #     depth;
 #   - rejects the ambiguous two-subfolder zip (two structurally valid,
-#     distinct candidate roots) with the pre-existing "nenhuma seção
-#     encontrada" error, same as before this ADR;
+#     distinct candidate roots) with the pre-existing "no section found"
+#     error, same as before this ADR;
 #   - leaves an existing-convention fixture's classification unchanged: a
 #     root-pack.json zip from the pre-existing scripts/gen_mep_test_pack.py
 #     must still pass, with NO fallback info line at all (the fallback must
@@ -43,9 +43,9 @@ fail() {
   exit 1
 }
 
-[ -f "$LINT" ] || fail "não encontrado: $LINT"
-[ -f "$GEN_FALLBACK" ] || fail "não encontrado: $GEN_FALLBACK"
-[ -f "$GEN_EXISTING" ] || fail "não encontrado: $GEN_EXISTING"
+[ -f "$LINT" ] || fail "not found: $LINT"
+[ -f "$GEN_FALLBACK" ] || fail "not found: $GEN_FALLBACK"
+[ -f "$GEN_EXISTING" ] || fail "not found: $GEN_EXISTING"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -63,33 +63,33 @@ run_lint() {
 
 # --- fixtures 1/2: the new ADR-0120 fallback generator ---------------------
 "$PY" "$GEN_FALLBACK" "$WORK/fallback" accept reject >/dev/null \
-  || fail "gen_mep_fallback_test_pack.py falhou"
+  || fail "gen_mep_fallback_test_pack.py failed"
 
 ACCEPT_ZIP="$WORK/fallback/mep-fallback-accept.zip"
 REJECT_ZIP="$WORK/fallback/mep-fallback-reject.zip"
-[ -f "$ACCEPT_ZIP" ] || fail "fixture 'accept' não foi gerada: $ACCEPT_ZIP"
-[ -f "$REJECT_ZIP" ] || fail "fixture 'reject' não foi gerada: $REJECT_ZIP"
+[ -f "$ACCEPT_ZIP" ] || fail "'accept' fixture was not generated: $ACCEPT_ZIP"
+[ -f "$REJECT_ZIP" ] || fail "'reject' fixture was not generated: $REJECT_ZIP"
 
 run_lint "$ACCEPT_ZIP"
-[ "$RUN_RC" -eq 0 ] || fail "mep_lint.py rejeitou o pack Contra80s-shaped (esperava exit 0, achou $RUN_RC):
+[ "$RUN_RC" -eq 0 ] || fail "mep_lint.py rejected the Contra80s-shaped pack (expected exit 0, got $RUN_RC):
 $RUN_OUT"
 grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
-  || fail "mep_lint.py aceitou o pack Contra80s-shaped mas não emitiu a linha info do fallback:
+  || fail "mep_lint.py accepted the Contra80s-shaped pack but did not emit the fallback info line:
 $RUN_OUT"
 grep -qF "pack root discovered at 'Contra80s-v1.1/Contra (U) [!]' (depth 4)" <<<"$RUN_OUT" \
-  || fail "a linha info do fallback não nomeia o path/depth descobertos como esperado:
+  || fail "the fallback info line does not name the discovered path/depth as expected:
 $RUN_OUT"
-grep -q "0 error(s)" <<<"$RUN_OUT" || fail "pack Contra80s-shaped aceito mas o resumo não reporta 0 erro(s):
+grep -q "0 error(s)" <<<"$RUN_OUT" || fail "Contra80s-shaped pack accepted but the summary does not report 0 error(s):
 $RUN_OUT"
 
 run_lint "$REJECT_ZIP"
-[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou o pack ambíguo de dois subdiretórios (esperava exit != 0):
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py accepted the ambiguous two-subfolder pack (expected exit != 0):
 $RUN_OUT"
 grep -q "no section found" <<<"$RUN_OUT" \
-  || fail "pack ambíguo não foi rejeitado com 'nenhuma seção encontrada':
+  || fail "the ambiguous pack was not rejected with 'no section found':
 $RUN_OUT"
 grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
-  && fail "pack ambíguo não deveria emitir a linha info do fallback (candidato deveria ser recusado por ambiguidade):
+  && fail "the ambiguous pack should not emit the fallback info line (the candidate should be refused for ambiguity):
 $RUN_OUT"
 
 # --- fixture 3: regression via the pre-existing gen_mep_test_pack.py -------
@@ -98,73 +98,73 @@ DUMMY_ROM="$WORK/dummy.nes"
 printf 'NES\x1a\x02\x01\x00\x00%080d' 0 > "$DUMMY_ROM"
 
 "$PY" "$GEN_EXISTING" "$DUMMY_ROM" "$WORK/existing" zip >/dev/null \
-  || fail "gen_mep_test_pack.py falhou"
+  || fail "gen_mep_test_pack.py failed"
 EXISTING_ZIP="$WORK/existing/mep-test-zip.zip"
-[ -f "$EXISTING_ZIP" ] || fail "fixture de regressão não foi gerada: $EXISTING_ZIP"
+[ -f "$EXISTING_ZIP" ] || fail "regression fixture was not generated: $EXISTING_ZIP"
 
 run_lint "$EXISTING_ZIP"
-[ "$RUN_RC" -eq 0 ] || fail "regressão: pack com pack.json na raiz deixou de ser aceito (exit $RUN_RC):
+[ "$RUN_RC" -eq 0 ] || fail "regression: pack with pack.json at the root is no longer accepted (exit $RUN_RC):
 $RUN_OUT"
 grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
-  && fail "regressão: um pack.json-root pack não deveria nunca acionar o fallback estrutural:
+  && fail "regression: a pack.json-root pack should never trigger the structural fallback:
 $RUN_OUT"
 
 # --- fixture 4: malformed manifest under a fallback-discovered prefix ------
 "$PY" "$GEN_FALLBACK" "$WORK/fallback" malformed >/dev/null \
-  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'malformed'"
+  || fail "gen_mep_fallback_test_pack.py failed generating 'malformed'"
 MALFORMED_ZIP="$WORK/fallback/mep-fallback-malformed-manifest.zip"
-[ -f "$MALFORMED_ZIP" ] || fail "fixture 'malformed' não foi gerada: $MALFORMED_ZIP"
+[ -f "$MALFORMED_ZIP" ] || fail "'malformed' fixture was not generated: $MALFORMED_ZIP"
 
 run_lint "$MALFORMED_ZIP"
-[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack.json malformado descoberto via fallback (esperava exit != 0 — o manifest descoberto precisa ser lintado, não só usado como marcador de aceite):
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py accepted a malformed pack.json discovered via the fallback (expected exit != 0 — the discovered manifest must be linted, not just used as an accept marker):
 $RUN_OUT"
 grep -q "invalid JSON" <<<"$RUN_OUT" \
-  || fail "pack.json malformado sob o prefixo do fallback não foi reportado como JSON inválido:
+  || fail "the malformed pack.json under the fallback prefix was not reported as invalid JSON:
 $RUN_OUT"
 grep -qF "$ACCEPT_WRAPPER_PACK_JSON" <<<"$RUN_OUT" \
-  || fail "o erro de JSON inválido não referencia o pack.json dentro do prefixo descoberto (deveria, não o da raiz do container):
+  || fail "the invalid-JSON error does not reference the pack.json inside the discovered prefix (it should, not the container root's):
 $RUN_OUT"
 
 # --- fixture 5: sections.textures.path == "" under a fallback prefix -------
 "$PY" "$GEN_FALLBACK" "$WORK/fallback" empty-path >/dev/null \
-  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'empty-path'"
+  || fail "gen_mep_fallback_test_pack.py failed generating 'empty-path'"
 EMPTY_PATH_ZIP="$WORK/fallback/mep-fallback-empty-section-path.zip"
-[ -f "$EMPTY_PATH_ZIP" ] || fail "fixture 'empty-path' não foi gerada: $EMPTY_PATH_ZIP"
+[ -f "$EMPTY_PATH_ZIP" ] || fail "'empty-path' fixture was not generated: $EMPTY_PATH_ZIP"
 
 run_lint "$EMPTY_PATH_ZIP"
-[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack com sections.textures.path==\"\" e hires.txt quebrado sob o prefixo do fallback (esperava exit != 0 — a barra dupla root_prefix+path vazio não pode silenciar a camada textures):
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py accepted a pack with sections.textures.path==\"\" and a broken hires.txt under the fallback prefix (expected exit != 0 — the root_prefix + empty-path double slash must not silence the textures layer):
 $RUN_OUT"
 grep -q "does not exist: missing.png" <<<"$RUN_OUT" \
-  || fail "o hires.txt quebrado (path==\"\") sob o prefixo do fallback não foi lintado (nenhum erro <img> reportado):
+  || fail "the broken hires.txt (path==\"\") under the fallback prefix was not linted (no <img> error reported):
 $RUN_OUT"
 
 # --- fixture 6: loose root hires.txt under a fallback prefix, no pack.json -
 "$PY" "$GEN_FALLBACK" "$WORK/fallback" root-hires >/dev/null \
-  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'root-hires'"
+  || fail "gen_mep_fallback_test_pack.py failed generating 'root-hires'"
 ROOT_HIRES_ZIP="$WORK/fallback/mep-fallback-root-hires.zip"
-[ -f "$ROOT_HIRES_ZIP" ] || fail "fixture 'root-hires' não foi gerada: $ROOT_HIRES_ZIP"
+[ -f "$ROOT_HIRES_ZIP" ] || fail "'root-hires' fixture was not generated: $ROOT_HIRES_ZIP"
 
 run_lint "$ROOT_HIRES_ZIP"
-[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um hires.txt quebrado solto na raiz do subdiretório descoberto (sem pack.json, esperava exit != 0 — o branch de hires.txt-na-raiz precisa ser espelhado sob o prefixo do fallback):
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py accepted a broken hires.txt loose at the root of the discovered subfolder (no pack.json, expected exit != 0 — the root-hires.txt branch must be mirrored under the fallback prefix):
 $RUN_OUT"
 grep -q "does not exist: missing.png" <<<"$RUN_OUT" \
-  || fail "o hires.txt legado (raiz do fallback) não foi lintado (nenhum erro <img> reportado):
+  || fail "the legacy hires.txt (fallback root) was not linted (no <img> error reported):
 $RUN_OUT"
 
 # --- fixture 7: zip-slip-shaped candidate ('..' segment) -------------------
 "$PY" "$GEN_FALLBACK" "$WORK/fallback" traversal >/dev/null \
-  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'traversal'"
+  || fail "gen_mep_fallback_test_pack.py failed generating 'traversal'"
 TRAVERSAL_ZIP="$WORK/fallback/mep-fallback-traversal.zip"
-[ -f "$TRAVERSAL_ZIP" ] || fail "fixture 'traversal' não foi gerada: $TRAVERSAL_ZIP"
+[ -f "$TRAVERSAL_ZIP" ] || fail "'traversal' fixture was not generated: $TRAVERSAL_ZIP"
 
 run_lint "$TRAVERSAL_ZIP"
-[ "$RUN_RC" -ne 0 ] || fail "SEGURANÇA: mep_lint.py aceitou um candidato zip-slip-shaped ('../evil/...') via fallback estrutural (esperava exit != 0 — find_fallback_subfolder deve recusar via safe_rel):
+[ "$RUN_RC" -ne 0 ] || fail "SECURITY: mep_lint.py accepted a zip-slip-shaped candidate ('../evil/...') via the structural fallback (expected exit != 0 — find_fallback_subfolder must refuse it via safe_rel):
 $RUN_OUT"
 grep -q "no section found" <<<"$RUN_OUT" \
-  || fail "candidato zip-slip-shaped não foi rejeitado com 'nenhuma seção encontrada':
+  || fail "the zip-slip-shaped candidate was not rejected with 'no section found':
 $RUN_OUT"
 grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
-  && fail "SEGURANÇA: candidato zip-slip-shaped não deveria emitir a linha info do fallback (deveria ser recusado antes disso):
+  && fail "SECURITY: the zip-slip-shaped candidate should not emit the fallback info line (it should be refused before that):
 $RUN_OUT"
 
-echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, rejeita sections.textures.path==\"\" com hires.txt quebrado sob o fallback, rejeita um hires.txt legado quebrado solto na raiz do fallback, rejeita um candidato zip-slip-shaped ('..'), e não muda a classificação de um pack.json-root pack existente"
+echo "PASS: mep_lint.py accepts the Contra80s-shaped pack via the structural fallback (with path/depth info), rejects the ambiguous two-subfolder pack, rejects a malformed pack.json discovered via the fallback, rejects sections.textures.path==\"\" with a broken hires.txt under the fallback, rejects a broken legacy hires.txt loose at the fallback root, rejects a zip-slip-shaped candidate ('..'), and does not change the classification of an existing pack.json-root pack"

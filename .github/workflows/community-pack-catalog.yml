@@ -1,21 +1,21 @@
 name: Community pack catalog
 
-# Regenera docs/community-packs.md a partir do board "MesenCE Community
-# Packs" (Project 3, owner sbihaiko, node id PVT_kwHOB1MsbM4BhjpN).
+# Regenerates docs/community-packs.md from the "MesenCE Community
+# Packs" board (Project 3, owner sbihaiko, node id PVT_kwHOB1MsbM4BhjpN).
 #
-# Trigger: só workflow_dispatch neste arquivo. community-pack-validate.yml
-# também dispara este workflow (via `gh workflow run community-pack-catalog.yml`)
-# quando o veredito final é um dos dois estados "Aceito*" — essa chamada
-# vive no arquivo do workflow reutilizável, não aqui.
+# Trigger: workflow_dispatch only in this file. community-pack-validate.yml
+# also triggers this workflow (via `gh workflow run community-pack-catalog.yml`)
+# when the final verdict is one of the two "Aceito*" (accepted) states — that
+# call lives in the reusable workflow's file, not here.
 #
-# `gh project item-list` (usado por scripts/generate_community_pack_catalog.py)
-# exige Projects v2 read; o GITHUB_TOKEN padrão não enxerga Projects v2 num
-# repo pessoal, então este job precisa de um PAT clássico com escopos
-# `repo` + `project` + `read:org` (o `read:org` também é exigido pelos
-# comandos `gh project` para resolver o tipo do owner mesmo em projeto
-# pessoal — confirmado ao vivo via falha "unknown owner type" sem ele)
-# configurado manualmente como secret do repo (nome exato: `PROJECT_PAT`).
-# Esse secret não é criado por este workflow nem por nenhuma automação.
+# `gh project item-list` (used by scripts/generate_community_pack_catalog.py)
+# requires Projects v2 read; the default GITHUB_TOKEN can't see Projects v2 in
+# a personal repo, so this job needs a classic PAT with `repo` + `project` +
+# `read:org` scopes (`read:org` is also required by `gh project` commands to
+# resolve the owner type even for a personal project — confirmed live via an
+# "unknown owner type" failure without it) configured manually as a repo
+# secret (exact name: `PROJECT_PAT`).
+# This secret is not created by this workflow nor by any automation.
 on:
   workflow_dispatch:
 
@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet -- docs/community-packs.md; then
-            echo "docs/community-packs.md sem mudanças, nada a commitar."
+            echo "docs/community-packs.md unchanged, nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"

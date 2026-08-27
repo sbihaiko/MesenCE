@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""generate_community_pack_catalog.py — regenera docs/community-packs.md.
+"""generate_community_pack_catalog.py — regenerates docs/community-packs.md.
 
-Lê os itens aceitos do board "MesenCE Community Packs" (Project 3, owner
-sbihaiko, node id PVT_kwHOB1MsbM4BhjpN) via `gh project item-list` e, para
-cada issue de origem, busca autor/data/console/reações via `gh issue view`.
-Reescreve docs/community-packs.md com uma tabela link/jogo/console/autor/
-categoria/data e uma seção "Mais populares" ordenada por reação 👍 — um
-proxy de popularidade, não uma métrica real de uso (nenhuma telemetria é
-implementada aqui ou em nenhum outro lugar deste repositório).
+Reads the accepted items from the "MesenCE Community Packs" board (Project
+3, owner sbihaiko, node id PVT_kwHOB1MsbM4BhjpN) via `gh project item-list`
+and, for each source issue, fetches author/date/console/reactions via
+`gh issue view`. Rewrites docs/community-packs.md with a
+link/game/console/author/category/date table and a "Most popular" section
+ranked by 👍 reactions — a popularity proxy, not a real usage metric (no
+telemetry is implemented here or anywhere else in this repository).
 
-stdlib apenas (subprocess + json), no estilo de scripts/report-bug.sh e
+stdlib only (subprocess + json), in the style of scripts/report-bug.sh and
 scripts/mep_lint.py.
 
-Uso: python3 scripts/generate_community_pack_catalog.py
+Usage: python3 scripts/generate_community_pack_catalog.py
 """
 import json
 import re
@@ -32,31 +32,32 @@ TABLE_SEP = "|---|---|---|---|---|---|"
 
 
 def run_gh(args):
-    """Executa `gh` e devolve stdout; stderr/erro propagam para o log do job."""
+    """Runs `gh` and returns stdout; stderr/error propagate to the job log."""
     result = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
     return result.stdout
 
 
 def fetch_accepted_items():
-    """Lista os itens do Project 3 com Status num dos dois estados "Aceito*".
+    """Lists the Project 3 items whose Status is one of the two "Aceito*"
+    states.
 
-    Provenance note (confirmado ao vivo nesta sessão, gh 2.83.1):
-    `gh project field-list 3 --owner sbihaiko --format json` CONFIRMA o
-    field id de Status (PVTSSF_lAHOB1MsbM4BhjpNzhge86c, com as 5 opções do
-    task) e o de Pack Hash (PVTF_lAHOB1MsbM4BhjpNzhge9Is) contra a API real
-    do GitHub. Já os nomes de chave por item de `gh project item-list 3
-    --owner sbihaiko --format json` permanecem um COVERAGE GAP aberto e
-    auditado: essa mesma chamada, em sessão real, devolveu
-    `{"items":[],"totalCount":0}` — o Project está com zero itens no
-    momento da escrita deste script, então não existe exemplo populado para
-    confirmar esses nomes de chave contra dado real. O gap está no próprio
-    datastore ao vivo (nenhum item populado existe ainda), não apenas numa
-    visão em cache, e não é apresentado aqui como fato assentado — qualquer
-    conclusão negativa/de ausência de chave abaixo é qualificada por esse
-    gap. `extract_row` usa lookups defensivos e não-crash (`dict.get`) em
-    vez de indexação direta, para que um schema real diferente do esperado
-    falhe visivelmente (linha com placeholders) em vez de derrubar o script
-    ou arquivar um item errado silenciosamente.
+    Provenance note (confirmed live in this session, gh 2.83.1):
+    `gh project field-list 3 --owner sbihaiko --format json` CONFIRMS the
+    Status field id (PVTSSF_lAHOB1MsbM4BhjpNzhge86c, with the task's 5
+    options) and the Pack Hash one (PVTF_lAHOB1MsbM4BhjpNzhge9Is) against
+    the real GitHub API. The per-item key names from `gh project item-list 3
+    --owner sbihaiko --format json`, however, remain an open, audited
+    COVERAGE GAP: that same call, in a real session, returned
+    `{"items":[],"totalCount":0}` — the Project has zero items at the time
+    this script was written, so there is no populated example to confirm
+    those key names against real data. The gap is in the live datastore
+    itself (no populated item exists yet), not just in a cached view, and is
+    not presented here as settled fact — any negative/absent-key conclusion
+    below is qualified by this gap. `extract_row` uses defensive,
+    non-crashing lookups (`dict.get`) instead of direct indexing, so that a
+    real schema different from the expected one fails visibly (a row with
+    placeholders) instead of taking down the script or silently filing the
+    wrong item.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])
@@ -64,26 +65,26 @@ def fetch_accepted_items():
 
 
 def _item_status(item):
-    """Lookup defensivo do Status do item (ver provenance note em fetch_accepted_items)."""
+    """Defensive lookup of the item's Status (see the provenance note in fetch_accepted_items)."""
     return item.get("status") or item.get("Status") or ""
 
 
 def _item_issue_number(item):
-    """Lookup defensivo do número da issue de origem, tentando os formatos plausíveis."""
+    """Defensive lookup of the source issue number, trying the plausible formats."""
     content = item.get("content") or {}
     return content.get("number") or item.get("number") or item.get("issue_number")
 
 
 def fetch_issue_details(issue_number):
-    """Busca autor/data/labels/reações da issue via `gh issue view`.
+    """Fetches the issue's author/date/labels/reactions via `gh issue view`.
 
-    Campo confirmado ao vivo nesta sessão: o nome de campo JSON correto é
-    `reactionGroups` (não `reactions` — `gh issue view --json reactions`
-    falha com "Unknown JSON field" no gh 2.83.1). Formato populado
-    confirmado ao vivo (reação de teste adicionada e removida via
-    `gh api graphql` addReaction/removeReaction nesta sessão):
-    `[{"content": "THUMBS_UP", "users": {"totalCount": N}}, ...]`, só com
-    grupos de contagem > 0; lista vazia quando não há reações.
+    Field confirmed live in this session: the correct JSON field name is
+    `reactionGroups` (not `reactions` — `gh issue view --json reactions`
+    fails with "Unknown JSON field" on gh 2.83.1). Populated format
+    confirmed live (a test reaction added and removed via `gh api graphql`
+    addReaction/removeReaction in this session):
+    `[{"content": "THUMBS_UP", "users": {"totalCount": N}}, ...]`, only with
+    count groups > 0; an empty list when there are no reactions.
     """
     raw = run_gh(["issue", "view", str(issue_number), "--repo", REPO,
                   "--json", "author,createdAt,title,labels,url,reactionGroups,body"])
@@ -125,7 +126,7 @@ def _escape_table_cell(value):
 
 
 def _thumbs_up_count(details):
-    """Soma defensiva de reações THUMBS_UP a partir de reactionGroups."""
+    """Defensive sum of THUMBS_UP reactions from reactionGroups."""
     for group in details.get("reactionGroups") or []:
         if group.get("content") == "THUMBS_UP":
             users = group.get("users") or {}
@@ -150,7 +151,7 @@ def _categoria_from_status(status):
 
 
 def build_row(item):
-    """Monta uma linha de catálogo combinando o item do Project e a issue."""
+    """Builds a catalog row combining the Project item and the issue."""
     issue_number = _item_issue_number(item)
     status = _item_status(item)
     if issue_number is None:

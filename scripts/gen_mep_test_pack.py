@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
-"""Gera packs MEP v1 de teste para uma ROM (F3.1 — validação headless).
+"""Generates test MEP v1 packs for a ROM (F3.1 — headless validation).
 
-Calcula o SHA-1 No-Intro da ROM (ADR-0039: .nes sem header iNES/trainer,
-SNES sem copier header, demais formatos arquivo inteiro) e escreve, na pasta
-EnhancementPacks/ indicada, os contêineres pedidos:
+Computes the ROM's No-Intro SHA-1 (ADR-0039: .nes without the iNES/trainer
+header, SNES without the copier header, other formats use the whole file)
+and writes, into the given EnhancementPacks/ folder, the requested
+containers:
 
-  dir       <out>/<name>/pack.json            (pack em diretório)
-  zip       <out>/<name>.zip                  (pack em zip, pack.json na raiz)
-  badhash   pack válido que NÃO casa (sha1 de zeros)
-  badjson   pack.json malformado (deve ser rejeitado com log)
-  slip      zip com entrada '../evil.txt' (deve ser rejeitado — zip-slip)
-  major     pack com "mep": "2.0.0" (major desconhecido — rejeitado)
+  dir       <out>/<name>/pack.json            (pack as a folder)
+  zip       <out>/<name>.zip                  (pack as a zip, pack.json at the root)
+  badhash   valid pack that does NOT match (all-zero sha1)
+  badjson   malformed pack.json (must be rejected with a log)
+  slip      zip with a '../evil.txt' entry (must be rejected — zip-slip)
+  major     pack with "mep": "2.0.0" (unknown major — rejected)
 
-Uso:
-  python3 scripts/gen_mep_test_pack.py <rom> <EnhancementPacks-dir> [kinds...] [--textures=<pasta>]
-  (sem kinds: gera dir e zip; --textures copia uma pasta de HD pack real —
-  ex. a saída de `headless_record ... hdpack` — para textures/ em vez do
-  hires.txt vazio, permitindo o screenshot 1:1 da F3.2)
+Usage:
+  python3 scripts/gen_mep_test_pack.py <rom> <EnhancementPacks-dir> [kinds...] [--textures=<folder>]
+  (no kinds: generates dir and zip; --textures copies a real HD pack folder —
+  e.g. the output of `headless_record ... hdpack` — into textures/ instead of
+  the empty hires.txt, enabling F3.2's 1:1 screenshot)
 
-Imprime o SHA-1 No-Intro calculado na saída padrão (para comparar com o
-"[MEP] ... matches ROM sha1 ..." do log do core).
+Prints the computed No-Intro SHA-1 to stdout (to compare against the core
+log's "[MEP] ... matches ROM sha1 ...").
 """
 import hashlib
 import json
@@ -71,7 +72,7 @@ CONTENT = {
 }
 
 
-TEXTURES_SRC = None  # pasta de HD pack real a copiar para textures/
+TEXTURES_SRC = None  # real HD pack folder to copy into textures/
 
 
 def write_dir(root: Path, meta: dict, content=CONTENT):
@@ -141,9 +142,9 @@ def main() -> int:
         elif kind == "major":
             write_dir(out / "mep-test-major", pack_json("MEP v2", system, sha1, mep="2.0.0"))
         else:
-            print(f"kind desconhecido: {kind}")
+            print(f"unknown kind: {kind}")
             return 1
-        print(f"gerado: {kind}")
+        print(f"generated: {kind}")
     return 0
 
 

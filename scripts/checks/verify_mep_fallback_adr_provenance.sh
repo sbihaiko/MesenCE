@@ -18,53 +18,53 @@ fail() {
   exit 1
 }
 
-[ -e "${ADR_GLOB[0]}" ] || fail "nenhum arquivo .dev-squad/adr/0120-*.md encontrado"
-[ "${#ADR_GLOB[@]}" -eq 1 ] || fail "esperava exatamente 1 arquivo 0120-*.md, achou ${#ADR_GLOB[@]}: ${ADR_GLOB[*]}"
+[ -e "${ADR_GLOB[0]}" ] || fail "no .dev-squad/adr/0120-*.md file found"
+[ "${#ADR_GLOB[@]}" -eq 1 ] || fail "expected exactly 1 file matching 0120-*.md, found ${#ADR_GLOB[@]}: ${ADR_GLOB[*]}"
 
 ADR="${ADR_GLOB[0]}"
 
 require_i() {
   # require_i <description> <ERE pattern>  — case-insensitive extended regex
   local desc="$1" pattern="$2"
-  grep -qiE "$pattern" "$ADR" || fail "$desc: padrão '$pattern' não encontrado em $ADR"
+  grep -qiE "$pattern" "$ADR" || fail "$desc: pattern '$pattern' not found in $ADR"
 }
 
 require_f() {
   # require_f <description> <fixed string>
   local desc="$1" pattern="$2"
-  grep -qF "$pattern" "$ADR" || fail "$desc: string '$pattern' não encontrada em $ADR"
+  grep -qF "$pattern" "$ADR" || fail "$desc: string '$pattern' not found in $ADR"
 }
 
 # --- Provenance of the motivating claim ------------------------------------
-require_i "menciona TasticHacks" "TasticHacks"
-require_i "menciona Contra80s" "Contra80s"
-require_i "cita a issue #3 e/ou a fonte de release" "issue #?3|issues/3"
+require_i "mentions TasticHacks" "TasticHacks"
+require_i "mentions Contra80s" "Contra80s"
+require_i "cites issue #3 and/or the release source" "issue #?3|issues/3"
 grep -qiE "github\\.com/TasticHacks/Contra80s|releases/download" "$ADR" \
-  || fail "não cita a fonte de release do pack (URL do GitHub Releases)"
+  || fail "does not cite the pack's release source (GitHub Releases URL)"
 
 # --- Independently verified vs. not independently re-verified --------------
-require_i "marca algo como independentemente verificado" \
+require_i "marks something as independently verified" \
   "independently verified"
-require_i "marca algo como NÃO re-verificado" \
+require_i "marks something as NOT re-verified" \
   "not.*(independently )?(re-)?verified|not.*independently.*re-inspected|was not independently"
 
 # The specific fact that WAS verified: PrepareZip / DetectConventionLayout
 # require an exact root layout with no recursion.
-require_f "menciona PrepareZip" "PrepareZip"
-require_f "menciona DetectConventionLayout" "DetectConventionLayout"
-require_i "afirma 'no recursion' para o comportamento atual" "no recursion"
-require_i "cita o arquivo MepPackManager.cpp como fonte" "MepPackManager\\.cpp"
-require_i "cita o arquivo MepPack.cpp como fonte" "MepPack\\.cpp"
+require_f "mentions PrepareZip" "PrepareZip"
+require_f "mentions DetectConventionLayout" "DetectConventionLayout"
+require_i "states 'no recursion' for the current behavior" "no recursion"
+require_i "cites MepPackManager.cpp as the source" "MepPackManager\\.cpp"
+require_i "cites MepPack.cpp as the source" "MepPack\\.cpp"
 
 # The specific fact that was NOT independently re-verified: the real
 # published zip's byte-for-byte structure.
 grep -qiE "byte-for-byte|actual (internal )?structure|real.*zip.*structure" "$ADR" \
-  || fail "não menciona a estrutura byte-a-byte do zip real como não re-verificada"
+  || fail "does not mention the real zip's byte-for-byte structure as not re-verified"
 
 # --- The "would not load today" claim must be qualified, not asserted flat -
 if grep -qiE "would not load (today|as-is)" "$ADR"; then
   grep -qiE "qualif|coverage gap|gap\\)|described.*not independently|not.*independently re-inspected" "$ADR" \
-    || fail "a afirmação 'would not load today' aparece sem qualificação explícita pela lacuna de verificação"
+    || fail "the 'would not load today' claim appears without an explicit qualification for the verification gap"
 fi
 
-echo "PASS: $ADR cita a proveniência TasticHacks/Contra80s (issue #3 / release), distingue o que foi verificado diretamente no código atual (PrepareZip/DetectConventionLayout sem recursão) do que não foi re-verificado (estrutura byte-a-byte do zip real) e qualifica qualquer afirmação de que o pack 'não carregaria hoje' por essa lacuna"
+echo "PASS: $ADR cites the TasticHacks/Contra80s provenance (issue #3 / release), distinguishes what was verified directly against the current code (PrepareZip/DetectConventionLayout with no recursion) from what was not re-verified (the real zip's byte-for-byte structure), and qualifies any claim that the pack 'would not load today' by that gap"

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Verifica .github/ISSUE_TEMPLATE/community-pack.yml (AC-1).
+"""Verifies .github/ISSUE_TEMPLATE/community-pack.yml (AC-1).
 
-Confere que o arquivo é um GitHub Issue Form (não issue de texto livre) com:
-- campo de link do pack (URL)
-- campo jogo/ROM alvo + região
-- dropdown de console (NES/SNES/GB/GBC/SMS/outro)
-- campo autor/créditos
-- checkbox obrigatório de confirmação de direitos
-- campo de descrição opcional
+Confirms that the file is a GitHub Issue Form (not a free-text issue) with:
+- pack link field (URL)
+- target game/ROM + region field
+- console dropdown (NES/SNES/GB/GBC/SMS/Other)
+- author/credits field
+- mandatory rights-confirmation checkbox
+- optional description field
 - labels: [community-pack]
-- link para docs/hd-pack-authoring.md
+- link to docs/hd-pack-authoring.md
 
-Sem dependências além de PyYAML (já usado por outros checks do repo).
+No dependencies beyond PyYAML (already used by other checks in the repo).
 """
 import pathlib
 import sys
@@ -21,7 +21,7 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "community-pack.yml"
 
-CONSOLE_OPTIONS = {"nes", "snes", "gb", "gbc", "sms", "outro"}
+CONSOLE_OPTIONS = {"nes", "snes", "gb", "gbc", "sms", "other"}
 
 
 def fail(msg):
@@ -31,28 +31,28 @@ def fail(msg):
 
 def load_template():
     if not TEMPLATE_PATH.is_file():
-        fail(f"arquivo não encontrado: {TEMPLATE_PATH}")
+        fail(f"file not found: {TEMPLATE_PATH}")
     text = TEMPLATE_PATH.read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        fail(f"YAML inválido em {TEMPLATE_PATH}: {exc}")
+        fail(f"invalid YAML in {TEMPLATE_PATH}: {exc}")
     if not isinstance(data, dict):
-        fail("documento raiz não é um mapeamento YAML")
+        fail("root document is not a YAML mapping")
     return data, text
 
 
 def check_top_level(data):
     if "body" not in data or not isinstance(data["body"], list):
-        fail("chave 'body' ausente ou não é uma lista (não é um Issue Form)")
+        fail("'body' key missing or not a list (not an Issue Form)")
     labels = data.get("labels")
     if labels != ["community-pack"]:
-        fail(f"labels deve ser ['community-pack'], encontrado: {labels!r}")
+        fail(f"labels must be ['community-pack'], found: {labels!r}")
 
 
 def check_doc_link(text):
     if "docs/hd-pack-authoring.md" not in text:
-        fail("nenhum link para docs/hd-pack-authoring.md encontrado no template")
+        fail("no link to docs/hd-pack-authoring.md found in the template")
 
 
 def find_fields(body):
@@ -79,9 +79,9 @@ def check_pack_link(inputs):
         or "link" in str(e.get("id", "")).lower()
     ]
     if not matches:
-        fail("nenhum campo 'input' de link do pack encontrado")
+        fail("no pack-link 'input' field found")
     if not any(is_required(e) for e in matches):
-        fail("campo de link do pack não é obrigatório")
+        fail("pack-link field is not required")
 
 
 def check_rom_target(inputs):
@@ -89,53 +89,53 @@ def check_rom_target(inputs):
         e
         for e in inputs
         if "rom" in str(e.get("id", "")).lower()
-        or "jogo" in str(e.get("attributes", {}).get("label", "")).lower()
+        or "game" in str(e.get("attributes", {}).get("label", "")).lower()
     ]
     if not matches:
-        fail("nenhum campo 'input' de jogo/ROM alvo + região encontrado")
+        fail("no target game/ROM + region 'input' field found")
 
 
 def check_console_dropdown(dropdowns):
     if not dropdowns:
-        fail("nenhum campo 'dropdown' de console encontrado")
+        fail("no console 'dropdown' field found")
     for dropdown in dropdowns:
         options = dropdown.get("attributes", {}).get("options") or []
         normalized = {str(o).strip().lower() for o in options}
         if CONSOLE_OPTIONS.issubset(normalized):
             return
-    fail(f"nenhum dropdown cobre as opções esperadas {sorted(CONSOLE_OPTIONS)}")
+    fail(f"no dropdown covers the expected options {sorted(CONSOLE_OPTIONS)}")
 
 
 def check_author_field(inputs):
     matches = [
         e
         for e in inputs
-        if "autor" in str(e.get("id", "")).lower()
+        if "author" in str(e.get("id", "")).lower()
         or "credit" in str(e.get("id", "")).lower()
     ]
     if not matches:
-        fail("nenhum campo 'input' de autor/créditos encontrado")
+        fail("no author/credits 'input' field found")
 
 
 def check_rights_checkbox(checkboxes):
     if not checkboxes:
-        fail("nenhum campo 'checkboxes' encontrado")
+        fail("no 'checkboxes' field found")
     for cb in checkboxes:
         options = cb.get("attributes", {}).get("options") or []
         for opt in options:
             if isinstance(opt, dict) and opt.get("required") is True:
                 return
-    fail("nenhuma opção de checkbox obrigatória de confirmação de direitos encontrada")
+    fail("no mandatory rights-confirmation checkbox option found")
 
 
 def check_optional_description(textareas):
     matches = [e for e in textareas if "descri" in str(e.get("id", "")).lower()]
     if not matches:
-        fail("nenhum campo 'textarea' de descrição encontrado")
+        fail("no description 'textarea' field found")
     for textarea in matches:
         validations = textarea.get("validations") or {}
         if validations.get("required") is True:
-            fail("campo de descrição deveria ser opcional, mas está marcado required")
+            fail("description field should be optional, but is marked required")
 
 
 def main():
@@ -151,7 +151,7 @@ def main():
     check_rights_checkbox(by_type.get("checkboxes", []))
     check_optional_description(by_type.get("textarea", []))
 
-    print("PASS: community-pack.yml é um Issue Form válido com todos os campos exigidos")
+    print("PASS: community-pack.yml is a valid Issue Form with all required fields")
     return 0
 
 

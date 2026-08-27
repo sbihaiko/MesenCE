@@ -1,42 +1,42 @@
 # .github/workflows/community-pack-drift-check.yml
 #
-# Verificação diária de drift dos packs comunitários já aceitos no Project 3
+# Daily drift check for community packs already accepted in Project 3
 # ("MesenCE Community Packs", node id PVT_kwHOB1MsbM4BhjpN, owner sbihaiko).
-# Para cada item aceito, re-baixa o `pack_url` guardado e recalcula o hash com
-# `curl`+`sha256sum` (sem chamar o Claude Code Action nesta pré-checagem); só
-# quando o hash mudou é que este workflow comenta na issue e chama o workflow
-# reutilizável `community-pack-validate.yml` com `mode: revalidate`.
+# For each accepted item, re-downloads the stored `pack_url` and recomputes
+# the hash with `curl`+`sha256sum` (without calling the Claude Code Action in
+# this pre-check); only when the hash changed does this workflow comment on
+# the issue and call the reusable `community-pack-validate.yml` workflow with
+# `mode: revalidate`.
 #
-# O `GITHUB_TOKEN` padrão do Actions NÃO tem permissão de leitura/escrita em
-# Projects v2 numa conta pessoal — este workflow precisa de um PAT clássico
-# com escopos `repo` + `project` + `read:org` (o `read:org` também é
-# exigido pelos comandos `gh project` para resolver o tipo do owner mesmo
-# em projeto pessoal — confirmado ao vivo via falha "unknown owner type"
-# sem ele) fornecido manualmente no secret de repositório `PROJECT_PAT`
-# (mesma exigência documentada em `community-pack-validate.yml`; este
-# workflow não cria esse secret, apenas o consome).
+# The default Actions `GITHUB_TOKEN` does NOT have read/write permission on
+# Projects v2 in a personal account — this workflow needs a classic PAT with
+# `repo` + `project` + `read:org` scopes (`read:org` is also required by
+# `gh project` commands to resolve the owner type even for a personal
+# project — confirmed live via an "unknown owner type" failure without it)
+# supplied manually in the repository secret `PROJECT_PAT` (same requirement
+# documented in `community-pack-validate.yml`; this workflow does not create
+# that secret, it only consumes it).
 #
-# --- Proveniência gh project (ver AC-5) -------------------------------------
-# CONFIRMADO ao vivo, fonte primária, na sessão de Scout deste run
+# --- gh project provenance (see AC-5) ---------------------------------------
+# CONFIRMED live, primary source, in this run's Scout session
 # (`gh project field-list 3 --owner sbihaiko --format json`):
-#   - campo Status:    PVTSSF_lAHOB1MsbM4BhjpNzhge86c
-#     opções: 5173b5cd (Novo envio), 51951f52 (Em validação),
-#             227e4623 (Inválido), 39e4f3a1 (Aceito parcial HD Mesen),
-#             cd763737 (Aceito MEP completo)
-#   - campo Pack Hash: PVTF_lAHOB1MsbM4BhjpNzhge9Is
+#   - Status field:    PVTSSF_lAHOB1MsbM4BhjpNzhge86c
+#     options: 5173b5cd (Novo envio), 51951f52 (Em validação),
+#              227e4623 (Inválido), 39e4f3a1 (Aceito parcial HD Mesen),
+#              cd763737 (Aceito MEP completo)
+#   - Pack Hash field: PVTF_lAHOB1MsbM4BhjpNzhge9Is
 #
-# NÃO CONFIRMADO - gap de cobertura explícito, não uma suposição apresentada
-# como fato: `gh project item-list 3 --owner sbihaiko --format json`, na
-# mesma sessão, devolveu `{"items":[],"totalCount":0}` - o Project 3 tinha
-# ZERO itens. Os nomes de chave JSON por item (como o valor de Status
-# aparece aninhado, como o texto de Pack Hash aparece, como o número da
-# issue de origem aparece) nunca foram observados em dado real - o gap está
-# no datastore em si (não existe item populado para inspecionar), não
-# apenas numa view em cache. Qualquer conclusão de "esta chave não existe"
-# a seguir é necessariamente provisória, não definitiva, e o parsing abaixo
-# é propositalmente defensivo (múltiplas chaves candidatas, fallback `//
-# empty`, nunca indexação direta) para falhar de forma visível - não
-# silenciosa - se o esquema real divergir das chaves tentadas aqui.
+# UNCONFIRMED - an explicit coverage gap, not an assumption presented as
+# fact: `gh project item-list 3 --owner sbihaiko --format json`, in the same
+# session, returned `{"items":[],"totalCount":0}` - Project 3 had ZERO
+# items. The per-item JSON key names (how the Status value appears nested,
+# how the Pack Hash text appears, how the source issue number appears) were
+# never observed against real data - the gap is in the datastore itself (no
+# populated item exists to inspect), not just in a cached view. Any "this key
+# doesn't exist" conclusion below is necessarily provisional, not definitive,
+# and the parsing below is deliberately defensive (multiple candidate keys,
+# `// empty` fallback, never direct indexing) so it fails visibly - not
+# silently - if the real schema diverges from the keys tried here.
 # -----------------------------------------------------------------------------
 
 name: Community Pack Drift Check
@@ -72,10 +72,10 @@ jobs:
           set -euo pipefail
           mismatched="[]"
           while IFS= read -r item; do
-            # Chaves candidatas defensivas: o esquema por item nunca foi
-            # observado em dado real (ver bloco de proveniência acima), então
-            # tentamos as variações plausíveis com fallback `//` em vez de
-            # indexar direto - uma chave ausente vira string vazia, não crash.
+            # Defensive candidate keys: the per-item schema was never
+            # observed against real data (see the provenance block above), so
+            # we try the plausible variants with a `//` fallback instead of
+            # direct indexing - a missing key becomes an empty string, not a crash.
             status=$(jq -r '.status // .["Status"] // empty' <<<"$item")
             case "$status" in
               "$STATUS_ACCEPTED_PARTIAL"|"$STATUS_ACCEPTED_FULL") ;;
@@ -85,14 +85,14 @@ jobs:
             issue_number=$(jq -r '.content.number // .number // empty' <<<"$item")
             stored_hash=$(jq -r '.["Pack Hash"] // .packHash // .pack_hash // empty' <<<"$item")
             if [ -z "$issue_number" ] || [ -z "$stored_hash" ]; then
-              echo "::warning::item sem issue_number ou Pack Hash reconhecível nas chaves candidatas - pulando defensivamente"
+              echo "::warning::item has no recognizable issue_number or Pack Hash among the candidate keys - skipping defensively"
               continue
             fi
 
             body=$(gh issue view "$issue_number" --repo "$REPO" --json body -q '.body')
             pack_url=$(printf '%s\n' "$body" | grep -Eo 'https?://[^ ")]+' | head -n1 || true)
             if [ -z "$pack_url" ]; then
-              echo "::warning::issue #$issue_number sem URL de pack detectável no corpo - pulando"
+              echo "::warning::issue #$issue_number has no detectable pack URL in the body - skipping"
               continue
             fi
 
@@ -112,7 +112,7 @@ jobs:
             fresh_hash=$(sha256sum drift_download.bin | cut -d' ' -f1)
             if [ "$fresh_hash" != "$stored_hash" ]; then
               gh issue comment "$issue_number" --repo "$REPO" \
-                --body "o conteúdo do pack mudou desde a última validação — revalidando automaticamente"
+                --body "the pack's content changed since the last validation — revalidating automatically"
               mismatched=$(jq -c --arg n "$issue_number" --arg u "$pack_url" \
                 '. + [{"issue_number": ($n | tonumber), "pack_url": $u}]' <<<"$mismatched")
             fi

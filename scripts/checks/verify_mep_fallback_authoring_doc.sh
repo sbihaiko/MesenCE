@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Verifica docs/hd-pack-authoring.md (AC-10): documenta, para autores, o
-# caminho de compatibilidade de última prioridade para zips de release que
-# embrulham o pack numa subpasta/pasta de promoção (o fallback de MEP-v1.md
-# §2.1 regra 9).
+# Verifies docs/hd-pack-authoring.md (AC-10): documents, for pack authors,
+# the last-priority compatibility path for release zips that wrap the pack
+# in a subfolder/promo folder (the MEP-v1.md §2.1 rule 9 fallback).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,32 +12,32 @@ fail() {
   exit 1
 }
 
-[ -f "$DOC" ] || fail "arquivo não encontrado: $DOC"
+[ -f "$DOC" ] || fail "file not found: $DOC"
 
 grep -qi 'wrapper\|promo' "$DOC" \
-  || fail "$DOC não menciona pasta de wrapper/promoção em zips de release"
+  || fail "$DOC does not mention a wrapper/promo folder in release zips"
 
-grep -qi 'subpasta' "$DOC" \
-  || fail "$DOC não menciona a busca por subpasta (fallback)"
+grep -qi 'subfolder' "$DOC" \
+  || fail "$DOC does not mention the subfolder search (fallback)"
 
 grep -q 'MEP-v1.md' "$DOC" \
-  || fail "$DOC não referencia MEP-v1.md"
+  || fail "$DOC does not reference MEP-v1.md"
 
 grep -q '§2.1' "$DOC" \
-  || fail "$DOC não referencia a seção §2.1 de MEP-v1.md (onde o fallback é normativo)"
+  || fail "$DOC does not reference MEP-v1.md's §2.1 section (where the fallback is normative)"
 
-grep -qi 'última prioridade\|last.priority\|último recurso' "$DOC" \
-  || fail "$DOC não deixa claro que o fallback é de última prioridade/último recurso"
+grep -qi 'last-resort\|last-priority\|last priority' "$DOC" \
+  || fail "$DOC does not make clear that the fallback is last-priority/last-resort"
 
 grep -qi 'ambigu' "$DOC" \
-  || fail "$DOC não menciona a rejeição por ambiguidade (mais de uma subpasta candidata)"
+  || fail "$DOC does not mention rejection on ambiguity (more than one candidate subfolder)"
 
 grep -qi 'mep_lint.py' "$DOC" \
-  || fail "$DOC não menciona que a triagem automática (mep_lint.py) também aplica o fallback"
+  || fail "$DOC does not mention that automatic triage (mep_lint.py) also applies the fallback"
 
-# A recomendação continua sendo evitar depender do fallback, preferindo as
-# convenções de primeira classe (pack.json na raiz / zip nomeado como a ROM).
-grep -qi 'pack.json na raiz' "$DOC" \
-  || fail "$DOC não recomenda pack.json na raiz como alternativa preferida ao fallback"
+# The recommendation remains to avoid depending on the fallback, preferring
+# the first-class conventions (pack.json at the root / zip named as the ROM).
+grep -qi 'pack.json at the.*root\|pack.json.*zip root' "$DOC" \
+  || fail "$DOC does not recommend pack.json at the root as the preferred alternative to the fallback"
 
-echo "PASS: docs/hd-pack-authoring.md documenta o caminho de compatibilidade de wrapper/promoção apontando para MEP-v1.md §2.1"
+echo "PASS: docs/hd-pack-authoring.md documents the wrapper/promo compatibility path pointing to MEP-v1.md §2.1"

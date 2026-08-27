@@ -3,6 +3,11 @@
 # section byte-for-byte untouched and gains a new "Triagem de Community
 # HD/MEP Packs (GitHub Project)" section documenting the second, separate
 # board/flow. No mocks: this reads the real CLAUDE.md from the repo root.
+#
+# NOTE: the reference heading/body strings below are matched verbatim
+# against a specific historical (pt-BR) snapshot of CLAUDE.md. They are
+# intentionally left untranslated — see the translation task's final
+# report for why this check is currently stale against the real file.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,15 +21,15 @@ fail() {
   exit 1
 }
 
-[[ -f "$CLAUDE_MD" ]] || fail "CLAUDE.md não encontrado em $CLAUDE_MD"
+[[ -f "$CLAUDE_MD" ]] || fail "CLAUDE.md not found at $CLAUDE_MD"
 
 # Exactly one occurrence of each heading: no duplication of the old section,
 # and the new section must actually be present.
 orig_count=$(grep -Fc "$ORIG_HEADING" "$CLAUDE_MD")
-[[ "$orig_count" -eq 1 ]] || fail "esperava 1 ocorrência de '$ORIG_HEADING', achou $orig_count"
+[[ "$orig_count" -eq 1 ]] || fail "expected 1 occurrence of '$ORIG_HEADING', found $orig_count"
 
 new_count=$(grep -Fc "$NEW_HEADING" "$CLAUDE_MD")
-[[ "$new_count" -eq 1 ]] || fail "esperava 1 ocorrência de '$NEW_HEADING', achou $new_count"
+[[ "$new_count" -eq 1 ]] || fail "expected 1 occurrence of '$NEW_HEADING', found $new_count"
 
 # Byte-for-byte check: the original file content (title + bug-tracker
 # section) must be an exact, untouched prefix of the current CLAUDE.md.
@@ -70,21 +75,21 @@ EOF_REF
 
 ref_len=$(wc -c < "$REF_FILE" | tr -d '[:space:]')
 actual_len=$(wc -c < "$CLAUDE_MD" | tr -d '[:space:]')
-[[ "$actual_len" -gt "$ref_len" ]] || fail "CLAUDE.md não cresceu — nova seção não foi anexada"
+[[ "$actual_len" -gt "$ref_len" ]] || fail "CLAUDE.md did not grow — new section was not appended"
 
 ACTUAL_PREFIX="$(mktemp)"
 head -c "$ref_len" "$CLAUDE_MD" > "$ACTUAL_PREFIX"
 
 cmp -s "$REF_FILE" "$ACTUAL_PREFIX" || {
-  echo "--- diff (esperado vs. seção original atual) ---" >&2
+  echo "--- diff (expected vs. current original section) ---" >&2
   diff -u "$REF_FILE" "$ACTUAL_PREFIX" >&2 || true
-  fail "a seção 'Rastreamento de bugs (GitHub Project)' foi alterada"
+  fail "the 'Rastreamento de bugs (GitHub Project)' section was changed"
 }
 
 # The new heading must appear strictly after the untouched original block,
 # i.e. it was appended, not spliced into the middle of the old section.
 tail_from_ref_len="$(tail -c +"$((ref_len + 1))" "$CLAUDE_MD")"
 grep -Fq "$NEW_HEADING" <<< "$tail_from_ref_len" \
-  || fail "'$NEW_HEADING' não aparece depois da seção original preservada"
+  || fail "'$NEW_HEADING' does not appear after the preserved original section"
 
-echo "PASS: CLAUDE.md mantém a seção de bugs intacta e contém a nova seção de triagem de packs"
+echo "PASS: CLAUDE.md keeps the bug-tracking section intact and contains the new pack-triage section"

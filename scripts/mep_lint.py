@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
-"""mep_lint — validação offline de packs (F5.1, docs/roadmap/plano-execucao-F5.md).
+"""mep_lint — offline pack validation (F5.1, docs/roadmap/plano-execucao-F5.md).
 
-Aceita um diretório ou um .zip e verifica, sem rodar o emulador:
+Accepts a directory or a .zip and checks, without running the emulator:
 
-  * pack.json (opcional na convenção de pasta — ADR-0049): campos MUST da spec
-    MEP-v1, semver, hashes, paths seguros, patches[] (ADR-0044);
-  * layout da convenção: textures/hires.txt, audio/hires.txt, synth/preset.cfg
-    e as mesmas camadas em auto/;
-  * hires.txt NES (HDNes): tags conhecidas, arquivos referenciados existentes
-    (<img>, <background>, <bgm>, <sfx>, <patch>), <condition> com tipo válido,
-    coordenadas de *AtPosition dentro de 256×240, offsets de *Nearby dentro do
-    range da tela (o off-by-one que derrubava o emulador é reportado aqui),
-    chaves <tile> duplicadas, PNG com dimensão múltipla do scale;
-  * hires.txt GB/SMS (<ver>200): <system>, <img> existentes, <tile> com 7 campos,
-    blobs hex, chaves duplicadas.
+  * pack.json (optional under the folder convention — ADR-0049): MUST fields
+    of the MEP-v1 spec, semver, hashes, safe paths, patches[] (ADR-0044);
+  * convention layout: textures/hires.txt, audio/hires.txt, synth/preset.cfg
+    and the same layers under auto/;
+  * NES hires.txt (HDNes): known tags, referenced files that exist
+    (<img>, <background>, <bgm>, <sfx>, <patch>), <condition> with a valid
+    type, *AtPosition coordinates within 256x240, *Nearby offsets within the
+    screen range (the off-by-one that used to crash the emulator is reported
+    here), duplicate <tile> keys, PNG dimensions that are a multiple of scale;
+  * GB/SMS hires.txt (<ver>200): <system>, existing <img>, <tile> with 7
+    fields, hex blobs, duplicate keys.
 
-Saída: uma linha por achado (`error|warning|info  arquivo:linha  mensagem`) e um
-resumo; exit code 1 quando há erro, 0 caso contrário. O texto de cada achado é
-sempre em en-US (Issues/comentários no GitHub são en-US per CLAUDE.md), mesmo
-com o resto deste arquivo documentado em pt-br.
+Output: one line per finding (`error|warning|info  file:line  message`) and a
+summary; exit code 1 when there is an error, 0 otherwise. Each finding's text
+is always in en-US (GitHub Issues/comments are en-US per CLAUDE.md).
 
-Uso: python3 scripts/mep_lint.py <pasta-ou-zip> [rom_name] [--quiet]
-  rom_name (opcional): nome do ROM alvo declarado pelo submitter (ex.: "Contra
-  (U) [!]"). Quando presente, habilita o fallback por nome de ROM (ADR-0120
-  §3's named follow-up) além do fallback estrutural — ver
+Usage: python3 scripts/mep_lint.py <folder-or-zip> [rom_name] [--quiet]
+  rom_name (optional): target ROM name declared by the submitter (e.g.
+  "Contra (U) [!]"). When present, enables the ROM-name fallback (ADR-0120
+  §3's named follow-up) in addition to the structural fallback — see
   find_fallback_subfolder_by_name.
+
+  Last resort (issue #19): if no convention or fallback finds anything and
+  the container has exactly one .zip directly at its root, that .zip is
+  unpacked in memory and discovery runs again from scratch against its
+  contents — see find_top_level_nested_zip/discover_sections.
 """
+import io
 import json
 import re
 import struct
@@ -85,22 +90,38 @@ HEX40 = re.compile(r"^[0-9A-Fa-f]{40}$")
 
 
 class Source:
-    """Uniformiza pasta e zip: listagem, leitura de bytes e texto."""
+    """Uniformizes folder and zip: listing, byte and text reading. Also
+    accepts a .zip already in memory via from_zip_bytes, without writing
+    anything to disk — used by the ADR-0120 last resort that unpacks a .zip
+    nested inside the downloaded container (issue #19: a real pack wrapped
+    one level deeper, e.g. inside a Google Drive zip alongside unrelated
+    bonus content)."""
 
     def __init__(self, path: Path):
         self.path = path
         self.zip = zipfile.ZipFile(path) if path.is_file() else None
+        self._init_names()
+
+    @classmethod
+    def from_zip_bytes(cls, data: bytes, label: str):
+        src = cls.__new__(cls)
+        src.path = label
+        src.zip = zipfile.ZipFile(io.BytesIO(data))
+        src._init_names()
+        return src
+
+    def _init_names(self):
         if self.zip:
             self.names = {n.replace("\\", "/") for n in self.zip.namelist()}
         else:
-            self.names = {p.relative_to(path).as_posix() for p in path.rglob("*") if p.is_file()}
+            self.names = {p.relative_to(self.path).as_posix() for p in self.path.rglob("*") if p.is_file()}
 
     def exists(self, rel: str) -> bool:
         return rel in self.names
 
     def exists_icase(self, rel: str):
-        """Nome real quando o arquivo existe só com outra capitalização (macOS/
-        Windows carregam, Linux não), senão None."""
+        """Real name when the file exists only under a different
+        capitalization (macOS/Windows load it, Linux does not), else None."""
         if not hasattr(self, "_lower"):
             self._lower = {n.lower(): n for n in self.names}
         return self._lower.get(rel.lower())
@@ -213,20 +234,27 @@ def find_fallback_subfolder(names):
 
 
 _TRAILING_TAG_RE = re.compile(r"\s*[\(\[][^()\[\]]*[\)\]]\s*$")
+_SEPARATOR_RE = re.compile(r"[_-]")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def normalize_rom_core_name(name):
-    """Strips trailing (region)/[flag] tags repeatedly and lowercases, so a
-    submitter's human-typed game name ("Contra (USA)") can anchor against the
-    pack's internal goodtools/no-intro-style ROM name ("Contra (U) [!]") --
-    exact-string matching alone practically never bridges that gap, since
-    submitters describe the game, not the ROM filename convention."""
+    """Strips trailing (region)/[flag] tags repeatedly, folds underscores/
+    hyphens to spaces, collapses repeated whitespace, and lowercases, so a
+    submitter's human-typed game name ("Contra (USA)") can anchor against
+    both the pack's internal goodtools/no-intro-style ROM name
+    ("Contra (U) [!]") and a repo/folder-naming convention that uses
+    underscores or hyphens where a human types a space (e.g. HDnes's
+    "Super_Mario_Bros/" vs. a submitter's "Super Mario Bros") -- exact-string
+    matching alone practically never bridges either gap, since submitters
+    describe the game, not the ROM filename or folder-naming convention."""
     prev = None
     stripped = name.strip()
     while stripped != prev:
         prev = stripped
         stripped = _TRAILING_TAG_RE.sub("", stripped)
-    return stripped.lower()
+    folded = _SEPARATOR_RE.sub(" ", stripped)
+    return _WHITESPACE_RE.sub(" ", folded).strip().lower()
 
 
 def find_fallback_subfolder_by_name(names, rom_name):
@@ -275,6 +303,85 @@ def find_fallback_subfolder_by_name(names, rom_name):
     return (candidate, candidate_depth) if candidate else None
 
 
+def find_top_level_nested_zip(names):
+    """Last-resort discovery (issue #19), tried only after every existing
+    convention and both fallbacks (structural, ROM-name) already found
+    nothing: when the container has exactly one entry that sits directly at
+    its root (no '/') and ends in ".zip", that entry is a candidate for
+    being the real pack, wrapped one level deeper than any current
+    discovery path looks (e.g. a Google Drive export whose top level is
+    "Bonus1/", "Bonus2/", "RealPack.zip", "readme.txt"). Returns that
+    entry's name, or None when there is no such entry or more than one
+    (ambiguous — same fail-closed philosophy as the structural/ROM-name
+    fallbacks: guessing wrong here would silently lint unrelated bonus
+    content instead of the real pack)."""
+    candidates = []
+    for name in names:
+        normalized = safe_rel(name)
+        if normalized is None or "/" in normalized:
+            continue
+        if normalized.lower().endswith(".zip"):
+            candidates.append(normalized)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def discover_sections(src: Source, rep: Report, rom_name):
+    """Runs every pack-root discovery path (existing conventions, then the
+    ADR-0120 structural and ROM-name fallbacks, in priority order) against
+    `src` and returns the resulting `sections` dict (empty when nothing
+    matched). Factored out of main() so it can be run a second time against
+    a nested .zip discovered by find_top_level_nested_zip (issue #19) with
+    no duplicated logic between the two passes."""
+    sections = {}
+    if src.exists("pack.json"):
+        sections = lint_pack_json(src, rep)
+    else:
+        rep.info("pack.json", "absent — pack via folder convention (ADR-0049): identity = name/location")
+
+    # convention layers (also apply to packs that have a pack.json)
+    scan_convention_sections(src, rep, sections)
+    if src.exists("hires.txt"):
+        # HD pack HDNes solto (HdPacks/<rom>/): o hires.txt fica na raiz
+        rep.info("hires.txt", "Legacy HD pack (hires.txt at the root) — loadable as HdPacks/<rom>/ or as a textures section with path \"\"")
+        sections.setdefault("textures", "")
+
+    if not sections:
+        # ADR-0120: no convention matched at the root — last attempt before
+        # rejecting: look for a structural subfolder (see
+        # find_fallback_subfolder) that alone holds the convention; if that
+        # fails and a rom_name was passed, try the ROM-name fallback
+        # (ADR-0120 §3's named follow-up, find_fallback_subfolder_by_name).
+        fallback = find_fallback_subfolder(src.names)
+        fallback_kind = "structural" if fallback else None
+        if not fallback and rom_name:
+            fallback = find_fallback_subfolder_by_name(src.names, rom_name)
+            fallback_kind = "ROM-name" if fallback else None
+        if fallback:
+            fb_prefix, fb_depth = fallback
+            rep.info(fb_prefix, f"{fallback_kind} fallback (ADR-0120): pack root discovered at '{fb_prefix}' (depth {fb_depth})")
+            fb_root = f"{fb_prefix}/"
+            if src.exists(f"{fb_root}pack.json"):
+                # pack.json was itself the marker that made this subdirectory
+                # a candidate (FALLBACK_SUFFIXES) — it needs to be linted in
+                # full here, otherwise a malformed/unsafe manifest would be
+                # accepted without ever being validated (only its sections'
+                # presence, via scan_convention_sections below).
+                sections = lint_pack_json(src, rep, root_prefix=fb_root)
+            scan_convention_sections(src, rep, sections, root_prefix=fb_root)
+            if src.exists(f"{fb_root}hires.txt"):
+                # mirrors the legacy HD pack branch (line ~628, hires.txt at
+                # the container root) under the discovered prefix: the same
+                # loose layout can be wrapped inside the fallback (e.g. a zip
+                # with only "Rel-v1/Game/synth/preset.cfg" + "Rel-v1/Game/
+                # hires.txt", no pack.json and no textures/hires.txt) —
+                # without this mirror the textures layer stays mute: never
+                # linted nor reported.
+                rep.info(f"{fb_root}hires.txt", "Legacy HD pack (hires.txt at the fallback root) — loadable as a textures section with path \"\"")
+                sections.setdefault("textures", fb_prefix)
+
+    return sections
+
+
 def scan_convention_sections(src: Source, rep: Report, sections: dict, root_prefix: str = ""):
     """Populates `sections` from the layer convention (human + auto/) under
     `root_prefix` — "" for the container root, or a fallback-discovered
@@ -294,13 +401,13 @@ def scan_convention_sections(src: Source, rep: Report, sections: dict, root_pref
 
 
 def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
-    """Valida pack.json em `root_prefix` (raiz do container, ou o prefixo
-    "<fallback>/" descoberto por find_fallback_subfolder — ADR-0120). Todos
-    os paths referenciados pelo manifest (patches[].file, sections[].path)
-    são resolvidos relativos a `root_prefix`, nunca à raiz do container,
-    para que um pack.json descoberto via fallback seja validado por inteiro
-    (MUST fields, semver, sha1s, safe_rel) em vez de servir só como marcador
-    de aceite não verificado."""
+    """Validates pack.json at `root_prefix` (the container root, or the
+    "<fallback>/" prefix discovered by find_fallback_subfolder — ADR-0120).
+    Every path referenced by the manifest (patches[].file, sections[].path)
+    is resolved relative to `root_prefix`, never to the container root, so
+    that a pack.json discovered via fallback is validated in full (MUST
+    fields, semver, sha1s, safe_rel) instead of just serving as an
+    unverified acceptance marker."""
     where = f"{root_prefix}pack.json"
     try:
         root = json.loads(src.text(where))
@@ -367,12 +474,13 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
             probe = rel if name == "synth" else (f"{rel}/hires.txt" if rel else "hires.txt")
             if not src.exists(f"{root_prefix}{probe}"):
                 rep.error(where, f"section '{name}': '{probe}' does not exist")
-            # rstrip: quando `rel` é "" (path "" == raiz do container/fallback)
-            # e `root_prefix` não é vazio, a concatenação nua deixaria uma
-            # barra final ("Rel-v1/Game/") que o loop em main() trataria como
-            # verdadeira e duplicaria a barra ao montar "<rel>/hires.txt" —
-            # o hires.txt daquela seção nunca seria encontrado/lintado e o
-            # pack seria aceito sem essa camada ter sido validada.
+            # rstrip: when `rel` is "" (path "" == container/fallback root)
+            # and `root_prefix` is not empty, the bare concatenation would
+            # leave a trailing slash ("Rel-v1/Game/") that the loop in main()
+            # would treat as truthy and double the slash when building
+            # "<rel>/hires.txt" — that section's hires.txt would never be
+            # found/linted and the pack would be accepted without that layer
+            # ever having been validated.
             found[name] = f"{root_prefix}{rel}".rstrip("/")
         if not found:
             rep.error(where, "'sections' needs textures/audio/synth")
@@ -380,7 +488,7 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
 
 
 def parse_line(line: str):
-    """Devolve (conds, tag, params) de uma linha `[c1&c2]<tag>params`."""
+    """Returns (conds, tag, params) from a `[c1&c2]<tag>params` line."""
     conds = []
     if line.startswith("["):
         end = line.find("]")
@@ -426,7 +534,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
         for c in used:
             base = c[1:] if c.startswith("!") else c
             if base not in conds and base not in GLOBAL_CONDS:
-                rep.error(where, f"condition '{base}' used before being defined (or nonexistent)")
+                rep.warning(where, f"condition '{base}' used before being defined (or nonexistent) — HdPackLoader::ParseConditionString just logError's ('Condition not found') and omits it from the entry's condition list, it doesn't abort the file parse; the tile/background this gates just loses that one condition gate (often ends up unconditional) instead of the pack failing to load — not a blocking defect, but worth fixing upstream")
             elif tag == "background" and (base in GLOBAL_CONDS or cond_kinds.get(base) not in BG_ALLOWED_KINDS):
                 kind_label = cond_kinds.get(base, base)
                 rep.warning(where, f"condition '{base}' ({kind_label}) is not valid in <background> — HdPackLoader::ProcessBackgroundTag silently drops this entry (logs 'Invalid condition type for background' and falls back to the original NES graphics for it, no crash)")
@@ -474,7 +582,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             if idx not in imgs:
                 rep.error(where, f"<tile> references nonexistent <img> #{idx}")
             elif imgs[idx] and scale and (x + 8 * scale > imgs[idx][0] or y + 8 * scale > imgs[idx][1]):
-                rep.error(where, f"<tile> at ({x},{y}) is outside image #{idx} ({imgs[idx][0]}x{imgs[idx][1]})")
+                rep.warning(where, f"<tile> at ({x},{y}) is outside image #{idx} ({imgs[idx][0]}x{imgs[idx][1]}) — HdPackTileInfo::Init guards the memcpy with a bounds check (Bitmap->PixelData.size() >= bitmapOffset + ...); when it fails, HdTileData is left all-zero, which UpdateFlags reads as fully-transparent, so DrawTile just returns early — no OOB read, no load failure, the tile simply renders as invisible — not a blocking defect, but worth fixing upstream")
             key = (tokens[1], tokens[2].upper(), tuple(sorted(used)))
             if key in tile_keys:
                 dups.append((n, tile_keys[key]))
@@ -546,7 +654,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 continue
             path = folder + tokens[2].strip()
             if not src.exists(path):
-                rep.error(where, f"<{tag}> file does not exist: {tokens[2]}")
+                rep.warning(where, f"<{tag}> file does not exist: {tokens[2]} — HdPackLoader::ProcessSoundTrack logs 'OGG file not found' and this track/effect is simply never registered (PlayBgmTrack/PlaySfx just log and return false when asked to play it later), so the pack still loads fully; only that specific cue is silently unavailable — not a blocking defect, but worth fixing upstream")
             try:
                 album, track = int(tokens[0]), int(tokens[1])
                 if not (0 <= album <= 255 and 0 <= track <= 255):
@@ -558,7 +666,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 rep.error(where, "<patch> needs file,sha1")
                 continue
             if not src.exists(folder + tokens[0]):
-                rep.error(where, f"<patch> file does not exist: {tokens[0]}")
+                rep.warning(where, f"<patch> file does not exist: {tokens[0]} — HdPackLoader::ProcessPatchTag's checkConstraint on a missing file only returns from that one function (logError, no propagated failure), so the pack still loads fully; this specific ROM patch is just never applied, not a blocking defect, but worth fixing upstream")
             if not HEX40.match(tokens[1].strip()):
                 rep.error(where, f"<patch> invalid sha1: {tokens[1]}")
             rep.info(where, "<patch> matches by the whole ROM file's sha1; other revisions load the pack without the patch (ADR-0044)")
@@ -721,51 +829,25 @@ def main(argv):
     src = Source(target)
     rep = Report()
 
-    sections = {}
-    if src.exists("pack.json"):
-        sections = lint_pack_json(src, rep)
-    else:
-        rep.info("pack.json", "absent — pack via folder convention (ADR-0049): identity = name/location")
-
-    # camadas da convenção (também valem para packs com pack.json)
-    scan_convention_sections(src, rep, sections)
-    if src.exists("hires.txt"):
-        # HD pack HDNes solto (HdPacks/<rom>/): o hires.txt fica na raiz
-        rep.info("hires.txt", "Legacy HD pack (hires.txt at the root) — loadable as HdPacks/<rom>/ or as a textures section with path \"\"")
-        sections.setdefault("textures", "")
+    sections = discover_sections(src, rep, rom_name)
 
     if not sections:
-        # ADR-0120: nenhuma convenção casou na raiz — última tentativa antes
-        # de rejeitar: procura um subdiretório estrutural (ver
-        # find_fallback_subfolder) que sozinho contenha a convenção; se isso
-        # falhar e um rom_name tiver sido passado, tenta o fallback por nome
-        # de ROM (ADR-0120 §3's named follow-up, find_fallback_subfolder_by_name).
-        fallback = find_fallback_subfolder(src.names)
-        fallback_kind = "structural" if fallback else None
-        if not fallback and rom_name:
-            fallback = find_fallback_subfolder_by_name(src.names, rom_name)
-            fallback_kind = "ROM-name" if fallback else None
-        if fallback:
-            fb_prefix, fb_depth = fallback
-            rep.info(fb_prefix, f"{fallback_kind} fallback (ADR-0120): pack root discovered at '{fb_prefix}' (depth {fb_depth})")
-            fb_root = f"{fb_prefix}/"
-            if src.exists(f"{fb_root}pack.json"):
-                # pack.json foi o próprio marcador que tornou este subdiretório
-                # candidato (FALLBACK_SUFFIXES) — precisa ser lintado por
-                # inteiro aqui, senão um manifest malformado/inseguro seria
-                # aceito sem nunca ser validado (só a presença de suas seções
-                # via scan_convention_sections abaixo).
-                sections = lint_pack_json(src, rep, root_prefix=fb_root)
-            scan_convention_sections(src, rep, sections, root_prefix=fb_root)
-            if src.exists(f"{fb_root}hires.txt"):
-                # espelha o branch de HD pack legado (linha ~628, hires.txt na
-                # raiz do container) sob o prefixo descoberto: o mesmo layout
-                # solto pode estar embrulhado dentro do fallback (ex.: zip com
-                # só "Rel-v1/Game/synth/preset.cfg" + "Rel-v1/Game/hires.txt",
-                # sem pack.json e sem textures/hires.txt) — sem este espelho a
-                # camada textures fica muda: nunca é lintada nem reportada.
-                rep.info(f"{fb_root}hires.txt", "Legacy HD pack (hires.txt at the fallback root) — loadable as a textures section with path \"\"")
-                sections.setdefault("textures", fb_prefix)
+        # Issue #19: absolute last resort, tried only once every convention
+        # and both ADR-0120 fallbacks above already found nothing — the pack
+        # may be wrapped one level deeper inside a single top-level .zip
+        # (e.g. a Google Drive export bundling the real pack.zip alongside
+        # unrelated bonus folders). Unwraps in memory and re-runs the exact
+        # same discovery against the nested zip's own content.
+        nested_name = find_top_level_nested_zip(src.names)
+        if nested_name:
+            try:
+                nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
+            except zipfile.BadZipFile as exc:
+                rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
+            else:
+                rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
+                src = nested_src
+                sections = discover_sections(src, rep, rom_name)
 
     if not sections:
         rep.error(".", "no section found (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")

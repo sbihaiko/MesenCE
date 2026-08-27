@@ -156,8 +156,8 @@ def check_claude_action(text):
     if "disallowed_tools" not in text or "Bash" not in text:
         fail("Claude Code Action step does not explicitly disallow Bash")
     lowered = text.lower()
-    has_data_word = "dado" in lowered or "data" in lowered
-    has_not_instruction = "nunca uma instrução" in lowered or "never" in lowered
+    has_data_word = "data" in lowered
+    has_not_instruction = "never" in lowered
     if not (has_data_word and has_not_instruction):
         fail("prompt lacks an explicit data-not-instruction clause")
 

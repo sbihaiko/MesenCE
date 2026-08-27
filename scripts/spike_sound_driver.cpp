@@ -298,7 +298,7 @@ namespace
 int main(int argc, char** argv)
 {
 	if(argc < 3) {
-		fprintf(stderr, "uso: %s <rom.nes> <workdir> [maxIds=40] [secondsPerId=4] [startAt=3.0]\n", argv[0]);
+		fprintf(stderr, "usage: %s <rom.nes> <workdir> [maxIds=40] [secondsPerId=4] [startAt=3.0]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -340,7 +340,7 @@ int main(int argc, char** argv)
 		SetNesConfig(nes);
 	}
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
-		fprintf(stderr, "FALHA ao carregar ROM\n");
+		fprintf(stderr, "FAILED to load ROM\n");
 		return 2;
 	}
 	RegisterNotificationCallback(OnNotification);
@@ -366,7 +366,7 @@ int main(int argc, char** argv)
 		Sample probe = SampleApu(1.0);
 		NesState st = {};
 		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
-		printf("   frame %u: %u/%u frames audíveis no título (hash %08X)\n", st.Ppu.FrameCount, probe.Audible, probe.Frames, probe.Hash());
+		printf("   frame %u: %u/%u audible frames on the title screen (hash %08X)\n", st.Ppu.FrameCount, probe.Audible, probe.Frames, probe.Hash());
 	}
 	SaveStateFile((char*)titleState.c_str());
 	SleepMs(100);
@@ -447,7 +447,7 @@ int main(int argc, char** argv)
 	auto playId = [&](const Trigger& t, int id, double seconds, bool* ok) -> Sample { return playFrom(titleState, t, id, seconds, ok); };
 
 	//---------------------------------------------------------------- A) driver tick
-	printf("== A) quem escreve nos registradores de som do APU?\n");
+	printf("== A) who writes to the APU sound registers?\n");
 	{
 		//$4014 (OAM DMA) and $4016/$4017 (controllers) are not sound: they would drag the NMI/input code in
 		BreakpointAbi bps[2] = { MakeBp(BreakpointTypeFlags::Write, 0x4000, 0x4013, 1), MakeBp(BreakpointTypeFlags::Write, 0x4015, 0x4015, 2) };
@@ -465,7 +465,7 @@ int main(int argc, char** argv)
 				//silent title with no SFX (Castlevania): provoke sound by leaving the title
 				pressedA = true;
 				presserA = std::thread([]() { PulseStart(4.0); });
-				printf("   título mudo: pulsando Start para provocar som\n");
+				printf("   silent title: pulsing Start to provoke sound\n");
 				continue;
 			}
 			if(Seconds(tA) > 8.0) {
@@ -492,7 +492,7 @@ int main(int argc, char** argv)
 	SetBreakpoints(nullptr, 0);
 	SleepMs(50);
 	if(hits == 0) {
-		fprintf(stderr, "nenhuma escrita de som no APU observada (título mudo e sem SFX?)\n");
+		fprintf(stderr, "no APU sound write observed (silent title with no SFX?)\n");
 		Stop();
 		return 3;
 	}
@@ -522,7 +522,7 @@ int main(int argc, char** argv)
 		}
 	}
 	if(P == 0) {
-		fprintf(stderr, "não achei a rotina de tick do driver\n");
+		fprintf(stderr, "could not find the driver's tick routine\n");
 		Stop();
 		return 3;
 	}
@@ -535,13 +535,13 @@ int main(int argc, char** argv)
 	}
 	driverLo = std::max<int32_t>(0x8000, (int32_t)driverLo - 0x400);
 	driverHi = std::min<uint32_t>(0xFFFF, driverHi + 0x400);
-	printf("   %d escritas, %zu PCs distintos; tick P = $%04X (%u/%d pilhas); região do driver ~ $%04X-$%04X\n", hits, writerPcs.size(), P, pBest, hits, driverLo, driverHi);
+	printf("   %d writes, %zu distinct PCs; tick P = $%04X (%u/%d stacks); driver region ~ $%04X-$%04X\n", hits, writerPcs.size(), P, pBest, hits, driverLo, driverHi);
 	{
-		printf("   PCs escritores:");
+		printf("   writer PCs:");
 		for(auto& kv : writerPcs) {
 			printf(" $%04X(x%u)", kv.first, kv.second);
 		}
-		printf("\n   callstack típica:");
+		printf("\n   typical callstack:");
 		for(uint32_t t : stacks[stacks.size() / 2]) {
 			printf(" $%04X", t);
 		}
@@ -557,7 +557,7 @@ int main(int argc, char** argv)
 	Sample baseline2 = SampleApu(3.0, 400);
 	std::set<int16_t> background(baseline.Onsets.begin(), baseline.Onsets.end());
 	background.insert(baseline2.Onsets.begin(), baseline2.Onsets.end());
-	printf("   linha de base do título: audible=%u/%u, %zu (voz,nota) de fundo\n", baseline.Audible, baseline.Frames, background.size());
+	printf("   title baseline: audible=%u/%u, %zu background (voice,note) pairs\n", baseline.Audible, baseline.Frames, background.size());
 
 	//Try a trigger on a few ids: how many distinct, audible results that differ from the baseline?
 	//tickClears: the tick itself writes the address (a request slot it consumes) - then a
@@ -565,17 +565,17 @@ int main(int argc, char** argv)
 	auto validate = [&](const Trigger& t, const std::vector<int>& ids, const char* label, bool tickClears) -> int {
 		std::set<uint32_t> distinct;
 		int deterministic = 0, checked = 0;
-		printf("   testando %s:", label);
+		printf("   testing %s:", label);
 		for(int id : ids) {
 			bool ok = false;
 			Sample s = playId(t, id, 1.5, &ok);
 			if(!ok) {
-				printf(" id%d=sem-tick", id);
+				printf(" id%d=no-tick", id);
 				continue;
 			}
 			size_t novel = s.Novel(background).size();
 			bool sounds = s.Audible >= 8 && novel >= 2;
-			printf(" id%d=%s(%u,%zu novos,%08X)", id, sounds ? "som" : "-", s.Audible, novel, s.NovelHash(background));
+			printf(" id%d=%s(%u,%zu novel,%08X)", id, sounds ? "sound" : "-", s.Audible, novel, s.NovelHash(background));
 			if(sounds) {
 				distinct.insert(s.NovelHash(background));
 				if(checked < 2) {
@@ -593,16 +593,16 @@ int main(int argc, char** argv)
 		//tickClears is informative only: the novelty-based hashes already make SFX masks (Zelda $0600)
 		//reproducible, and the exemption let driver state variables through (Bomberman $00BE/$00C0)
 		bool accepted = distinct.size() >= 3 && deterministic >= 1;
-		printf(" -> %zu distintos, %d/%d reprodutíveis%s -> %s\n", distinct.size(), deterministic, checked, tickClears ? ", limpo pelo tick" : "", accepted ? "ACEITO" : "rejeitado");
+		printf(" -> %zu distinct, %d/%d reproducible%s -> %s\n", distinct.size(), deterministic, checked, tickClears ? ", cleared by the tick" : "", accepted ? "ACCEPTED" : "rejected");
 		return accepted ? (int)distinct.size() : 0;
 	};
 
 	//---------------------------------------------------------------- B) call-style trigger
-	printf("== B) quem chama o driver quando a música muda?\n");
+	printf("== B) who calls the driver when the music changes?\n");
 	AddressInfo absP = GetAbsoluteAddress({ (int32_t)P, MemoryType::NesMemory });
 	int32_t absDriverLo = absP.Address - (int32_t)(P - driverLo);
 	int32_t absDriverHi = absP.Address + (int32_t)(driverHi - P);
-	printf("   P=$%04X está em PRG $%05X; driver (abs) ~ $%05X-$%05X\n", P, absP.Address, absDriverLo, absDriverHi);
+	printf("   P=$%04X is at PRG $%05X; driver (abs) ~ $%05X-$%05X\n", P, absP.Address, absDriverLo, absDriverHi);
 	std::vector<uint8_t> prg;
 	{
 		FILE* f = fopen(rom.c_str(), "rb");
@@ -641,7 +641,7 @@ int main(int argc, char** argv)
 	for(JsrSite& j : sites) {
 		targetSites[j.Target]++;
 	}
-	printf("   %zu JSRs (fora do banco do driver) para dentro dele, %zu alvos\n", sites.size(), targetSites.size());
+	printf("   %zu JSRs (outside the driver's bank) into it, %zu targets\n", sites.size(), targetSites.size());
 	std::vector<BreakpointAbi> bps;
 	for(size_t i = 0; i < sites.size() && i < 400; i++) {
 		BreakpointAbi bp = MakeBp(BreakpointTypeFlags::Execute, sites[i].Abs, sites[i].Abs, (uint32_t)(10 + i));
@@ -679,7 +679,7 @@ int main(int argc, char** argv)
 		if(!pressed && Seconds(tB) > 1.0) {
 			pressed = true;
 			presser = std::thread([]() { PulseStart(3.0); });
-			printf("   Start pulsado a partir de t=%.1fs\n", Seconds(tB));
+			printf("   Start pulsed starting at t=%.1fs\n", Seconds(tB));
 		}
 		if(!WaitForBreak(0.2)) {
 			continue;
@@ -736,14 +736,14 @@ int main(int argc, char** argv)
 		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
 		framesB = st.Ppu.FrameCount - frame0;
 	}
-	printf("   %d paradas em %u frames; alvos chamados de fora do driver:\n", stops, framesB);
+	printf("   %d stops in %u frames; targets called from outside the driver:\n", stops, framesB);
 	std::vector<Candidate*> ranked;
 	for(auto& kv : candidates) {
 		Candidate& c = kv.second;
 		//called (almost) every frame: usually an update routine - but Konami-style drivers take the
 		//request register every NMI, so per-frame callers with a varying register stay in the race
 		c.PerFrame = c.Pruned || c.Hits * 4 >= framesB;
-		printf("     $%04X  hits=%u sítios=%zu A∈%zu X∈%zu Y∈%zu %s%s\n", c.Target, c.Hits, c.Sites.size(), c.As.size(), c.Xs.size(), c.Ys.size(), c.AfterStart ? "(após Start) " : "", c.PerFrame ? "[por frame]" : "");
+		printf("     $%04X  hits=%u sites=%zu A∈%zu X∈%zu Y∈%zu %s%s\n", c.Target, c.Hits, c.Sites.size(), c.As.size(), c.Xs.size(), c.Ys.size(), c.AfterStart ? "(after Start) " : "", c.PerFrame ? "[per frame]" : "");
 		if(!c.PerFrame || c.Variance() > 1) {
 			ranked.push_back(&c);
 		}
@@ -794,7 +794,7 @@ int main(int argc, char** argv)
 			t.Addr = c.Target;
 			t.Reg = regs[r].first;
 			char label[64];
-			snprintf(label, sizeof(label), "JSR $%04X com %c=id", t.Addr, t.Reg);
+			snprintf(label, sizeof(label), "JSR $%04X with %c=id", t.Addr, t.Reg);
 			int score = validate(t, idsFor(*regs[r].second), label, false);
 			if(score > bestScore) {
 				bestScore = score;
@@ -805,7 +805,7 @@ int main(int argc, char** argv)
 
 	//---------------------------------------------------------------- B') mailbox fallback
 	if(bestScore < 3) {
-		printf("== B') nenhuma chamada convincente: procurando caixa postal em RAM (trace)\n");
+		printf("== B') no convincing call found: looking for a RAM mailbox (trace)\n");
 		//Trace ~3 s around a pulsed Start and cross "RAM written outside the tick" with "RAM read
 		//inside the tick". The tick region is delimited by the JSR site that calls P and its return.
 		uint32_t tickSite = 0;
@@ -834,7 +834,7 @@ int main(int argc, char** argv)
 			}
 			SetBreakpoints(nullptr, 0);
 		}
-		printf("   tick chamado em $%04X\n", tickSite);
+		printf("   tick called at $%04X\n", tickSite);
 		std::string tracePath = (work / "trace.txt").string();
 		LoadStateFile((char*)titleState.c_str());
 		SleepMs(100);
@@ -1042,10 +1042,10 @@ int main(int argc, char** argv)
 			}
 			return a.Addr < b.Addr;
 		});
-		printf("   trace: %u linhas; %zu endereços lidos no tick, %zu escritos fora; candidatas:\n", lines, readsInTick.size(), writesOutside.size());
+		printf("   trace: %u lines; %zu addresses read in the tick, %zu written outside; candidates:\n", lines, readsInTick.size(), writesOutside.size());
 		for(size_t i = 0; i < mailboxes.size() && i < 40; i++) {
 			Mailbox& m = mailboxes[i];
-			printf("     $%04X  escritas fora=%zu  leituras tick=%u  escritas tick=%u  eventos:", m.Addr, m.OutsideWrites, m.TickReads, m.TickWrites);
+			printf("     $%04X  outside writes=%zu  tick reads=%u  tick writes=%u  events:", m.Addr, m.OutsideWrites, m.TickReads, m.TickWrites);
 			for(size_t j = 0; j < m.Events.size() && j < 6; j++) {
 				printf(" f%u:%02X@$%04X", m.Events[j].Frame, m.Events[j].Value, m.Events[j].Pc);
 			}
@@ -1062,7 +1062,7 @@ int main(int argc, char** argv)
 				}
 			}
 			char label[64];
-			snprintf(label, sizeof(label), "caixa postal $%04X", t.Addr);
+			snprintf(label, sizeof(label), "mailbox $%04X", t.Addr);
 			int score = validate(t, idsFor(seen), label, mailboxes[i].TickWrites > 0 && mailboxes[i].TickWrites * 2 < mailboxes[i].TickReads);
 			if(score > bestScore) {
 				bestScore = score;
@@ -1076,15 +1076,15 @@ int main(int argc, char** argv)
 		triggers.push_back(best);
 	}
 	if(bestScore < 3) {
-		fprintf(stderr, "nenhum gatilho validado (melhor pontuação %d)\n", bestScore);
+		fprintf(stderr, "no validated trigger (best score %d)\n", bestScore);
 		Stop();
 		return 4;
 	}
 	for(Trigger& t : triggers) {
 		if(t.Mailbox) {
-			printf("   gatilho: escrever id em $%04X na entrada do tick\n", t.Addr);
+			printf("   trigger: write id to $%04X on tick entry\n", t.Addr);
 		} else {
-			printf("   gatilho: JSR $%04X com %c=id\n", t.Addr, t.Reg);
+			printf("   trigger: JSR $%04X with %c=id\n", t.Addr, t.Reg);
 		}
 	}
 
@@ -1101,15 +1101,15 @@ int main(int argc, char** argv)
 	std::set<uint32_t> seenHashes;
 	for(Trigger& trig : triggers) {
 		if(trig.Mailbox) {
-			printf("== C) enumerando id 0..%d em $%04X (%.0fs cada)\n", maxIds - 1, trig.Addr, secondsPerId);
+			printf("== C) enumerating id 0..%d at $%04X (%.0fs each)\n", maxIds - 1, trig.Addr, secondsPerId);
 		} else {
-			printf("== C) enumerando id 0..%d via JSR $%04X %c=id (%.0fs cada)\n", maxIds - 1, trig.Addr, trig.Reg, secondsPerId);
+			printf("== C) enumerating id 0..%d via JSR $%04X %c=id (%.0fs each)\n", maxIds - 1, trig.Addr, trig.Reg, secondsPerId);
 		}
 		for(int id = 0; id < maxIds; id++) {
 			bool ok = false;
 			Sample s = playId(trig, id, secondsPerId, &ok);
 			if(!ok) {
-				printf("   id %2d: sem tick - abortado\n", id);
+				printf("   id %2d: no tick - aborted\n", id);
 				continue;
 			}
 			Result r;
@@ -1136,7 +1136,7 @@ int main(int argc, char** argv)
 			r.FirstNotes = buf;
 			bool dup = (r.Kind == "bgm" || r.Kind == "sfx") && seenHashes.count(r.Hash) > 0;
 			seenHashes.insert(r.Hash);
-			printf("   id %2d: %-5s audible=%3u/%3u last=%3u hash=%08X %s%s\n", id, r.Kind.c_str(), r.Audible, r.Frames, r.LastAudible, r.Hash, r.FirstNotes.c_str(), dup ? " (repetida)" : "");
+			printf("   id %2d: %-5s audible=%3u/%3u last=%3u hash=%08X %s%s\n", id, r.Kind.c_str(), r.Audible, r.Frames, r.LastAudible, r.Hash, r.FirstNotes.c_str(), dup ? " (repeat)" : "");
 			results.push_back(r);
 		}
 	}
@@ -1156,7 +1156,7 @@ int main(int argc, char** argv)
 			uniq.insert(r.Hash);
 		}
 	}
-	printf("== resumo: %d bgm, %d sfx, %d curtos, %d = título, %zu assinaturas distintas em %d ids x %zu gatilho(s)\n", bgm, sfx, shortN, title, uniq.size(), maxIds, triggers.size());
+	printf("== summary: %d bgm, %d sfx, %d short, %d = title, %zu distinct signatures across %d ids x %zu trigger(s)\n", bgm, sfx, shortN, title, uniq.size(), maxIds, triggers.size());
 	Stop();
 	return 0;
 }

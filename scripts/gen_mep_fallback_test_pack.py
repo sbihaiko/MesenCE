@@ -1,58 +1,59 @@
 #!/usr/bin/env python3
-"""Gera zips sintéticos para exercitar o fallback estrutural do ADR-0120
+"""Generates synthetic zips to exercise the ADR-0120 structural fallback
 (scripts/mep_lint.py's find_fallback_subfolder / scripts/checks/
 verify_mep_fallback_lint_fixture.sh).
 
-Nenhum dos dois zips tem pack.json na raiz nem nome de arquivo igual ao da
-ROM — as duas convenções existentes (ADR-0040/ADR-0049) já falham por
-construção, então só o fallback (ou a rejeição ambígua dele) decide o
-resultado:
+Neither zip has a pack.json at its root nor a filename matching the ROM's —
+the two existing conventions (ADR-0040/ADR-0049) already fail by
+construction, so only the fallback (or its ambiguous rejection) decides the
+outcome:
 
-  accept     <out>/mep-fallback-accept.zip   um único wrapper (formato de
-             release zip real, "Contra80s-v1.1/Contra (U) [!]/") contendo a
-             convenção completa (textures/hires.txt, synth/preset.cfg) mais
-             um arquivo de promo solto ao lado ("Contra80s-v1.1/README.txt")
-             que não deve confundir a busca — candidato único, deve ser
-             aceito.
-  reject     <out>/mep-fallback-reject.zip   dois subdiretórios distintos
-             ("PackA/", "PackB/"), cada um com sua própria convenção
-             completa — dois candidatos estruturalmente válidos, ambíguo,
-             deve ser rejeitado (nenhuma seção encontrada).
-  malformed  <out>/mep-fallback-malformed-manifest.zip   mesmo wrapper único
-             do "accept", mas com um pack.json inválido (JSON quebrado)
-             dentro do subdiretório descoberto — pack.json é um dos
-             FALLBACK_SUFFIXES (marcador de aceite), então isto prova que o
-             fallback linta o manifest descoberto por inteiro em vez de só
-             usá-lo como sinal estrutural (ver o fix de segurança no
-             histórico de mep_lint.py, revision cycle do T3): deve ser
-             rejeitado.
-  empty-path <out>/mep-fallback-empty-section-path.zip   mesmo wrapper único,
-             pack.json válido com sections.textures.path == "" (hires.txt na
-             raiz do subdiretório descoberto, não em "textures/") + hires.txt
-             quebrado (<img> referenciando um PNG ausente). Regressão: o
-             root_prefix + path("") vazio produzia uma barra dupla ao montar
-             "<rel>/hires.txt", o hires.txt nunca era encontrado e o pack
-             era aceito sem essa camada ter sido validada — deve ser
-             rejeitado.
-  root-hires <out>/mep-fallback-root-hires.zip   wrapper único sem pack.json,
-             com synth/preset.cfg (válido) + hires.txt na raiz do
-             subdiretório descoberto (layout "HD pack legado", <img>
-             referenciando um PNG ausente) — mesma regressão do item acima,
-             mas sem manifest: o branch que reconhece hires.txt solto na
-             raiz do container não era espelhado sob o prefixo do fallback,
-             então a camada textures ficava muda; deve ser rejeitado.
-  traversal  <out>/mep-fallback-traversal.zip   entradas com um segmento
-             ".." ("../evil/textures/hires.txt", "../evil/synth/
-             preset.cfg") — zip-slip-shaped, sem pack.json na raiz nem nome
-             de arquivo igual ao da ROM, então só o fallback decide. Regressão
-             de segurança: find_fallback_subfolder deve recusar (via
-             safe_rel) esse candidato em vez de descobri-lo como raiz do
-             pack — deve ser rejeitado com "nenhuma seção encontrada", igual
-             à fixture 'reject'.
+  accept     <out>/mep-fallback-accept.zip   a single wrapper (real release
+             zip format, "Contra80s-v1.1/Contra (U) [!]/") containing the
+             full convention (textures/hires.txt, synth/preset.cfg) plus a
+             loose promo file alongside it ("Contra80s-v1.1/README.txt")
+             that must not confuse the search — a single candidate, must be
+             accepted.
+  reject     <out>/mep-fallback-reject.zip   two distinct subdirectories
+             ("PackA/", "PackB/"), each with its own full convention — two
+             structurally valid candidates, ambiguous, must be rejected (no
+             section found).
+  malformed  <out>/mep-fallback-malformed-manifest.zip   same single wrapper
+             as "accept", but with an invalid pack.json (broken JSON) inside
+             the discovered subdirectory — pack.json is one of the
+             FALLBACK_SUFFIXES (acceptance marker), so this proves that the
+             fallback lints the discovered manifest in full instead of just
+             using its presence as a structural signal (see the security fix
+             in mep_lint.py's history, T3's revision cycle): must be
+             rejected.
+  empty-path <out>/mep-fallback-empty-section-path.zip   same single
+             wrapper, valid pack.json with sections.textures.path == ""
+             (hires.txt at the discovered subdirectory's root, not under
+             "textures/") + a broken hires.txt (<img> referencing a missing
+             PNG). Regression: an empty root_prefix + path("") used to
+             produce a double slash when building "<rel>/hires.txt", the
+             hires.txt was never found, and the pack was accepted without
+             that layer ever having been validated — must be rejected.
+  root-hires <out>/mep-fallback-root-hires.zip   single wrapper without a
+             pack.json, with synth/preset.cfg (valid) + a broken hires.txt
+             at the discovered subdirectory's root ("legacy HD pack" layout,
+             <img> referencing a missing PNG) — same regression as the item
+             above, but without a manifest: the branch that recognizes a
+             loose hires.txt at the container root was not mirrored under
+             the fallback prefix, so the textures layer stayed mute; must be
+             rejected.
+  traversal  <out>/mep-fallback-traversal.zip   entries with a ".." segment
+             ("../evil/textures/hires.txt", "../evil/synth/preset.cfg") —
+             zip-slip-shaped, no pack.json at the root nor a filename
+             matching the ROM's, so only the fallback decides. Security
+             regression: find_fallback_subfolder must refuse (via safe_rel)
+             this candidate instead of discovering it as the pack root —
+             must be rejected with "no section found", same as the 'reject'
+             fixture.
 
-Uso:
+Usage:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
-  (sem kinds: gera accept e reject)
+  (no kinds: generates accept and reject)
 """
 import sys
 import zipfile
@@ -67,7 +68,7 @@ VALID_PACK_JSON = (
     '"sections":{"textures":{"path":""}}}'
 )
 
-# Formato típico de um zip de release do GitHub: "<Repo>-<tag>/<Jogo>/..."
+# Typical GitHub release zip format: "<Repo>-<tag>/<Game>/..."
 ACCEPT_WRAPPER = "Contra80s-v1.1/Contra (U) [!]"
 
 
@@ -80,8 +81,8 @@ def _write_zip(path: Path, entries):
 
 
 def write_accept_zip(path: Path):
-    """Um único candidato estrutural: aceito pelo fallback (depth 4, no
-    limite de FALLBACK_MAX_DEPTH/kMepFallbackMaxDepth/FallbackMaxDepth)."""
+    """A single structural candidate: accepted by the fallback (depth 4, at
+    the FALLBACK_MAX_DEPTH/kMepFallbackMaxDepth/FallbackMaxDepth limit)."""
     _write_zip(path, [
         (f"{ACCEPT_WRAPPER}/textures/hires.txt", HIRES_TXT),
         (f"{ACCEPT_WRAPPER}/synth/preset.cfg", PRESET_CFG),
@@ -90,8 +91,8 @@ def write_accept_zip(path: Path):
 
 
 def write_reject_zip(path: Path):
-    """Dois candidatos estruturalmente válidos e distintos: ambíguo, o
-    fallback deve recusar (retornar 'nada encontrado') em vez de adivinhar."""
+    """Two distinct, structurally valid candidates: ambiguous, the fallback
+    must refuse (return 'nothing found') instead of guessing."""
     _write_zip(path, [
         ("PackA/textures/hires.txt", HIRES_TXT),
         ("PackA/synth/preset.cfg", PRESET_CFG),
@@ -101,19 +102,21 @@ def write_reject_zip(path: Path):
 
 
 def write_malformed_manifest_zip(path: Path):
-    """Mesmo wrapper único do accept, mas com um pack.json inválido dentro
-    do subdiretório descoberto: prova que o fallback linta o manifest
-    descoberto (não só usa sua presença como sinal estrutural)."""
+    """Same single wrapper as accept, but with an invalid pack.json inside
+    the discovered subdirectory: proves that the fallback lints the
+    discovered manifest (not just using its presence as a structural
+    signal)."""
     _write_zip(path, [
-        (f"{ACCEPT_WRAPPER}/pack.json", "{ isto não é json"),
+        (f"{ACCEPT_WRAPPER}/pack.json", "{ this is not valid json"),
         (f"{ACCEPT_WRAPPER}/textures/hires.txt", HIRES_TXT),
     ])
 
 
 def write_empty_section_path_zip(path: Path):
-    """Wrapper único, pack.json válido com sections.textures.path == "" e um
-    hires.txt quebrado na raiz do subdiretório descoberto: prova que o
-    root_prefix não vazio + path("") não deixa a camada textures muda."""
+    """Single wrapper, valid pack.json with sections.textures.path == "" and
+    a broken hires.txt at the discovered subdirectory's root: proves that a
+    non-empty root_prefix + path("") does not leave the textures layer
+    mute."""
     _write_zip(path, [
         (f"{ACCEPT_WRAPPER}/pack.json", VALID_PACK_JSON),
         (f"{ACCEPT_WRAPPER}/hires.txt", BROKEN_HIRES_TXT),
@@ -121,10 +124,11 @@ def write_empty_section_path_zip(path: Path):
 
 
 def write_root_hires_zip(path: Path):
-    """Wrapper único sem pack.json: synth/preset.cfg válido (é o único
-    marcador que torna o subdiretório candidato) + hires.txt quebrado solto
-    na raiz do subdiretório descoberto (layout HD pack legado): prova que o
-    branch de hires.txt-na-raiz é espelhado sob o prefixo do fallback."""
+    """Single wrapper without a pack.json: valid synth/preset.cfg (the only
+    marker that makes the subdirectory a candidate) + a broken hires.txt
+    loose at the discovered subdirectory's root (legacy HD pack layout):
+    proves that the hires.txt-at-root branch is mirrored under the fallback
+    prefix."""
     _write_zip(path, [
         (f"{ACCEPT_WRAPPER}/synth/preset.cfg", PRESET_CFG),
         (f"{ACCEPT_WRAPPER}/hires.txt", BROKEN_HIRES_TXT),
@@ -132,10 +136,10 @@ def write_root_hires_zip(path: Path):
 
 
 def write_traversal_zip(path: Path):
-    """Entradas zip-slip-shaped (segmento '..'): find_fallback_subfolder deve
-    recusar este candidato via safe_rel em vez de descobri-lo como raiz do
-    pack (revision cycle do T3 — ver o fix de segurança no histórico de
-    mep_lint.py)."""
+    """Zip-slip-shaped entries ('..' segment): find_fallback_subfolder must
+    refuse this candidate via safe_rel instead of discovering it as the
+    pack's root (T3's revision cycle — see the security fix in mep_lint.py's
+    history)."""
     _write_zip(path, [
         ("../evil/textures/hires.txt", HIRES_TXT),
         ("../evil/synth/preset.cfg", PRESET_CFG),
@@ -164,9 +168,9 @@ def main() -> int:
         elif kind == "traversal":
             write_traversal_zip(out / "mep-fallback-traversal.zip")
         else:
-            print(f"kind desconhecido: {kind}")
+            print(f"unknown kind: {kind}")
             return 1
-        print(f"gerado: {kind}")
+        print(f"generated: {kind}")
     return 0
 
 

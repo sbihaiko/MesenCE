@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""mep_compare — compara a camada automática (`auto/textures`, xBRZ) com um
-HD pack feito por artista, tile a tile (F5, avaliação qualitativa do bootstrap).
+"""mep_compare — compares the automatic layer (`auto/textures`, xBRZ) with an
+artist-made HD pack, tile by tile (F5, qualitative bootstrap evaluation).
 
-Funciona para packs NES cuja chave de tile é intrínseca (CHR RAM: bitmap de
-32 hex + paleta). Para cada chave presente nos dois lados monta uma faixa
-`original | xBRZ (auto) | artista` e calcula métricas simples:
+Works for NES packs whose tile key is intrinsic (CHR RAM: 32-hex bitmap +
+palette). For each key present on both sides it builds a
+`original | xBRZ (auto) | artist` strip and computes simple metrics:
 
-  * cobertura: quantas chaves do artista o bootstrap também viu (e vice-versa);
-  * MAE(xBRZ, artista) vs MAE(nearest, artista): o upscale automático aproxima
-    o resultado do artista mais do que o pixel cru?;
-  * quantos tiles do artista dependem de <condition> (contexto que a máquina
-    ainda não infere — F5.4).
+  * coverage: how many of the artist's keys the bootstrap also saw (and vice
+    versa);
+  * MAE(xBRZ, artist) vs MAE(nearest, artist): does the automatic upscale
+    approximate the artist's result more than the raw pixel does?;
+  * how many of the artist's tiles depend on <condition> (context the
+    machine still can't infer — F5.4).
 
-Uso: python3 scripts/mep_compare.py <auto/textures> <pack-do-artista> <saida> [--name Jogo] [--samples 48]
-Saída: <saida>/<name>.json, <name>-common.png, <name>-artist-only.png, <name>-auto-only.png
+Usage: python3 scripts/mep_compare.py <auto/textures> <artist-pack> <output> [--name Game] [--samples 48]
+Output: <output>/<name>.json, <name>-common.png, <name>-artist-only.png, <name>-auto-only.png
 """
 import json
 import random
@@ -24,7 +25,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-# 2C02 (mesma tabela de Core/NES/NesDefaultVideoFilter.cpp)
+# 2C02 (same table as Core/NES/NesDefaultVideoFilter.cpp)
 _PAL = [0x666666, 0x002A88, 0x1412A7, 0x3B00A4, 0x5C007E, 0x6E0040, 0x6C0600, 0x561D00, 0x333500, 0x0B4800, 0x005200, 0x004F08, 0x00404D, 0x000000, 0x000000, 0x000000,
         0xADADAD, 0x155FD9, 0x4240FF, 0x7527FE, 0xA01ACC, 0xB71E7B, 0xB53120, 0x994E00, 0x6B6D00, 0x388700, 0x0C9300, 0x008F32, 0x007C8D, 0x000000, 0x000000, 0x000000,
         0xFFFEFF, 0x64B0FF, 0x9290FF, 0xC676FF, 0xF36AFF, 0xFE6ECC, 0xFE8170, 0xEA9E22, 0xBCBE00, 0x88D800, 0x5CE430, 0x45E082, 0x48CDDE, 0x4F4F4F, 0x000000, 0x000000,
@@ -201,10 +202,10 @@ def main(argv):
 
     sc = sample(comparable)
     montage([[render_original(*k) for k in sc], [auto.crop(k) for k in sc], [artist.crop(k) for k in sc]], 40,
-            ["original", f"auto xBRZ {auto.scale}x", f"artista {artist.scale}x"], out / f"{name}-common.png")
+            ["original", f"auto xBRZ {auto.scale}x", f"artist {artist.scale}x"], out / f"{name}-common.png")
     so = sample(artist_only)
     montage([[render_original(*k) for k in so], [artist.crop(k) for k in so]], 40,
-            ["original", "artista"], out / f"{name}-artist-only.png")
+            ["original", "artist"], out / f"{name}-artist-only.png")
     sa = sample(auto_only)
     montage([[render_original(*k) for k in sa], [auto.crop(k) for k in sa]], 40,
             ["original", f"auto xBRZ {auto.scale}x"], out / f"{name}-auto-only.png")

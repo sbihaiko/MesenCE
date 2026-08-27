@@ -18,6 +18,30 @@ configured option names (see below): those stay whatever they are actually
 configured as, quoted verbatim in docs, never "translated" in a way that
 would desync the doc from the real field.
 
+## Source code comment and in-code text language
+
+Comments and in-code text (log messages, developer-facing CLI output,
+inline strings not shown to end users through the emulator's own UI) in
+**source code** — C#/C++ under `Core/`, `UI/`, and scripts under
+`scripts/` — MUST be written in **en-US**, matching the rest of the
+codebase. This applies to new code and to any existing code touched
+during a task.
+
+This is the **same convention** as the "Documentation and user-facing
+message language" rule above: `.md` docs, `AGENTS.md`/`CLAUDE.md` files,
+GitHub Issue/PR text, and now source comments/in-code text all stay
+en-US. Emulator end-user UI strings (menus, dialogs, in-app messages
+shown to players) are the one exception — those follow the project's
+existing localization convention (including pt-BR locale resource
+files), not this rule; this rule is about comments and
+developer/maintainer-facing text only.
+
+As of 2026-08-27, the existing C#/C++ codebase under `Core/`/`UI/` is
+already consistently in English. A handful of scripts under `scripts/`
+(`report-bug.sh`, `ensure_community_pack_labels.sh`) and a stray comment
+in `mep_lint.py` were in pt-BR and are being converted to English to
+match this rule.
+
 ## Bug tracking (GitHub Project)
 
 Bugs in this project are tracked as GitHub Issues on the "MesenCE Bug

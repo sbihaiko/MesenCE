@@ -111,9 +111,9 @@ def _multi_palette_check(shapes: dict) -> tuple:
     multi_palette_shapes = {k: v for k, v in shapes.items() if len(v) > 1}
     max_variants = max((len(v) for v in shapes.values()), default=0)
     return (
-        "pelo menos 1 tile shape com mais de 1 paleta distinta capturada "
-        f"({len(multi_palette_shapes)}/{len(shapes)} shapes com variantes, "
-        f"máximo {max_variants} paletas num único shape)",
+        "at least 1 tile shape captured more than one distinct palette "
+        f"({len(multi_palette_shapes)}/{len(shapes)} shapes with variants, "
+        f"max {max_variants} palettes in a single shape)",
         len(multi_palette_shapes) > 0,
     )
 
@@ -125,8 +125,8 @@ def _cap_not_exceeded_check(variant_counts: list, cap: int) -> tuple:
     HdPackBuilder::CaptureOrCapPaletteVariant is actually enforced."""
     max_variants = max(variant_counts, default=0)
     return (
-        f"nenhum tile shape excede MaxPaletteVariantsPerTile ({cap}) "
-        f"(máximo observado: {max_variants})",
+        f"no tile shape exceeds MaxPaletteVariantsPerTile ({cap}) "
+        f"(max observed: {max_variants})",
         max_variants <= cap,
     )
 
@@ -136,17 +136,17 @@ def _cap_reached_check(variant_counts: list, cap: int) -> tuple:
     because no shape ever gets close to it)."""
     shapes_at_cap = sum(1 for c in variant_counts if c == cap)
     return (
-        f"cap efetivamente atingido por pelo menos 1 shape real "
-        f"({shapes_at_cap} shape(s) com exatamente {cap} variantes)",
+        f"cap effectively reached by at least 1 real shape "
+        f"({shapes_at_cap} shape(s) with exactly {cap} variants)",
         shapes_at_cap > 0,
     )
 
 
 def run_checks(hires: Path, cap: int) -> list:
-    checks = [(f"hires.txt gerado ({hires})", hires.exists())]
+    checks = [(f"hires.txt generated ({hires})", hires.exists())]
 
     shapes = group_palettes_by_shape(hires)
-    checks.append((f"tiles capturados ({len(shapes)} shapes distintos)", len(shapes) > 0))
+    checks.append((f"tiles captured ({len(shapes)} distinct shapes)", len(shapes) > 0))
 
     variant_counts = [len(v) for v in shapes.values()]
     checks.append(_multi_palette_check(shapes))
@@ -157,17 +157,17 @@ def run_checks(hires: Path, cap: int) -> list:
 
 def main() -> int:
     if not ROM.exists():
-        print(f"FAIL: rom não encontrada em {ROM} (necessária para esta validação)")
+        print(f"FAIL: rom not found at {ROM} (required for this validation)")
         return 1
 
     cap = read_cap()
-    print(f"PASS: MaxPaletteVariantsPerTile lido de {HEADER} = {cap}")
+    print(f"PASS: MaxPaletteVariantsPerTile read from {HEADER} = {cap}")
 
     tool = ensure_capture_tool()
     if not tool.exists():
-        print(f"FAIL: {tool} continua ausente após 'make capture-tool'")
+        print(f"FAIL: {tool} still missing after 'make capture-tool'")
         return 1
-    print(f"PASS: headless_record disponível em {tool}")
+    print(f"PASS: headless_record available at {tool}")
 
     with tempfile.TemporaryDirectory(prefix="hdpack-palette-") as tmp:
         hires = record_hdpack(tool, Path(tmp))

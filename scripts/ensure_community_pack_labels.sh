@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Garante (idempotente) a existência das labels usadas pelo fluxo de
-# triagem de "Community HD/MEP Packs" (CLAUDE.md, seção "Triagem de
-# Community HD/MEP Packs"). Rode uma vez ao configurar o repositório, ou
-# de novo a qualquer momento — labels já existentes são ignoradas.
+# Idempotently ensures the labels used by the "Community HD/MEP Packs"
+# triage flow exist (CLAUDE.md, "Community HD/MEP Pack triage" section).
+# Run once when setting up the repository, or again at any time — labels
+# that already exist are skipped.
 #
-# Uso: scripts/ensure_community_pack_labels.sh
+# Usage: scripts/ensure_community_pack_labels.sh
 #
-# Requer `gh` autenticado com acesso de escrita a issues/labels no repo.
+# Requires `gh` authenticated with write access to issues/labels on the repo.
 set -euo pipefail
 
 REPO="sbihaiko/MesenCE"
@@ -14,20 +14,20 @@ REPO="sbihaiko/MesenCE"
 # name|color|description — '|' as separator because label names themselves
 # contain ':' (e.g. "pack:invalid-structure").
 LABELS=(
-  "community-pack|1D76DB|Submissão de HD/MEP Pack da comunidade"
-  "pack:invalid-structure|D93F0B|Falhou o lint estrutural (mep_lint.py)"
-  "pack:invalid-license|D93F0B|Sem confirmação/direito de distribuição dos assets"
-  "pack:invalid-other|D93F0B|Reprovado por outro motivo de conteúdo/política"
-  "pack:partial-hd|FBCA04|Aceito parcial — apenas assets HD padrão Mesen"
-  "pack:mep-full|0E8A16|Aceito — MEP completo (texturas + áudio/synth)"
+  "community-pack|1D76DB|Community-submitted HD/MEP Pack"
+  "pack:invalid-structure|D93F0B|Failed the structural lint (mep_lint.py)"
+  "pack:invalid-license|D93F0B|Missing confirmation/right to distribute the assets"
+  "pack:invalid-other|D93F0B|Rejected for another content/policy reason"
+  "pack:partial-hd|FBCA04|Partially accepted — standard Mesen HD assets only"
+  "pack:mep-full|0E8A16|Accepted — full MEP (textures + audio/synth)"
 )
 
 for entry in "${LABELS[@]}"; do
   IFS='|' read -r name color description <<<"$entry"
   if gh label list --repo "$REPO" --json name -q '.[].name' | grep -qx "$name"; then
-    echo "Já existe: $name"
+    echo "Already exists: $name"
   else
     gh label create "$name" --repo "$REPO" --color "$color" --description "$description"
-    echo "Criada: $name"
+    echo "Created: $name"
   fi
 done

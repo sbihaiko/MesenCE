@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""mep_render_audio — renderiza os MIDI do bootstrap em OGG (F5.3, ADR-0047).
+"""mep_render_audio — renders the bootstrap's MIDI into OGG (F5.3, ADR-0047).
 
-Lê `<pack>/auto/audio/fingerprints.json` (e/ou `<pack>/audio/fingerprints.json`)
-e, para cada faixa `bgm` com MIDI, escreve `<camada>/bgm/<id>.ogg`:
+Reads `<pack>/auto/audio/fingerprints.json` (and/or
+`<pack>/audio/fingerprints.json`) and, for each `bgm` track with MIDI, writes
+`<layer>/bgm/<id>.ogg`:
 
-  1. com **fluidsynth** + um SoundFont (`--sf2`, ou $MEP_SF2, ou um GeneralUser/
-     FluidR3 encontrado nos caminhos usuais) → render General MIDI;
-  2. sem fluidsynth, um sintetizador interno em Python/numpy (pulso 25 %/50 %,
-     triângulo, ruído) — timbre próximo do chip original, útil como
-     placeholder e para provar o pipeline;
-  3. a codificação OGG usa **ffmpeg** (libvorbis); sem ffmpeg fica o WAV ao lado
-     e o host não toca (só OGG é suportado pelo OggMixer).
+  1. with **fluidsynth** + a SoundFont (`--sf2`, or $MEP_SF2, or a GeneralUser/
+     FluidR3 found in the usual paths) -> General MIDI render;
+  2. without fluidsynth, an internal Python/numpy synthesizer (25%/50% pulse,
+     triangle, noise) — timbre close to the original chip, useful as a
+     placeholder and to prove out the pipeline;
+  3. OGG encoding uses **ffmpeg** (libvorbis); without ffmpeg the WAV is left
+     alongside it and the host does not play it (only OGG is supported by
+     OggMixer).
 
-Nunca sobrescreve um OGG na camada humana (`audio/bgm/`); só escreve em
-`auto/audio/bgm/` (ou em `audio/bgm/` quando o fingerprints.json está lá e
-não existe camada auto — `--layer` força).
+Never overwrites an OGG in the human layer (`audio/bgm/`); only writes to
+`auto/audio/bgm/` (or to `audio/bgm/` when fingerprints.json lives there and
+there is no auto layer — `--layer` forces it).
 
-Uso: python3 scripts/mep_render_audio.py <pasta-do-pack> [--sf2 arquivo.sf2] [--layer auto|human] [--force]
+Usage: python3 scripts/mep_render_audio.py <pack-folder> [--sf2 file.sf2] [--layer auto|human] [--force]
 """
 import json
 import math
@@ -49,9 +51,9 @@ def read_varlen(data, pos):
 
 
 def parse_smf(path: Path):
-    """Devolve (tpqn, tempo_us, eventos [(tick, kind, channel, note)])."""
+    """Returns (tpqn, tempo_us, events [(tick, kind, channel, note)])."""
     data = path.read_bytes()
-    assert data[:4] == b"MThd", "não é SMF"
+    assert data[:4] == b"MThd", "not an SMF"
     hdr_len = struct.unpack(">I", data[4:8])[0]
     fmt, ntracks, division = struct.unpack(">HHH", data[8:14])
     pos = 8 + hdr_len
@@ -190,12 +192,12 @@ def main(argv):
     if layer_opt in (None, "human") and (pack / "audio/fingerprints.json").exists() and (layer_opt == "human" or not layers):
         layers.append(pack / "audio")
     if not layers:
-        print("nenhum fingerprints.json encontrado em auto/audio/ ou audio/")
+        print("no fingerprints.json found in auto/audio/ or audio/")
         return 1
 
-    print(f"renderer: {'fluidsynth + ' + sf2 if use_fluid else 'sintetizador interno (instale fluidsynth + um SoundFont para General MIDI)'}")
+    print(f"renderer: {'fluidsynth + ' + sf2 if use_fluid else 'internal synthesizer (install fluidsynth + a SoundFont for General MIDI)'}")
     if not shutil.which("ffmpeg"):
-        print("aviso: ffmpeg não encontrado — só WAV será gerado (o emulador toca apenas OGG)")
+        print("warning: ffmpeg not found — only WAV will be generated (the emulator only plays OGG)")
 
     done = skipped = failed = 0
     for layer in layers:
@@ -208,7 +210,7 @@ def main(argv):
             ogg = layer / "bgm" / f"{t['id']}.ogg"
             human_ogg = pack / "audio/bgm" / f"{t['id']}.ogg"
             if not midi.exists():
-                print(f"  {t['id']}: MIDI ausente ({midi})")
+                print(f"  {t['id']}: MIDI missing ({midi})")
                 failed += 1
                 continue
             if ogg.exists() and not force:
@@ -221,18 +223,18 @@ def main(argv):
                     render_internal(midi, wav)
                     ok = True
                 except Exception as exc:  # noqa: BLE001
-                    print(f"  {t['id']}: falha no render interno: {exc}")
+                    print(f"  {t['id']}: internal render failed: {exc}")
             if ok and encode_ogg(wav, ogg):
                 wav.unlink(missing_ok=True)
-                note = " (a camada humana tem o próprio OGG — prevalece)" if human_ogg.exists() and layer.name == "audio" and layer.parent.name == "auto" else ""
+                note = " (the human layer has its own OGG — it takes precedence)" if human_ogg.exists() and layer.name == "audio" and layer.parent.name == "auto" else ""
                 print(f"  {t['id']}: {ogg.relative_to(pack)} ({t.get('frames', 0) / 60:.1f} s){note}")
                 done += 1
             elif ok:
-                print(f"  {t['id']}: {wav.relative_to(pack)} (sem ffmpeg — não codificado)")
+                print(f"  {t['id']}: {wav.relative_to(pack)} (no ffmpeg — not encoded)")
                 failed += 1
             else:
                 failed += 1
-    print(f"{done} renderizada(s), {skipped} já existiam, {failed} falha(s)")
+    print(f"{done} rendered, {skipped} already existed, {failed} failed")
     return 0 if failed == 0 else 1
 
 

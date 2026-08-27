@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Registra um bug como GitHub Issue e adiciona ao board "MesenCE Bug Tracker"
-# (github.com/users/sbihaiko/projects/1), já com Status = "To triage".
+# Files a bug as a GitHub Issue and adds it to the "MesenCE Bug Tracker" board
+# (github.com/users/sbihaiko/projects/1), already with Status = "To triage".
 #
-# Uso: scripts/report-bug.sh "<título>" "<corpo>" [P0|P1|P2]
+# Usage: scripts/report-bug.sh "<title>" "<body>" [P0|P1|P2]
 #
-# Requer `gh` autenticado com escopo `project` (gh auth refresh -s project).
+# Requires `gh` authenticated with the `project` scope (gh auth refresh -s project).
 set -euo pipefail
 
 REPO="sbihaiko/MesenCE"
@@ -16,7 +16,7 @@ STATUS_TRIAGE_OPTION_ID="f971fb55"
 PRIORITY_FIELD_ID="PVTSSF_lAHOB1MsbM4BhjX3zhges5M"
 
 usage() {
-  echo "Uso: $0 <título> <corpo> [P0|P1|P2]" >&2
+  echo "Usage: $0 <title> <body> [P0|P1|P2]" >&2
   exit 1
 }
 
@@ -27,11 +27,11 @@ PRIORITY="${3:-}"
 
 case "$PRIORITY" in
   ""|P0|P1|P2) ;;
-  *) echo "Prioridade inválida: $PRIORITY (use P0, P1 ou P2)" >&2; exit 1 ;;
+  *) echo "Invalid priority: $PRIORITY (use P0, P1, or P2)" >&2; exit 1 ;;
 esac
 
 ISSUE_URL=$(gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY" --label bug)
-echo "Issue criada: $ISSUE_URL"
+echo "Issue created: $ISSUE_URL"
 
 ITEM_ID=$(gh project item-add "$PROJECT_NUMBER" --owner "$OWNER" --url "$ISSUE_URL" --format json -q '.id')
 
@@ -48,4 +48,4 @@ if [ -n "$PRIORITY" ]; then
     --field-id "$PRIORITY_FIELD_ID" --single-select-option-id "$OPT_ID" >/dev/null
 fi
 
-echo "Registrado no board: https://github.com/users/$OWNER/projects/$PROJECT_NUMBER"
+echo "Added to board: https://github.com/users/$OWNER/projects/$PROJECT_NUMBER"
