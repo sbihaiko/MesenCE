@@ -432,18 +432,21 @@ jobs:
             echo "Autofix did not converge or made no change to scripts/mep_lint.py — not opening a PR. Summary: $SUMMARY"
             exit 0
           fi
-          # actions/checkout leaves TWO things behind: a credential helper
-          # AND an http.<url>.extraheader carrying the job's read-only
-          # GITHUB_TOKEN as a Basic-auth header. `gh auth setup-git` alone
-          # only replaces the former — git prefers the extraheader when
-          # both are present, so the push below still authenticated as
-          # github-actions[bot] (confirmed live: run 33045652190, "remote:
-          # Permission ... denied to github-actions[bot]", exit 128) even
-          # with GH_TOKEN=PROJECT_PAT set on this step. Removing the
-          # leftover header first is what actually hands the push to
-          # PROJECT_PAT's identity.
-          git config --local --unset-all "http.https://github.com/.extraheader" || true
-          gh auth setup-git
+          # Two prior attempts at this comment both turned out wrong in
+          # practice: unsetting actions/checkout's http.extraheader, then
+          # (separately) pairing that with `gh auth setup-git`, still
+          # authenticated the push as github-actions[bot] and got a 403
+          # (confirmed live twice: runs 33045652190 and 33047829747,
+          # "remote: Permission ... denied to github-actions[bot]", exit
+          # 128) — something in this job (quite possibly the Claude Code
+          # Action step just above, which does its own internal git/gh
+          # auth setup) keeps re-establishing default-token credential
+          # state after ours. Rather than chase that further, this embeds
+          # PROJECT_PAT directly in the remote URL: a URL-embedded
+          # credential always wins over any credential helper or
+          # extraheader git might otherwise pick up, regardless of what
+          # else touched git's config earlier in the job.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           BRANCH="autofix/mep-lint-drift-issue-${ISSUE_NUMBER}-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
