@@ -198,10 +198,17 @@ def scan_convention_sections(src: Source, rep: Report, sections: dict, root_pref
                 lint_fingerprints(src, alt_rel, rep)
 
 
-def lint_pack_json(src: Source, rep: Report):
-    where = "pack.json"
+def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
+    """Valida pack.json em `root_prefix` (raiz do container, ou o prefixo
+    "<fallback>/" descoberto por find_fallback_subfolder — ADR-0120). Todos
+    os paths referenciados pelo manifest (patches[].file, sections[].path)
+    são resolvidos relativos a `root_prefix`, nunca à raiz do container,
+    para que um pack.json descoberto via fallback seja validado por inteiro
+    (MUST fields, semver, sha1s, safe_rel) em vez de servir só como marcador
+    de aceite não verificado."""
+    where = f"{root_prefix}pack.json"
     try:
-        root = json.loads(src.text("pack.json"))
+        root = json.loads(src.text(where))
     except Exception as exc:  # noqa: BLE001
         rep.error(where, f"JSON inválido: {exc}")
         return {}
@@ -244,7 +251,7 @@ def lint_pack_json(src: Source, rep: Report):
                 rel = safe_rel(p["file"])
                 if rel is None:
                     rep.error(where, f"patches[{i}].file inseguro: {p['file']}")
-                elif not src.exists(rel):
+                elif not src.exists(f"{root_prefix}{rel}"):
                     rep.error(where, f"patches[{i}].file não existe: {rel}")
     sections = root.get("sections")
     found = {}
@@ -263,9 +270,9 @@ def lint_pack_json(src: Source, rep: Report):
                 rep.error(where, f"seção '{name}': path inseguro '{sec['path']}'")
                 continue
             probe = rel if name == "synth" else (f"{rel}/hires.txt" if rel else "hires.txt")
-            if not src.exists(probe):
+            if not src.exists(f"{root_prefix}{probe}"):
                 rep.error(where, f"seção '{name}': '{probe}' não existe")
-            found[name] = rel
+            found[name] = f"{root_prefix}{rel}"
         if not found:
             rep.error(where, "'sections' precisa de textures/audio/synth")
     return found
@@ -631,7 +638,15 @@ def main(argv):
         if fallback:
             fb_prefix, fb_depth = fallback
             rep.info(fb_prefix, f"fallback estrutural (ADR-0120): raiz do pack descoberta em '{fb_prefix}' (depth {fb_depth})")
-            scan_convention_sections(src, rep, sections, root_prefix=f"{fb_prefix}/")
+            fb_root = f"{fb_prefix}/"
+            if src.exists(f"{fb_root}pack.json"):
+                # pack.json foi o próprio marcador que tornou este subdiretório
+                # candidato (FALLBACK_SUFFIXES) — precisa ser lintado por
+                # inteiro aqui, senão um manifest malformado/inseguro seria
+                # aceito sem nunca ser validado (só a presença de suas seções
+                # via scan_convention_sections abaixo).
+                sections = lint_pack_json(src, rep, root_prefix=fb_root)
+            scan_convention_sections(src, rep, sections, root_prefix=fb_root)
 
     if not sections:
         rep.error(".", "nenhuma seção encontrada (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")

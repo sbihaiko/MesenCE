@@ -50,10 +50,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `FALLBACK_MAX_DEPTH`/`FALLBACK_MAX_ENTRIES` (reusing `PROBES`/
   `AUDIO_ALT_PROBE`); it fires only when the root-level convention scan
   found no section, and emits an info line naming the discovered path/depth.
-  `gen_mep_fallback_test_pack.py` generates the two synthetic zip fixtures
+  Because `pack.json` is itself one of the fallback's accept markers
+  (`FALLBACK_SUFFIXES`), a `pack.json` found under the discovered prefix is
+  fully re-run through `lint_pack_json` (parameterized by `root_prefix`) —
+  a manifest is never accepted on presence alone, the same MUST-field/
+  semver/sha1/`safe_rel` checks the root-level manifest gets apply to a
+  fallback-discovered one too.
+  `gen_mep_fallback_test_pack.py` generates three synthetic zip fixtures
   (`accept`: one Contra80s-shaped release-zip wrapper; `reject`: two
-  structurally-valid, ambiguous subfolders) that exercise it, mirroring
-  `gen_mep_test_pack.py`'s CLI/docstring style.
+  structurally-valid, ambiguous subfolders; `malformed`: the same wrapper
+  shape as `accept` but with an invalid `pack.json` inside it, proving the
+  discovered manifest gets linted rather than just detected) that exercise
+  it, mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
 - `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
@@ -114,13 +122,16 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   recursion) from what was not independently re-verified (the real
   published zip's byte-for-byte structure), qualifying any "would not load
   today" claim by that gap.
-  `verify_mep_fallback_lint_fixture.sh` (AC-5) generates the two
+  `verify_mep_fallback_lint_fixture.sh` (AC-5) generates the three
   `gen_mep_fallback_test_pack.py` fixtures plus one `gen_mep_test_pack.py`
-  regression fixture and runs the real `mep_lint.py` CLI against all three:
+  regression fixture and runs the real `mep_lint.py` CLI against all four:
   the Contra80s-shaped wrapper is accepted with a fallback info line naming
   the discovered path/depth, the ambiguous two-subfolder pack is rejected
-  with no such line, and a pre-existing pack.json-root pack's classification
-  (and the absence of any fallback line) is unchanged.
+  with no such line, the wrapper with a malformed `pack.json` inside the
+  discovered prefix is rejected with a JSON-invalid error naming that
+  nested `pack.json` (not silently accepted on the manifest's mere
+  presence), and a pre-existing pack.json-root pack's classification (and
+  the absence of any fallback line) is unchanged.
   `verify_mep_fallback_constant_parity.sh` (AC-6) extracts
   `kMepFallbackMaxDepth`/`kMepFallbackMaxEntries` (C++, `MepPack.h`),
   `FallbackMaxDepth`/`FallbackMaxEntries` (C#, `MepZipValidator.cs`), and

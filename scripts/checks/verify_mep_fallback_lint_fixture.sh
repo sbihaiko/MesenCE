@@ -11,7 +11,11 @@
 #   - leaves an existing-convention fixture's classification unchanged: a
 #     root-pack.json zip from the pre-existing scripts/gen_mep_test_pack.py
 #     must still pass, with NO fallback info line at all (the fallback must
-#     never even run when the existing conventions already matched).
+#     never even run when the existing conventions already matched);
+#   - rejects a fallback-discovered subfolder whose pack.json is malformed:
+#     pack.json is one of the FALLBACK_SUFFIXES accept markers, so this
+#     proves the discovered manifest is fully linted (not just used as an
+#     unchecked structural signal) once the fallback resolves a prefix.
 # No mocks: runs the real mep_lint.py CLI against real generated zip files.
 set -euo pipefail
 
@@ -32,6 +36,9 @@ fail() {
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+
+# Mirrors ACCEPT_WRAPPER in gen_mep_fallback_test_pack.py.
+ACCEPT_WRAPPER_PACK_JSON="Contra80s-v1.1/Contra (U) [!]/pack.json"
 
 run_lint() {
   # run_lint <zip> -> stdout on global RUN_OUT, exit code on global RUN_RC
@@ -89,4 +96,20 @@ grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
   && fail "regressão: um pack.json-root pack não deveria nunca acionar o fallback estrutural:
 $RUN_OUT"
 
-echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, e não muda a classificação de um pack.json-root pack existente"
+# --- fixture 4: malformed manifest under a fallback-discovered prefix ------
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" malformed >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'malformed'"
+MALFORMED_ZIP="$WORK/fallback/mep-fallback-malformed-manifest.zip"
+[ -f "$MALFORMED_ZIP" ] || fail "fixture 'malformed' não foi gerada: $MALFORMED_ZIP"
+
+run_lint "$MALFORMED_ZIP"
+[ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack.json malformado descoberto via fallback (esperava exit != 0 — o manifest descoberto precisa ser lintado, não só usado como marcador de aceite):
+$RUN_OUT"
+grep -q "JSON inválido" <<<"$RUN_OUT" \
+  || fail "pack.json malformado sob o prefixo do fallback não foi reportado como JSON inválido:
+$RUN_OUT"
+grep -qF "$ACCEPT_WRAPPER_PACK_JSON" <<<"$RUN_OUT" \
+  || fail "o erro de JSON inválido não referencia o pack.json dentro do prefixo descoberto (deveria, não o da raiz do container):
+$RUN_OUT"
+
+echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, e não muda a classificação de um pack.json-root pack existente"

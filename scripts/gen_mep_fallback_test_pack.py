@@ -8,15 +8,24 @@ ROM — as duas convenções existentes (ADR-0040/ADR-0049) já falham por
 construção, então só o fallback (ou a rejeição ambígua dele) decide o
 resultado:
 
-  accept  <out>/mep-fallback-accept.zip   um único wrapper (formato de release
-          zip real, "Contra80s-v1.1/Contra (U) [!]/") contendo a convenção
-          completa (textures/hires.txt, synth/preset.cfg) mais um arquivo de
-          promo solto ao lado ("Contra80s-v1.1/README.txt") que não deve
-          confundir a busca — candidato único, deve ser aceito.
-  reject  <out>/mep-fallback-reject.zip   dois subdiretórios distintos
-          ("PackA/", "PackB/"), cada um com sua própria convenção completa —
-          dois candidatos estruturalmente válidos, ambíguo, deve ser
-          rejeitado (nenhuma seção encontrada).
+  accept     <out>/mep-fallback-accept.zip   um único wrapper (formato de
+             release zip real, "Contra80s-v1.1/Contra (U) [!]/") contendo a
+             convenção completa (textures/hires.txt, synth/preset.cfg) mais
+             um arquivo de promo solto ao lado ("Contra80s-v1.1/README.txt")
+             que não deve confundir a busca — candidato único, deve ser
+             aceito.
+  reject     <out>/mep-fallback-reject.zip   dois subdiretórios distintos
+             ("PackA/", "PackB/"), cada um com sua própria convenção
+             completa — dois candidatos estruturalmente válidos, ambíguo,
+             deve ser rejeitado (nenhuma seção encontrada).
+  malformed  <out>/mep-fallback-malformed-manifest.zip   mesmo wrapper único
+             do "accept", mas com um pack.json inválido (JSON quebrado)
+             dentro do subdiretório descoberto — pack.json é um dos
+             FALLBACK_SUFFIXES (marcador de aceite), então isto prova que o
+             fallback linta o manifest descoberto por inteiro em vez de só
+             usá-lo como sinal estrutural (ver o fix de segurança no
+             histórico de mep_lint.py, revision cycle do T3): deve ser
+             rejeitado.
 
 Uso:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
@@ -62,6 +71,16 @@ def write_reject_zip(path: Path):
     ])
 
 
+def write_malformed_manifest_zip(path: Path):
+    """Mesmo wrapper único do accept, mas com um pack.json inválido dentro
+    do subdiretório descoberto: prova que o fallback linta o manifest
+    descoberto (não só usa sua presença como sinal estrutural)."""
+    _write_zip(path, [
+        (f"{ACCEPT_WRAPPER}/pack.json", "{ isto não é json"),
+        (f"{ACCEPT_WRAPPER}/textures/hires.txt", HIRES_TXT),
+    ])
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -75,6 +94,8 @@ def main() -> int:
             write_accept_zip(out / "mep-fallback-accept.zip")
         elif kind == "reject":
             write_reject_zip(out / "mep-fallback-reject.zip")
+        elif kind == "malformed":
+            write_malformed_manifest_zip(out / "mep-fallback-malformed-manifest.zip")
         else:
             print(f"kind desconhecido: {kind}")
             return 1
