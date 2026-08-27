@@ -50,13 +50,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `FALLBACK_MAX_DEPTH`/`FALLBACK_MAX_ENTRIES` (reusing `PROBES`/
   `AUDIO_ALT_PROBE`); it fires only when the root-level convention scan
   found no section, and emits an info line naming the discovered path/depth.
+  Every candidate entry is run through `safe_rel` before it can become the
+  discovered prefix — a zip-slip-shaped entry (a `..` segment) is skipped,
+  never treated as a valid pack root, matching the traversal guards
+  `MepZipValidator.IsSafePath` (C#) and `MepPack::NormalizeRelativePath`
+  (C++) already apply on their own candidate-scan paths.
   Because `pack.json` is itself one of the fallback's accept markers
   (`FALLBACK_SUFFIXES`), a `pack.json` found under the discovered prefix is
   fully re-run through `lint_pack_json` (parameterized by `root_prefix`) —
   a manifest is never accepted on presence alone, the same MUST-field/
   semver/sha1/`safe_rel` checks the root-level manifest gets apply to a
   fallback-discovered one too.
-  `gen_mep_fallback_test_pack.py` generates five synthetic zip fixtures
+  `gen_mep_fallback_test_pack.py` generates six synthetic zip fixtures
   (`accept`: one Contra80s-shaped release-zip wrapper; `reject`: two
   structurally-valid, ambiguous subfolders; `malformed`: the same wrapper
   shape as `accept` but with an invalid `pack.json` inside it, proving the
@@ -67,8 +72,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `root-hires`: same wrapper with no `pack.json` at all - only
   `synth/preset.cfg` makes the subfolder a candidate - plus a broken
   `hires.txt` loose at the discovered prefix's root, proving the legacy
-  root-`hires.txt` branch is mirrored under the fallback prefix) that
-  exercise it, mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
+  root-`hires.txt` branch is mirrored under the fallback prefix; `traversal`:
+  zip-slip-shaped entries (`../evil/textures/hires.txt`, `../evil/synth/
+  preset.cfg`) with no root `pack.json` and no ROM-name match, proving
+  `find_fallback_subfolder`'s `safe_rel` guard refuses a `..`-segment
+  candidate instead of discovering it as the pack root) that exercise it,
+  mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
 - `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
@@ -129,9 +138,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   recursion) from what was not independently re-verified (the real
   published zip's byte-for-byte structure), qualifying any "would not load
   today" claim by that gap.
-  `verify_mep_fallback_lint_fixture.sh` (AC-5) generates all five
+  `verify_mep_fallback_lint_fixture.sh` (AC-5) generates all six
   `gen_mep_fallback_test_pack.py` fixtures plus one `gen_mep_test_pack.py`
-  regression fixture and runs the real `mep_lint.py` CLI against all six:
+  regression fixture and runs the real `mep_lint.py` CLI against all seven:
   the Contra80s-shaped wrapper is accepted with a fallback info line naming
   the discovered path/depth, the ambiguous two-subfolder pack is rejected
   with no such line, a pre-existing pack.json-root pack's classification
@@ -140,10 +149,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   JSON-invalid error naming that nested `pack.json` (not silently accepted
   on the manifest's mere presence), the wrapper with an empty
   `sections.textures.path` plus a broken discovered-root `hires.txt` is
-  rejected (the empty path doesn't leave the textures layer unlinted), and
-  the manifest-less wrapper with a broken discovered-root `hires.txt` is
+  rejected (the empty path doesn't leave the textures layer unlinted), the
+  manifest-less wrapper with a broken discovered-root `hires.txt` is
   likewise rejected (the legacy root-`hires.txt` branch is mirrored under
-  the fallback prefix, not skipped).
+  the fallback prefix, not skipped), and the zip-slip-shaped candidate is
+  rejected with no fallback info line (a `..` segment must never be
+  discovered as a pack root).
   `verify_mep_fallback_constant_parity.sh` (AC-6) extracts
   `kMepFallbackMaxDepth`/`kMepFallbackMaxEntries` (C++, `MepPack.h`),
   `FallbackMaxDepth`/`FallbackMaxEntries` (C#, `MepZipValidator.cs`), and

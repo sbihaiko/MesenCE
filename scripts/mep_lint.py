@@ -164,7 +164,16 @@ def find_fallback_subfolder(names):
         return None
     candidate, candidate_depth = None, 0
     for name in sorted(names):
-        normalized = name.replace("\\", "/")
+        # safe_rel rejects '..' segments, a leading '/', and drive letters —
+        # without this guard a zip-slip-shaped entry (e.g. "../evil/textures/
+        # hires.txt") would be accepted as a discovered pack root and PASS a
+        # pack that BASE (and both the C++/C# mirrors, which run their own
+        # traversal guards over every entry) reject. The six existing accept/
+        # reject fixtures all use safe names, so this changes no legitimate
+        # behavior — only closes the traversal hole.
+        normalized = safe_rel(name)
+        if normalized is None:
+            continue
         segments = normalized.split("/")
         if len(segments) > FALLBACK_MAX_DEPTH:
             continue

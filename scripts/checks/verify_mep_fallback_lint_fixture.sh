@@ -24,6 +24,11 @@
 #     (HD-pack-legado layout, no pack.json at all): regression for the
 #     container-root-only "hires.txt na raiz" branch not being mirrored
 #     under the discovered prefix, which left the textures layer mute.
+#   - rejects a zip-slip-shaped candidate ("../evil/textures/hires.txt"):
+#     security regression for find_fallback_subfolder discovering a '..'
+#     segment as a pack root instead of refusing it via safe_rel (revision
+#     cycle T3) — must fail closed exactly like the ambiguous-two-subfolder
+#     fixture, not silently accept an out-of-container path.
 # No mocks: runs the real mep_lint.py CLI against real generated zip files.
 set -euo pipefail
 
@@ -146,4 +151,20 @@ grep -q "não existe: missing.png" <<<"$RUN_OUT" \
   || fail "o hires.txt legado (raiz do fallback) não foi lintado (nenhum erro <img> reportado):
 $RUN_OUT"
 
-echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, rejeita sections.textures.path==\"\" com hires.txt quebrado sob o fallback, rejeita um hires.txt legado quebrado solto na raiz do fallback, e não muda a classificação de um pack.json-root pack existente"
+# --- fixture 7: zip-slip-shaped candidate ('..' segment) -------------------
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" traversal >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py falhou ao gerar 'traversal'"
+TRAVERSAL_ZIP="$WORK/fallback/mep-fallback-traversal.zip"
+[ -f "$TRAVERSAL_ZIP" ] || fail "fixture 'traversal' não foi gerada: $TRAVERSAL_ZIP"
+
+run_lint "$TRAVERSAL_ZIP"
+[ "$RUN_RC" -ne 0 ] || fail "SEGURANÇA: mep_lint.py aceitou um candidato zip-slip-shaped ('../evil/...') via fallback estrutural (esperava exit != 0 — find_fallback_subfolder deve recusar via safe_rel):
+$RUN_OUT"
+grep -q "nenhuma seção encontrada" <<<"$RUN_OUT" \
+  || fail "candidato zip-slip-shaped não foi rejeitado com 'nenhuma seção encontrada':
+$RUN_OUT"
+grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
+  && fail "SEGURANÇA: candidato zip-slip-shaped não deveria emitir a linha info do fallback (deveria ser recusado antes disso):
+$RUN_OUT"
+
+echo "PASS: mep_lint.py aceita o pack Contra80s-shaped via fallback estrutural (com info de path/depth), rejeita o pack ambíguo de dois subdiretórios, rejeita um pack.json malformado descoberto via fallback, rejeita sections.textures.path==\"\" com hires.txt quebrado sob o fallback, rejeita um hires.txt legado quebrado solto na raiz do fallback, rejeita um candidato zip-slip-shaped ('..'), e não muda a classificação de um pack.json-root pack existente"

@@ -41,6 +41,14 @@ resultado:
              mas sem manifest: o branch que reconhece hires.txt solto na
              raiz do container não era espelhado sob o prefixo do fallback,
              então a camada textures ficava muda; deve ser rejeitado.
+  traversal  <out>/mep-fallback-traversal.zip   entradas com um segmento
+             ".." ("../evil/textures/hires.txt", "../evil/synth/
+             preset.cfg") — zip-slip-shaped, sem pack.json na raiz nem nome
+             de arquivo igual ao da ROM, então só o fallback decide. Regressão
+             de segurança: find_fallback_subfolder deve recusar (via
+             safe_rel) esse candidato em vez de descobri-lo como raiz do
+             pack — deve ser rejeitado com "nenhuma seção encontrada", igual
+             à fixture 'reject'.
 
 Uso:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
@@ -123,6 +131,17 @@ def write_root_hires_zip(path: Path):
     ])
 
 
+def write_traversal_zip(path: Path):
+    """Entradas zip-slip-shaped (segmento '..'): find_fallback_subfolder deve
+    recusar este candidato via safe_rel em vez de descobri-lo como raiz do
+    pack (revision cycle do T3 — ver o fix de segurança no histórico de
+    mep_lint.py)."""
+    _write_zip(path, [
+        ("../evil/textures/hires.txt", HIRES_TXT),
+        ("../evil/synth/preset.cfg", PRESET_CFG),
+    ])
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -142,6 +161,8 @@ def main() -> int:
             write_empty_section_path_zip(out / "mep-fallback-empty-section-path.zip")
         elif kind == "root-hires":
             write_root_hires_zip(out / "mep-fallback-root-hires.zip")
+        elif kind == "traversal":
+            write_traversal_zip(out / "mep-fallback-traversal.zip")
         else:
             print(f"kind desconhecido: {kind}")
             return 1
