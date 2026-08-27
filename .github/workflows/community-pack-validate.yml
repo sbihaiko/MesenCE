@@ -50,6 +50,25 @@ env:
   STATUS_ACEITO_PARCIAL: "39e4f3a1"
   STATUS_ACEITO_COMPLETO: "cd763737"
   PACK_HASH_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhge9Is
+  # Structured fields (confirmed live via `gh project field-create` /
+  # `gh project field-list 3 --owner sbihaiko --format json` on 2026-08-27)
+  # so the client-side pack-discovery vision can query Game/Console/
+  # Category/hashes directly instead of regex-parsing issue bodies.
+  GAME_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmoA
+  CONSOLE_FIELD_ID: PVTSSF_lAHOB1MsbM4BhjpNzhghmoE
+  CONSOLE_NES: "ceb4bb8a"
+  CONSOLE_SNES: "408f2457"
+  CONSOLE_GB: "74fea5ea"
+  CONSOLE_GBC: "0f2858ab"
+  CONSOLE_SMS: "c4bc3f87"
+  CONSOLE_OTHER: "e810a7e3"
+  CATEGORY_FIELD_ID: PVTSSF_lAHOB1MsbM4BhjpNzhghmpY
+  CATEGORY_FULL_MEP: "512e4e17"
+  CATEGORY_PARTIAL_HD: "d9566561"
+  PACK_URL_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmqU
+  PACK_MD5_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmrQ
+  ROM_SHA1_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmrU
+  ROM_MD5_FIELD_ID: PVTF_lAHOB1MsbM4BhjpNzhghmrY
   MAX_PACK_BYTES: 314572800 # 300MB pre-download cap (300 * 1024 * 1024)
 
 permissions:
@@ -78,30 +97,50 @@ jobs:
           fi
           gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_EM_VALIDACAO" >/dev/null
-      # Runs unconditionally (before host/lint/classify even start) since the
-      # game name is submitter-declared Issue Form metadata, not a
-      # validation result — useful for browsing the issue list regardless of
-      # eventual verdict. Replaces the whole title (not just the Issue
-      # Form's pre-filled default — a submitter can freely edit that box)
-      # with a fixed "[Pack] <game>" shape, so every community-pack issue is
-      # titled consistently regardless of what was typed. Idempotent against
-      # /revalidate re-runs: a no-op once the title already matches.
-      - name: Rename issue title to "[Pack] <game>" (from the Issue Form)
+      # Runs unconditionally (before host/lint/classify even start) since
+      # game/console/pack-link are submitter-declared Issue Form metadata,
+      # not a validation result — useful for browsing/filtering the board
+      # regardless of eventual verdict. Title replaces the whole thing (not
+      # just the Issue Form's pre-filled default — a submitter can freely
+      # edit that box) with a fixed "[Pack] <game>" shape, so every
+      # community-pack issue is titled consistently regardless of what was
+      # typed. Idempotent against /revalidate re-runs: a no-op once the
+      # title already matches, and item-edit calls are safe to repeat.
+      - name: Record submission metadata (title, Game, Console, Pack URL)
         id: rename-title
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
+          PACK_URL: ${{ inputs.pack_url }}
         run: |
           set -euo pipefail
           BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body -q '.body')
           GAME=$(python3 -c "import re, sys; body = sys.stdin.read(); m = re.search(r'^###\s+Target game/ROM and region\s*\n+(.*?)(?=\n###\s|\Z)', body, re.M | re.S); value = (m.group(1).strip() if m else '').splitlines(); print(value[0].strip() if value else '')" <<<"$BODY")
+          CONSOLE=$(python3 -c "import re, sys; body = sys.stdin.read(); m = re.search(r'^###\s+Console\s*\n+(.*?)(?=\n###\s|\Z)', body, re.M | re.S); value = (m.group(1).strip() if m else '').splitlines(); print(value[0].strip() if value else '')" <<<"$BODY")
           if [ -n "$GAME" ]; then
             NEW_TITLE="[Pack] $GAME"
             CURRENT_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title -q '.title')
             if [ "$CURRENT_TITLE" != "$NEW_TITLE" ]; then
               gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
             fi
+            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+              --field-id "$GAME_FIELD_ID" --text "$GAME" >/dev/null
           fi
+          case "$CONSOLE" in
+            NES) OPT="$CONSOLE_NES" ;;
+            SNES) OPT="$CONSOLE_SNES" ;;
+            GB) OPT="$CONSOLE_GB" ;;
+            GBC) OPT="$CONSOLE_GBC" ;;
+            SMS) OPT="$CONSOLE_SMS" ;;
+            Other) OPT="$CONSOLE_OTHER" ;;
+            *) OPT="" ;;
+          esac
+          if [ -n "$OPT" ]; then
+            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+              --field-id "$CONSOLE_FIELD_ID" --single-select-option-id "$OPT" >/dev/null
+          fi
+          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            --field-id "$PACK_URL_FIELD_ID" --text "$PACK_URL" >/dev/null
       - name: Enforce host allow-list (github.com/*/releases/*, raw/gist githubusercontent, gist.github.com)
         id: host-check
         env:
@@ -173,6 +212,41 @@ jobs:
           echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$PACK_HASH_FIELD_ID" --text "$HASH" >/dev/null
+          MD5=$(md5sum pack_download.bin | awk '{print $1}')
+          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            --field-id "$PACK_MD5_FIELD_ID" --text "$MD5" >/dev/null
+      # ROM SHA1/MD5 come from the submitted pack.json's targets[0], when a
+      # pack.json exists at all (folder-convention packs, ADR-0049, usually
+      # don't declare one — that's expected, not an error). Reuses mep_lint's
+      # own Source/find_fallback_subfolder (imported, never modified) so
+      # subfolder discovery (ADR-0120) matches exactly what the lint step
+      # already validated, instead of a second, possibly-divergent
+      # reimplementation of that lookup.
+      - name: Parse pack.json for declared ROM hashes (if present)
+        id: rom-hashes
+        if: steps.download.outcome == 'success'
+        continue-on-error: true # best-effort: a malformed pack.json is already reported by the lint step, not fatal here
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          python3 -c "import sys, json; from pathlib import Path; sys.path.insert(0, 'scripts'); from mep_lint import Source, find_fallback_subfolder; src = Source(Path('pack_download.bin')); fb = None if src.exists('pack.json') else find_fallback_subfolder(src.names); root = (fb[0] + '/') if fb else ''; ok = src.exists(root + 'pack.json'); data = json.loads(src.text(root + 'pack.json')) if ok else {}; targets = data.get('targets') or []; t0 = targets[0] if targets else {}; print('sha1=' + (t0.get('sha1') or '')); print('md5=' + (t0.get('md5') or ''))" >> "$GITHUB_OUTPUT"
+      - name: Record ROM SHA1 on the Project item (when declared)
+        if: steps.download.outcome == 'success' && steps.rom-hashes.outputs.sha1 != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            --field-id "$ROM_SHA1_FIELD_ID" --text "${{ steps.rom-hashes.outputs.sha1 }}" >/dev/null
+      - name: Record ROM MD5 on the Project item (when declared)
+        if: steps.download.outcome == 'success' && steps.rom-hashes.outputs.md5 != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            --field-id "$ROM_MD5_FIELD_ID" --text "${{ steps.rom-hashes.outputs.md5 }}" >/dev/null
       # `shell: bash` is required (not just the default, unspecified shell)
       # so this multi-line-equivalent pipeline actually runs under `bash -eo
       # pipefail`: the unspecified/default shell on Linux runners is `bash -e
@@ -281,9 +355,10 @@ jobs:
             echo ""
             echo "Pack SHA-256: \`$PACK_SHA256\` — pin this against the pack link; a link that starts serving a different file changes this hash, and this verdict is stale until \`/revalidate\` runs again."
           } >> verdict_comment.txt
+          CATEGORY=""
           case "$VERDICT" in
-            partial_hd) FINAL="$STATUS_ACEITO_PARCIAL" ;;
-            mep_full) FINAL="$STATUS_ACEITO_COMPLETO" ;;
+            partial_hd) FINAL="$STATUS_ACEITO_PARCIAL"; CATEGORY="$CATEGORY_PARTIAL_HD" ;;
+            mep_full) FINAL="$STATUS_ACEITO_COMPLETO"; CATEGORY="$CATEGORY_FULL_MEP" ;;
             invalid) FINAL="$STATUS_INVALIDO" ;;
             *)
               echo "::error::Unrecognized verdict '$VERDICT' from Classify pack structured_output." >&2
@@ -294,6 +369,10 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$FINAL" >/dev/null
+          if [ -n "$CATEGORY" ]; then
+            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+              --field-id "$CATEGORY_FIELD_ID" --single-select-option-id "$CATEGORY" >/dev/null
+          fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"
       # Dispatches community-pack-catalog.yml (on: workflow_dispatch) by
       # name only — never opened/parsed here. AC-6 (validate side).
