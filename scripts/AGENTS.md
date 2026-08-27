@@ -104,10 +104,15 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `checks/` subfolder as later tasks add them; none needs its own AGENTS.md
   (same one-script-one-contract pattern as the checks below).
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
-  `verify-ui-logic-firewall.sh` - repo-hygiene shell checks. Today only
-  `check-core-manifest.sh` is wired (`make check-manifest`, a dependency of
-  `ui`/`core`); the other three run by hand until ADR-0137's `make doc-checks`
-  target lands (roadmap slice H1). `check-f5-4b-doc.sh` was deleted on
+  `verify-ui-logic-firewall.sh` - repo-hygiene shell checks. All four are
+  now invoked by `make doc-checks` (ADR-0137, roadmap slice H1):
+  `check-core-manifest.sh` via the target's `check-manifest` dependency
+  (itself still a dependency of `ui`/`core` on its own), then
+  `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh`, and
+  `check-file-loc.sh` (against `Core/Shared/Audio/MidiExporter.cpp 200`)
+  run directly by `doc-checks`, in order, failing on the first non-zero
+  exit. CI runs `make doc-checks` as its own step on the Linux and macOS
+  build jobs, before "Build Mesen". `check-f5-4b-doc.sh` was deleted on
   2026-08-27 together with the plan header it guarded.
 - `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
   runs (one script per AC, invoked directly by its AC's Verification
