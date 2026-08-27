@@ -548,7 +548,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     if version == 0:
         rep.error(rel, "<ver> missing")
     for name, lines in sorted(missing.items(), key=lambda kv: -len(kv[1])):
-        rep.error(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries silently dropped by the emulator")
+        rep.warning(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries silently dropped by the emulator; HdPackLoader::ProcessBackgroundTag logs the error and discards the entry, so the affected screen(s) just fall back to the original unmodified NES graphics for that layer (no crash, no black screen) — not a blocking defect, but worth fixing upstream")
     for (ref, real), lines in badcase.items():
         rep.warning(f"{rel}:{lines[0]}", f"<background> {ref} only exists as '{real}' — loads on macOS/Windows, fails on Linux ({len(lines)} entry/entries)")
     if dups:
