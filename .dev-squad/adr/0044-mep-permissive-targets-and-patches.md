@@ -2,7 +2,7 @@
 
 - Status: accepted (F5.1, 2026-08-25)
 - Date: 2026-08-25
-- Fase 5 (docs/roadmap/plano-execucao-F5.md), F5.1.
+- Phase 5 (docs/roadmap/plano-execucao-F5.md), F5.1.
 
 ## Context
 Zelda Remastered v1.3 requires one exact PRG0 sha1: it ships an IPS that

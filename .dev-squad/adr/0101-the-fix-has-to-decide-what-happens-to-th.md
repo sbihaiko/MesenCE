@@ -1,7 +1,8 @@
 # ADR-0101: The fix has to decide what happens to the pre-existing `DefaultTile` ...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0132
 
 ## Context
 Raised during decompose: The fix has to decide what happens to the pre-existing `DefaultTile` wildcard entry once real palette variants are captured for the same shape: keep it as a permanent fallback alongside the variants, or stop writing it once N real variants exist. That choice changes what a bootstrap pack looks like on disk (hires.txt gains both a wildcard line and per-palette lines for the same shape) and how the draw-time exact-key-then-wildcard resolution in HdNesPack.cpp:501/509 behaves for palettes never seen during recording. It should be an explicit, recorded decision rather than an implementation side effect.

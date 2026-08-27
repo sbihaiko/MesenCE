@@ -1,7 +1,8 @@
 # ADR-0074: The new `core-unit-tests` target is a regression gate that nothing ru...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0126
 
 ## Context
 Raised during decompose: The new `core-unit-tests` target is a regression gate that nothing runs automatically — confirmed that .github/workflows/ references none of the existing harness targets (`roles-probe`, `capture-tool`, `spike-sound-driver`) either, so Bloco A/B assertions only protect the code when a human remembers to invoke them. Fase 4 doubles the number of hand-run C++ checks without deciding where they get enforced.

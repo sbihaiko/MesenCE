@@ -1,7 +1,8 @@
 # ADR-0107: mep_compare.py is structurally NES-only (32-hex CHR shape + 8-hex NES...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0136
 
 ## Context
 Raised during Execute/T2: mep_compare.py is structurally NES-only (32-hex CHR shape + 8-hex NES palette) yet the repo's only checked-in golden MEP texture pack, docs/specs/golden/mep/textures, is GB-shaped - so the comparator crashes with a raw ValueError on the project's own fixture. That forced this task's fixture-based check to hand-roll its own pack instead of reusing the golden, and it will force the same duplication on every future mep_compare test.

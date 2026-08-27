@@ -1,7 +1,8 @@
 # ADR-0100: MaxPaletteVariantsPerTile is being added as a hardcoded builder-local...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0132
 
 ## Context
 Raised during spec: MaxPaletteVariantsPerTile is being added as a hardcoded builder-local constant rather than a configurable HdPackBuilderOptions field, unlike Scale/FilterType which are already user-facing bootstrap options. If a fixed cap later proves wrong for some titles (too tight -> no-op fix, too loose -> pack bloat on long sessions), the ADR-0050 series may want it promoted to a tunable option in a future phase.

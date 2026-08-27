@@ -1,7 +1,8 @@
 # ADR-0099: Promoting spike_sound_driver.cpp's debugger-breakpoint/JSR-discovery technique from a standalone spike into an in-process, shortcut-triggered feature makes a ~50% failure mode user-facing.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0135
 
 ## Context
 Raised during decompose

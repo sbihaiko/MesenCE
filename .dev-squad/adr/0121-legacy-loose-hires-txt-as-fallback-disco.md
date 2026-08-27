@@ -1,7 +1,8 @@
 # ADR-0121: Legacy loose hires.txt as fallback discovery signal in MEP zip wrapper folders
 
-- Status: accepted
+- Status: proposed (open: extend structural fallback to bare legacy hires.txt vs. reject and require re-zip)
 - Date: 2026-08-27
+- Extends ADR-0120 §2/§3 (subfolder fallback for wrapped zips). Motivated by issues #46, #47, #48.
 
 ## Context
 Bug https://github.com/sbihaiko/MesenCE/issues/48: scripts/mep_lint.py rejects classic Mesen 0.9.5/Mesen2-native HD packs (hires.txt at the pack's own root, no textures/ subfolder — the pre-MEP, pre-ADR-0049 convention MesenCE's HdPacks loader still supports at the container root) with "no section found", specifically when that loose hires.txt sits one level down inside an unrelated wrapper folder — e.g. a raw GitHub /archive/refs/heads/<branch>.zip download whose top-level folder is named after the repo (HDNes-Graphics-Pac-master/, ZII-mesen-main/), not the ROM/game.
@@ -22,14 +23,26 @@ Confirmed by reading current source in-session (not inferred):
 ADR-0120 §3 explicitly lists "add optional ROM-name parameter to MepZipValidator.Validate and mep_lint.py" as a deferred follow-up but does not mention legacy root-level hires.txt as a valid fallback indicator; its existing fallback logic across all three implementations (C++, C#, Python) is scoped only to the textures/audio/synth convention-probe shape.
 
 ## Decision
-Decide whether the structural (Python/C#) and/or name-anchored (all three: C++, C#, Python) fallback subfolder discovery should also accept a bare legacy-probe-basename match (hires.txt / preset.cfg / fingerprints.json with no textures//audio//synth/ wrapper required) as a valid discovery signal — and if so, under what ambiguity and resource-cap rules, consistent with ADR-0120 §2's existing fail-closed-on-ambiguity, depth-4/entry-cap-2000 discipline enforced in lockstep by verify_mep_fallback_constant_parity.sh.
+**Not yet taken.** The open question is whether the structural (Python/C#) and/or name-anchored (all three: C++, C#, Python) fallback subfolder discovery should also accept a bare legacy-probe-basename match (hires.txt / preset.cfg / fingerprints.json with no textures//audio//synth/ wrapper required) as a valid discovery signal — and if so, under what ambiguity and resource-cap rules, consistent with ADR-0120 §2's existing fail-closed-on-ambiguity, depth-4/entry-cap-2000 discipline enforced in lockstep by verify_mep_fallback_constant_parity.sh.
 
-Alternative: reject as out of scope, on the grounds that accepting a bare legacy basename without the textures/audio/synth wrapper shape would meaningfully weaken the "this really looks like a pack" signal that ADR-0120 §3 deliberately keeps tied to the convention shape, and instead close issue #48 by documenting that legacy-format community-pack submissions must be re-zipped/renamed so the wrapper folder (or a subfolder) matches the ROM name for the existing name-anchored fallback to apply.
+The two options on the table are described under Alternatives; their trade-offs under Consequences. Whichever is chosen must also be recorded in MEP-v1: a bare root `hires.txt` (no `textures/`) is not a container shape defined anywhere in §2/§2.1 today, yet `mep_lint.py` already accepts it at the container root as a "legacy loose-pack signal", so the spec (or `docs/community-packs.md`/CLAUDE.md) needs to state that legacy HD Mesen packs are an accepted submission class with their own shape rule before either option is implemented.
 
-If accepted, scope the follow-up implementation consistently across scripts/mep_lint.py, Core/Shared/EnhancementPacks/MepPack.cpp, and UI/Logic/MepZipValidator.cs, keeping any new depth/entry-cap constants in lockstep via verify_mep_fallback_constant_parity.sh, and re-validate issues #46 and #47 against the new logic to confirm they move from "Inválido" to "Aceito parcial (HD Mesen)".
+Prerequisite when option A is chosen: scope the implementation consistently across scripts/mep_lint.py, Core/Shared/EnhancementPacks/MepPack.cpp, and UI/Logic/MepZipValidator.cs, keep any new depth/entry-cap constants in lockstep via verify_mep_fallback_constant_parity.sh, and re-validate issues #46 and #47 against the new logic to confirm they move from "Inválido" to "Aceito parcial (HD Mesen)".
 
 ## Consequences
+Option A — extend the structural fallback to bare legacy basenames:
+- Issues #46 and #47 (raw GitHub `/archive/refs/heads/<branch>.zip` downloads wrapped in a repo-named folder) validate without the submitter re-zipping; the triage board moves them from "Inválido" to "Aceito parcial (HD Mesen)".
+- The "this really looks like a pack" signal weakens: any zip with a `hires.txt` somewhere in its first four path segments becomes a candidate, so the fail-closed ambiguity rule (more than one candidate → reject) and the depth-4/entry-cap-2000 bounds from ADR-0120 §2 carry more weight and must be applied identically in all three languages.
+- Three implementations change (Python, C#, and — for load-time parity — C++ `MepPack::FindFallbackSubfolder` / `ResolveFallbackPrefix`, which today has no structural, no-ROM-name variant at all), plus the parity script.
+- MEP-v1 §2.1 rule 9 must be amended to describe the bare-basename acceptance path.
 
+Option B — reject and require re-zip/rename:
+- No code change; ADR-0120's convention-shape signal stays as tight as designed.
+- Issue #48 is closed by documentation: legacy-format submissions must be re-zipped (or the wrapper folder renamed) so the existing name-anchored fallback applies. Submitters of #46/#47 have to act, and the same friction will recur for every raw GitHub archive download of a legacy pack.
+- Runtime behaviour stays aligned with what the C++ loader already does (name-anchored only), so validators do not accept anything the engine would reject.
 
 ## Alternatives
+- **A. Accept bare legacy probe basenames as a discovery signal** in the structural fallback (and optionally the name-anchored one), under the same fail-closed-on-ambiguity, depth-4/entry-cap-2000 rules as ADR-0120 §2, implemented in lockstep across Python, C# and C++.
+- **B. Reject as out of scope**: keep the fallback tied to the textures/audio/synth convention shape (ADR-0120 §3) and document that legacy community-pack submissions must be re-zipped or renamed so that the wrapper folder (or a subfolder) matches the ROM name, letting the existing name-anchored fallback apply.
+- Not considered viable: accepting the first plausible candidate without an ambiguity rule — already rejected by ADR-0120 for non-determinism.
 

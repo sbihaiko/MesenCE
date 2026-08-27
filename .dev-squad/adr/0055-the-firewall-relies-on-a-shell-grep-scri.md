@@ -1,7 +1,8 @@
 # ADR-0055: The firewall relies on a shell grep (scripts/verify-ui-logic-firewall...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0123
 
 ## Context
 Raised during decompose: The firewall relies on a shell grep (scripts/verify-ui-logic-firewall.sh) plus the dual-compile trick to keep UI/Logic/*.cs host-free. The spec's own risk section notes that a future helper needing a UI-side type breaks the firewall silently until dotnet test runs, and grep for 'Avalonia'/'EmuApi' will not catch a transitive dependency introduced through a using of another UI namespace.

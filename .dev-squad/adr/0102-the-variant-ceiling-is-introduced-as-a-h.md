@@ -1,7 +1,8 @@
 # ADR-0102: The variant ceiling is introduced as a hardcoded internal constant wi...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0132
 
 ## Context
 Raised during decompose: The variant ceiling is introduced as a hardcoded internal constant with no way to observe or tune it, while the target it is calibrated against (ADR-0050's ~7.6 palettes/shape from Zelda Remastered) is a directional figure. A long bootstrap session on a palette-heavy title will silently hit the cap and start dropping variants with no signal in the pack or the log, and the only feedback loop is re-running mep_compare.py by hand.

@@ -1,7 +1,8 @@
 # ADR-0093: Precedent shows ExportRomTilesHdPack's enum entry is only one of ~8 files it touches (NesConsole/SmsConsole/Gameboy .cpp+.h, MepPackManager.cpp, the C# EmulatorShortcut.cs mirror enum, and the ViewModel). AC-14/AC-15 verify only the enum entry and a ViewModel symbol name.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0135
 
 ## Context
 Raised during spec

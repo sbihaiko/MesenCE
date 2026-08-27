@@ -1,7 +1,8 @@
 # ADR-0092: Every existing script in scripts/ (mep_lint.py, mep_compare.py, mep_render_audio.py, validate-specs.py) is invoked via `python3 scripts/<name>.py` and none carry the executable bit; this spec's two new scripts are the first to require `chmod +x` and direct `./scripts/<name>.py` invocation (AC-2, AC-3), a minor convention divergence for the actor to be aware of, not a defect.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0137
 
 ## Context
 Raised during spec

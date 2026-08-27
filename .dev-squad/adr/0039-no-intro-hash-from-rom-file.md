@@ -23,6 +23,10 @@ extension/signature, following the spec table:
 | `.sfc/.smc/.swc/.fig/.bs/.st` | skip 512-byte copier header when `size % 1024 == 512` |
 | everything else (`.gb/.gbc/.sms/.gg/.sg/.col/...`) | whole file |
 
+Amended by ADR-0044 item 1 (MEP-v1 §4, v1.1): for iNES the hashed range is
+clamped to the header-declared PRG+CHR size, so trailing garbage after the
+payload no longer changes the hash; the trainer skip is unchanged.
+
 Output is 40 uppercase hex digits (matches `SHA1::GetHash`). Comparison with
 `targets[].sha1` is case-insensitive. `crc32` is not used for matching in v1
 (spec allows it only as a pre-filter).
@@ -39,4 +43,7 @@ Output is 40 uppercase hex digits (matches `SHA1::GetHash`). Comparison with
 - Ask the mounted console for the hash: impossible at the required point in
   the load sequence without restructuring every console's LoadRom.
 - Match by file name (like HdPacks/): rejected by the spec and by the PRD —
-  the pack must survive renames and identify the exact revision.
+  the pack must survive renames and identify the exact revision. Revised:
+  MEP-v1 v1.1 §2.1 rule 5 and ADR-0049 re-admitted name matching for the
+  convention forms (sibling folder, `<Game>.zip`); hash matching remains the
+  rule for `pack.json` containers.

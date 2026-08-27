@@ -1,7 +1,8 @@
 # ADR-0058: The shared fixture is declared as the cross-language contract for the...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0124
 
 ## Context
 Raised during Execute/T3: The shared fixture is declared as the cross-language contract for the future Fase 4B C++ suite, but the control-character cases (< 0x20) are deliberately excluded from it and tested only via C# [InlineData] escape sequences. The C++ suite reading this fixture will therefore get zero coverage of the control-char rule, which is the one rejection MepZipValidator adds beyond the old inline UI check — the exact rule most likely to drift between the two implementations.

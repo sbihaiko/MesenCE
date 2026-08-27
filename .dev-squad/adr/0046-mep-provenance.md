@@ -2,7 +2,7 @@
 
 - Status: superseded by ADR-0049 (folder convention replaces the manifest: layers = top-level vs `auto/`, provenance = location, sheets/midi/stems = fixed paths)
 - Date: 2026-08-25
-- Fase 5, F5.2+. Generalises the re-record merge rule of F2/ADR-0043.
+- Phase 5, F5.2+. Generalises the re-record merge rule of F2/ADR-0043.
 
 ## Context
 Neither studied pack records where an asset came from. Once a pipeline can

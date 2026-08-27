@@ -1,8 +1,8 @@
 # ADR-0052: Sound level 2 — automatic GM cover from live APU state, SoundFont timbres
 
-- Status: accepted for items 1, 2, 5, 7 (Bloco A implemented 2026-08-25); items 3, 4, 6 and the bundled-SoundFont question still open
+- Status: accepted (items 1, 2, 5 and 6 — Block A implemented 2026-08-25; items 3, 4 and the bundled-SoundFont question still open)
 - Date: 2026-08-25
-- Fase 5, F5.4g. Builds on F1 (`EnhancedSynth`/`EnhancedSynthEngine`), ADR-0042 (ESP per pack), ADR-0047/0051 (track identification).
+- Phase 5, F5.4g. Builds on F1 (`EnhancedSynth`/`EnhancedSynthEngine`), ADR-0042 (ESP per pack), ADR-0047/0051 (track identification).
 
 ## Context
 Two roads were explored for better game audio without a human in the loop:
@@ -45,7 +45,7 @@ of never embedding heavy pipelines.
 Track identification (3a) and human OGGs (3b) sit **on top**: 3a never changes
 the sound by itself, 3b overrides level 2 only for the tracks that exist.
 
-## Implementation notes (Bloco A, 2026-08-25)
+## Implementation notes (Block A, 2026-08-25)
 - `Core/Shared/Audio/ChannelRoleClassifier.{h,cpp}`: console-agnostic; the
   wrappers (NES/GB/SMS) build one `RawChannel` per melodic channel and
   `EnhancedSynthEngine::Route()` fills the Lead/Harmony/Bass slots by role and

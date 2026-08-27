@@ -1,7 +1,8 @@
 # ADR-0106: The F5.4b spec is built on a misdiagnosis. The 'DefaultTile wildcard ...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0132
 
 ## Context
 Raised during Execute/T1: The F5.4b spec is built on a misdiagnosis. The 'DefaultTile wildcard funnel' in HdPackBuilder::ProcessTile does not exist — the wildcard key is only ever written to `_tilesByKey` (HdPackBuilder.cpp:206, :278), never to `_tileUsageCount`, so the old fallback lookup was unreachable and palette variants were already captured unbounded (measured: up to 71 distinct palettes for one tile shape on Zelda.nes). The real open question for ADR-0050 step (b) is therefore not capture-side promotion but a variant-budget policy: how many palette variants per shape are worth persisting, and what the pack-size/quality trade-off is at load and draw time.

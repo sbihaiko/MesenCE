@@ -1,7 +1,8 @@
 # ADR-0059: IsSafePath is public primarily so the test suite can drive the fixtur...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0125
 
 ## Context
 Raised during Execute/T3: IsSafePath is public primarily so the test suite can drive the fixture directly and so a later task can reuse it; Validate is the only production consumer today. This widens the extracted module's public contract for test visibility, which sets the precedent for the rest of UI/Logic/ as Fase 2 adds more extracted types.

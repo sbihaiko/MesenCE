@@ -1,7 +1,8 @@
 # ADR-0096: Promoting the ADR-0051 spike (failed outright on 6 of 12 tested ROMs) into an in-process, breakpoint-driven live feature reachable from an emulator shortcut is a design/reliability trade-off.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0135
 
 ## Context
 Raised during decompose

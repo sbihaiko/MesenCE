@@ -2,7 +2,7 @@
 
 - Status: superseded by ADR-0049 (folder convention replaces the manifest: layers = top-level vs `auto/`, provenance = location, sheets/midi/stems = fixed paths)
 - Date: 2026-08-25
-- Fase 5, F5.4/F5.5.
+- Phase 5, F5.4/F5.5.
 
 ## Context
 hires.txt is a machine format: one line per tile key, palettes in hex,

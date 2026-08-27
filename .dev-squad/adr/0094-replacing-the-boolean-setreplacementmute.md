@@ -1,7 +1,8 @@
 # ADR-0094: Replacing the boolean SetReplacementMute(bool) with a per-channel SetReplacementMuteMask changes a core audio API contract in the NES mixer hot path (Bloco C), with no ADR recording the decision.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0133
 
 ## Context
 Raised during decompose

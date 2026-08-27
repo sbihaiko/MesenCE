@@ -1,7 +1,8 @@
 # ADR-0090: The one live conflict is between issue 3 and issues 1/2: issue 3 want...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0131
 
 ## Context
 Raised during auditor-b: The one live conflict is between issue 3 and issues 1/2: issue 3 wants a compiler matrix inside the step, while issues 1/2 both rest on keeping this lane a single cheap signal (and issue 1 objects specifically to extra compile time riding along with the C# tests). Resolve it in favour of 1/2 — document the clang-only choice instead of expanding the matrix. Nothing here warrants immediate attention; all three are documentation edits to .github/AGENTS.md that can ride the next touch of that file.

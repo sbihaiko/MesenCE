@@ -1,7 +1,8 @@
 # ADR-0053: The spec correctly identifies that whether UI.Tests.csproj joins Mese...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0122
 
 ## Context
 Raised during spec: The spec correctly identifies that whether UI.Tests.csproj joins Mesen.sln affects Windows-only CI (dotnet-format-check.yml's `dotnet restore` + `dotnet format --verify-no-changes`, and any `-r win-x64 -p:PublishAot=true` restore), but cannot be executed/verified from this non-Windows actor environment. The spec resolves this by having the actor record a decision (include vs. exclude, with rationale) in UI/AGENTS.md rather than run the Windows verification.

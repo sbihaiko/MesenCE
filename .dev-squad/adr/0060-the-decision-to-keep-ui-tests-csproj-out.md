@@ -1,7 +1,8 @@
 # ADR-0060: The decision to keep UI.Tests.csproj out of Mesen.sln is recorded in ...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0122
 
 ## Context
 Raised during Execute/T5: The decision to keep UI.Tests.csproj out of Mesen.sln is recorded in UI/AGENTS.md with rationale (as the task required), but it is a durable cross-cutting trade-off: the test project stays permanently outside the solution-level `dotnet restore -r win-x64 -p:PublishAot=true` and `dotnet format --verify-no-changes` gates, so UI.Tests code is never format-checked in CI and the RID-less-csproj-under-AOT-restore risk is deferred rather than resolved.

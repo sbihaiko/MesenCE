@@ -1,7 +1,8 @@
 # ADR-0057: The Fase 0 firewall relies on `UI/Logic/**/*.cs` being compiled twice...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0123
 
 ## Context
 Raised during Execute/T1: The Fase 0 firewall relies on `UI/Logic/**/*.cs` being compiled twice, but the two compilations do not use the same C# property set. `UI.Tests.csproj` sets `ImplicitUsings=enable` and leaves `TreatWarningsAsErrors` unset; `UI/UI.csproj` does not enable `ImplicitUsings` and sets `TreatWarningsAsErrors=true`. A Logic file that omits an explicit `using System;` will compile green under `dotnet test` and fail the real UI build, and any warning in Logic code fails the UI build while `dotnet test` stays green. The dual-compile therefore does not actually prove what UI.Tests/AGENTS.md claims it proves ('any accidental dependency breaks dotnet test immediately'). This is latent today (no UI/Logic/ files exist yet) but bites the moment T2 lands MepZipValidator/MepPackListParser.

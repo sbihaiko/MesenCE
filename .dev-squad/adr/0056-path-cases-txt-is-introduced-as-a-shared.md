@@ -1,7 +1,8 @@
 # ADR-0056: path-cases.txt is introduced as a shared fixture whose whole purpose ...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0124
 
 ## Context
 Raised during decompose: path-cases.txt is introduced as a shared fixture whose whole purpose is to catch divergence between the C# MepZipValidator and C++ MepPack::NormalizeRelativePath (the plan notes they already diverge: the C++ side rejects control chars < 0x20 and ignores '.' segments, the C# side does not). Nothing in this slice enforces the `path<TAB>ok|bad` format or the file's existence, and its only consumer until Fase 4 is the C# suite — so the format can drift or the file can be silently reshaped before the second consumer ever reads it.

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-25
-- Fase 5, F5.4. Reorders the F5.4 plan (objects/sheets → backgrounds first).
+- Phase 5, F5.4. Reorders the F5.4 plan (objects/sheets → backgrounds first).
 
 ## Context
 Comparing the auto layer with three community packs (`scripts/mep_compare.py`,
@@ -26,6 +26,13 @@ numbers on re-record.
 Under a human `textures/` layer the auto screens are **not** merged (only the
 tiles are): a whole-screen PNG would hide the artist's tiles. The artist
 promotes a screen by copying its lines (and PNG) into `textures/hires.txt`.
+
+Note: dropping all auto `<background>` entries whenever a human `textures/`
+layer exists is a deliberate deviation from the per-entry resolution rule in
+MEP-v1 §5.1 / §2.1 rule 6 (human entry wins, remaining `auto/` entries are
+added). The spec needs a sentence recording this exception (e.g. "`<background>`
+entries from `auto/` are added only when the human layer defines no textures")
+citing this ADR; until then this ADR is the only place the behaviour is stated.
 
 ## Consequences
 - The auto layer now yields exactly the artefact the best packs are built

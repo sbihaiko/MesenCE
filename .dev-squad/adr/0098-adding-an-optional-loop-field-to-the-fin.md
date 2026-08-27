@@ -1,7 +1,8 @@
 # ADR-0098: Adding an optional loop field to the fingerprint schema with a minor version bump — no ADR records why the loop point belongs in the fingerprint rather than in OGG metadata that OggReader already parses.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0134
 
 ## Context
 Raised during decompose

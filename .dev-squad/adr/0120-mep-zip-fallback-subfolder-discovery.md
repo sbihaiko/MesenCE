@@ -121,7 +121,14 @@ validators the one piece of context they currently lack: the ROM name.
 `MepZipValidator.Validate` and to `mep_lint.py`'s CLI (e.g. an optional
 second argument) so that, when a caller has that context, the validators
 can tighten to the same name match C++ uses instead of only the looser
-structural one. Today **neither existing caller has that context**:
+structural one. *Status update (ADR-0121, 2026-08-27):* the Python half is
+implemented — `scripts/mep_lint.py` accepts an optional second positional
+ROM name and, when the structural fallback finds nothing, tries the
+ROM-name-anchored `find_fallback_subfolder_by_name`; the CI workflow can
+supply the name from the issue form. The C# validator
+(`UI/Logic/MepZipValidator.cs`) remains structural-only
+(`FindStructuralFallbackPrefix`, no ROM-name parameter). At the time of this
+ADR **neither existing caller had that context**:
 `InstallPack` copies into the shared `PacksFolder` with no ROM selected
 (§3 above), and CI validates a downloaded pack with no ROM at all — both
 would keep using the structural path even after the parameter exists.
@@ -206,7 +213,8 @@ close this gap and could be folded into the E2E harness named in §4.
   fallback is invisible to them because it only decides *what* gets
   extracted where, not *how* it is consumed afterward.
 - Two follow-ups are explicitly deferred, not silently dropped: an optional
-  ROM-name parameter for `MepZipValidator.Validate`/`mep_lint.py` (§3), and a
+  ROM-name parameter for `MepZipValidator.Validate`/`mep_lint.py` (§3 — since
+  done for `mep_lint.py`, still open for the C# validator; see ADR-0121), and a
   standalone C++ E2E zip-pipeline harness (§4).
 
 ## Alternatives

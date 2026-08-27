@@ -1,0 +1,57 @@
+[
+  {
+    "id": "L-282110275400-000",
+    "class": "bug",
+    "lesson": "The Python harness implicitly assumed \"binary exists\" == \"binary is up to date\": ensure_capture_tool() only ran `make capture-tool` when the file was missing, never when it was stale relative to the MesenCore.dylib/sources it links. This is a class of build-artifact staleness not tracked by git (scripts/headless_record is in .gitignore, so there is no commit timestamp to compare against, only the local disk mtime). The symptom (SIGABRT from a missing dyld symbol, before any HdPackBuilder code runs) was easy to misdiagnose as a logic bug in HdPackBuilder because AC-3 only reports \"process aborted during recording\", without distinguishing a dynamic-loading failure from a real runtime failure. Avoid: compare the binary's mtime against the .dylib's (or simply always invoke `make capture-tool`, which is idempotent and always relinks because the target matches no file and the Makefile declares no .PHONY) instead of an existence check.",
+    "scope": [
+      "scripts/validate_palette_variants.py"
+    ],
+    "status": "blocking-in-review",
+    "source": "diagnóstico"
+  },
+  {
+    "id": "L-989ce2c41e3e-000",
+    "class": "new-feature",
+    "lesson": "Decompose phase failed: max iterations (4) exhausted without proxy APPROVE. The same failure recurred on 2026-08-26 when a multi-phase task was again fed to one run. Avoid: never hand a multi-phase PRD to a single dev-squad run — slice it per phase and settle the phase's ADRs first.",
+    "scope": [
+      "workflow:decompose"
+    ],
+    "status": "advisory",
+    "source": "post-mortem"
+  },
+  {
+    "id": "L-b909cad872b0-000",
+    "class": "refactor",
+    "lesson": "The intent anchor pointed at plano-testes-unitarios.md, but Scout resolved unit-tests.yml, .gitignore, AGENTS.md, path-cases.txt and makefile for a referential task — a likely wrong target. Avoid: confirm the intended target before proceeding when Scout's resolved files diverge from the anchor named in the task.",
+    "scope": [
+      "unit-tests.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "path-cases.txt",
+      "makefile"
+    ],
+    "status": "advisory",
+    "source": "post-mortem"
+  },
+  {
+    "id": "L-ff73acd33912-000",
+    "class": "new-feature",
+    "lesson": "The reviewer blocked the task repeatedly (category code-quality, 3x): max_lines_per_file threshold violated — MidiExporter.cpp is 216 lines (`wc -l` confirms), 16 over the configured 200-line cap, while the actor's result claimed compliance. Avoid: re-check the code-quality guardrails (line caps included) before declaring a task done; when a file is near the cap, split it first (see ADR-0034).",
+    "scope": [
+      "Core/Shared/Audio/MidiExporter.h",
+      "Core/Shared/Audio/MidiExporter.cpp"
+    ],
+    "status": "advisory",
+    "source": "revisão"
+  },
+  {
+    "id": "L-ff73acd33912-001",
+    "class": "new-feature",
+    "lesson": "Verify failed: AC(s) AC-6, AC-7, AC-8, AC-9, AC-10, AC-11, AC-12, AC-13, AC-14 did not pass. Review the implementation and the AC commands before re-running Verify.",
+    "scope": [
+      "workflow:verify"
+    ],
+    "status": "advisory",
+    "source": "post-mortem"
+  }
+]

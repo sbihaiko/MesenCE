@@ -1,8 +1,8 @@
 # ADR-0051: Enumerating a game's music and SFX without playing it (sound-driver discovery)
 
-- Status: proposed (spike run on 12 ROMs, 2026-08-25: 5–6 with a validated trigger)
+- Status: proposed (spike implemented and calibrated on 12 ROMs 2026-08-25; the shipping shape is what remains proposed — runtime contract in ADR-0135)
 - Date: 2026-08-25
-- Fase 5, F5.4f. Complements ADR-0047 (fingerprint trigger) and F5.3 (bootstrap recorder).
+- Phase 5, F5.4f. Complements ADR-0047 (fingerprint trigger) and F5.3 (bootstrap recorder).
 
 ## Context
 F5.3 records music only while the user plays: a track the user never reaches is
@@ -59,14 +59,14 @@ from every RAM address the tick reads (trace-based mailbox fallback).
 
 | Game | Tick | Trigger | Verdict |
 |---|---|---|---|
-| Mega Man (Capcom) | `$9000` bank 4 | `JSR $9003`, `A=id`, 2/2 reproducible | ✅ ids 0–50: 18 bgm + sfx |
-| Castlevania (Konami) | `$838A` bank 6 | `JSR $8187`, `A=id`, 2/2 | ✅ 15 sfx/jingles (music entry may differ) |
-| Zelda (Nintendo) | `$9825` | mailboxes `$0600` (SFX mask) + `$0602` (music), 2/2 | ✅ |
-| Punch-Out!! | `$8000` | mailbox `$0722`, 2/2 | ✅ 19 signatures |
-| SMB3 | `$F795` | mailboxes `$04F5`, `$04F1`, 2/2 (its real sound queue) | ✅ |
-| Ninja Gaiden (Tecmo) | `$8000` | `$0600`, 1/2 | ⚠️ plausible |
-| Bomberman | `$E4C7` | `$00BE/$00C0` only through a "tick clears it" exemption, 0/2 | ❌ state corruption (exemption removed) |
-| 1943, Contra, Excitebike, Gauntlet, SMB1 | found | nothing validated | ❌ |
+| Mega Man (Capcom) | `$9000` bank 4 | `JSR $9003`, `A=id`, 2/2 reproducible | validated — ids 0–50: 18 bgm + sfx |
+| Castlevania (Konami) | `$838A` bank 6 | `JSR $8187`, `A=id`, 2/2 | validated — 15 sfx/jingles (music entry may differ) |
+| Zelda (Nintendo) | `$9825` | mailboxes `$0600` (SFX mask) + `$0602` (music), 2/2 | validated |
+| Punch-Out!! | `$8000` | mailbox `$0722`, 2/2 | validated — 19 signatures |
+| SMB3 | `$F795` | mailboxes `$04F5`, `$04F1`, 2/2 (its real sound queue) | validated |
+| Ninja Gaiden (Tecmo) | `$8000` | `$0600`, 1/2 | plausible, not validated |
+| Bomberman | `$E4C7` | `$00BE/$00C0` only through a "tick clears it" exemption, 0/2 | failed — state corruption (exemption removed) |
+| 1943, Contra, Excitebike, Gauntlet, SMB1 | found | nothing validated | failed |
 
 Failure mode where it fails: the request never happens inside the observation
 window — silent title and Start alone does not change the music (Contra, SMB1
@@ -103,5 +103,7 @@ levers above push the hit rate up.
 - `+` No per-game tables, no NSF database; works on ROM hacks.
 - `−` Runs the game's own code with a hijacked stack: a few ids will do
   nothing or hang (cap the sampling window; a `JMP`-self stub contains it).
+  This is host tooling driving the ROM under the debugger, not pack content,
+  so MEP-v1 §6 ("hosts MUST NOT execute pack content") is not implicated.
 - `−` Enumerated ids are not named; naming stays a human step (or a later
   match against the tracks the player actually reaches).

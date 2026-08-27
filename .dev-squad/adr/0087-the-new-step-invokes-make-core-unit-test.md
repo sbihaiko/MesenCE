@@ -1,7 +1,8 @@
 # ADR-0087: The new step invokes `make core-unit-tests` with no make flags, so it...
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0131
 
 ## Context
 Raised during Execute/T1: The new step invokes `make core-unit-tests` with no make flags, so it silently inherits the makefile's `CXX := clang++` default (a `:=` assignment that overrides any environment CXX). By contrast .github/workflows/build.yml's Linux matrix deliberately exercises both toolchains (`USE_GCC=true` and the clang default, build.yml L69-71). The C++ unit-test harness is therefore gated on exactly one unpinned compiler, while the production core is gated on two - a divergence in toolchain coverage that is not recorded anywhere.

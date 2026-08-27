@@ -1,7 +1,8 @@
 # ADR-0095: Adding an optional loop field to the fingerprint schema plus a minor spec version bump is a published-format contract change spread across three tasks with no single owner of the field's semantics.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0134
 
 ## Context
 Raised during decompose

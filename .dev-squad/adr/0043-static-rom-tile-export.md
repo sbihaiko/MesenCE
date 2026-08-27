@@ -1,6 +1,6 @@
 # ADR-0043: Static ROM tile export as palette-agnostic `defaultTile` entries
 
-- Status: accepted
+- Status: accepted (amended 2026-08-25, F5.4 — see Amendment section)
 - Date: 2026-08-25
 - Complements F2 (HD Pack Builder) and feeds F5 (offline upscaling pipeline).
 
@@ -19,7 +19,8 @@ ExportRomTilesHdPack`, same `HdPackBuilderOptions` as recording):
   written as a `defaultTile` entry keyed by its absolute CHR index (CHR ROM
   keys are index-based in HDNes), drawn with a neutral gray ramp
   (`PaletteColors = 0F001030`, ignored by the loader for default tiles).
-  CHR RAM games are refused with a message: recording is the only option.
+  CHR RAM games are refused with a message: recording is the only option
+  (reversed by the 2026-08-25 amendment below).
 - **GB/GBC/SMS/GG** (`HdTilePackBuilder::AddRomTiles`): heuristic scan of the
   ROM file in aligned 16-byte (2bpp) / 32-byte (4bpp planar) blocks; flat
   blocks are skipped; each block yields one BG and one OBJ `defaultTile`
@@ -34,7 +35,9 @@ ExportRomTilesHdPack`, same `HdPackBuilderOptions` as recording):
 ## Consequences
 - 100% bitmap coverage for NES CHR ROM games without playing; the artist
   paints once per bitmap and loses per-palette variants unless they also
-  record. The export is *not* 1:1 with the original rendering (gray art).
+  record. The export is *not* 1:1 with the original rendering (gray art)
+  (reversed by the 2026-08-25 amendment below: the gray ramp is recolored at
+  draw time).
 - GB/SMS export catches uncompressed tiles only (e.g. 12 of 26 on-screen
   tiles of the F1 test ROM are runtime-generated and not found).
 - The neutral gray sheets are the natural input for the F5 upscaling

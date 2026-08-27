@@ -2,7 +2,7 @@
 
 - Status: superseded by ADR-0049 (folder convention replaces the manifest: layers = top-level vs `auto/`, provenance = location, sheets/midi/stems = fixed paths)
 - Date: 2026-08-25
-- Fase 5, F5.2–F5.5. Extends MEP v1 (minor bump 1.1).
+- Phase 5, F5.2–F5.5. Extends MEP v1 (minor bump 1.1).
 
 ## Context
 Zelda Remastered ships an alternate folder with 8-bit SFX: "levels" done by

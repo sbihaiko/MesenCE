@@ -1,6 +1,6 @@
 # ADR-0041: MEP `audio` section — v1 host scope is NES OGG only
 
-- Status: accepted
+- Status: accepted (partially superseded by ADR-0047/ADR-0049, see Decision)
 - Date: 2026-08-24
 - Phase: F3.0 (MEP v1 host)
 
@@ -27,6 +27,20 @@ in this version".
 The MEP spec is **not** changed — this is a documented host limitation
 (README roadmap + `docs/specs/README.md` note), lifted when the hires-gbsms
 extension freezes (issue #1) and when/if SNES enters a later phase.
+
+**Partially superseded by ADR-0047/ADR-0049:** in folder-form (MEP-v1 §2.1,
+§5.2) the audio layer may be `fingerprints.json` + `bgm/*.ogg` with no
+hires.txt at all — the fingerprint matcher raises the same OggMixer events the
+`<bgm>`/`<sfx>` tags would. The hires.txt route above remains valid for
+`pack.json` containers.
+
+Audio scope per feature (the "NES only" of this ADR applies to the first row
+only):
+
+| Feature | Consoles |
+|---|---|
+| OGG replacement (`audio` section, hires.txt tags or fingerprints, ADR-0041/0047) | NES only |
+| Live re-synthesis / GM cover (Enhanced Audio level 2, ADR-0052) | NES, GB/GBC, SMS/GG |
 
 ## Consequences
 - The F3 success criterion (NES: textures + OGG BGM + synth preset, each

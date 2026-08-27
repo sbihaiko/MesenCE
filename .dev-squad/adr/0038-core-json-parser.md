@@ -8,7 +8,7 @@
 `pack.json` (MEP-v1 §3) is the first JSON the C++ core has to parse; there is
 no JSON parser anywhere in Core/ or Utilities/. The file is tiny (a handful of
 strings, one array of targets, one object of sections) and the spec demands
-strict JSON (§2.2) plus "unknown fields MUST be ignored" (§3.2).
+strict JSON (MEP-v1 §2 rule 2) plus "unknown fields MUST be ignored" (§3.2).
 
 ## Decision
 Add `Utilities/JsonReader.{h,cpp}`: a self-contained, strict RFC 8259 parser

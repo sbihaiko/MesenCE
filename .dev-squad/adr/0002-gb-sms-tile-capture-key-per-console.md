@@ -9,6 +9,8 @@ Raised during spec: The spec assumes the NES HdBuilderPpu tile-capture pattern (
 ## Decision
 Treat the GB and SMS tile-capture key format (what uniquely identifies a 'tile' for dedup/replacement purposes, including palette/bank) as a decision the actor records explicitly per console during F2.1, rather than assuming a 1:1 structural port of HdBuilderPpu.
 
+**Implemented by ADR-0036 (GB) and ADR-0037 (SMS)**, which record the actual per-console identity keys.
+
 ## Consequences
 The key format determines pack compatibility forever after (it is what pack authors key their replacements on), so it must be right before the F2 hires.txt extension spec freezes. See ADR-0004 for the draft status of that spec.
 

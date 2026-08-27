@@ -1,7 +1,8 @@
 # ADR-0097: Bloco C item 9 replaces SetReplacementMute(bool) with a per-channel mask driven by ChannelRoleClassifier — no ADR records this.
 
-- Status: proposed
+- Status: superseded (consolidated 2026-08-27)
 - Date: 2026-08-26
+- Superseded by: ADR-0133
 
 ## Context
 Raised during decompose

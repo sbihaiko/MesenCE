@@ -9,6 +9,8 @@ Raised during auditor-b (consolidates audit-round ADR-0022, ADR-0031 and ADR-003
 ## Decision
 Retrofit into the templates, not into this run: (1) when a deliverable enumerates N symbols in one file, the AC uses a count-based or multi-symbol check instead of a single representative grep; (2) when a spec names a sibling class as the template, it names the axes to copy and the axes to decide independently; (3) when consolidating ADRs, replacement ADRs take fresh ids beyond the highest id ever used (never delete-then-create, which reissues the freed ids), and consolidated files are deleted only after the replacements exist. Complements the lesson already recorded in ADR-0012: a structural finding recurring across consecutive task reviews is promoted to a spec change, not re-litigated downstream.
 
+Historical note (accepted damage): ids 0009–0010, 0015–0020 and 0022–0032 are permanently retired — each names one or two deleted findings — and must never be reissued; the surviving "consolidates former ADR-XXXX" references in ADR-0011 through ADR-0021 are annotated with the round they belong to.
+
 ## Consequences
 Single-grep ACs stop passing on incomplete deliverables; sibling-mirroring specs stop generating one late-reported issue per genuinely-different axis; ADR cross-references stay unambiguous across consolidation rounds.
 
