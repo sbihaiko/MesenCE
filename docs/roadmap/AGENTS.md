@@ -27,6 +27,8 @@ runtime behavior.
 - New plan: `plano-*.md` in this folder.
 - Core reduction: `plano-reducao-cores.md` (completed).
 - Host gamepad tester: `plano-host-input-tester.md`.
+- Community pack → MEP conversion tooling (draft):
+  `PRD-community-pack-mep-conversion.md`.
 
 ## Verification
 
