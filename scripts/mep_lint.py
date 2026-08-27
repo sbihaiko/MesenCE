@@ -621,13 +621,17 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                     missing.setdefault(tokens[0], []).append(n)
             elif png_size(src.read(path)) is None:
                 rep.error(where, f"<background> is not a valid PNG: {tokens[0]}")
-            if len(tokens) >= 8:
+            if len(tokens) > 4 and version >= 106:
                 try:
-                    prio = int(tokens[7])
+                    prio = int(tokens[4])
                     if not 0 <= prio < 40:
-                        rep.error(where, f"<background> priority out of 0..39: {prio}")
+                        rep.warning(where, f"<background> priority out of 0..39: {prio} — entry is dropped, not registered (HdPackLoader::ProcessBackgroundTag checkConstraint)")
                 except ValueError:
-                    rep.error(where, "<background> invalid priority")
+                    rep.error(where, f"<background> priority is not an integer: {tokens[4]!r}")
+            elif len(tokens) > 4 and tokens[4] not in ("Y", "N"):
+                rep.warning(where, f"<background> field 5 (priority flag, pre-106 format) should be Y/N: {tokens[4]!r} — treated as N (HdPackLoader::ParseBooleanValue)")
+            if len(tokens) > 7 and tokens[7] not in ("Alpha", "Add", "Subtract"):
+                rep.warning(where, f"<background> unknown blend mode {tokens[7]!r} — falls back to Alpha (HdPackLoader::ProcessBackgroundTag)")
         elif tag == "condition":
             if len(tokens) < 4:
                 rep.error(where, "<condition> needs >= 4 fields")
