@@ -110,6 +110,32 @@ public:
 	//Returns false when unsafe; "normalized" receives the cleaned path.
 	static bool NormalizeRelativePath(const string& path, string& normalized);
 
+	//ADR-0120: last-priority, additive fallback consulted by
+	//MepPackManager::PrepareZip only after the pack.json-root and
+	//zip-name-equals-ROM conventions (ADR-0040/ADR-0049) both fail. Pure and
+	//I/O-free: operates only on the normalized entry-path list PrepareZip
+	//already builds while validating zip-slip (no ZipReader/filesystem
+	//access here, so it stays link-safe for core-unit-tests). Searches for a
+	//subfolder literally named after the ROM (case-insensitive) that
+	//directly holds a convention probe file (hires.txt, preset.cfg or
+	//fingerprints.json - the leaf names of MepPack's own kConventionProbe
+	//table), e.g. entries wrapped one extra release-zip folder deep:
+	//"Contra80s-v1.1/Contra (U) [!]/hires.txt". Returns the discovered
+	//prefix up to and including the ROM-named segment (no trailing '/');
+	//"" when no candidate matches or more than one distinct candidate
+	//matches (ambiguous - fails closed rather than guessing).
+	//
+	//"Depth" is the number of '/'-separated path segments in the normalized
+	//entry itself (not just the discovered prefix), e.g.
+	//"Contra80s-v1.1/Contra (U) [!]/hires.txt" is depth 3. Only entries at
+	//depth <= kMepFallbackMaxDepth are considered; the whole list is refused
+	//(fail-closed, "" returned) once it holds more than
+	//kMepFallbackMaxEntries entries, so a pathological zip can't force an
+	//unbounded scan.
+	static constexpr int kMepFallbackMaxDepth = 4;
+	static constexpr int kMepFallbackMaxEntries = 2000;
+	static string FindFallbackSubfolder(const vector<string>& normalizedEntries, const string& romName);
+
 	static bool IsValidSemver(const string& text);
 	static bool IsKnownSystem(const string& system);
 };

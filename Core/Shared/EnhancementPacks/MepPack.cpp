@@ -11,6 +11,10 @@ namespace
 	//folders holding a hires.txt, synth is the preset file itself
 	constexpr const char* kConventionPaths[3] = { "textures", "audio", "synth/preset.cfg" };
 	constexpr const char* kConventionProbe[3] = { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg" };
+	//Leaf names of kConventionProbe (+ ADR-0047's audio/fingerprints.json
+	//alt) - what MepPack::FindFallbackSubfolder looks for directly under a
+	//ROM-named subfolder (ADR-0120)
+	constexpr const char* kFallbackProbeBasenames[3] = { "hires.txt", "preset.cfg", "fingerprints.json" };
 	constexpr const char* kKnownSystems[] = { "nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes" };
 	constexpr int kSupportedMajor = 1;
 
@@ -37,6 +41,41 @@ namespace
 		}
 		out = value->GetString();
 		return true;
+	}
+
+	bool IsFallbackProbeBasename(const string& basename)
+	{
+		string lower = StringUtilities::ToLower(basename);
+		for(const char* probe : kFallbackProbeBasenames) {
+			if(lower == probe) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//Rightmost segment (excluding the basename itself) equal to romName,
+	//case-insensitive; -1 when no segment matches (ADR-0120)
+	int FindRomNameAnchor(const vector<string>& segments, const string& lowerRomName)
+	{
+		for(int i = (int)segments.size() - 2; i >= 0; i--) {
+			if(StringUtilities::ToLower(segments[i]) == lowerRomName) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	string JoinSegments(const vector<string>& segments, int lastIndex)
+	{
+		string joined;
+		for(int i = 0; i <= lastIndex; i++) {
+			if(i > 0) {
+				joined += '/';
+			}
+			joined += segments[i];
+		}
+		return joined;
 	}
 }
 
@@ -153,6 +192,36 @@ bool MepPack::NormalizeRelativePath(const string& path, string& normalized)
 		normalized += parts[i];
 	}
 	return true;
+}
+
+string MepPack::FindFallbackSubfolder(const vector<string>& normalizedEntries, const string& romName)
+{
+	if(romName.empty() || normalizedEntries.size() > (size_t)kMepFallbackMaxEntries) {
+		//Fail-closed: an empty ROM name or an oversized entry list is
+		//refused outright rather than partially scanned (ADR-0120)
+		return "";
+	}
+
+	string lowerRomName = StringUtilities::ToLower(romName);
+	string candidate; //first accepted prefix; prefixes are never empty once found
+	bool ambiguous = false;
+	for(const string& normalized : normalizedEntries) {
+		vector<string> segments = StringUtilities::Split(normalized, '/');
+		if((int)segments.size() < 2 || (int)segments.size() > kMepFallbackMaxDepth || !IsFallbackProbeBasename(segments.back())) {
+			continue;
+		}
+		int anchor = FindRomNameAnchor(segments, lowerRomName);
+		if(anchor < 0) {
+			continue;
+		}
+		string prefix = JoinSegments(segments, anchor);
+		if(candidate.empty()) {
+			candidate = prefix;
+		} else if(candidate != prefix) {
+			ambiguous = true;
+		}
+	}
+	return ambiguous ? "" : candidate;
 }
 
 bool MepPack::Parse(const string& json, MepPack& out, string& error)
