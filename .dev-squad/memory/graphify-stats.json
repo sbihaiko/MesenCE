@@ -108,6 +108,15 @@
       "scoutMs": null,
       "classification": "chore",
       "diverged": false
+    },
+    {
+      "sid": "5c0cf7449e07",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "docs",
+      "diverged": false
     }
   ]
 }

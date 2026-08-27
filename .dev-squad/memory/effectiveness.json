@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-27T22:33:56.824Z",
+  "updatedAt": "2026-08-27T22:54:06.186Z",
   "byId": {
     "L-ff73acd33912-000": {
       "injected": 2,
@@ -20,6 +20,9 @@
       "lastExposedSid": "0570161c4bd2"
     },
     "L-b909cad872b0-000": {
+      "injected": 2,
+      "exposed": 1,
+      "recurred": 0,
       "class": "refactor",
       "status": "advisory",
       "scope": [
@@ -30,29 +33,26 @@
         "makefile"
       ],
       "category": null,
-      "injected": 1,
-      "exposed": 1,
-      "recurred": 0,
       "firstSeen": "2026-08-27T22:33:56.824Z",
       "contentHash": "98f44137e95e99c0660a089de844a1b0f8aff9a0f43ed87fbf03175b04d39d5f",
-      "lastInjectedSid": "45092f2ebec4",
-      "lastUpdated": "2026-08-27T22:33:56.824Z",
+      "lastInjectedSid": "5c0cf7449e07",
+      "lastUpdated": "2026-08-27T22:54:06.186Z",
       "lastExposedSid": "45092f2ebec4"
     },
     "L-282110275400-000": {
+      "injected": 2,
+      "exposed": 0,
+      "recurred": 0,
       "class": "bug",
       "status": "blocking-in-review",
       "scope": [
         "scripts/validate_palette_variants.py"
       ],
       "category": null,
-      "injected": 1,
-      "exposed": 0,
-      "recurred": 0,
       "firstSeen": "2026-08-27T22:33:56.824Z",
       "contentHash": "4efd8557139b1dd568b22094f1fa4a06372cf054f86b0b24509a97363b9d3087",
-      "lastInjectedSid": "45092f2ebec4",
-      "lastUpdated": "2026-08-27T22:33:56.824Z"
+      "lastInjectedSid": "5c0cf7449e07",
+      "lastUpdated": "2026-08-27T22:54:06.186Z"
     }
   }
 }
