@@ -149,6 +149,28 @@ namespace
 		Check(caseCount > 0, "BlocoB: path-cases.txt fixture has at least one case", "found " + std::to_string(caseCount));
 	}
 
+	void TestNormalizeRelativePathRejectsControlChars()
+	{
+		//Control characters (bytes < 0x20) are deliberately excluded from
+		//path-cases.txt (the TAB column format can't carry them literally -
+		//ADR-0124), so this C++ side owns its own literal coverage, mirroring
+		//the C# IsSafePath_RejectsControlCharacters theory in
+		//UI.Tests/Mep/MepZipValidatorTests.cs.
+		static const std::pair<char, const char*> cases[] = {
+			{ '\0', "NUL" },
+			{ '\x01', "0x01" },
+			{ '\t', "a literal TAB" },
+		};
+		for(const auto& c : cases) {
+			std::string path = "textures/bad";
+			path += c.first;
+			path += "name.txt";
+			std::string normalized;
+			bool actualOk = MepPack::NormalizeRelativePath(path, normalized);
+			Check(!actualOk, std::string("BlocoB: NormalizeRelativePath rejects a path containing ") + c.second, actualOk ? "unexpectedly succeeded" : "correctly rejected");
+		}
+	}
+
 	void TestParseValidPackJson()
 	{
 		const std::string fixturePath = "docs/specs/golden/mep/pack.json";
@@ -333,6 +355,7 @@ int main()
 	TestLeadVsBassByMeanPitch();
 
 	TestNormalizeRelativePathGolden();
+	TestNormalizeRelativePathRejectsControlChars();
 	TestParseValidPackJson();
 	TestParseFailureCases();
 
