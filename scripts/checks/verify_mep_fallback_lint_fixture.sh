@@ -73,22 +73,22 @@ REJECT_ZIP="$WORK/fallback/mep-fallback-reject.zip"
 run_lint "$ACCEPT_ZIP"
 [ "$RUN_RC" -eq 0 ] || fail "mep_lint.py rejeitou o pack Contra80s-shaped (esperava exit 0, achou $RUN_RC):
 $RUN_OUT"
-grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   || fail "mep_lint.py aceitou o pack Contra80s-shaped mas não emitiu a linha info do fallback:
 $RUN_OUT"
-grep -qF "raiz do pack descoberta em 'Contra80s-v1.1/Contra (U) [!]' (depth 4)" <<<"$RUN_OUT" \
+grep -qF "pack root discovered at 'Contra80s-v1.1/Contra (U) [!]' (depth 4)" <<<"$RUN_OUT" \
   || fail "a linha info do fallback não nomeia o path/depth descobertos como esperado:
 $RUN_OUT"
-grep -q "0 erro(s)" <<<"$RUN_OUT" || fail "pack Contra80s-shaped aceito mas o resumo não reporta 0 erro(s):
+grep -q "0 error(s)" <<<"$RUN_OUT" || fail "pack Contra80s-shaped aceito mas o resumo não reporta 0 erro(s):
 $RUN_OUT"
 
 run_lint "$REJECT_ZIP"
 [ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou o pack ambíguo de dois subdiretórios (esperava exit != 0):
 $RUN_OUT"
-grep -q "nenhuma seção encontrada" <<<"$RUN_OUT" \
+grep -q "no section found" <<<"$RUN_OUT" \
   || fail "pack ambíguo não foi rejeitado com 'nenhuma seção encontrada':
 $RUN_OUT"
-grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   && fail "pack ambíguo não deveria emitir a linha info do fallback (candidato deveria ser recusado por ambiguidade):
 $RUN_OUT"
 
@@ -105,7 +105,7 @@ EXISTING_ZIP="$WORK/existing/mep-test-zip.zip"
 run_lint "$EXISTING_ZIP"
 [ "$RUN_RC" -eq 0 ] || fail "regressão: pack com pack.json na raiz deixou de ser aceito (exit $RUN_RC):
 $RUN_OUT"
-grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   && fail "regressão: um pack.json-root pack não deveria nunca acionar o fallback estrutural:
 $RUN_OUT"
 
@@ -118,7 +118,7 @@ MALFORMED_ZIP="$WORK/fallback/mep-fallback-malformed-manifest.zip"
 run_lint "$MALFORMED_ZIP"
 [ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack.json malformado descoberto via fallback (esperava exit != 0 — o manifest descoberto precisa ser lintado, não só usado como marcador de aceite):
 $RUN_OUT"
-grep -q "JSON inválido" <<<"$RUN_OUT" \
+grep -q "invalid JSON" <<<"$RUN_OUT" \
   || fail "pack.json malformado sob o prefixo do fallback não foi reportado como JSON inválido:
 $RUN_OUT"
 grep -qF "$ACCEPT_WRAPPER_PACK_JSON" <<<"$RUN_OUT" \
@@ -134,7 +134,7 @@ EMPTY_PATH_ZIP="$WORK/fallback/mep-fallback-empty-section-path.zip"
 run_lint "$EMPTY_PATH_ZIP"
 [ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um pack com sections.textures.path==\"\" e hires.txt quebrado sob o prefixo do fallback (esperava exit != 0 — a barra dupla root_prefix+path vazio não pode silenciar a camada textures):
 $RUN_OUT"
-grep -q "não existe: missing.png" <<<"$RUN_OUT" \
+grep -q "does not exist: missing.png" <<<"$RUN_OUT" \
   || fail "o hires.txt quebrado (path==\"\") sob o prefixo do fallback não foi lintado (nenhum erro <img> reportado):
 $RUN_OUT"
 
@@ -147,7 +147,7 @@ ROOT_HIRES_ZIP="$WORK/fallback/mep-fallback-root-hires.zip"
 run_lint "$ROOT_HIRES_ZIP"
 [ "$RUN_RC" -ne 0 ] || fail "mep_lint.py aceitou um hires.txt quebrado solto na raiz do subdiretório descoberto (sem pack.json, esperava exit != 0 — o branch de hires.txt-na-raiz precisa ser espelhado sob o prefixo do fallback):
 $RUN_OUT"
-grep -q "não existe: missing.png" <<<"$RUN_OUT" \
+grep -q "does not exist: missing.png" <<<"$RUN_OUT" \
   || fail "o hires.txt legado (raiz do fallback) não foi lintado (nenhum erro <img> reportado):
 $RUN_OUT"
 
@@ -160,10 +160,10 @@ TRAVERSAL_ZIP="$WORK/fallback/mep-fallback-traversal.zip"
 run_lint "$TRAVERSAL_ZIP"
 [ "$RUN_RC" -ne 0 ] || fail "SEGURANÇA: mep_lint.py aceitou um candidato zip-slip-shaped ('../evil/...') via fallback estrutural (esperava exit != 0 — find_fallback_subfolder deve recusar via safe_rel):
 $RUN_OUT"
-grep -q "nenhuma seção encontrada" <<<"$RUN_OUT" \
+grep -q "no section found" <<<"$RUN_OUT" \
   || fail "candidato zip-slip-shaped não foi rejeitado com 'nenhuma seção encontrada':
 $RUN_OUT"
-grep -q "fallback estrutural (ADR-0120)" <<<"$RUN_OUT" \
+grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   && fail "SEGURANÇA: candidato zip-slip-shaped não deveria emitir a linha info do fallback (deveria ser recusado antes disso):
 $RUN_OUT"
 
