@@ -210,6 +210,10 @@ def main() -> int:
             write_root_hires_zip(out / "mep-fallback-root-hires.zip")
         elif kind == "traversal":
             write_traversal_zip(out / "mep-fallback-traversal.zip")
+        elif kind == "loose-legacy":
+            write_loose_legacy_zip(out / "mep-fallback-loose-legacy.zip")
+        elif kind == "loose-legacy-ambiguous":
+            write_loose_legacy_ambiguous_zip(out / "mep-fallback-loose-legacy-ambiguous.zip")
         else:
             print(f"unknown kind: {kind}")
             return 1
