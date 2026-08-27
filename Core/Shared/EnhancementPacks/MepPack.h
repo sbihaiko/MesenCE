@@ -96,7 +96,11 @@ public:
 
 	//Fills the sections from the fixed folder layout (ADR-0049):
 	//textures/hires.txt, audio/hires.txt, synth/preset.cfg and the same
-	//three under auto/. Returns true when at least one layer exists.
+	//three under auto/; also recognizes a bare hires.txt directly at
+	//RootFolder as a textures section with an empty Path (ADR-0121: the
+	//classic, pre-MEP Mesen HD pack layout, still loadable by the emulator's
+	//separate HdPacks/<rom>/ loader at that shape). Returns true when at
+	//least one layer exists.
 	bool DetectConventionLayout();
 
 	//Section/layer relative paths of the convention

@@ -115,6 +115,30 @@ bool MepPack::DetectConventionLayout()
 			any = true;
 		}
 	}
+
+	//ADR-0121: a bare hires.txt directly at RootFolder (no textures/ wrapper
+	//at all) is the pre-MEP, pre-ADR-0049 "classic Mesen HD pack" layout -
+	//still loadable today by the emulator's separate, older HdPacks/<rom>/
+	//loader at that exact shape (see MepPackManager::StartBootstrapIfNeeded's
+	//own check of that legacy path), but until now never recognized as a
+	//textures section by MEP's *own* convention detection. That silently
+	//broke two paths that otherwise already work: a sibling folder
+	//(ADR-0049) or a zip/folder container named exactly like the ROM
+	//(ADR-0040) holding nothing but a loose hires.txt. Mirrors
+	//scripts/mep_lint.py's discover_sections() root-level branch
+	//(`sections.setdefault("textures", "")`) - "setdefault" here too: never
+	//overrides a textures/ layer the loop above already found.
+	MepSection& textures = Sections[(int)MepSectionType::Textures];
+	if(!textures.Present) {
+		string rootHires = FolderUtilities::CombinePath(RootFolder, "hires.txt");
+		if((bool)ifstream(rootHires)) {
+			textures.Present = true;
+			textures.HasHuman = true;
+			textures.Path = "";
+			any = true;
+		}
+	}
+
 	return any;
 }
 

@@ -3,13 +3,17 @@
 //ChannelRoleClassifier; Bloco B exercises MepPack::NormalizeRelativePath
 //(driven by docs/specs/golden/mep/path-cases.txt) and MepPack::Parse; Bloco C
 //(ADR-0120) exercises MepPack::FindFallbackSubfolder, the pure last-priority
-//zip-fallback search PrepareZip consults, with literal fixtures. No
+//zip-fallback search PrepareZip consults, with literal fixtures; Bloco D
+//(ADR-0121) exercises MepPack::DetectConventionLayout's bare-root hires.txt
+//recognition against a real throwaway temp-dir tree (the one block here that
+//touches the filesystem, since DetectConventionLayout itself does). No
 //framework: cases print PASS/FAIL, exit is non-zero on any failure (see
 //roles_probe.cpp). Run from the repo root so the golden paths resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/EnhancementPacks/MepPack.h"
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -235,6 +239,90 @@ namespace
 		std::vector<std::string> noMatch = { "SomeOtherGame/hires.txt", "pack.json" };
 		Check(MepPack::FindFallbackSubfolder(noMatch, "Contra (U) [!]").empty(), "BlocoC: FindFallbackSubfolder is empty when no candidate matches");
 	}
+
+	//--- Bloco D: MepPack::DetectConventionLayout bare-root hires.txt (ADR-0121) ---
+	//Real filesystem I/O (unlike Blocos B/C's pure-function fixtures):
+	//DetectConventionLayout() itself opens files via ifstream, so these tests
+	//write a throwaway folder tree under the OS temp dir and remove it
+	//afterward, rather than adding a filesystem seam to a class kept pure by
+	//design elsewhere in this same file (ADR-0120 §2).
+
+	std::filesystem::path MakeTempPackDir(const std::string& label)
+	{
+		std::filesystem::path dir = std::filesystem::temp_directory_path() / ("mep_core_unit_tests_" + label);
+		std::error_code ec;
+		std::filesystem::remove_all(dir, ec);
+		std::filesystem::create_directories(dir, ec);
+		return dir;
+	}
+
+	void WriteTestFile(const std::filesystem::path& path, const std::string& content)
+	{
+		std::ofstream out(path, std::ios::out | std::ios::binary);
+		out << content;
+	}
+
+	void TestDetectConventionLayoutBareRootHiresTxt()
+	{
+		//The pre-MEP "classic Mesen HD pack" shape: hires.txt loose at
+		//RootFolder, no textures/ wrapper - e.g. a sibling folder (ADR-0049)
+		//or a zip/folder container named exactly like the ROM (ADR-0040)
+		//holding nothing else. Mirrors scripts/mep_lint.py's
+		//discover_sections() root-level branch.
+		std::filesystem::path dir = MakeTempPackDir("bare_root_hires");
+		WriteTestFile(dir / "hires.txt", "<ver>106\n");
+
+		MepPack pack;
+		pack.RootFolder = dir.string();
+		bool any = pack.DetectConventionLayout();
+
+		Check(any, "BlocoD: DetectConventionLayout finds a bare root hires.txt");
+		Check(pack.HasSection(MepSectionType::Textures), "BlocoD: bare root hires.txt is recognized as the textures section");
+		Check(pack.GetSectionPath(MepSectionType::Textures) == dir.string(), "BlocoD: textures section path resolves to RootFolder itself (empty Path)", pack.GetSectionPath(MepSectionType::Textures));
+		Check(!pack.HasSection(MepSectionType::Audio) && !pack.HasSection(MepSectionType::Synth), "BlocoD: bare root hires.txt does not fabricate audio/synth sections");
+
+		std::error_code ec;
+		std::filesystem::remove_all(dir, ec);
+	}
+
+	void TestDetectConventionLayoutConventionWinsOverBareRoot()
+	{
+		//A pack with BOTH textures/hires.txt (the real convention) and a
+		//loose root hires.txt must resolve to the convention path - never
+		//overridden by the ADR-0121 addition (mirrors mep_lint.py's
+		//sections.setdefault: existing entries win).
+		std::filesystem::path dir = MakeTempPackDir("convention_wins");
+		std::error_code ec;
+		std::filesystem::create_directories(dir / "textures", ec);
+		WriteTestFile(dir / "textures" / "hires.txt", "<ver>106\n");
+		WriteTestFile(dir / "hires.txt", "<ver>106\n<img>unrelated.png\n");
+
+		MepPack pack;
+		pack.RootFolder = dir.string();
+		pack.DetectConventionLayout();
+
+		std::string texturesPath = pack.GetSectionPath(MepSectionType::Textures);
+		Check(texturesPath != dir.string() && texturesPath.find("textures") != std::string::npos, "BlocoD: an existing textures/hires.txt convention is never overridden by the bare-root fallback", texturesPath);
+
+		std::filesystem::remove_all(dir, ec);
+	}
+
+	void TestDetectConventionLayoutNoHiresTxtAtAll()
+	{
+		//No hires.txt anywhere: DetectConventionLayout must return false, not
+		//be fooled by an unrelated file at RootFolder.
+		std::filesystem::path dir = MakeTempPackDir("no_hires_at_all");
+		WriteTestFile(dir / "readme.txt", "not a pack");
+
+		MepPack pack;
+		pack.RootFolder = dir.string();
+		bool any = pack.DetectConventionLayout();
+
+		Check(!any, "BlocoD: DetectConventionLayout finds nothing when there is no hires.txt anywhere");
+
+		std::error_code ec;
+		std::filesystem::remove_all(dir, ec);
+	}
 }
 
 int main()
@@ -251,6 +339,10 @@ int main()
 	TestFallbackSubfolderContra80sResolves();
 	TestFallbackSubfolderAmbiguousIsEmpty();
 	TestFallbackSubfolderDepthAndEntryCaps();
+
+	TestDetectConventionLayoutBareRootHiresTxt();
+	TestDetectConventionLayoutConventionWinsOverBareRoot();
+	TestDetectConventionLayoutNoHiresTxtAtAll();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

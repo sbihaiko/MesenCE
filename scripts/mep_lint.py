@@ -53,21 +53,36 @@ AUDIO_ALT_PROBE = "audio/fingerprints.json"
 # is depth 3.
 FALLBACK_MAX_DEPTH = 4
 FALLBACK_MAX_ENTRIES = 2000
-# Every probe (human + auto/ layer) plus pack.json itself: a subfolder that
-# directly holds any one of these is a candidate fallback pack root. Reuses
-# PROBES/AUDIO_ALT_PROBE rather than duplicating the leaf names.
-FALLBACK_SUFFIXES = ["pack.json"] + [
-    variant
-    for probe in list(PROBES.values()) + [AUDIO_ALT_PROBE]
-    for variant in (probe, f"auto/{probe}")
-]
-# Bare leaf names of the probes above (ADR-0120 §3's named follow-up): what
-# MepPack::FindFallbackSubfolder (C++) looks for directly under a subfolder
-# segment that matches the caller-supplied ROM name. Looser than
-# FALLBACK_SUFFIXES structurally (no "textures/" wrapper required) but safe
-# only because the ROM-name anchor removes the ambiguity a bare basename
-# would otherwise carry.
+# Bare leaf names of the probes above: what MepPack::FindFallbackSubfolder
+# (C++) looks for directly under a subfolder segment that matches the
+# caller-supplied ROM name (ADR-0120 §3's named follow-up) — no "textures/"
+# wrapper required, safe there because the ROM-name anchor removes the
+# ambiguity a bare basename would otherwise carry. ADR-0121 additionally
+# folds these into FALLBACK_SUFFIXES below, so the *structural* (name-
+# agnostic) fallback accepts them too: a classic Mesen HD pack (hires.txt at
+# a wrapper folder's own root, no textures/ wrapper at all) whose wrapper is
+# named after a release/repo rather than the ROM — e.g. a raw GitHub
+# `/archive/refs/heads/<branch>.zip` download's `<Repo>-<branch>/hires.txt`
+# — has no ROM-name segment to anchor on, so only the structural path can
+# ever discover it. Same fail-closed-on-ambiguity/depth/entry-cap discipline
+# as every other candidate in FALLBACK_SUFFIXES; see community-pack issues
+# #46 (PepCodes/HDNes-Graphics-Pac) and #47 (ModernRetroDesign/ZII-mesen),
+# both real fixtures with this exact shape.
 FALLBACK_PROBE_BASENAMES = {"hires.txt", "preset.cfg", "fingerprints.json"}
+# Every probe (human + auto/ layer) plus pack.json itself, plus (ADR-0121)
+# the bare legacy probe basenames with no textures/audio/synth wrapper: a
+# subfolder that directly holds any one of these is a candidate fallback
+# pack root. Reuses PROBES/AUDIO_ALT_PROBE/FALLBACK_PROBE_BASENAMES rather
+# than duplicating the leaf names.
+FALLBACK_SUFFIXES = (
+    ["pack.json"]
+    + [
+        variant
+        for probe in list(PROBES.values()) + [AUDIO_ALT_PROBE]
+        for variant in (probe, f"auto/{probe}")
+    ]
+    + sorted(FALLBACK_PROBE_BASENAMES)
+)
 KNOWN_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
 NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condition", "bgm", "sfx", "patch", "overscan", "options", "addition", "fallback"}
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
@@ -193,17 +208,20 @@ def _longest_matching_suffix(normalized: str):
 
 
 def find_fallback_subfolder(names):
-    """Pure, structural (name-agnostic) last-priority fallback (ADR-0120):
-    the Python mirror of Core::MepPack::FindFallbackSubfolder (C++, matches
-    by ROM name) and MepZipValidator.FindStructuralFallbackPrefix (C#,
-    matches structurally like here — mep_lint has no ROM context either).
-    Searches `names` (the source's full entry-path set) for a single
-    subfolder that directly holds pack.json or one of PROBES/
-    AUDIO_ALT_PROBE (human or auto/ layer), depth/entry-capped by
-    FALLBACK_MAX_DEPTH/FALLBACK_MAX_ENTRIES. Returns (prefix, depth) for the
-    one unambiguous candidate found, or None when nothing matches or more
-    than one distinct candidate matches (ambiguous — fails closed rather
-    than guessing, same philosophy as the C++/C# mirrors)."""
+    """Pure, structural (name-agnostic) last-priority fallback (ADR-0120,
+    extended by ADR-0121): the Python mirror of
+    MepZipValidator.FindStructuralFallbackPrefix (C#, matches structurally
+    like here — mep_lint has no ROM context either). Searches `names` (the
+    source's full entry-path set) for a single subfolder that directly holds
+    pack.json, one of PROBES/AUDIO_ALT_PROBE (human or auto/ layer), or
+    (ADR-0121) a bare FALLBACK_PROBE_BASENAMES leaf with no textures/audio/
+    synth wrapper — depth/entry-capped by FALLBACK_MAX_DEPTH/
+    FALLBACK_MAX_ENTRIES. Returns (prefix, depth) for the one unambiguous
+    candidate found, or None when nothing matches or more than one distinct
+    candidate matches (ambiguous — fails closed rather than guessing, same
+    philosophy as the C#/C++ mirrors — see ADR-0121 for why the C++ runtime
+    loader's own MepPack::FindFallbackSubfolder deliberately stays
+    ROM-name-anchored instead of gaining this same structural widening)."""
     if len(names) > FALLBACK_MAX_ENTRIES:
         return None
     candidate, candidate_depth = None, 0
@@ -346,11 +364,13 @@ def discover_sections(src: Source, rep: Report, rom_name):
         sections.setdefault("textures", "")
 
     if not sections:
-        # ADR-0120: no convention matched at the root — last attempt before
-        # rejecting: look for a structural subfolder (see
-        # find_fallback_subfolder) that alone holds the convention; if that
-        # fails and a rom_name was passed, try the ROM-name fallback
-        # (ADR-0120 §3's named follow-up, find_fallback_subfolder_by_name).
+        # ADR-0120 (extended by ADR-0121): no convention matched at the root
+        # — last attempt before rejecting: look for a structural subfolder
+        # (see find_fallback_subfolder) that alone holds the convention or a
+        # bare legacy probe basename (hires.txt/preset.cfg/fingerprints.json,
+        # no wrapper); if that fails and a rom_name was passed, try the
+        # ROM-name fallback (ADR-0120 §3's named follow-up,
+        # find_fallback_subfolder_by_name).
         fallback = find_fallback_subfolder(src.names)
         fallback_kind = "structural" if fallback else None
         if not fallback and rom_name:

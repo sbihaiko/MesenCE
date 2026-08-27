@@ -24,6 +24,22 @@ namespace Mesen.Logic
 			"synth/preset.cfg",
 		};
 
+		//Bare leaf names of the probes above (ADR-0121, extending ADR-0120
+		//§3's structural fallback): a classic Mesen HD pack (hires.txt at a
+		//wrapper folder's own root, no textures/ wrapper at all) whose
+		//wrapper is named after a release/repo rather than the ROM - e.g. a
+		//raw GitHub archive download's "<Repo>-<branch>/hires.txt" - has no
+		//textures/audio/synth shape and no ROM name for this validator to
+		//anchor on (see ADR-0120 §3), so only a bare-basename match can ever
+		//discover it. Mirrors scripts/mep_lint.py's FALLBACK_PROBE_BASENAMES;
+		//see community-pack issues #46/#47 for the real fixtures that
+		//motivated this.
+		private static readonly string[] LegacyProbeBasenames = new[] {
+			"hires.txt",
+			"preset.cfg",
+			"fingerprints.json",
+		};
+
 		//Structural fallback search limits (ADR-0120). Mirrored numerically (not
 		//algorithmically - see the ADR for the C++-vs-validators asymmetry) by
 		//Core::MepPackManager::FindFallbackSubfolder and scripts/mep_lint.py's
@@ -68,20 +84,23 @@ namespace Mesen.Logic
 			return false;
 		}
 
-		//Name-agnostic, last-priority fallback (ADR-0120): when the zip has no
-		//layer at its root, look for exactly one subfolder anywhere in the
-		//entry list (depth/entry-capped) that itself directly contains
-		//pack.json or one of the LayerProbes (human or auto/ layer). Unlike the
-		//C++ core's MepPackManager::FindFallbackSubfolder, this call site has
-		//no ROM name to match against - it is purely structural - so more than
-		//one candidate subfolder is ambiguous and is refused rather than
-		//guessed at, keeping the same fail-closed philosophy as the exact-name
-		//match. Returns the discovered prefix, or null when no unambiguous
-		//candidate exists.
+		//Name-agnostic, last-priority fallback (ADR-0120, extended by
+		//ADR-0121 to LegacyProbeBasenames): when the zip has no layer at its
+		//root, look for exactly one subfolder anywhere in the entry list
+		//(depth/entry-capped) that itself directly contains pack.json, one of
+		//the LayerProbes (human or auto/ layer), or a bare LegacyProbeBasenames
+		//leaf with no wrapper. Unlike the C++ core's
+		//MepPackManager::FindFallbackSubfolder, this call site has no ROM name
+		//to match against - it is purely structural - so more than one
+		//candidate subfolder is ambiguous and is refused rather than guessed
+		//at, keeping the same fail-closed philosophy as the exact-name match.
+		//Returns the discovered prefix, or null when no unambiguous candidate
+		//exists.
 		private static string? FindStructuralFallbackPrefix(ZipArchive zip)
 		{
 			string[] suffixes = LayerProbes
 				.SelectMany(probe => new[] { probe, "auto/" + probe })
+				.Concat(LegacyProbeBasenames)
 				.Append("pack.json")
 				.ToArray();
 
