@@ -19,6 +19,24 @@ on:
   issue_comment:
     types: [created]
 
+# Serializes runs per issue and lets a newer trigger supersede a stale one
+# in flight. This is the real fix for the self-trigger duplication (see the
+# now-removed DEBUG step this replaced): the changes.body-based guard below
+# assumed a title-only `gh issue edit --title` could never make GitHub
+# report `changes.body`, but confirmed live (2026-08-27, issue #13, runs
+# #42/#43) that assumption is false — GitHub sent `action: edited,
+# changes: {body: {from: ""}}` for a pure title-only edit traced (via
+# GH_DEBUG=api) to carry no body field in its mutation at all. Rather than
+# depend on that unreliable signal, this group guarantees only one
+# "Community Pack Submitted" run is ever active per issue: a second
+# trigger (whatever its real cause) cancels the first and reruns against
+# the same pack_url, converging on exactly one final comment/label/Status
+# move instead of two. `issue_comment` payloads also carry `.issue.number`,
+# so the same key covers both trigger paths.
+concurrency:
+  group: community-pack-submitted-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   prepare:
     # Only issues (not PRs) carrying the community-pack label, and only an
@@ -48,13 +66,6 @@ jobs:
       pack_url: ${{ steps.extract.outputs.pack_url }}
       mode: ${{ steps.mode.outputs.mode }}
     steps:
-      # TEMP DEBUG (to be removed once the self-trigger guard is confirmed
-      # correct): dumps the raw event action/changes so we can see exactly
-      # what GitHub sends for our own automation's title-only edits.
-      - name: DEBUG - dump event action/changes
-        run: |
-          echo "action=${{ github.event.action }}"
-          echo "changes=${{ toJSON(github.event.changes) }}"
       - name: Extract pack URL from issue body
         id: extract
         env:
