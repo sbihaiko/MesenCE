@@ -12,23 +12,19 @@ set -euo pipefail
 REPO="sbihaiko/MesenCE"
 
 # name|color|description — '|' as separator because label names themselves
-# contain ':' (e.g. "pack:invalid-structure").
+# contain ':' (e.g. "pack:invalid").
 LABELS=(
   "community-pack|1D76DB|Community-submitted HD/MEP Pack"
-  "pack:invalid-structure|D93F0B|Failed the structural lint (mep_lint.py)"
-  "pack:invalid-license|D93F0B|Missing confirmation/right to distribute the assets"
-  "pack:invalid-other|D93F0B|Rejected for another content/policy reason"
-  "pack:partial-hd|FBCA04|Partially accepted — standard Mesen HD assets only"
-  "pack:mep-full|0E8A16|Accepted — full MEP (textures + audio/synth)"
-  "asset:textures|5319E7|Pack declares <img>/<tile>/<background> (graphics) content"
-  "asset:audio|5319E7|Pack declares <bgm>/<sfx> (audio) content"
-  "asset:ips|5319E7|Pack bundles an IPS-format ROM patch"
-  "asset:bps|5319E7|Pack bundles a BPS-format ROM patch"
-  "nes|5319E7|Pack targets the NES console"
-  "snes|5319E7|Pack targets the SNES console (gamepad input only, no SNES core on main)"
-  "gb|5319E7|Pack targets the GB/GBC console"
-  "gbc|5319E7|Pack targets the GB/GBC console"
-  "sms|5319E7|Pack targets the SMS/GG/SG-1000 console"
+  "pack:valid|0E8A16|Accepted — has at least one usable MEP-v1 §5 section (textures/audio/synth)"
+  "pack:invalid|D93F0B|Rejected — no usable section content, or another content/policy problem"
+  "assets:textures|FBCA04|Pack declares <img>/<tile>/<background> (graphics) content"
+  "assets:audio|FBCA04|Pack declares <bgm>/<sfx> (audio) content"
+  "patch:ips|2D4F8F|Pack bundles an IPS-format ROM patch"
+  "patch:bps|2D4F8F|Pack bundles a BPS-format ROM patch"
+  "console:nes|5319E7|Pack targets the NES console"
+  "console:gb|5319E7|Pack targets the GB/GBC console"
+  "console:gbc|5319E7|Pack targets the GB/GBC console"
+  "console:sms|5319E7|Pack targets the SMS/GG/SG-1000 console"
 )
 
 for entry in "${LABELS[@]}"; do

@@ -44,7 +44,6 @@ body:
       description: "Target system for the pack."
       options:
         - NES
-        - SNES
         - GB
         - GBC
         - SMS
