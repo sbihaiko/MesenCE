@@ -69,10 +69,13 @@ def read_cap() -> int:
 
 
 def ensure_capture_tool() -> Path:
+    """Always relink scripts/headless_record. The binary is gitignored and
+    links against MesenCore, so "exists" does not mean "up to date": a stale
+    binary aborts at dyld time with a missing symbol, which looks like a
+    HdPackBuilder crash. `make capture-tool` is idempotent and cheap."""
     tool = REPO_ROOT / "scripts" / "headless_record"
-    if not tool.exists():
-        print(f"[build] {tool} missing, running 'make capture-tool'...")
-        subprocess.run(["make", "capture-tool"], cwd=REPO_ROOT, check=True)
+    print(f"[build] running 'make capture-tool' to refresh {tool}...")
+    subprocess.run(["make", "capture-tool"], cwd=REPO_ROOT, check=True)
     return tool
 
 
