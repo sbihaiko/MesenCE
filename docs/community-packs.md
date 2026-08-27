@@ -6,6 +6,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 
 | Link | Game | Console | Author | Category | Date |
 |---|---|---|---|---|---|
+| [link](https://github.com/sbihaiko/MesenCE/issues/33) | Contra (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/35) | The Legend of Zelda (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/38) | Dr. Mario (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/36) | 1942 (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
