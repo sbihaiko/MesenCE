@@ -6,7 +6,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 
 | Link | Game | Console | Author | Category | Date |
 |---|---|---|---|---|---|
-| [link](https://github.com/sbihaiko/MesenCE/issues/6) | [Community Pack] Contra80s MEP-conversion validation (synthetic fixture) | ? | sbihaiko | Full MEP | 2026-08-27 |
+| _no packs accepted yet_ | | | | | |
 
 ## Most popular
 

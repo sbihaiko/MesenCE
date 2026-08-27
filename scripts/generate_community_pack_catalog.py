@@ -15,6 +15,7 @@ scripts/mep_lint.py.
 Uso: python3 scripts/generate_community_pack_catalog.py
 """
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ OWNER = "sbihaiko"
 PROJECT_NUMBER = 3
 
 ACCEPTED_STATUSES = {"Aceito parcial (HD Mesen)", "Aceito (MEP completo)"}
-CONSOLE_LABELS = {"nes", "snes", "gb", "gbc", "sms", "outro"}
+CONSOLE_LABELS = {"nes", "snes", "gb", "gbc", "sms", "other"}
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.md"
 TABLE_HEADER = "| Link | Game | Console | Author | Category | Date |"
 TABLE_SEP = "|---|---|---|---|---|---|"
@@ -85,8 +86,42 @@ def fetch_issue_details(issue_number):
     grupos de contagem > 0; lista vazia quando não há reações.
     """
     raw = run_gh(["issue", "view", str(issue_number), "--repo", REPO,
-                  "--json", "author,createdAt,title,labels,url,reactionGroups"])
+                  "--json", "author,createdAt,title,labels,url,reactionGroups,body"])
     return json.loads(raw)
+
+
+def _parse_form_field(body, heading):
+    """Extracts the answer under a '### <heading>' section of an Issue Form body.
+
+    Issue Forms always render a submitted field as a Markdown '### <label>'
+    heading followed by the answer, up to the next '### ' heading or the end
+    of the body (confirmed live against issues #6/#7/#8's rendered bodies —
+    see .github/ISSUE_TEMPLATE/community-pack.yml for the field labels).
+    Returns None (not "?") when the heading isn't found or the answer is
+    empty, so callers can fall back to another source instead of an empty
+    string leaking into the catalog.
+    """
+    if not body:
+        return None
+    pattern = re.compile(
+        r"^###\s+" + re.escape(heading) + r"\s*\n+(.*?)(?=\n###\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(body)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def _escape_table_cell(value):
+    """Collapses whitespace/newlines and escapes '|' for a Markdown table cell.
+
+    Needed once free-form issue-body text (not just labels/title) starts
+    flowing into the table — a submitter's answer could otherwise contain a
+    literal '|' or a line break and break the table's row structure.
+    """
+    return re.sub(r"\s+", " ", str(value)).replace("|", "\\|").strip()
 
 
 def _thumbs_up_count(details):
@@ -123,10 +158,19 @@ def build_row(item):
                 "categoria": _categoria_from_status(status), "data": "?", "url": "", "thumbs_up": 0}
     details = fetch_issue_details(issue_number)
     author = (details.get("author") or {}).get("login") or "?"
+    body = details.get("body") or ""
+    # Prefer the Issue Form's own structured fields over the issue title/
+    # labels — title is free text (often just restating the pack name, not
+    # the target ROM) and no automation in this pipeline ever attaches a
+    # console-name label (see the "Console" section always parsing to "?"
+    # bug this fixes), so falling back to them only covers issues that
+    # don't follow the current form shape (e.g. hand-created ones).
+    game = _parse_form_field(body, "Target game/ROM and region") or details.get("title") or "(no title)"
+    console = _parse_form_field(body, "Console") or _console_from_labels(details.get("labels"))
     return {
-        "jogo": details.get("title") or "(no title)",
-        "console": _console_from_labels(details.get("labels")),
-        "autor": author,
+        "jogo": _escape_table_cell(game),
+        "console": _escape_table_cell(console),
+        "autor": _escape_table_cell(author),
         "categoria": _categoria_from_status(status),
         "data": (details.get("createdAt") or "?")[:10],
         "url": details.get("url") or "",
