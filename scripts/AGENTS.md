@@ -89,6 +89,20 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `verify_community_pack_drift_check_workflow.py`, and
   `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
   Actions workflows and their GH Project field-provenance assumptions.
+  `verify_mep_fallback_adr.sh` (AC-7 of the MEP zip-fallback task) checks
+  `.dev-squad/adr/0120-*.md` documents the subfolder fallback as an additive
+  last-priority extension of ADR-0040/ADR-0049's precedence, a pure I/O-free
+  function `PrepareZip` consults with its `outFolder` contract held fixed,
+  the C++ (name match) vs C#/Python (structural match) asymmetry with its
+  named ROM-name-parameter follow-up, and the standalone C++ E2E
+  zip-pipeline harness deferred as a separate follow-up.
+  `verify_mep_fallback_adr_provenance.sh` (AC-8, same ADR) checks it cites
+  the TasticHacks/Contra80s provenance (issue #3 / the release download
+  URL) and explicitly separates what was independently verified by reading
+  `PrepareZip`/`DetectConventionLayout` today (exact root layout, no
+  recursion) from what was not independently re-verified (the real
+  published zip's byte-for-byte structure), qualifying any "would not load
+  today" claim by that gap.
 
 ## Verification
 
@@ -102,6 +116,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   only if all pass.
 - `python3 scripts/checks/verify_community_pack_issue_template.py` and
   `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
+- `./scripts/checks/verify_mep_fallback_adr.sh` and
+  `./scripts/checks/verify_mep_fallback_adr_provenance.sh` - see `checks/`
+  above (AC-7/AC-8 of the MEP zip-fallback task).
 
 ## Child DOX Index
 
