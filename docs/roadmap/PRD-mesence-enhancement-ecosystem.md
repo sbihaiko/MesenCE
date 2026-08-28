@@ -103,6 +103,11 @@ does not exist.
   `ui-tests` job covers both host-free suites, record the clang-only C++
   step and the `10.x` dotnet pin, with grep lines in Verification. Doc-only;
   the workflow file was already compliant.
+- **H3 — `path-cases.txt` format guard and control-char scope** (ADR-0124):
+  `validate_path_cases` in `scripts/validate-specs.py` (skip rules identical
+  to the C++ reader, no whitespace around the path column), a "Scope" note in
+  the fixture header, and `TestNormalizeRelativePathRejectsControlChars` in
+  `scripts/core_unit_tests.cpp` Block B (NUL, 0x01, literal TAB).
 
 ## 4. Roadmap — pending work, by slice
 
@@ -206,7 +211,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 1. **F6.0** (minutes, unblocks catalog regeneration).
 2. **F6.1 → F6.2 → F6.3 → F6.4 → F6.5**, one run each.
-3. **H1–H4** at any time (small, independent, no Core impact).
+3. **H4** at any time (small, independent, no Core impact). H1–H3 shipped.
 4. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
 5. **Input tester I.0–I.2** independent of everything above.

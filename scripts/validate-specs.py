@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1 specs and the hires-gbsms draft. Exits with a
-non-zero code on the first violation. Run from the repo root:
+of the ESP v1, MEP v1, MEI v1 specs and the hires-gbsms draft, and enforces
+the wire format of shared cross-language test fixtures (path-cases.txt, see
+ADR-0124). Exits with a non-zero code on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
 """
 import json
@@ -136,14 +137,23 @@ def validate_path_cases(path):
     does not interpret paths semantically (see ADR-0124) -- that is owned
     by the fixture's two real consumers, UI.Tests/Mep/MepZipValidatorTests.cs
     and scripts/core_unit_tests.cpp."""
+    # Skip rules are byte-identical to the C++ reader in
+    # scripts/core_unit_tests.cpp (empty line, or '#' in column 0): an
+    # indented comment would pass a looser guard and then fail the harness.
     case_count = 0
-    for n, raw in enumerate(path.read_text().splitlines(), 1):
-        line = raw.strip("\n")
-        if not line.strip() or line.lstrip().startswith("#"):
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        if line == "" or line[0] == "#":
             continue
-        check(bool(PATH_CASE_LINE.match(line)),
+        m = PATH_CASE_LINE.match(line)
+        check(bool(m),
               f"{path.name}:{n}: expected '<path><TAB>ok|bad', got: {line!r}")
-        if PATH_CASE_LINE.match(line):
+        if m:
+            # The C# reader Trim()s the line and the C++ one does not, so
+            # surrounding whitespace would feed two different strings to the
+            # two suites from one shared case -- reject it here.
+            path_col = line[:line.index("\t")]
+            check(path_col == path_col.strip(),
+                  f"{path.name}:{n}: path column has leading/trailing whitespace: {line!r}")
             case_count += 1
     check(case_count > 0, f"{path.name}: no path case recognized")
 
