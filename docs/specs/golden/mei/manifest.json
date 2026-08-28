@@ -1,6 +1,6 @@
 {
-  "mei": "1.0.0",
-  "name": "Índice de exemplo canônico (golden da spec MEI v1)",
+  "mei": "1.1.0",
+  "name": "Índice de exemplo canônico (golden da spec MEI v1.1)",
   "maintainer": "MesenCE",
   "updated": "2026-08-24",
   "packs": [
@@ -18,6 +18,68 @@
       "url": "https://example.org/packs/f1-test-tone-1.0.0.zip",
       "size": 4096,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "hd-legacy",
+      "name": "Synthetic Split Pack — community submission (golden)",
+      "game": "Synthetic Split Pack (homebrew)",
+      "system": "nes",
+      "rom": {
+        "crc32": "6C648F63"
+      },
+      "license": "unknown",
+      "url": "https://example.org/packs/synthetic-split-1.0.0.zip",
+      "size": 4096,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deps": [
+        {
+          "id": "audio",
+          "url": "https://example.org/audio/synthetic-split-ogg.zip",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 4096,
+          "license": "CC0-1.0"
+        }
+      ],
+      "recipe_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "recipe_ok": true,
+      "recipe": {
+        "recipe": 1,
+        "sources": {
+          "primary": {
+            "url": "https://example.org/packs/synthetic-split-1.0.0.zip",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "deps": [
+            {
+              "id": "audio",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "size": 4096,
+              "hints": ["https://example.org/audio/synthetic-split-ogg.zip"],
+              "license": "CC0-1.0",
+              "user_supplied": true
+            }
+          ]
+        },
+        "ops": [
+          { "op": "copy", "from": "primary:hires.txt", "to": "hires.txt" },
+          { "op": "glob", "from": "audio:**/*.ogg", "to": "audio/" },
+          { "op": "rewrite-paths", "file": "hires.txt", "tags": ["bgm", "sfx"], "prefix": "audio/" }
+        ],
+        "pack": {
+          "mep": "1.1.0",
+          "name": "Synthetic Split Pack",
+          "version": "1.0.0",
+          "license": "CC0-1.0",
+          "targets": [
+            { "system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B" }
+          ],
+          "sections": { "textures": { "path": "" } }
+        },
+        "policy": { "apply_patch_only_if_complete": true }
+      },
+      "verdict": "Aceito parcial (HD Mesen)",
+      "validated_at": "2026-08-24",
+      "labels": ["community-pack", "pack:valid", "assets:audio"]
     }
   ]
 }

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1, MEP-recipe v1 specs and the hires-gbsms draft,
+of the ESP v1, MEP v1, MEI v1.1, MEP-recipe v1 specs and the hires-gbsms draft,
 and enforces the wire format of shared cross-language test fixtures
 (path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
+
+MEI v1.1 validation lives in the sibling validate_specs_mei.py, and the
+shared primitives (SPECS, semver/hash regexes, check(), validate_rom_id())
+in spec_validate_common.py -- both split out to keep this file under the
+project's line-count threshold (ADR-0138 §24 split convention).
 """
 import json, re, subprocess, sys
 from pathlib import Path
 
-SPECS = Path(__file__).resolve().parent.parent / "docs" / "specs"
-SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-SHA1_UPPER = re.compile(r"^[0-9A-F]{40}$")
-CRC32_UPPER = re.compile(r"^[0-9A-F]{8}$")
-MD5_UPPER = re.compile(r"^[0-9A-F]{32}$")
-SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
-SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
+from spec_validate_common import SPECS, SEMVER, _failures, check, validate_rom_id
+from validate_specs_mei import validate_mei_catalog
 
 ESP_PRESETS = {"Synthwave", "ChipDeluxe", "OrchestralLite", "Dry", "Studio"}
 ESP_SUFFIXES = {"", ".Gb", ".Sms"}
@@ -29,53 +29,53 @@ ESP_DOUBLE_FIELDS = {
 }
 ESP_BOOL_FIELDS = {"FollowDuty", "LeadAlwaysSaw"}
 
-_failures = []
+def _skip_esp_line(line):
+    """True when a raw ESP line is blank or a comment and carries nothing
+    to validate (extracted from validate_esp to keep its cyclomatic
+    complexity under the project's threshold)."""
+    return not line or line[0] in "#;"
 
-def check(cond, msg):
-    if not cond:
-        _failures.append(msg)
+def _validate_esp_section(path, n, name):
+    """Checks one '[Section]' header and reports whether it is a known
+    '<Preset><Suffix>' combo (extracted from validate_esp to keep its
+    cyclomatic complexity under the project's threshold)."""
+    in_known_section = any(name == p + s for p in ESP_PRESETS for s in ESP_SUFFIXES)
+    check(in_known_section or "." in name,
+          f"{path.name}:{n}: section '{name}' is not '<Preset><Suffix>'")
+    return in_known_section
+
+def _validate_esp_field(path, n, field, value):
+    """Checks one 'field = value' line and reports whether `field` is a
+    recognized ESP field (unknown fields are allowed and ignored, S3.5)."""
+    if field in ESP_DOUBLE_FIELDS:
+        try:
+            float(value)
+        except ValueError:
+            check(False, f"{path.name}:{n}: '{field}' not numeric: {value}")
+        return True
+    if field in ESP_BOOL_FIELDS:
+        check(value in ("true", "false"),
+              f"{path.name}:{n}: '{field}' must be true/false: {value}")
+        return True
+    return False
 
 def validate_esp(path):
     in_known_section = False
     known_field_count = 0
     for n, raw in enumerate(path.read_text().splitlines(), 1):
         line = raw.strip()
-        if not line or line[0] in "#;":
+        if _skip_esp_line(line):
             continue
         if line.startswith("[") and line.endswith("]"):
-            name = line[1:-1]
-            in_known_section = any(
-                name == p + s for p in ESP_PRESETS for s in ESP_SUFFIXES)
-            check(in_known_section or "." in name,
-                  f"{path.name}:{n}: section '{name}' is not '<Preset><Suffix>'")
+            in_known_section = _validate_esp_section(path, n, line[1:-1])
             continue
         check("=" in line, f"{path.name}:{n}: line is neither a field nor a section")
         if "=" not in line or not in_known_section:
             continue
         field, value = (part.strip() for part in line.split("=", 1))
-        if field in ESP_DOUBLE_FIELDS:
+        if _validate_esp_field(path, n, field, value):
             known_field_count += 1
-            try:
-                float(value)
-            except ValueError:
-                check(False, f"{path.name}:{n}: '{field}' not numeric: {value}")
-        elif field in ESP_BOOL_FIELDS:
-            known_field_count += 1
-            check(value in ("true", "false"),
-                  f"{path.name}:{n}: '{field}' must be true/false: {value}")
-        # unknown field: allowed and ignored per spec (§3.5)
     check(known_field_count > 0, f"{path.name}: no ESP field recognized")
-
-def validate_rom_id(entry, where):
-    check(entry.get("system") in SYSTEMS, f"{where}: invalid system: {entry.get('system')}")
-    check(bool(SHA1_UPPER.match(entry.get("sha1", ""))),
-          f"{where}: sha1 must be 40 UPPERCASE hex digits")
-    if "crc32" in entry:
-        check(bool(CRC32_UPPER.match(entry["crc32"])),
-              f"{where}: crc32 must be 8 UPPERCASE hex digits")
-    if "md5" in entry:
-        check(bool(MD5_UPPER.match(entry["md5"])),
-              f"{where}: md5 must be 32 UPPERCASE hex digits")
 
 def safe_relative_path(p):
     return not p.startswith("/") and ".." not in p.split("/")
@@ -104,24 +104,6 @@ def lint_golden_packs():
     for root in (SPECS / "golden" / "mep", SPECS / "golden" / "mep-nes"):
         result = subprocess.run([sys.executable, mep_lint, str(root)], capture_output=True, text=True)
         check(result.returncode == 0, f"mep_lint.py exited {result.returncode} on {root}:\n{result.stdout}{result.stderr}")
-
-def validate_mei(path):
-    d = json.loads(path.read_text())
-    for field in ("mei", "name", "packs"):
-        check(field in d, f"{path.name}: required field missing: {field}")
-    check(bool(SEMVER.match(d.get("mei", ""))), f"{path.name}: 'mei' is not semver")
-    for i, p in enumerate(d.get("packs", [])):
-        where = f"{path.name}: packs[{i}]"
-        for field in ("name", "version", "game", "system", "rom", "mep",
-                      "license", "url", "sha256"):
-            check(field in p, f"{where}: required field missing: {field}")
-        check(bool(SEMVER.match(p.get("version", ""))), f"{where}: version is not semver")
-        check(bool(SEMVER.match(p.get("mep", ""))), f"{where}: mep is not semver")
-        check(p.get("url", "").startswith("https://"), f"{where}: url must be HTTPS")
-        check(bool(SHA256_HEX.match(p.get("sha256", ""))), f"{where}: invalid sha256")
-        rom = dict(p.get("rom", {}))
-        rom.setdefault("system", p.get("system"))
-        validate_rom_id(rom, f"{where}.rom")
 
 def validate_hires_draft(path):
     lines = [l for l in path.read_text().splitlines() if l.strip()]
@@ -184,7 +166,7 @@ def main():
     validate_esp(SPECS / "golden" / "esp" / "EnhancedAudioPresets.cfg")
     validate_mep(SPECS / "golden" / "mep" / "pack.json")
     validate_mep(SPECS / "golden" / "mep-nes" / "pack.json")
-    validate_mei(SPECS / "golden" / "mei" / "manifest.json")
+    validate_mei_catalog()
     validate_hires_draft(SPECS / "golden" / "hires-gbsms" / "hires.txt")
     validate_path_cases(SPECS / "golden" / "mep" / "path-cases.txt")
     validate_recipe(SPECS / "golden" / "mep-recipe" / "recipe.json")
@@ -193,8 +175,9 @@ def main():
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
-    print("validate-specs: all golden files conform (ESP, MEP, MEI, MEP-recipe, "
-          "hires-gbsms draft, path-cases format); mep-nes/pack.json structurally validated; mep + mep-nes lint-checked")
+    print("validate-specs: all golden files conform (ESP, MEP, MEI v1.1, MEP-recipe, "
+          "hires-gbsms draft, path-cases format); mep-nes/pack.json structurally validated; mep + mep-nes lint-checked; "
+          "MEI catalog validated (golden always, docs/community-packs.json when present)")
 
 if __name__ == "__main__":
     main()
