@@ -8,6 +8,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Link | Game | Console | Author | Submitted by | Category | Date | 👍 | External assets |
 |---|---|---|---|---|---|---|---|---|
 | [link](https://github.com/sbihaiko/MesenCE/issues/63) | Mega Man (USA) | NES | AxlRocks (Megaman-Super HD Pack) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
+| [link](https://github.com/sbihaiko/MesenCE/issues/62) | Contra (USA) | NES | TasticHacks (Contra80s HD Pack) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 | [link](https://github.com/sbihaiko/MesenCE/issues/64) | The Legend of Zelda (USA) | NES | Not explicitly named in the pack's own readme. The readme credits KYA (development support), ShadowOne333 (incorporating aspects of Zelda 1 Redux), and Sour (the Mesen emulator itself). | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 | [link](https://github.com/sbihaiko/MesenCE/issues/67) | Ice Climber (USA, Europe) | NES | LiQuiDzGit (HDnes) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 | [link](https://github.com/sbihaiko/MesenCE/issues/70) | Duck Hunt (World) | NES | LiQuiDzGit (HDnes) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
@@ -22,6 +23,7 @@ _listed pack starts at 1. This is a popularity proxy, not a real usage_
 _metric — no usage telemetry is collected by this project._
 
 - [Mega Man (USA)](https://github.com/sbihaiko/MesenCE/issues/63) — 👍 1
+- [Contra (USA)](https://github.com/sbihaiko/MesenCE/issues/62) — 👍 1
 - [The Legend of Zelda (USA)](https://github.com/sbihaiko/MesenCE/issues/64) — 👍 1
 - [Ice Climber (USA, Europe)](https://github.com/sbihaiko/MesenCE/issues/67) — 👍 1
 - [Duck Hunt (World)](https://github.com/sbihaiko/MesenCE/issues/70) — 👍 1
