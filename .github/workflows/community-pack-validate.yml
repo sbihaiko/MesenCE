@@ -648,9 +648,23 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           STRUCTURED_OUTPUT: ${{ steps.classify.outputs.structured_output }}
           PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
+          RECIPE_STATUS: ${{ steps.assemble-recipe.outputs.recipe_status }}
+          RECIPE_OK: ${{ steps.recipe-gate.outputs.recipe_ok }}
         run: |
           set -euo pipefail
           VERDICT=$(jq -r '.verdict' <<<"$STRUCTURED_OUTPUT")
+          # ADR-0138 §2/§10/§13: this is the ONLY place a recipe result can
+          # move the verdict, and it can only ever downgrade accepted ->
+          # invalid (a schema-invalid or lint-unclean recipe), never
+          # upgrade an invalid classify verdict. Deliberately a plain bash
+          # condition inside `run:`, not a step-level `if:` — the gate
+          # (`recipe-gate`) never writes Status/labels itself (ADR-0138
+          # §10), so this remains the sole verdict/label writer.
+          DOWNGRADED=false
+          if [ "$VERDICT" = "accepted" ] && [ "$RECIPE_STATUS" = "present" ] && [ "$RECIPE_OK" != "true" ]; then
+            VERDICT="invalid"
+            DOWNGRADED=true
+          fi
           jq -r '.comment' <<<"$STRUCTURED_OUTPUT" > verdict_comment.txt
           {
             echo ""
@@ -665,6 +679,12 @@ jobs:
             echo ""
             echo "Pack SHA-256: \`$PACK_SHA256\` — pin this against the pack link; a link that starts serving a different file changes this hash, and this verdict is stale until \`/revalidate\` runs again."
           } >> verdict_comment.txt
+          if [ "$DOWNGRADED" = "true" ]; then
+            {
+              echo ""
+              echo "Downgraded from \`accepted\` to \`invalid\`: the assembled MEP recipe (external-asset re-packaging, ADR-0138) failed \`mep_recipe.py validate\`/\`dry-run\`. See [MEP-recipe-v1.md](https://github.com/${REPO}/blob/main/docs/specs/MEP-recipe-v1.md)."
+            } >> verdict_comment.txt
+          fi
           CATEGORY=""
           case "$VERDICT" in
             accepted) FINAL="$STATUS_ACEITO_PARCIAL"; CATEGORY="$CATEGORY_PARTIAL_HD"; LABEL="pack:valid" ;;
@@ -676,6 +696,18 @@ jobs:
           esac
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file verdict_comment.txt
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
+          APPLIED_LABELS="$LABEL"
+          # assets:external (ADR-0138 §6/§13): applied only when the
+          # deterministic assembly step actually built a recipe with at
+          # least one external dependency — never derived from classify's
+          # own `assets` enum (it has no "external" member). Feeding it
+          # through the same case/label loop as textures/audio/ips/bps
+          # keeps this the single place asset-type labels are decided.
+          HAS_EXTERNAL_DEPS=""
+          if [ "$RECIPE_STATUS" = "present" ]; then
+            DEPS_COUNT=$(jq -r '(.sources.deps // []) | length' "$RUNNER_TEMP/mep_recipe.json")
+            [ "$DEPS_COUNT" != "0" ] && HAS_EXTERNAL_DEPS=1
+          fi
           # Visual asset-type index (textures/audio -> assets:*, ips/bps ->
           # patch:*) — independent of the accept/reject verdict above, so an
           # invalid pack still shows what kind of content it declared (e.g.
@@ -684,10 +716,11 @@ jobs:
           while IFS= read -r asset; do
             [ -z "$asset" ] && continue
             case "$asset" in
-              textures|audio) gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "assets:$asset" ;;
-              ips|bps) gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "patch:$asset" ;;
+              textures|audio) L="assets:$asset"; gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$L"; APPLIED_LABELS="$APPLIED_LABELS $L" ;;
+              ips|bps) L="patch:$asset"; gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$L"; APPLIED_LABELS="$APPLIED_LABELS $L" ;;
+              external) L="assets:external"; gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$L"; APPLIED_LABELS="$APPLIED_LABELS $L" ;;
             esac
-          done < <(jq -r '.assets[]?' <<<"$STRUCTURED_OUTPUT")
+          done < <(jq -r '.assets[]?' <<<"$STRUCTURED_OUTPUT"; [ -n "$HAS_EXTERNAL_DEPS" ] && echo external || true)
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$FINAL" >/dev/null
           if [ -n "$CATEGORY" ]; then
@@ -695,6 +728,13 @@ jobs:
               --field-id "$CATEGORY_FIELD_ID" --single-select-option-id "$CATEGORY" >/dev/null
           fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"
+          # Effective verdict (post-downgrade) and the labels actually
+          # applied to the issue, exposed as this step's own outputs so a
+          # later step (e.g. the mep-meta comment upsert, F6.2b remainder)
+          # can consume them without re-deriving/re-computing anything
+          # already decided here.
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          echo "labels=$APPLIED_LABELS" >> "$GITHUB_OUTPUT"
       # Dispatches community-pack-catalog.yml (on: workflow_dispatch) by
       # name only — never opened/parsed here. AC-6 (validate side).
       - name: Dispatch catalog regeneration on acceptance
