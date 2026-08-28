@@ -253,6 +253,81 @@ def check_classify_schema_no_sources_field(text):
         )
 
 
+RUNNER_TEMP_RECIPE_PATH = "$RUNNER_TEMP/mep_recipe.json"
+RECIPE_STATUS_VALUES = ("absent", "present", "refused")
+ISSUE_VIEW_CALL = 'gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body -q'
+
+
+def _assemble_recipe_block(text):
+    blocks = [b for b in text.split("\n      - name:") if "Assemble MEP recipe" in b]
+    if not blocks:
+        fail("Assemble MEP recipe step not found")
+        return None
+    return blocks[0]
+
+
+def check_assemble_recipe_step_present(text):
+    # F6.2b (ADR-0138 §13): a new deterministic step assembles the
+    # recipe's `sources` block after classify — never the LLM, which
+    # never computes hashes (§4).
+    block = _assemble_recipe_block(text)
+    if block is None:
+        return
+    if "id: assemble-recipe" not in block:
+        fail("Assemble MEP recipe step missing 'id: assemble-recipe'")
+    if "steps.classify.outcome" not in block:
+        fail("Assemble MEP recipe step does not gate on steps.classify.outcome (must run after classify)")
+    if "mep_recipe.py assemble-sources" not in block:
+        fail("Assemble MEP recipe step does not call 'mep_recipe.py assemble-sources'")
+
+
+def check_assemble_recipe_issue_body_via_gh(text):
+    # ADR-0138 §17: the issue body is fetched via `gh issue view`, never
+    # taken from the triggering event's payload (this is a reusable
+    # workflow_call workflow whose caller may not even be an issues event).
+    block = _assemble_recipe_block(text)
+    if block is None:
+        return
+    if ISSUE_VIEW_CALL not in block:
+        fail(f"Assemble MEP recipe step does not fetch the issue body via: {ISSUE_VIEW_CALL}")
+
+
+def check_assemble_recipe_runner_temp_handoff(text):
+    # ADR-0138 §13: the assembled recipe is written to a runner-local temp
+    # path, never a path inside the checkout.
+    block = _assemble_recipe_block(text)
+    if block is None:
+        return
+    if RUNNER_TEMP_RECIPE_PATH not in block:
+        fail(f"Assemble MEP recipe step does not reference the handoff path {RUNNER_TEMP_RECIPE_PATH}")
+    if f'--out "{RUNNER_TEMP_RECIPE_PATH}"' not in block:
+        fail("Assemble MEP recipe step does not pass --out pointing at the runner-local handoff path")
+
+
+def check_recipe_status_three_values(text):
+    # ADR-0138 §13: the step exposes exactly one output, recipe_status,
+    # with exactly three literal values — absent/present/refused.
+    block = _assemble_recipe_block(text)
+    if block is None:
+        return
+    for value in RECIPE_STATUS_VALUES:
+        literal = f"recipe_status={value}"
+        if literal not in block:
+            fail(f"Assemble MEP recipe step never emits literal '{literal}' to GITHUB_OUTPUT")
+
+
+def check_no_github_event_issue(text):
+    # ADR-0138 §17: the issue body/number must come from `gh issue view`
+    # plus `inputs.issue_number`, never from the triggering event's
+    # payload — the verifier asserts the absence of this literal anywhere
+    # in the file, not just inside the new step.
+    if "github.event.issue" in text:
+        fail(
+            "github.event.issue was found — the issue body/number must "
+            "come from gh issue view / inputs.issue_number (ADR-0138 §17)"
+        )
+
+
 CHECKS = (
     check_ids,
     check_project_number_only,
@@ -267,6 +342,11 @@ CHECKS = (
     check_classify_recipe_fragment_required,
     check_classify_top_level_required_unchanged,
     check_classify_schema_no_sources_field,
+    check_assemble_recipe_step_present,
+    check_assemble_recipe_issue_body_via_gh,
+    check_assemble_recipe_runner_temp_handoff,
+    check_recipe_status_three_values,
+    check_no_github_event_issue,
 )
 
 
