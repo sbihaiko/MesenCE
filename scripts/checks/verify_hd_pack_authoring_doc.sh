@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Verifies docs/hd-pack-authoring.md (AC-9): exists, is not trivial, and
+# Verifies docs/hd-pack-authoring.md (AC-9, AC-3): exists, is not trivial,
 # cites docs/specs/MEP-v1.md (the §5.1/§5.2/§5.3/§6 sections used in
-# community-pack triage verdicts).
+# community-pack triage verdicts), and documents the split-distribution
+# MEP Recipe flow (ADR-0138 §12): external_assets/external_assets_license,
+# the assets:external label, and docs/specs/MEP-recipe-v1.md.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,4 +29,13 @@ for section in '§5.1' '§5.2' '§5.3' '§6'; do
   grep -qF "$section" "$DOC" || fail "$DOC does not reference section $section of MEP-v1.md"
 done
 
-echo "PASS: docs/hd-pack-authoring.md exists, is not trivial, and references MEP-v1.md §5.1/§5.2/§5.3/§6"
+grep -q '^## Split-distribution packs (MEP Recipe)' "$DOC" \
+  || fail "$DOC is missing the 'Split-distribution packs (MEP Recipe)' section"
+
+grep -qF 'MEP-recipe-v1.md' "$DOC" || fail "$DOC does not reference MEP-recipe-v1.md"
+
+for term in 'external_assets' 'assets:external'; do
+  grep -qF "$term" "$DOC" || fail "$DOC does not mention required term: $term"
+done
+
+echo "PASS: docs/hd-pack-authoring.md exists, is not trivial, references MEP-v1.md §5.1/§5.2/§5.3/§6, and documents split-distribution packs (MEP-recipe-v1.md, external_assets, assets:external)"

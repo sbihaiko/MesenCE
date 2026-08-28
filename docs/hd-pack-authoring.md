@@ -85,6 +85,61 @@ file/folder itself exactly like the ROM (no extension), so the submission
 is accepted by the first convention without depending on the fallback or
 the criteria difference described above.
 
+## Split-distribution packs (MEP Recipe)
+
+Some releases cannot ship a single self-contained zip: the textures/patch
+live in your release, but the referenced audio (or another dependency) is
+distributed separately — for example because it is too large for the CI
+download cap, or because you do not hold redistribution rights for the
+audio files themselves. For this case the submission form has two optional
+fields, `external_assets` and `external_assets_license`, that let triage
+assemble a **MEP Recipe** — a declarative instruction set (never executable
+code) that tells the host how to combine your primary pack with the
+externally-hosted files at install time. The full normative vocabulary is
+[`docs/specs/MEP-recipe-v1.md`](specs/MEP-recipe-v1.md) (ADR-0138); this
+section only explains what to put in the form.
+
+### `external_assets`
+
+An optional multi-line field. One dependency per non-empty line; blank
+lines and lines whose first non-space character is `#` are ignored. Each
+line is whitespace-separated:
+
+```
+<url> [<sha256>] [<size>]
+```
+
+- `url` — where the file can be downloaded (a direct link, not an HTML
+  landing page).
+- `sha256` — the SHA-256 of the file's exact bytes, as **64 lowercase hex
+  characters** (compute it with `sha256sum <file>`).
+- `size` — the file's size in bytes, as a decimal integer. Optional, but
+  recommended.
+
+**A line missing `sha256` disables recipe assembly for the entire
+submission** (ADR-0138 §12): triage cannot trust an unverified download, so
+the recipe step is skipped and the submission falls back to the normal
+pre-recipe verdict path, with a comment explaining which line is missing
+its hash and how to add it before commenting `/revalidate`.
+
+### `external_assets_license`
+
+An optional single-line field for the declared license of the files listed
+in `external_assets` (e.g. an SPDX identifier or a short free-text
+description). This is shown to installers before the dependency is used —
+it does not replace your own distribution-rights responsibility for the
+primary pack (see "Before submitting" below).
+
+### The `assets:external` label
+
+When a recipe is successfully assembled from your `external_assets` lines,
+the issue receives the `assets:external` label in addition to whatever the
+primary pack contains (`assets:textures`, `assets:audio`). This is an
+additive content-index label, like the others — it never changes the
+binary verdict (still "Aceito parcial (HD Mesen)" / "Inválido"): a recipe
+only ever assembles a pack that would otherwise be accepted, it cannot turn
+a rejected submission into an accepted one.
+
 ## Before submitting
 
 - **Distribution rights.** The pack MUST NOT contain ROM bytes or assets

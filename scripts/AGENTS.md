@@ -155,8 +155,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   Project)" section is appended after it. `verify_community_pack_issue_template.py`
   parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
   the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
-  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
-  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_submitted_workflow.py`,
+  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, cites
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6, and documents the
+  split-distribution/MEP Recipe flow (ADR-0138 §12): the
+  "Split-distribution packs (MEP Recipe)" section, `external_assets`,
+  `assets:external`, and a citation of `docs/specs/MEP-recipe-v1.md`.
+  `verify_community_pack_submitted_workflow.py`,
   `verify_community_pack_drift_check_workflow.py`, and
   `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
   Actions workflows and their GH Project field-provenance assumptions.
