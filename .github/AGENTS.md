@@ -85,7 +85,7 @@ what CI actually runs; this doc records why they're split the way they are.
   workflow only documents those names, never creates them. See
   `scripts/checks/verify_community_pack_validate_workflow.py` for its
   structural contract.
-- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, gate implemented).**
+- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b complete).**
   The "Classify pack" step's `--json-schema` now carries an OPTIONAL
   nested `recipe` property (`ops`/`deps`/`pack`, per
   `docs/specs/MEP-recipe-v1.md`) with its own `"required":["ops","deps","pack"]`
@@ -171,13 +171,42 @@ what CI actually runs; this doc records why they're split the way they are.
   non-empty (§6) — never derived from classify's own `assets` enum, which
   has no "external" member. `apply-verdict` exposes its own two step
   outputs, `verdict` (the effective, post-downgrade verdict) and `labels`
-  (every label actually applied to the issue), so a later step (the
-  mep-meta comment upsert, still the not-yet-implemented rest of F6.2b)
-  can consume them without recomputing. Checked by
+  (every label actually applied to the issue), so the mep-meta upsert
+  step below can consume them without recomputing. Checked by
   `verify_community_pack_validate_workflow.py`'s
   `check_apply_verdict_downgrade_expression`,
   `check_apply_verdict_external_label_branch`, and
   `check_apply_verdict_exposes_outputs`.
+  **"Upsert mep-meta comment" (`id: upsert-mep-meta`, F6.2b complete).**
+  Runs right after `apply-verdict`, on EVERY successful classify pass
+  (`if: steps.classify.outcome == 'success'`) — deliberately never gated
+  on `recipe_status == 'present'` (§5/§13/§18): a submission with no
+  assembled recipe (`absent`/`refused`) still gets its verdict, labels
+  and `source_sha256` recorded, just without the `deps`/`recipe_hash`
+  fields (omitted entirely, never emitted empty/null). `verdict` and
+  `labels` are read verbatim from `apply-verdict`'s own outputs — never
+  recomputed. The `<!-- mep-meta -->`-marked comment is bot-owned and
+  rewritten WHOLESALE on every pass (§5): the step finds it via `gh api`
+  (`GET /repos/$REPO/issues/$ISSUE_NUMBER/comments`, `--jq` matching the
+  marker), then `gh api --method PATCH` its body outright — never a
+  read-modify-merge with whatever it said before — or `gh api --method
+  POST` a new comment when none exists yet. The comment body (embedded
+  JSON metadata block plus the literal provenance line, "dep digests:
+  submitter-declared, verified on install", §16) and the API request
+  payload are both built with Python's `json` module (a `python3 -
+  <<'PYEOF'` heredoc reading the step's own env vars), never bash string
+  concatenation. `recipe_hash` is `sha256sum` of
+  `$RUNNER_TEMP/mep_recipe.json` itself — a hash of the recipe DOCUMENT,
+  never of dep contents; dep `sha256`/`size` are copied straight from the
+  assembled recipe's `sources.deps` (submitter-declared, never
+  CI-verified, §11/§16). Checked by
+  `verify_community_pack_validate_workflow.py`'s
+  `check_mep_meta_step_present_and_not_gated_on_recipe_status`,
+  `check_mep_meta_find_then_patch`, `check_mep_meta_marker_in_comment_body`,
+  `check_mep_meta_provenance_line`, `check_mep_meta_body_built_via_python_json`,
+  and `check_mep_meta_omits_deps_and_recipe_hash_when_absent`. F6.2b is now
+  complete end-to-end (classify schema → assembly → gate →
+  apply-verdict → mep-meta upsert).
 
 ## Work Guidance
 
