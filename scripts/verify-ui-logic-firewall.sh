@@ -40,10 +40,28 @@ while IFS= read -r -d '' file; do
 		echo "ERROR: $file references Avalonia or EmuApi in code - UI/Logic/*.cs must stay BCL-only (plus System.IO.Compression) so it dual-compiles into UI.Tests." >&2
 		fail=1
 	fi
+	# ADR-0138 §53: the three-layer rule also holds upward - Logic never
+	# reaches into the host-aware Services layer or issues HTTP itself.
+	if sed -E 's|//.*$||' "$file" | grep -qE 'Mesen\.Services|System\.Net\.Http|HttpClient'; then
+		echo "ERROR: $file references Mesen.Services/HttpClient - UI/Logic/*.cs is the host-free decision layer; network orchestration belongs in UI/Services/*.cs." >&2
+		fail=1
+	fi
 done < <(find "$logicDir" -name '*.cs' -print0)
+
+# ADR-0138 §53: HttpClient use in UI/ is confined to UI/Services/*.cs (plus the
+# pre-existing update check) - never Windows code-behind or ViewModels.
+while IFS= read -r -d '' file; do
+	case "$file" in
+		UI/Services/*|UI/ViewModels/UpdatePromptViewModel.cs) continue ;;
+	esac
+	if sed -E 's|//.*$||' "$file" | grep -qE 'HttpClient'; then
+		echo "ERROR: $file uses HttpClient outside UI/Services/ - the network boundary is UI/Services/*.cs (ADR-0138 §37/§53)." >&2
+		fail=1
+	fi
+done < <(find UI -name '*.cs' -not -path 'UI/bin/*' -not -path 'UI/obj/*' -print0)
 
 if [[ "$fail" -ne 0 ]]; then
 	exit 1
 fi
 
-echo "OK: UI/Logic firewall holds ($csproj has no RuntimeIdentifier/ProjectReference, UI/Logic/*.cs is free of Avalonia/EmuApi)."
+echo "OK: UI/Logic firewall holds ($csproj has no RuntimeIdentifier/ProjectReference, UI/Logic/*.cs is free of Avalonia/EmuApi/HttpClient/Mesen.Services, HttpClient confined to UI/Services/)."

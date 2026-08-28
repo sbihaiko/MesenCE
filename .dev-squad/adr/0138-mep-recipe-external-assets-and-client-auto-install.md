@@ -658,6 +658,66 @@ again) are folded and deleted.
     stays mirrored because `SettingTypes.h` declares it. The rule: mirror iff
     a native consumer exists.
 
+50. **Client download trust contract (F6.4b-2 audit).** Every HTTP GET the
+    client issues for community packs — the catalog included — goes through
+    one primitive, `UI/Services/CommunityPackDownloader.GetAsync`: redirects
+    are never followed automatically, each hop is re-checked against the
+    embedded allow-list (`MatchHost`, https only, 5-hop cap, mirroring
+    `fetch_pack.py`'s `open_validated`), and the body is capped in bytes
+    before it is buffered (300MB for artifacts = the CI validator's ceiling,
+    16MB for the catalog). The catalog URL stays a compile-time constant
+    bound to this fork, but it is no longer exempt from `MatchHost`. DNS /
+    private-range checks remain CI-only by design: the allow-listed hosts are
+    public CDNs and a client cannot pin DNS the way the runner does. The
+    declared `sha256` doubles as the `.cache/downloads/` file name, so it is
+    validated as 64 hex chars before touching the filesystem.
+51. **§38 gate ownership and per-session idempotency.**
+    `CommunityPackInstallService` (the ROM-load hook) owns the consent gate:
+    it evaluates `CommunityPackConsentState` — showing the first-run dialog
+    via `EnhancementPacksWindow.EnsureCommunityPackAutoInstallConsent` — and
+    a per-process `HashSet` of attempted ROM sha1s *before* any network
+    call; `CommunityPackInstallCoordinator`'s own `NeedsConsent` outcome is
+    documented defense in depth, not the primary gate. The
+    `.mep-install.json` stamp (§43) remains the cross-session gate. Power
+    cycles are not new loads (an installed pack is applied through one).
+52. **Container name is host-free.** The sanitization of the catalog's
+    submitter-influenced `name`/`game` into a folder name and `DisabledPacks`
+    key lives in `UI/Logic/CommunityPackContainerName.cs` (pinned by
+    UI.Tests); `CommunityPackInstallCoordinator.ResolveOutFolder` is the
+    stateful partner that roots it under `EnhancementPackFolder` and asserts
+    it stayed there (ADR-0127 header rule).
+53. **Three-layer rule for `UI/`.** `UI/Logic` = host-free decisions (BCL
+    only, dual-compiled into UI.Tests); `UI/Services` = host/network
+    orchestration (`HttpClient`, `EmuApi`, file I/O allowed); `UI/Windows`/
+    `UI/ViewModels` = presentation. `scripts/verify-ui-logic-firewall.sh`
+    enforces it in both directions: `UI/Logic/*.cs` never references
+    `Mesen.Services`/`HttpClient`, and `HttpClient` under `UI/` is confined
+    to `UI/Services/*.cs` plus the pre-existing `UpdatePromptViewModel`.
+54. **Consent dialog placement — decided, stop re-raising.** The first-run
+    Yes/No dialog is a public static helper on `EnhancementPacksWindow`
+    (the window that owns the related settings and message-box usage),
+    called from the Services layer via the UI dispatcher; the decision
+    itself stays in `UI/Logic/CommunityPackConsentState`. Moving the
+    presenter into `UI/Services/` would put Avalonia into the Services layer
+    for no gain; revisit only if more prompts accumulate (per-pack consent).
+55. **Closed without action (F6.4b-2 audit).** (a) `Link=` on the embedded
+    allow-list: not needed — `LogicalName` is the only handle the code uses
+    and the checker pins the `Include`/`LogicalName` pair; (b) a
+    build-level (link-symbol) proof that `Core/` has no HTTP: the comment-
+    stripping grep in `verify_core_no_http_client.sh` is proportionate to a
+    tree that has no HTTP today; (c) moving the reinstall `Directory.Delete`
+    into a Core "replace mode" of `MepRecipeInstaller::Install` (temp folder
+    + atomic swap): deferred — the client-side delete is bounded by §52's
+    sanitization and the rooted-path assertion; reopen if the installer
+    grows a second mutating caller.
+
+**F6.4b-2 shipped (2026-08-28, run `119e1031a25f`).** T1 (fetcher) stagnated
+on two *real* critic findings (null dep id, sha256-as-path) — recovered per §40
+and fixed by hand; T5 (`CommunityPackInstallService` + `MainWindow` hook) was
+skipped for depending on T1 and written by hand; the auditor's PRIORITY
+findings became §50–§53 and were implemented in the same commit. Remaining:
+F6.4c, F6.5.
+
 **F6.4b second half (2026-08-28).** Run `2ef26ba839d1` landed the UI/Logic
 decision classes, DTOs and the interop export (T1–T5; T1 recovered per §40 and
 fixed for the empty-body 200). The remaining run — **F6.4b-2** — ships, in one

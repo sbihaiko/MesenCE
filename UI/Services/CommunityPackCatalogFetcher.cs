@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -43,13 +41,13 @@ namespace Mesen.Services
 				return null;
 			}
 
-			CommunityPackCatalog? catalog = await LoadCatalogAsync();
+			IReadOnlyList<CommunityPackHostEntry> allowedHosts = LoadAllowlist();
+			CommunityPackCatalog? catalog = await LoadCatalogAsync(allowedHosts);
 			CommunityPackCatalogEntry? entry = catalog == null ? null : FindMatchingEntry(catalog, romSha1);
 			if(entry == null) {
 				return null;
 			}
 
-			IReadOnlyList<CommunityPackHostEntry> allowedHosts = LoadAllowlist();
 			string? primaryPath = await DownloadAndVerifyAsync(entry.Url, entry.Sha256, allowedHosts);
 			if(primaryPath == null) {
 				return null;
@@ -99,7 +97,7 @@ namespace Mesen.Services
 
 		//ETag/If-None-Match caching (§37/§41): CommunityCatalogCacheDecision is the pure decision; this does the I/O.
 		//Never persists/returns a body that hasn't parsed as a real catalog - a non-JSON 200, or an explicit JSON "packs": null, degrades to null like any other failure, never an unhandled throw or a bad body cached for replay.
-		private static async Task<CommunityPackCatalog?> LoadCatalogAsync()
+		private static async Task<CommunityPackCatalog?> LoadCatalogAsync(IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
 			try {
 				Directory.CreateDirectory(CacheFolder);
@@ -107,7 +105,7 @@ namespace Mesen.Services
 				string? cachedETag = File.Exists(CatalogEtagPath) ? await File.ReadAllTextAsync(CatalogEtagPath) : null;
 				bool cacheUsable = CommunityCatalogCacheDecision.IsCacheUsable(cachedETag, cachedBody);
 
-				CommunityCatalogFetchOutcome outcome = await FetchCatalogOutcomeAsync(cacheUsable ? cachedETag : null);
+				CommunityCatalogFetchOutcome outcome = await FetchCatalogOutcomeAsync(cacheUsable ? cachedETag : null, allowedHosts);
 				CommunityCatalogCacheResult resolved = CommunityCatalogCacheDecision.Resolve(outcome, cachedETag, cachedBody);
 				CommunityPackCatalog? catalog = string.IsNullOrWhiteSpace(resolved.Body) ? null :
 					(CommunityPackCatalog?)JsonSerializer.Deserialize(resolved.Body, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
@@ -123,22 +121,16 @@ namespace Mesen.Services
 			}
 		}
 
-		private static async Task<CommunityCatalogFetchOutcome> FetchCatalogOutcomeAsync(string? ifNoneMatchETag)
+		//§50: the catalog GET goes through the same allow-list/no-redirect/size-capped primitive as the artifacts.
+		private static async Task<CommunityCatalogFetchOutcome> FetchCatalogOutcomeAsync(string? ifNoneMatchETag, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
-			try {
-				using HttpClient client = new();
-				using HttpRequestMessage request = new(HttpMethod.Get, CatalogUrl);
-				if(ifNoneMatchETag != null) {
-					request.Headers.TryAddWithoutValidation("If-None-Match", ifNoneMatchETag);
-				}
-				using HttpResponseMessage response = await client.SendAsync(request);
-				string? etag = response.Headers.ETag?.Tag;
-				string? body = response.StatusCode == HttpStatusCode.OK ? await response.Content.ReadAsStringAsync() : null;
-				return new CommunityCatalogFetchOutcome((int)response.StatusCode, etag, body);
-			} catch(Exception) {
-				//Network failure: same as "nothing new" - Resolve() falls back to the disk cache, or Cold.
+			CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(CatalogUrl, allowedHosts, CommunityPackDownloader.MaxCatalogBytes, ifNoneMatchETag);
+			if(response == null) {
+				//Network failure or refused hop: same as "nothing new" - Resolve() falls back to the disk cache, or Cold.
 				return new CommunityCatalogFetchOutcome(0, null, null);
 			}
+			string? body = response.Body == null ? null : System.Text.Encoding.UTF8.GetString(response.Body);
+			return new CommunityCatalogFetchOutcome(response.StatusCode, response.ETag, body);
 		}
 
 		private static async Task WriteCatalogCacheAsync(string body, string? etag)
@@ -149,15 +141,13 @@ namespace Mesen.Services
 			}
 		}
 
-		//Gates through the host allow-list (§41, MatchHost), verifies SHA256 against the declared hash (an existing .cache/downloads/ copy is reused only if it still matches).
+		//Verifies SHA256 against the declared hash (an existing .cache/downloads/ copy is reused only if it still matches);
+		//the GET itself is allow-list-gated per hop and size-capped by CommunityPackDownloader (§41/§50).
 		//The declared hash doubles as the cache file name, so it must be exactly 64 hex chars before touching the filesystem - a catalog is network data, never a path.
 		private static async Task<string?> DownloadAndVerifyAsync(
 			string url, string expectedSha256, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
 			if(string.IsNullOrWhiteSpace(url) || !IsSha256Hex(expectedSha256)) {
-				return null;
-			}
-			if(CommunityPackHostAllowlist.MatchHost(url, allowedHosts) == null) {
 				return null;
 			}
 			try {
@@ -166,12 +156,11 @@ namespace Mesen.Services
 				if(File.Exists(destPath) && string.Equals(ComputeSha256(File.ReadAllBytes(destPath)), expectedSha256, StringComparison.OrdinalIgnoreCase)) {
 					return destPath;
 				}
-				using HttpClient client = new();
-				byte[] data = await client.GetByteArrayAsync(url);
-				if(!string.Equals(ComputeSha256(data), expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+				CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(url, allowedHosts, CommunityPackDownloader.MaxArtifactBytes);
+				if(response?.Body == null || !string.Equals(ComputeSha256(response.Body), expectedSha256, StringComparison.OrdinalIgnoreCase)) {
 					return null;
 				}
-				await File.WriteAllBytesAsync(destPath, data);
+				await File.WriteAllBytesAsync(destPath, response.Body);
 				return destPath;
 			} catch(Exception) {
 				return null;

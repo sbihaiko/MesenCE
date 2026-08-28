@@ -187,6 +187,24 @@ does not exist.
   `mep_recipe.py apply` byte-for-byte (79/79). Run ended `ac_failed`/T4
   stagnated on critic false positives; T4 recovered from the orphaned branch
   and merged by hand (§40). Audit folded into §35, §38–§40.
+- **F6.4b — UI fetch + consent** (ADR-0138 §37/§38/§41–§55, runs
+  `2ef26ba839d1` + `119e1031a25f`, 2026-08-28): host-free decision classes
+  `UI/Logic/Community{PackHostAllowlist,CatalogCacheDecision,PackDepResolver,
+  PackReinstallDecision,PackConsentState,PackCatalog,PackContainerName}.cs`
+  (UI.Tests 183/183); `InteropDLL/EmuApiWrapperMep.cpp` `InstallMepRecipe`
+  export + `EmuApi` DllImport; `UI/Services/` layer —
+  `CommunityPackDownloader` (§50: per-hop allow-list, no auto-redirect,
+  byte cap), `CommunityPackCatalogFetcher` (ETag cache, No-Intro sha1
+  match, sha256-verified `.cache/downloads/`), `CommunityPackInstallCoordinator`
+  (§43 reinstall gate, dep resolution, `id<TAB>path` rows → interop),
+  `CommunityPackInstallService` (ROM-load hook, §51 consent-before-network,
+  per-session idempotency, withheld-patch / user_supplied notices);
+  allow-list embedded in `UI.csproj` (§41) with three `scripts/checks/`
+  guardrails in `make doc-checks`; `AutoInstallCommunityPacks` checkbox +
+  first-run consent dialog in `EnhancementPacksWindow`; firewall script now
+  enforces the §53 three-layer rule both ways. Both runs ended `ac_failed`
+  with T1 stagnated; recovered per §40. GUI flow not yet exercised against
+  the live catalog (needs F6.5's re-validated entries).
 - **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
   `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
   per-system tile/palette widths and explicit errors; sibling golden
@@ -324,7 +342,7 @@ P.1/P.2.
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.4a shipped; remaining work list = F6.4b, F6.4c, F6.5 |
+| 0138 | accepted | Phase 6 design; F6.0–F6.4b shipped; remaining work list = F6.4c, F6.5 |
 | 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |

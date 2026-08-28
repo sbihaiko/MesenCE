@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using Mesen.Config;
+using Mesen.Interop;
 using Mesen.Utilities;
 using Mesen.Windows;
 using System;
@@ -19,6 +20,9 @@ namespace Mesen.Services
 	{
 		private const string MessageTitle = "Enhancement Packs";
 		private static int _running = 0;
+		//§51 per-session idempotency key: one attempt per ROM sha1 per process, decided before any
+		//network call; the .mep-install.json stamp (§43) remains the cross-session gate.
+		private static readonly HashSet<string> _attemptedRomSha1 = new(StringComparer.OrdinalIgnoreCase);
 
 		//Called from MainWindow.OnNotification(GameLoaded); power cycles are not new loads
 		//(a pack we just installed is applied through exactly such a power cycle).
@@ -41,6 +45,12 @@ namespace Mesen.Services
 				bool allowed = await Dispatcher.UIThread.InvokeAsync(EnhancementPacksWindow.EnsureCommunityPackAutoInstallConsent);
 				if(!allowed) {
 					return;
+				}
+				string romSha1 = EmuApi.GetMepRomSha1();
+				lock(_attemptedRomSha1) {
+					if(string.IsNullOrWhiteSpace(romSha1) || !_attemptedRomSha1.Add(romSha1)) {
+						return; //no hash, or already attempted this session
+					}
 				}
 
 				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();

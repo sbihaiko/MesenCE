@@ -153,20 +153,10 @@ namespace Mesen.Services
 			return files;
 		}
 
-		//Destination-folder/DisabledPacks-key name (ADR-0040): entry.Name (fallback
-		//Game) is remote, submitter-influenced data (MEI-v1.md §2.2) reaching a
-		//path sink, so beyond swapping invalid chars this rejects dot-only names
-		//('.'/'..'), strips trailing dots/spaces (Windows), and caps length.
-		private static string GetContainerName(CommunityPackCatalogEntry entry)
-		{
-			string raw = string.IsNullOrWhiteSpace(entry.Name) ? entry.Game : entry.Name;
-			char[] invalid = Path.GetInvalidFileNameChars();
-			string sanitized = new string(raw.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim().TrimEnd('.', ' ');
-			if(sanitized.Length > 96) {
-				sanitized = sanitized.Substring(0, 96).TrimEnd('.', ' '); //truncation can re-expose a trailing dot/space
-			}
-			return sanitized.Length == 0 || sanitized.All(c => c == '.') ? "community-pack" : sanitized;
-		}
+		//Destination-folder/DisabledPacks-key name (ADR-0040): the sanitization is the host-free
+		//CommunityPackContainerName (UI/Logic, pinned by UI.Tests); ResolveOutFolder roots it.
+		private static string GetContainerName(CommunityPackCatalogEntry entry) =>
+			CommunityPackContainerName.Sanitize(entry.Name, entry.Game);
 
 		//Defense in depth on GetContainerName's sanitization: asserts the folder is still rooted under EnhancementPackFolder.
 		private static string ResolveOutFolder(string containerName)
