@@ -958,6 +958,8 @@
 			<Control ID="chkBootstrapEnhancementFolder">Bootstrap an enhancement folder beside played ROMs (records the game's tiles upscaled into &lt;Game&gt;/auto/ when no pack applies yet)</Control>
 			<Control ID="btnOpenSiblingFolder">Open Game Folder</Control>
 			<Control ID="chkApplyPatchOnHashMismatch">Apply ROM patches even when the hash does not match (may break other revisions)</Control>
+			<Control ID="chkAutoInstallCommunityPacks">Automatically install matching community packs</Control>
+			<Control ID="tipAutoInstallCommunityPacks">When a ROM is loaded and no local pack matches it, download and install a matching community pack from the online catalog, if one exists. The first automatic download always asks for confirmation.</Control>
 			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A folder named like the ROM beside it ("sibling") always comes first, then a loose HD pack in HdPacks/, then installed packs. Files under a pack's auto/ folder are the machine layer; anything outside it overrides them. Changes apply on the next power cycle.</Control>
 			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Create a folder named like the ROM beside it, install a .zip, or drop a pack folder into the EnhancementPacks folder.</Control>
 			<Control ID="colName">Name</Control>
@@ -1888,6 +1890,7 @@ E
 			<Message ID="InstallMepPackInvalidZipFile">The selected file is not a valid ZIP file or could not be copied.</Message>
 			<Message ID="InstallMepPackConfirmReset">The enhancement pack has been installed. Do you want to power cycle the console to apply it now?</Message>
 			<Message ID="EnhancementPacksConfirmReset">Enhancement pack settings apply on the next power cycle. Power cycle now?</Message>
+			<Message ID="CommunityPackAutoInstallConsent">MesenCE can automatically download and install a matching enhancement pack from the online community catalog for games that don't have one installed yet. This contacts an external server and downloads files onto your computer.&#xA;&#xA;Allow automatic downloads?</Message>
 			<Message ID="InstallHdPackConfirmReset">The HD Pack has been installed successfully. Do you want to reset the game and load the HD Pack now?</Message>
 
 		<Message ID="Player">Player</Message>

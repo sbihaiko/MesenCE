@@ -42,6 +42,7 @@
 			</c:OptionSection>
 			<CheckBox Content="{l:Translate chkBootstrapEnhancementFolder}" IsChecked="{Binding Config.BootstrapEnhancementFolder}" IsEnabled="{Binding Config.EnableMepPacks}" />
 			<CheckBox Content="{l:Translate chkApplyPatchOnHashMismatch}" IsChecked="{Binding Config.ApplyPatchOnHashMismatch}" IsEnabled="{Binding Config.EnableMepPacks}" />
+			<CheckBox Content="{l:Translate chkAutoInstallCommunityPacks}" IsChecked="{Binding Config.AutoInstallCommunityPacks}" IsEnabled="{Binding Config.EnableMepPacks}" ToolTip.Tip="{l:Translate tipAutoInstallCommunityPacks}" />
 			<TextBlock Text="{l:Translate lblPacksHelp}" TextWrapping="Wrap" Margin="0 3" />
 		</StackPanel>
 
