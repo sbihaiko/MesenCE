@@ -100,12 +100,20 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   would reject; `present` only when a real fragment and well-formed lines
   both exist; `refused` when any line is malformed or missing its
   sha256. Only `present` writes a document (`--out`).
+  `run_recipe`'s missing-dep handling (a dep id absent from the `--dep`
+  map — every declared dep, for the CI recipe-gate's --dep-less dry-run,
+  ADR-0138 §16) skips not just the `copy`/`glob` op whose `source_id` is
+  missing but also any later `rename` referencing a dest path that op
+  would have written — the ADR-0138 §1 reference recipe's own `glob`
+  (dep) → `rename` chain depends on this; only a hard-coded missing-dep
+  path collision still raises.
   `test_mep_recipe.py` is the framework-free acceptance check (unknown op
   / escaping path rejected; dry-run of a synthetic split pack is
-  `mep_lint`-clean; `assemble-sources`'s absent/present/refused outcomes,
-  including an empty-but-present classify fragment, an unmatched
-  `external_assets` line surviving into `sources.deps`, and the CLI round
-  trip).
+  `mep_lint`-clean; a `rename` chained after a missing-dep `glob` is
+  skipped rather than a hard error; `assemble-sources`'s absent/present/
+  refused outcomes, including an empty-but-present classify fragment, an
+  unmatched `external_assets` line surviving into `sources.deps`, and the
+  CLI round trip).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and

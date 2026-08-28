@@ -422,20 +422,20 @@ def _write_pack_json(recipe: dict, out: Path, include_patches: bool):
     (out / "pack.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
-def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str | None) -> None:
-    errors = validate_recipe(recipe)
-    if errors:
-        raise RecipeError("\n".join(errors))
+def _verify_primary(recipe: dict, primary: Path) -> None:
     if not primary.exists():
         raise RecipeError(f"primary does not exist: {primary}")
+    expected = recipe["sources"]["primary"]["sha256"].lower()
+    actual = sha256_file(primary)
+    if actual != expected:
+        raise RecipeError(f"primary sha256 mismatch: expected {expected}, got {actual}")
 
-    expected_primary = recipe["sources"]["primary"]["sha256"].lower()
-    actual_primary = sha256_file(primary)
-    if actual_primary != expected_primary:
-        raise RecipeError(
-            f"primary sha256 mismatch: expected {expected_primary}, got {actual_primary}"
-        )
 
+def _resolve_deps(recipe: dict, deps: dict) -> tuple:
+    """Hash-verifies every dep path CI supplied; anything absent from
+    `deps` (every declared dep, when the caller passes none — CI's
+    recipe-gate, ADR §16) is collected into `missing` instead of raising.
+    """
     dep_meta = {d["id"]: d for d in recipe["sources"].get("deps") or [] if isinstance(d, dict)}
     missing = []
     opened = {}
@@ -453,15 +453,143 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
                 f"dep {dep_id!r} sha256 mismatch: expected {meta['sha256'].lower()}, got {actual}"
             )
         opened[dep_id] = (mep_lint.Source(path), "")
+    return dep_meta, missing, opened
 
+
+def _check_missing_policy(recipe: dict, dep_meta: dict, missing: list) -> None:
+    if not missing:
+        return
     policy = recipe.get("policy") or {}
-    apply_complete = policy.get("apply_patch_only_if_complete", True)
-    if missing:
-        if not apply_complete:
-            raise RecipeError(f"missing dep(s): {', '.join(missing)}")
-        for dep_id in missing:
-            if not dep_meta[dep_id].get("user_supplied", True):
-                raise RecipeError(f"missing required dep {dep_id!r}")
+    if not policy.get("apply_patch_only_if_complete", True):
+        raise RecipeError(f"missing dep(s): {', '.join(missing)}")
+    for dep_id in missing:
+        if not dep_meta[dep_id].get("user_supplied", True):
+            raise RecipeError(f"missing required dep {dep_id!r}")
+
+
+class _RunState:
+    """Mutable state threaded through run_recipe's per-op handlers: open
+    sources, the missing-dep set, the output dir, and which dest paths
+    (`skipped_exact`, from `copy`) / dest-dir prefixes (`skipped_prefixes`,
+    from `glob`, trailing "/") were left unwritten because their op's
+    source_id is a missing dep. A later `rename` referencing one of those
+    un-written paths — the ADR-0138 §1 reference recipe chains exactly
+    this: glob a missing `audio` dep, then rename inside it — is skipped
+    too instead of raising, mirroring the copy/glob missing-dep skip.
+    """
+
+    def __init__(self, out: Path, opened: dict, include_patches: bool, missing: list):
+        self.out = out
+        self.opened = opened
+        self.include_patches = include_patches
+        self.missing = missing
+        self.skipped_exact = set()
+        self.skipped_prefixes = []
+
+
+def _record_skipped_dest(op: dict, where: str, kind: str, state: "_RunState") -> None:
+    if kind == "copy":
+        state.skipped_exact.add(_safe(op["to"], f"{where}.to"))
+    else:
+        dest_dir = _safe(op["to"].rstrip("/") or op["to"], f"{where}.to")
+        state.skipped_prefixes.append(dest_dir + "/")
+
+
+def _run_copy_op(op: dict, where: str, state: "_RunState", source_id: str, rest: str) -> None:
+    src, prefix = state.opened[source_id]
+    rel = _safe(rest, f"{where}.from path")
+    full = prefix + rel
+    if not src.exists(full):
+        raise RecipeError(f"{where}: source file not found: {full}")
+    dest = _safe(op["to"], f"{where}.to")
+    if not state.include_patches and _is_patch_dest(dest):
+        return
+    _write_file(state.out, dest, src.read(full))
+
+
+def _run_glob_op(op: dict, where: str, state: "_RunState", source_id: str, rest: str) -> None:
+    src, prefix = state.opened[source_id]
+    pattern = rest.replace("\\", "/")
+    matcher = _glob_to_re(pattern)
+    matches = [n for n in _rel_names(src, prefix) if matcher.match(n)]
+    if not matches:
+        raise RecipeError(f"{where}: glob matched no files: {pattern}")
+    dest_dir = _safe(op["to"].rstrip("/") or op["to"], f"{where}.to")
+    seen = {}
+    for match in matches:
+        base = match.rsplit("/", 1)[-1]
+        if base in seen:
+            raise RecipeError(
+                f"{where}: glob basename collision {base!r} ({seen[base]} vs {match})"
+            )
+        seen[base] = match
+        dest = f"{dest_dir}/{base}"
+        if not state.include_patches and _is_patch_dest(dest):
+            continue
+        _write_file(state.out, dest, src.read(prefix + match))
+
+
+def _run_copy_or_glob_op(op: dict, where: str, state: "_RunState") -> None:
+    kind = op["op"]
+    source_id, rest = _split_from(op["from"], where)
+    if source_id in state.missing:
+        _record_skipped_dest(op, where, kind, state)
+        return
+    if kind == "copy":
+        _run_copy_op(op, where, state, source_id, rest)
+    else:
+        _run_glob_op(op, where, state, source_id, rest)
+
+
+def _run_rename_op(op: dict, where: str, state: "_RunState") -> None:
+    src_rel = _safe(op["from"], f"{where}.from")
+    dest_rel = _safe(op["to"], f"{where}.to")
+    if not state.include_patches and (_is_patch_dest(src_rel) or _is_patch_dest(dest_rel)):
+        return
+    src_path = _out_path(state.out, src_rel)
+    if not src_path.exists():
+        skipped = src_rel in state.skipped_exact or any(
+            src_rel.startswith(p) for p in state.skipped_prefixes
+        )
+        if skipped:
+            return
+        raise RecipeError(f"{where}: rename source does not exist: {src_rel}")
+    dest_path = _out_path(state.out, dest_rel)
+    if dest_path.exists():
+        raise RecipeError(f"{where}: rename dest already exists: {dest_rel}")
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    src_path.rename(dest_path)
+
+
+def _run_rewrite_paths_op(op: dict, where: str, state: "_RunState") -> None:
+    rel = _safe(op["file"], f"{where}.file")
+    path = _out_path(state.out, rel)
+    if not path.exists():
+        raise RecipeError(f"{where}: rewrite-paths file does not exist: {rel}")
+    prefix = op["prefix"].replace("\\", "/")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    path.write_text(_rewrite_hires(text, list(op["tags"]), prefix), encoding="utf-8")
+
+
+def _run_op(i: int, op: dict, state: "_RunState") -> None:
+    kind = op["op"]
+    where = f"ops[{i}]"
+    if kind in ("copy", "glob"):
+        _run_copy_or_glob_op(op, where, state)
+    elif kind == "rename":
+        _run_rename_op(op, where, state)
+    elif kind == "rewrite-paths":
+        _run_rewrite_paths_op(op, where, state)
+
+
+def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str | None) -> None:
+    errors = validate_recipe(recipe)
+    if errors:
+        raise RecipeError("\n".join(errors))
+    _verify_primary(recipe, primary)
+
+    dep_meta, missing, opened = _resolve_deps(recipe, deps)
+    _check_missing_policy(recipe, dep_meta, missing)
 
     primary_src, primary_prefix = open_primary(primary, rom_name)
     opened["primary"] = (primary_src, primary_prefix)
@@ -470,66 +598,11 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
         raise RecipeError(f"--out is not empty: {out}")
     out.mkdir(parents=True, exist_ok=True)
 
-    include_patches = not missing
+    state = _RunState(out, opened, include_patches=not missing, missing=missing)
     for i, op in enumerate(recipe["ops"]):
-        kind = op["op"]
-        where = f"ops[{i}]"
-        if kind in ("copy", "glob"):
-            source_id, rest = _split_from(op["from"], where)
-            if source_id in missing:
-                continue
-            src, prefix = opened[source_id]
-            if kind == "copy":
-                rel = _safe(rest, f"{where}.from path")
-                full = prefix + rel
-                if not src.exists(full):
-                    raise RecipeError(f"{where}: source file not found: {full}")
-                dest = _safe(op["to"], f"{where}.to")
-                if not include_patches and _is_patch_dest(dest):
-                    continue
-                _write_file(out, dest, src.read(full))
-            else:
-                pattern = rest.replace("\\", "/")
-                matcher = _glob_to_re(pattern)
-                matches = [n for n in _rel_names(src, prefix) if matcher.match(n)]
-                if not matches:
-                    raise RecipeError(f"{where}: glob matched no files: {pattern}")
-                dest_dir = _safe(op["to"].rstrip("/") or op["to"], f"{where}.to")
-                seen = {}
-                for match in matches:
-                    base = match.rsplit("/", 1)[-1]
-                    if base in seen:
-                        raise RecipeError(
-                            f"{where}: glob basename collision {base!r} ({seen[base]} vs {match})"
-                        )
-                    seen[base] = match
-                    dest = f"{dest_dir}/{base}"
-                    if not include_patches and _is_patch_dest(dest):
-                        continue
-                    _write_file(out, dest, src.read(prefix + match))
-        elif kind == "rename":
-            src_rel = _safe(op["from"], f"{where}.from")
-            dest_rel = _safe(op["to"], f"{where}.to")
-            if not include_patches and (_is_patch_dest(src_rel) or _is_patch_dest(dest_rel)):
-                continue
-            src_path = _out_path(out, src_rel)
-            if not src_path.exists():
-                raise RecipeError(f"{where}: rename source does not exist: {src_rel}")
-            dest_path = _out_path(out, dest_rel)
-            if dest_path.exists():
-                raise RecipeError(f"{where}: rename dest already exists: {dest_rel}")
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            src_path.rename(dest_path)
-        elif kind == "rewrite-paths":
-            rel = _safe(op["file"], f"{where}.file")
-            path = _out_path(out, rel)
-            if not path.exists():
-                raise RecipeError(f"{where}: rewrite-paths file does not exist: {rel}")
-            prefix = op["prefix"].replace("\\", "/")
-            text = path.read_text(encoding="utf-8", errors="replace")
-            path.write_text(_rewrite_hires(text, list(op["tags"]), prefix), encoding="utf-8")
+        _run_op(i, op, state)
 
-    _write_pack_json(recipe, out, include_patches=include_patches)
+    _write_pack_json(recipe, out, include_patches=state.include_patches)
 
 
 def extract_issue_field_section(body: str, label: str) -> str:
