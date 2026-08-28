@@ -8,14 +8,18 @@ python3 scripts/validate-specs.py
 import json, re, subprocess, sys
 from pathlib import Path
 
+from mei_rules import (
+    CRC32_UPPER,
+    MD5_UPPER,
+    MEI_KINDS,
+    SEMVER,
+    SHA1_UPPER,
+    SHA256_HEX,
+    SYSTEMS,
+    required_mei_pack_fields,
+)
+
 SPECS = Path(__file__).resolve().parent.parent / "docs" / "specs"
-SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-SHA1_UPPER = re.compile(r"^[0-9A-F]{40}$")
-CRC32_UPPER = re.compile(r"^[0-9A-F]{8}$")
-MD5_UPPER = re.compile(r"^[0-9A-F]{32}$")
-SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
-SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
-MEI_KINDS = {"mep", "hd-legacy"}
 
 ESP_PRESETS = {"Synthwave", "ChipDeluxe", "OrchestralLite", "Dry", "Studio"}
 ESP_SUFFIXES = {"", ".Gb", ".Sms"}
@@ -110,9 +114,7 @@ def validate_mei(path):
         where = f"{path.name}: packs[{i}]"
         kind = p.get("kind")
         check(kind is None or kind in MEI_KINDS, f"{where}: invalid kind: {kind!r}")
-        required = ["name", "game", "system", "rom", "url", "sha256"]
-        required += [] if kind == "hd-legacy" else ["version", "mep"]
-        for field in required:
+        for field in required_mei_pack_fields(kind):
             check(field in p, f"{where}: required field missing: {field}")
         check("version" not in p or bool(SEMVER.match(p["version"])), f"{where}: version is not semver")
         check("mep" not in p or bool(SEMVER.match(p["mep"])), f"{where}: mep is not semver")
