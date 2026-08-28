@@ -30,8 +30,10 @@ namespace Mesen.Logic
 		//"hosts" array is read; "_comment" is ignored.
 		public static IReadOnlyList<CommunityPackHostEntry> Parse(string json)
 		{
-			CommunityPackHostAllowlistFile? file =
-				JsonSerializer.Deserialize<CommunityPackHostAllowlistFile>(json);
+			CommunityPackHostAllowlistFile? file = JsonSerializer.Deserialize(
+				json,
+				CommunityPackHostAllowlistSerializerContext.Default.CommunityPackHostAllowlistFile
+			);
 			return file?.Hosts ?? new List<CommunityPackHostEntry>();
 		}
 
@@ -108,12 +110,30 @@ namespace Mesen.Logic
 		private static readonly char[] PathBoundaryChars = { '/', '?', '#' };
 		private static readonly char[] QueryBoundaryChars = { '?', '#' };
 
-		private sealed class CommunityPackHostAllowlistFile
+		//Internal (not private): the source-gen context below,
+		//CommunityPackHostAllowlistSerializerContext, needs to reference this
+		//type from outside the class to generate its (de)serializer - a
+		//private nested type is invisible to the [JsonSerializable] attribute
+		//on a sibling top-level type.
+		internal sealed class CommunityPackHostAllowlistFile
 		{
 			[JsonPropertyName("hosts")]
 			public List<CommunityPackHostEntry> Hosts { get; set; } = new();
 		}
 	}
+
+	//Source-generated (de)serialization context for the allow-list DTOs.
+	//Required because UI/UI.csproj sets JsonSerializerIsReflectionEnabledByDefault=false
+	//and IsAotCompatible=true: a reflection-based JsonSerializer.Deserialize<T>() call
+	//throws InvalidOperationException at runtime in the shipped app (verified against
+	//that exact property). Every other JSON deserialize in UI/ already goes through a
+	//source-generated context (see UI/Utilities/JsonHelper.cs's MesenSerializerContext /
+	//MesenCamelCaseSerializerContext) - this follows the same convention, kept local to
+	//this host-free file so UI/Logic stays free of a dependency on JsonHelper.cs's
+	//Avalonia-adjacent siblings. Explicit [JsonPropertyName] on every DTO property means
+	//the default (PascalCase-preserving) naming policy below never needs to change.
+	[JsonSerializable(typeof(CommunityPackHostAllowlist.CommunityPackHostAllowlistFile))]
+	internal sealed partial class CommunityPackHostAllowlistSerializerContext : JsonSerializerContext { }
 
 	//One entry of scripts/pack_host_allowlist.json's "hosts" array.
 	public sealed class CommunityPackHostEntry
