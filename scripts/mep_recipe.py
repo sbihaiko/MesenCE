@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""mep_recipe — validate / dry-run / apply a MEP Recipe v1 document (F6.1).
+"""mep_recipe — validate / dry-run / apply a MEP Recipe v1 document (F6.1);
+assemble-sources builds the sources block deterministically (F6.2b).
 
 stdlib only. Reuses mep_lint discovery (Source, discover_sections,
 find_fallback_subfolder, find_fallback_subfolder_by_name,
@@ -12,6 +13,18 @@ Usage:
       [--dep ID=PATH ...] --out DIR [--rom-name NAME]
   python3 scripts/mep_recipe.py apply <recipe.json> --primary PATH
       [--dep ID=PATH ...] --out DIR [--rom-name NAME]
+  python3 scripts/mep_recipe.py assemble-sources --issue-body PATH
+      --pack-url URL --pack-sha256 HEX [--classify PATH] [--out PATH]
+
+assemble-sources parses the issue body's "External assets" Issue Form
+section (ADR-0138 §12 grammar: one `<url> [<sha256>] [<size>]` dependency
+per non-empty, non-`#` line) and merges the CI-computed primary sha256
+with classify's `ops`/`deps`/`pack` fragment (classify itself never
+computes hashes, ADR-0138 §4). It prints `recipe_status: <status>` where
+status is exactly one of `absent` (no external assets declared, or
+classify emitted no recipe fragment at all), `present` (recipe assembled
+and, when --out is given, written there), or `refused` (an
+`external_assets` line is malformed or lacks a sha256 — ADR-0138 §7/§13).
 """
 from __future__ import annotations
 
@@ -32,6 +45,8 @@ KNOWN_OPS = ("copy", "glob", "rename", "rewrite-paths")
 REWRITE_TAGS = ("bgm", "sfx", "img", "background", "patch")
 PATCH_SUFFIXES = (".ips", ".bps")
 FENCE = re.compile(r"```mep-recipe[^\n]*\n(.*?)```", re.DOTALL)
+EXTERNAL_ASSETS_LABEL = "external assets"
+NO_RESPONSE = "_no response_"
 
 
 class RecipeError(Exception):
@@ -517,6 +532,164 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
     _write_pack_json(recipe, out, include_patches=include_patches)
 
 
+def extract_issue_field_section(body: str, label: str) -> str:
+    """Text under a GitHub Issue Form '### <label>...' heading, up to the
+    next '### ' heading or the end of the body. Empty string when the
+    heading is absent (Issue Forms always emit one heading per field, so
+    a missing heading means the caller is looking at the wrong body).
+    """
+    heading = re.compile(rf"^###\s*{re.escape(label)}\b.*$", re.IGNORECASE | re.MULTILINE)
+    match = heading.search(body)
+    if not match:
+        return ""
+    rest = body[match.end():]
+    next_heading = re.search(r"^###\s", rest, re.MULTILINE)
+    return rest[: next_heading.start()] if next_heading else rest
+
+
+def _asset_lines(section: str) -> list:
+    lines = []
+    for raw in section.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.lower() == NO_RESPONSE:
+            continue
+        lines.append(line)
+    return lines
+
+
+def _parse_asset_line(line: str) -> dict:
+    """Parses one `<url> [<sha256>] [<size>]` line (ADR-0138 §12).
+
+    Raises RecipeError for a bad URL, a missing/malformed sha256 (reusing
+    SHA256_HEX rather than a new regex), or a non-decimal size — every one
+    of those means "no usable recipe" (§7) for the whole submission.
+    """
+    parts = line.split()
+    if not (1 <= len(parts) <= 3):
+        raise RecipeError(f"malformed external_assets line: {line!r}")
+    url = parts[0]
+    if not url.startswith("https://"):
+        raise RecipeError(f"external_assets url must be HTTPS: {url!r}")
+    if len(parts) < 2:
+        raise RecipeError(f"external_assets line missing sha256: {line!r}")
+    sha256 = parts[1]
+    if not SHA256_HEX.match(sha256):
+        raise RecipeError(f"external_assets sha256 is malformed: {sha256!r}")
+    size = None
+    if len(parts) == 3:
+        if not parts[2].isdigit():
+            raise RecipeError(f"external_assets size must be decimal bytes: {parts[2]!r}")
+        size = int(parts[2])
+    return {"url": url, "sha256": sha256.lower(), "size": size}
+
+
+def _match_asset(dep: dict, assets_by_url: dict) -> dict:
+    for url in dep.get("hints") or []:
+        if url in assets_by_url:
+            return assets_by_url[url]
+    raise RecipeError(f"no external_assets line matches dep {dep.get('id')!r} hints")
+
+
+def merge_recipe_deps(classify_deps: list, assets: list) -> list:
+    """Merges classify's non-derivable dep fields (id/hints/license/
+    user_supplied) with each dep's CI-parsed sha256/size, matched by the
+    dep's declared `hints` URL (the only data both sides share — classify
+    never sees a hash, ADR-0138 §4/§11).
+    """
+    assets_by_url = {a["url"]: a for a in assets}
+    merged = []
+    for dep in classify_deps:
+        if not isinstance(dep, dict):
+            raise RecipeError("classify dep entry must be an object")
+        asset = _match_asset(dep, assets_by_url)
+        merged_dep = dict(dep)
+        merged_dep["sha256"] = asset["sha256"]
+        if asset.get("size") is not None:
+            merged_dep["size"] = asset["size"]
+        merged.append(merged_dep)
+    return merged
+
+
+def _build_present_recipe(classify: dict, pack_url: str, pack_sha256: str, deps: list) -> dict:
+    recipe = {
+        "recipe": RECIPE_VERSION,
+        "sources": {
+            "primary": {"url": pack_url, "sha256": pack_sha256.lower()},
+            "deps": deps,
+        },
+        "ops": classify.get("ops") or [],
+        "pack": classify.get("pack") or {},
+    }
+    if "policy" in classify:
+        recipe["policy"] = classify["policy"]
+    return recipe
+
+
+def assemble_sources(issue_body: str, classify: dict | None, pack_url: str, pack_sha256: str):
+    """Assembles `sources` from the issue body + CI hash + classify's
+    ops/deps/pack fragment (ADR-0138 §4/§7/§12/§13). Returns (status,
+    recipe): 'absent' (no external assets declared, or classify emitted no
+    recipe fragment at all) / 'present' / 'refused' (a dep line is
+    malformed or lacks a sha256); recipe is None unless status=='present'.
+    """
+    if not SHA256_HEX.match(pack_sha256 or ""):
+        raise RecipeError(f"--pack-sha256 must be 64 hex digits, got {pack_sha256!r}")
+    lines = _asset_lines(extract_issue_field_section(issue_body, EXTERNAL_ASSETS_LABEL))
+    has_fragment = classify is not None and any(k in classify for k in ("ops", "deps", "pack"))
+    if not lines or not has_fragment:
+        return "absent", None
+    try:
+        assets = [_parse_asset_line(line) for line in lines]
+        deps = merge_recipe_deps(classify.get("deps") or [], assets)
+    except RecipeError:
+        return "refused", None
+    return "present", _build_present_recipe(classify, pack_url, pack_sha256, deps)
+
+
+def _parse_assemble_args(rest: list) -> dict:
+    args = {"issue_body": None, "classify": None, "pack_url": None, "pack_sha256": None, "out": None}
+    flags = {
+        "--issue-body": "issue_body",
+        "--classify": "classify",
+        "--pack-url": "pack_url",
+        "--pack-sha256": "pack_sha256",
+        "--out": "out",
+    }
+    i = 0
+    while i < len(rest):
+        arg = rest[i]
+        if arg in flags and i + 1 < len(rest):
+            args[flags[arg]] = rest[i + 1]
+            i += 2
+        else:
+            raise RecipeError(f"assemble-sources: unknown or incomplete flag: {arg}")
+    return args
+
+
+def cmd_assemble_sources(rest: list) -> int:
+    try:
+        args = _parse_assemble_args(rest)
+        for key in ("issue_body", "pack_url", "pack_sha256"):
+            if not args[key]:
+                raise RecipeError(f"assemble-sources requires --{key.replace('_', '-')}")
+        body = Path(args["issue_body"]).read_text(encoding="utf-8")
+        classify = json.loads(Path(args["classify"]).read_text(encoding="utf-8")) if args["classify"] else None
+        status, recipe = assemble_sources(body, classify, args["pack_url"], args["pack_sha256"])
+    except RecipeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid classify JSON: {exc}", file=sys.stderr)
+        return 2
+    if status == "present":
+        if not args["out"]:
+            print("error: assemble-sources requires --out when a recipe is assembled", file=sys.stderr)
+            return 2
+        Path(args["out"]).write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8")
+    print(f"recipe_status: {status}")
+    return 0
+
+
 def _parse_kv_args(argv):
     command = argv[1] if len(argv) > 1 else ""
     recipe = None
@@ -560,6 +733,8 @@ def main(argv=None) -> int:
     if len(argv) < 3:
         print(__doc__)
         return 2
+    if argv[1] == "assemble-sources":
+        return cmd_assemble_sources(argv[2:])
     try:
         command, recipe_path, primary, deps, out, rom_name = _parse_kv_args(argv)
     except RecipeError as exc:

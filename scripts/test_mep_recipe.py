@@ -267,6 +267,181 @@ def check_hash_mismatch_aborts():
         fail("primary sha256 mismatch did not abort")
 
 
+PACK_URL = "https://github.com/example/repo/releases/download/v1/pack.zip"
+PACK_SHA256 = hashlib.sha256(b"synthetic-primary-artifact").hexdigest()
+AUDIO_URL = "https://example.com/audio/synthetic-split-ogg.zip"
+AUDIO_SHA256 = hashlib.sha256(b"synthetic-audio-artifact").hexdigest()
+
+ISSUE_BODY_NO_ASSETS = "\n".join([
+    "### Pack link",
+    "",
+    PACK_URL,
+    "",
+    "### External assets (optional)",
+    "",
+    "_No response_",
+    "",
+    "### External assets license (optional)",
+    "",
+    "_No response_",
+    "",
+])
+
+
+def _issue_body_with_assets(line: str) -> str:
+    return "\n".join([
+        "### Pack link",
+        "",
+        PACK_URL,
+        "",
+        "### External assets (optional)",
+        "",
+        line,
+        "",
+        "### External assets license (optional)",
+        "",
+        "CC0-1.0",
+        "",
+    ])
+
+
+def _classify_fragment() -> dict:
+    return {
+        "ops": [
+            {"op": "copy", "from": "primary:hires.txt", "to": "hires.txt"},
+            {"op": "glob", "from": "audio:**/*.ogg", "to": "audio/"},
+        ],
+        "deps": [
+            {
+                "id": "audio",
+                "hints": [AUDIO_URL],
+                "license": "CC0-1.0",
+                "user_supplied": True,
+            }
+        ],
+        "pack": {
+            "name": "Synthetic Split Pack",
+            "version": "1.0.0",
+            "targets": [{"system": "nes", "sha1": SHA1}],
+        },
+    }
+
+
+def check_assemble_absent_no_assets_no_fragment():
+    status, recipe = mep_recipe.assemble_sources(ISSUE_BODY_NO_ASSETS, None, PACK_URL, PACK_SHA256)
+    if status != "absent" or recipe is not None:
+        fail(f"expected absent/None, got {status!r}/{recipe!r}")
+        return
+    status2, recipe2 = mep_recipe.assemble_sources(ISSUE_BODY_NO_ASSETS, {}, PACK_URL, PACK_SHA256)
+    if status2 != "absent" or recipe2 is not None:
+        fail(f"expected absent/None for empty classify fragment, got {status2!r}/{recipe2!r}")
+        return
+    ok("no external_assets text + no classify fragment -> absent, nothing written")
+
+
+def check_assemble_present_merges_classify():
+    line = f"{AUDIO_URL} {AUDIO_SHA256} 1048576"
+    body = _issue_body_with_assets(line)
+    classify = _classify_fragment()
+    status, recipe = mep_recipe.assemble_sources(body, classify, PACK_URL, PACK_SHA256)
+    if status != "present" or recipe is None:
+        fail(f"expected present recipe, got {status!r}/{recipe!r}")
+        return
+    if recipe["sources"]["primary"] != {"url": PACK_URL, "sha256": PACK_SHA256}:
+        fail(f"sources.primary not from CI hash/pack url: {recipe['sources']['primary']!r}")
+        return
+    deps = recipe["sources"]["deps"]
+    if len(deps) != 1 or deps[0]["sha256"] != AUDIO_SHA256 or deps[0]["size"] != 1048576:
+        fail(f"sources.deps not populated with parsed sha256/size: {deps!r}")
+        return
+    if deps[0]["hints"] != [AUDIO_URL] or deps[0]["license"] != "CC0-1.0" or deps[0]["user_supplied"] is not True:
+        fail(f"sources.deps did not merge classify's id/hints/license/user_supplied: {deps!r}")
+        return
+    if recipe["ops"] != classify["ops"] or recipe["pack"] != classify["pack"]:
+        fail("assembled recipe did not pass through classify's ops/pack verbatim")
+        return
+    if recipe["recipe"] != mep_recipe.RECIPE_VERSION:
+        fail(f"assembled recipe missing/wrong 'recipe' version: {recipe.get('recipe')!r}")
+        return
+    ok("well-formed external_assets line -> present, sources merged with classify's ops/deps/pack")
+
+
+def check_assemble_refused_missing_sha256():
+    body = _issue_body_with_assets(AUDIO_URL)
+    status, recipe = mep_recipe.assemble_sources(body, _classify_fragment(), PACK_URL, PACK_SHA256)
+    if status != "refused" or recipe is not None:
+        fail(f"dep line missing sha256 should refuse, got {status!r}/{recipe!r}")
+        return
+    ok("external_assets line missing sha256 -> refused, no partial recipe")
+
+
+def check_assemble_refused_malformed_line():
+    bad_url = _issue_body_with_assets(f"not-a-url {AUDIO_SHA256} 1048576")
+    status, recipe = mep_recipe.assemble_sources(bad_url, _classify_fragment(), PACK_URL, PACK_SHA256)
+    if status != "refused" or recipe is not None:
+        fail(f"non-HTTPS url should refuse, got {status!r}/{recipe!r}")
+        return
+    bad_sha = _issue_body_with_assets(f"{AUDIO_URL} not-hex-and-too-short 1048576")
+    status2, recipe2 = mep_recipe.assemble_sources(bad_sha, _classify_fragment(), PACK_URL, PACK_SHA256)
+    if status2 != "refused" or recipe2 is not None:
+        fail(f"malformed sha256 should refuse, got {status2!r}/{recipe2!r}")
+        return
+    ok("malformed url/sha256 line is rejected as refused, not silently accepted")
+
+
+def check_assemble_sources_cli_roundtrip():
+    with tempfile.TemporaryDirectory() as tmp_s:
+        tmp = Path(tmp_s)
+        line = f"{AUDIO_URL} {AUDIO_SHA256} 1048576"
+        body_path = tmp / "issue-body.md"
+        body_path.write_text(_issue_body_with_assets(line), encoding="utf-8")
+        classify_path = tmp / "classify.json"
+        classify_path.write_text(json.dumps(_classify_fragment()), encoding="utf-8")
+        out_path = tmp / "mep_recipe.json"
+        rc = mep_recipe.main([
+            "mep_recipe.py", "assemble-sources",
+            "--issue-body", str(body_path),
+            "--classify", str(classify_path),
+            "--pack-url", PACK_URL,
+            "--pack-sha256", PACK_SHA256,
+            "--out", str(out_path),
+        ])
+        if rc != 0:
+            fail(f"assemble-sources CLI exited {rc}")
+            return
+        if not out_path.exists():
+            fail("assemble-sources CLI did not write --out on a present recipe")
+            return
+        written = json.loads(out_path.read_text(encoding="utf-8"))
+        errors = mep_recipe.validate_recipe(written)
+        if errors:
+            fail(f"CLI-assembled recipe failed validate_recipe: {errors}")
+            return
+        ok("assemble-sources CLI writes a validate_recipe-clean document")
+
+
+def check_assemble_sources_cli_absent_writes_nothing():
+    with tempfile.TemporaryDirectory() as tmp_s:
+        tmp = Path(tmp_s)
+        body_path = tmp / "issue-body.md"
+        body_path.write_text(ISSUE_BODY_NO_ASSETS, encoding="utf-8")
+        out_path = tmp / "mep_recipe.json"
+        rc = mep_recipe.main([
+            "mep_recipe.py", "assemble-sources",
+            "--issue-body", str(body_path),
+            "--pack-url", PACK_URL,
+            "--pack-sha256", PACK_SHA256,
+            "--out", str(out_path),
+        ])
+        if rc != 0:
+            fail(f"assemble-sources CLI exited {rc} for the absent case")
+            return
+        if out_path.exists():
+            fail("assemble-sources CLI wrote --out for an absent recipe")
+            return
+        ok("assemble-sources CLI writes nothing when recipe_status is absent")
+
+
 def main():
     check_golden_validates()
     check_unknown_op_rejected()
@@ -275,6 +450,12 @@ def main():
     check_wrapped_primary_uses_lint_discovery()
     check_incomplete_withholds_patch()
     check_hash_mismatch_aborts()
+    check_assemble_absent_no_assets_no_fragment()
+    check_assemble_present_merges_classify()
+    check_assemble_refused_missing_sha256()
+    check_assemble_refused_malformed_line()
+    check_assemble_sources_cli_roundtrip()
+    check_assemble_sources_cli_absent_writes_nothing()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1
