@@ -25,6 +25,7 @@ LABELS=(
   "console:gb|5319E7|Pack targets the GB/GBC console"
   "console:gbc|5319E7|Pack targets the GB/GBC console"
   "console:sms|5319E7|Pack targets the SMS/GG/SG-1000 console"
+  "assets:external|FBCA04|Pack declares external_assets (split-distribution content-index) dependencies"
 )
 
 for entry in "${LABELS[@]}"; do
