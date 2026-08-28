@@ -79,6 +79,25 @@ what CI actually runs; this doc records why they're split the way they are.
   workflow only documents those names, never creates them. See
   `scripts/checks/verify_community_pack_validate_workflow.py` for its
   structural contract.
+- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, not yet implemented).**
+  `community-pack-validate.yml`'s future assembly step writes the MEP
+  Recipe to `$RUNNER_TEMP/mep_recipe.json` — a GitHub Actions runner-local
+  temp path, never a path inside the checkout, so the recipe can never be
+  mistaken for, or committed as, a repo artefact. Nothing under this repo
+  (this workflow, `scripts/`, or anywhere else) may write `mep_recipe.json`
+  into the checkout; the file exists only on the runner's local disk for
+  the duration of the job. The step exposes one step output, `recipe_status`,
+  with exactly three values: `absent` (the submission declared no
+  `external_assets`), `present` (a recipe was assembled and written to the
+  path above), and `refused` (assets were declared but at least one
+  dependency line lacks a `sha256`, so assembly was declined per §3/§12).
+  Every downstream reader — the gate step, the `assets:external` label
+  branch, `apply-verdict`'s downgrade expression, and the mep-meta
+  `recipe_hash` comment — branches on this enum instead of re-deriving
+  "is there a recipe?". This bullet only records the contract in prose;
+  the assembly step, the gate, and the workflow's own structural verifier
+  are F6.2b and are out of scope for this slice. Checked by
+  `scripts/checks/verify_agents_md_recipe_handoff.sh`.
 
 ## Work Guidance
 
@@ -119,6 +138,7 @@ what CI actually runs; this doc records why they're split the way they are.
 - `python3 scripts/checks/verify_community_pack_validate_workflow.py`
 - `grep -F "cancel-in-progress: \${{ github.event_name == 'issues' }}" .github/workflows/community-pack-submitted.yml`
 - `grep -A2 "id: classify" .github/workflows/community-pack-validate.yml | grep timeout-minutes`
+- `./scripts/checks/verify_agents_md_recipe_handoff.sh`
 
 ## Child DOX Index
 

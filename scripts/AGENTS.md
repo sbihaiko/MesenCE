@@ -156,7 +156,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
   the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
   checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
-  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_submitted_workflow.py`,
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_agents_md_recipe_handoff.sh`
+  (AC-4, F6.2a) checks that `.github/AGENTS.md` documents the ADR-0138 §13
+  recipe handoff: the `$RUNNER_TEMP/mep_recipe.json` path (and prose stating
+  it is runner-local and never written inside the checkout) plus the
+  three-valued `recipe_status` step output (`absent`/`present`/`refused`);
+  it never touches a workflow file — the assembly step itself is F6.2b.
+  `verify_community_pack_submitted_workflow.py`,
   `verify_community_pack_drift_check_workflow.py`, and
   `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
   Actions workflows and their GH Project field-provenance assumptions.
