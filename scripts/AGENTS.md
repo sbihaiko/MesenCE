@@ -164,11 +164,24 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   own top-level stripped `deps`, which lacks `license`); `issue_form_fields`
   holds the Issue Form field parsing shared by the Markdown row and the MEI
   entry, so `game`/`console`/`license` never drift between the two outputs.
+  `normalized_rom_sha1` upper-cases the Project's human-entered "ROM SHA1"
+  field and checks its 40-hex shape before it is copied into `rom.sha1`,
+  omitting it (not emitting an invalid one) on a mismatch. For a
+  `kind == "mep"` entry, `build_pack_entry` reads `pack.version`/`pack.mep`
+  out of mep-meta's embedded `recipe.pack` (`pack_version_fields`); when
+  the recipe is absent/refused and those fields can't be sourced,
+  `mei_entry_conforms` flags the entry as non-conformant so the caller
+  omits its JSON entry entirely (the Markdown row is unaffected) rather
+  than emit one validate_mei rejects for missing `version`/`mep` — never
+  silently relabeled as `"hd-legacy"`.
   `scripts/checks/verify_mei_catalog_generator.py` is the offline, no-`gh`
-  structural checker for this deliverable (AC-2 of the F6.3 task): it
-  asserts the generator writes `docs/community-packs.json`, uses
+  checker for this deliverable (AC-2 of the F6.3 task): structural checks
+  assert the generator writes `docs/community-packs.json`, uses
   `mep_meta_parser`, derives `kind`, and declares the "External assets"
-  column — never a live `main()` run.
+  column; it also imports the generator's pure functions directly (no
+  mocks, no live `gh`/`main()` run) to round-trip a `kind == "mep"` entry
+  with and without a mep-meta recipe, and a lowercase `rom.sha1`, through
+  the real `validate_mei` (`scripts/validate-specs.py`).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
