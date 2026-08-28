@@ -3,17 +3,14 @@
 `mep_compare.py`'s `stats["auto"]` dict now carries `palettes_per_shape`
 (previously only computed for the `artist` side).
 
-No emulator, no ROM, no build: writes a small real NES-shaped HD pack
-fixture to disk (`<tile>` lines with two distinct CHR shapes, one of them
-seen under two distinct palettes — the exact "several palettes captured for
-one shape" situation F5.4b's capture-side fix produces) and self-compares
-it through `mep_compare.main()` directly, then inspects the JSON it wrote.
-
-The existing golden pack at `docs/specs/golden/mep/textures` is GB-shaped
-(4-hex-char palette field) and is incompatible with `render_original`'s
-NES-only 8-hex-char palette decoding (a pre-existing, unrelated limitation
-of `mep_compare.py` — out of scope here), so this check uses its own
-on-disk NES-shaped fixture instead.
+No emulator, no ROM, no build: self-compares the shared NES golden fixture
+at `docs/specs/golden/mep-nes/textures` (ADR-0136) against itself through
+`mep_compare.main()` directly, then inspects the JSON it wrote. That golden
+is the shared NES-shaped fixture sibling to the GB golden at
+`docs/specs/golden/mep/` -- it captures one CHR shape under two distinct
+8-hex-char NES palettes and a second shape under just one, the exact
+"several palettes captured for one shape" situation F5.4b's capture-side
+fix produces (see `docs/specs/golden/mep-nes/textures/hires.txt`).
 
 Framework-free: prints PASS/FAIL per case, exits non-zero on any failure
 (see scripts/AGENTS.md's harness convention).
@@ -26,17 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PIL import Image
-
 SCRIPTS_DIR = Path(__file__).resolve().parent
-
-# Two distinct 16-byte (32 hex char) NES CHR shapes; SHAPE_A is captured
-# under two distinct 8-hex-char palettes, SHAPE_B under just one -- mirrors
-# the multi-palette-per-shape capture F5.4b's HdPackBuilder fix enables.
-SHAPE_A = "3C004200B900A500B900A50042003C00"
-SHAPE_B = "F300F300F000F000F000F000F000F000"
-PAL_1 = "0F001A2C"
-PAL_2 = "0F102636"
+GOLDEN_TEXTURES = SCRIPTS_DIR.parent / "docs" / "specs" / "golden" / "mep-nes" / "textures"
 
 
 def _load_mep_compare():
@@ -44,28 +32,6 @@ def _load_mep_compare():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _build_fixture(folder: Path) -> Path:
-    folder.mkdir(parents=True, exist_ok=True)
-    img = Image.new("RGBA", (24, 8), (0, 0, 0, 0))
-    px = img.load()
-    for tile_x, color in ((0, (200, 40, 40, 255)), (8, (40, 200, 40, 255)), (16, (40, 40, 200, 255))):
-        for y in range(8):
-            for x in range(tile_x, tile_x + 8):
-                px[x, y] = color
-    img.save(folder / "tiles.png")
-    lines = [
-        "<ver>200",
-        "<system>nes",
-        "<scale>1",
-        "<img>tiles.png",
-        f"<tile>0,{SHAPE_A},{PAL_1},0,0,1,N",
-        f"<tile>0,{SHAPE_A},{PAL_2},8,0,1,N",
-        f"<tile>0,{SHAPE_B},{PAL_1},16,0,1,N",
-    ]
-    (folder / "hires.txt").write_text("\n".join(lines) + "\n")
-    return folder
 
 
 def _run_self_compare(mep_compare, pack_dir: Path, out_dir: Path) -> dict:
@@ -90,8 +56,12 @@ def check_auto_reports_palettes_per_shape(stats: dict) -> bool:
 
 
 def check_auto_palettes_per_shape_value(stats: dict) -> bool:
-    # Fixture has 3 distinct (shape, palette) keys over 2 distinct shapes:
-    # SHAPE_A x {PAL_1, PAL_2} and SHAPE_B x {PAL_1} -> 3 / 2 = 1.5.
+    # docs/specs/golden/mep-nes/textures/hires.txt has 3 distinct (shape,
+    # palette) <tile> keys over 2 distinct CHR shapes: one shape captured
+    # under two palettes (PAL_1, PAL_2), the other under just PAL_1 ->
+    # 3 / 2 = 1.5. This mirrors the count the inline fixture this test
+    # previously hand-rolled produced -- verified against the golden's
+    # actual tile lines, not merely carried over unchanged.
     expected = 1.5
     value = stats["auto"]["palettes_per_shape"]
     ok = value == expected
@@ -109,10 +79,8 @@ def check_artist_still_reports_palettes_per_shape(stats: dict) -> bool:
 def main() -> int:
     mep_compare = _load_mep_compare()
     with tempfile.TemporaryDirectory(prefix="mep_compare_auto_palettes_") as tmp:
-        tmp_path = Path(tmp)
-        pack_dir = _build_fixture(tmp_path / "pack")
-        out_dir = tmp_path / "out"
-        stats = _run_self_compare(mep_compare, pack_dir, out_dir)
+        out_dir = Path(tmp) / "out"
+        stats = _run_self_compare(mep_compare, GOLDEN_TEXTURES, out_dir)
         results = [
             check_auto_reports_palettes_per_shape(stats),
             check_auto_palettes_per_shape_value(stats),
