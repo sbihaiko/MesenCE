@@ -431,6 +431,30 @@ def check_assemble_present_matches_hint_despite_trailing_slash():
     ok("hints URL differing only by a trailing slash still matches its external_assets line")
 
 
+def check_assemble_present_drops_classify_size_when_line_has_none():
+    """A classify-supplied `size` on a matched dep must never survive a
+    size-less external_assets line — sha256/size are the deterministic
+    step's alone to set (ADR-0138 §4/§11: submitter-declared, never
+    classify's), so a fabricated LLM size must not leak into the
+    assembled recipe just because the line omitted the optional field."""
+    line = AUDIO_URL + " " + AUDIO_SHA256  # no size field on the line
+    body = _issue_body_with_assets(line)
+    classify = _classify_fragment()
+    classify["deps"][0]["size"] = 999
+    status, recipe = mep_recipe.assemble_sources(body, classify, PACK_URL, PACK_SHA256)
+    if status != "present" or recipe is None:
+        fail(f"expected present recipe, got {status!r}/{recipe!r}")
+        return
+    deps = recipe["sources"]["deps"]
+    if len(deps) != 1 or "size" in deps[0]:
+        fail(f"classify-supplied size leaked into a size-less line's dep: {deps!r}")
+        return
+    if deps[0]["sha256"] != AUDIO_SHA256:
+        fail(f"sha256 not overwritten from the parsed line: {deps!r}")
+        return
+    ok("classify-supplied dep size does not survive a size-less external_assets line")
+
+
 def check_assemble_refused_missing_sha256():
     body = _issue_body_with_assets(AUDIO_URL)
     status, recipe = mep_recipe.assemble_sources(body, _classify_fragment(), PACK_URL, PACK_SHA256)
@@ -520,6 +544,7 @@ def main():
     check_assemble_present_merges_classify()
     check_assemble_present_keeps_unmatched_line_as_dep()
     check_assemble_present_matches_hint_despite_trailing_slash()
+    check_assemble_present_drops_classify_size_when_line_has_none()
     check_assemble_refused_missing_sha256()
     check_assemble_refused_malformed_line()
     check_assemble_sources_cli_roundtrip()

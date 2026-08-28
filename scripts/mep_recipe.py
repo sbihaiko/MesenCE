@@ -634,6 +634,12 @@ def merge_recipe_deps(classify_deps: list, assets: list) -> list:
         else:
             merged_dep = {"id": _synth_dep_id(i + 1, taken_ids), "hints": [asset["url"]], "user_supplied": True}
         taken_ids.add(merged_dep.get("id"))
+        # sha256/size are always the deterministic step's to set (ADR-0138
+        # §4/§11: submitter-declared, never classify's) — drop whatever
+        # classify's copied dep fragment carried before applying the parsed
+        # line's values, so a classify-supplied size never survives a
+        # size-less line by merely being left untouched.
+        merged_dep.pop("size", None)
         merged_dep["sha256"] = asset["sha256"]
         if asset.get("size") is not None:
             merged_dep["size"] = asset["size"]
