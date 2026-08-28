@@ -22,6 +22,16 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	//MEP recipe catalog. No UI toggle yet - that's F6.4b's job; this just
 	//keeps the by-value marshaled struct in sync with the native side.
 	[ObservableProperty] public partial bool AutoInstallCommunityPacks { get; set; } = true;
+	//ADR-0138 §38 (F6.4b): sticky flag for the first-run consent dialog that
+	//gates the very first automatic download (UI/Logic/CommunityPackConsentState.cs) -
+	//once true it is never asked again while AutoInstallCommunityPacks stays
+	//on. UI-only, deliberately NOT mirrored into InteropEnhancementPackConfig/
+	//ApplyConfig(): Core never reads AutoInstallCommunityPacks either (grep
+	//over Core/ finds only its declaration in SettingTypes.h, no call site) -
+	//every consent/download decision is made client-side in
+	//UI/Services/CommunityPackInstallService.cs before any native call, so
+	//the native side has no need to know this flag exists.
+	[ObservableProperty] public partial bool CommunityPackAutoInstallConsentGiven { get; set; } = false;
 
 	//Container names (folder / zip base name) of packs the user turned off
 	public List<string> DisabledPacks { get; set; } = new();
