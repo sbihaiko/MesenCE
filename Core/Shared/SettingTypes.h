@@ -822,6 +822,10 @@ struct EnhancementPackConfig
 	//the played tiles (xBRZ 4x) into <rom dir>/<Game>/auto/textures/ so the
 	//next load already plays with the auto layer
 	bool BootstrapEnhancementFolder = true;
+	//ADR-0138 (F6.4): auto-install a matching community pack found via the
+	//MEP recipe catalog. Stored only here - consumed by F6.4b's catalog
+	//fetch/prompt flow, no host logic in F6.4a.
+	bool AutoInstallCommunityPacks = true;
 };
 
 struct CvConfig
