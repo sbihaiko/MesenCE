@@ -549,9 +549,15 @@ jobs:
       # expression, the `assets:external` label branch, and the mep-meta
       # `recipe_hash` comment below) branches on this enum instead of
       # re-deriving "is there a recipe?".
+      # `continue-on-error`: a hard failure here (transient `gh`, empty
+      # structured_output) must never strand the item in "Em validação" by
+      # skipping `apply-verdict`; an empty `recipe_status` is not `present`,
+      # so the downgrade expression stays inert and the pre-ADR verdict path
+      # runs (ADR-0138 §13/§19).
       - name: Assemble MEP recipe
         id: assemble-recipe
         if: steps.classify.outcome == 'success'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
@@ -685,6 +691,15 @@ jobs:
               echo "Downgraded from \`accepted\` to \`invalid\`: the assembled MEP recipe (external-asset re-packaging, ADR-0138) failed \`mep_recipe.py validate\`/\`dry-run\`. See [MEP-recipe-v1.md](https://github.com/${REPO}/blob/main/docs/specs/MEP-recipe-v1.md)."
             } >> verdict_comment.txt
           fi
+          # ADR-0138 §3/§13: `refused` never changes the verdict or labels
+          # (comment-only), but the submitter must learn that the external
+          # assets were dropped and how to fix it.
+          if [ "$RECIPE_STATUS" = "refused" ]; then
+            {
+              echo ""
+              echo "External assets were **not** turned into a MEP recipe: at least one \`External assets\` line is malformed or lacks its sha256. Each line must be \`<url> <sha256> [<size>]\` — compute the digest with \`sha256sum <file>\`, edit the issue, and comment \`/revalidate\`. See [MEP-recipe-v1.md](https://github.com/${REPO}/blob/main/docs/specs/MEP-recipe-v1.md)."
+            } >> verdict_comment.txt
+          fi
           CATEGORY=""
           case "$VERDICT" in
             accepted) FINAL="$STATUS_ACEITO_PARCIAL"; CATEGORY="$CATEGORY_PARTIAL_HD"; LABEL="pack:valid" ;;
@@ -721,6 +736,13 @@ jobs:
               external) L="assets:external"; gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$L"; APPLIED_LABELS="$APPLIED_LABELS $L" ;;
             esac
           done < <(jq -r '.assets[]?' <<<"$STRUCTURED_OUTPUT"; [ -n "$HAS_EXTERNAL_DEPS" ] && echo external || true)
+          # Effective verdict (post-downgrade) and the labels actually
+          # applied, exposed as step outputs for the mep-meta upsert below
+          # (ADR-0138 §20). Written BEFORE the Project writes so a partial
+          # failure there never feeds empty values into the provenance
+          # comment.
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          echo "labels=$APPLIED_LABELS" >> "$GITHUB_OUTPUT"
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$FINAL" >/dev/null
           if [ -n "$CATEGORY" ]; then
@@ -728,12 +750,6 @@ jobs:
               --field-id "$CATEGORY_FIELD_ID" --single-select-option-id "$CATEGORY" >/dev/null
           fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"
-          # Effective verdict (post-downgrade) and the labels actually
-          # applied to the issue, exposed as this step's own outputs so the
-          # mep-meta comment upsert below can consume them without
-          # re-deriving/re-computing anything already decided here.
-          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
-          echo "labels=$APPLIED_LABELS" >> "$GITHUB_OUTPUT"
       # Upsert mep-meta comment (ADR-0138 §5/§11/§16/§18, F6.2b complete).
       # Runs on EVERY successful classify+apply-verdict pass, regardless of
       # `recipe_status` — deliberately never gated on
@@ -763,6 +779,7 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
           RECIPE_STATUS: ${{ steps.assemble-recipe.outputs.recipe_status }}
+          RECIPE_OK: ${{ steps.recipe-gate.outputs.recipe_ok }}
           VERDICT: ${{ steps.apply-verdict.outputs.verdict }}
           LABELS: ${{ steps.apply-verdict.outputs.labels }}
         run: |
@@ -802,6 +819,10 @@ jobs:
                   for dep in deps
               ]
               meta["recipe_hash"] = recipe_hash
+              # ADR-0138 §18/§21: digests are recorded even for a
+              # gate-rejected recipe ("record what was seen"); the reader
+              # (F6.3 catalog generator) tells them apart by this flag.
+              meta["recipe_ok"] = os.environ.get("RECIPE_OK") == "true"
 
           body_lines = [
               "<!-- mep-meta -->",

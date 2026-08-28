@@ -250,6 +250,27 @@ def check_incomplete_withholds_patch():
         ok("apply_patch_only_if_complete withholds the patch when a dep is missing")
 
 
+def check_missing_dep_skips_dependent_rename_and_rewrite():
+    """MEP-recipe-v1 §6 transitive skip: a rename/rewrite-paths whose
+    source only exists because of a skipped dep op is skipped too, so CI's
+    dry-run (no --dep) never false-rejects a structurally valid recipe."""
+    with tempfile.TemporaryDirectory() as tmp_s:
+        tmp = Path(tmp_s)
+        _recipe_path, primary, _audio, recipe = _make_split(tmp)
+        recipe["ops"].append({"op": "rename", "from": "audio/theme.ogg", "to": "audio/bgm.ogg"})
+        recipe["ops"].append({"op": "rewrite-paths", "file": "audio/bgm.ogg", "tags": ["bgm"], "prefix": "x/"})
+        out = tmp / "out"
+        try:
+            mep_recipe.run_recipe(recipe, primary, deps={}, out=out, rom_name=None)
+        except mep_recipe.RecipeError as exc:
+            fail(f"dependent rename/rewrite-paths on a withheld dep file raised: {exc}")
+            return
+        if (out / "audio").exists():
+            fail("withheld dep produced files anyway")
+            return
+        ok("rename/rewrite-paths on files a skipped dep op would have produced are skipped (§6)")
+
+
 def check_hash_mismatch_aborts():
     with tempfile.TemporaryDirectory() as tmp_s:
         tmp = Path(tmp_s)
@@ -464,6 +485,29 @@ def check_assemble_refused_missing_sha256():
     ok("external_assets line missing sha256 -> refused, no partial recipe")
 
 
+def check_assemble_refused_wins_over_empty_fragment():
+    """ADR-0138 §13 precedence: hash-less declared lines are `refused` even
+    when classify emitted no recipe content (the HDnes case: complete-looking
+    HD pack + pasted hash-less links)."""
+    body = _issue_body_with_assets(AUDIO_URL)
+    status, recipe = mep_recipe.assemble_sources(body, {"ops": [], "deps": [], "pack": {}}, PACK_URL, PACK_SHA256)
+    if status != "refused" or recipe is not None:
+        fail(f"hash-less line + empty fragment should refuse, got {status!r}")
+        return
+    ok("refused takes precedence over absent when a declared line lacks its sha256")
+
+
+def check_assemble_forces_user_supplied_true():
+    classify = _classify_fragment()
+    classify["deps"][0]["user_supplied"] = False
+    body = _issue_body_with_assets(f"{AUDIO_URL} {AUDIO_SHA256} 1048576")
+    status, recipe = mep_recipe.assemble_sources(body, classify, PACK_URL, PACK_SHA256)
+    if status != "present" or recipe["sources"]["deps"][0]["user_supplied"] is not True:
+        fail(f"classify's user_supplied=false survived into sources.deps: {recipe!r}")
+        return
+    ok("user_supplied is forced true on every dep built from an external_assets line (§11)")
+
+
 def check_assemble_refused_malformed_line():
     bad_url = _issue_body_with_assets(f"not-a-url {AUDIO_SHA256} 1048576")
     status, recipe = mep_recipe.assemble_sources(bad_url, _classify_fragment(), PACK_URL, PACK_SHA256)
@@ -538,6 +582,7 @@ def main():
     check_dry_run_lint_clean()
     check_wrapped_primary_uses_lint_discovery()
     check_incomplete_withholds_patch()
+    check_missing_dep_skips_dependent_rename_and_rewrite()
     check_hash_mismatch_aborts()
     check_assemble_absent_no_assets_no_fragment()
     check_assemble_absent_when_classify_fragment_is_empty()
@@ -546,6 +591,8 @@ def main():
     check_assemble_present_matches_hint_despite_trailing_slash()
     check_assemble_present_drops_classify_size_when_line_has_none()
     check_assemble_refused_missing_sha256()
+    check_assemble_refused_wins_over_empty_fragment()
+    check_assemble_forces_user_supplied_true()
     check_assemble_refused_malformed_line()
     check_assemble_sources_cli_roundtrip()
     check_assemble_sources_cli_absent_writes_nothing()

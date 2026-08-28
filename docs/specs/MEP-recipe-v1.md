@@ -227,7 +227,7 @@ become a pack root (same `safe_rel` guard `mep_lint.py` already applies).
 
 | Field | Default | Semantics |
 |---|---|---|
-| `apply_patch_only_if_complete` | `true` | When any dep is missing or fails its hash: abort on a hash mismatch; on a **missing** `user_supplied` dep, skip ops whose `from` source-id is that dep, skip ops whose `to` (or `rename` dest) sits under `patches/` or whose basename ends in `.ips`/`.bps`, and omit `pack.patches` from the written `pack.json`. Textures (and any other complete sections) are still written. The host MUST tell the user the patch was withheld. When `false`, a missing dep MUST abort the whole install |
+| `apply_patch_only_if_complete` | `true` | When any dep is missing or fails its hash: abort on a hash mismatch; on a **missing** `user_supplied` dep, skip ops whose `from` source-id is that dep, skip `rename`/`rewrite-paths` ops whose source path would only have been produced by an op skipped this way (transitively), skip ops whose `to` (or `rename` dest) sits under `patches/` or whose basename ends in `.ips`/`.bps`, and omit `pack.patches` from the written `pack.json`. Textures (and any other complete sections) are still written. The host MUST tell the user the patch was withheld. When `false`, a missing dep MUST abort the whole install |
 
 A sha256 mismatch on a provided artifact (primary or dep) MUST always
 abort, regardless of this flag.

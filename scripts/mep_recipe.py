@@ -471,12 +471,26 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
     out.mkdir(parents=True, exist_ok=True)
 
     include_patches = not missing
+    # Files (and directories, as "dir/" prefixes) that a skipped op WOULD
+    # have produced. MEP-recipe-v1 §6: a rename/rewrite-paths whose source
+    # exists only because of a skipped dep op is skipped too (transitive
+    # closure), instead of failing "source does not exist" and turning a
+    # structurally valid recipe into a false reject in CI's dry-run.
+    withheld: set = set()
+
+    def _withheld(rel: str) -> bool:
+        return rel in withheld or any(rel.startswith(d) for d in withheld if d.endswith("/"))
+
     for i, op in enumerate(recipe["ops"]):
         kind = op["op"]
         where = f"ops[{i}]"
         if kind in ("copy", "glob"):
             source_id, rest = _split_from(op["from"], where)
             if source_id in missing:
+                if kind == "copy":
+                    withheld.add(_safe(op["to"], f"{where}.to"))
+                else:
+                    withheld.add(_safe(op["to"].rstrip("/") or op["to"], f"{where}.to") + "/")
                 continue
             src, prefix = opened[source_id]
             if kind == "copy":
@@ -512,6 +526,9 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
             dest_rel = _safe(op["to"], f"{where}.to")
             if not include_patches and (_is_patch_dest(src_rel) or _is_patch_dest(dest_rel)):
                 continue
+            if _withheld(src_rel):
+                withheld.add(dest_rel)
+                continue
             src_path = _out_path(out, src_rel)
             if not src_path.exists():
                 raise RecipeError(f"{where}: rename source does not exist: {src_rel}")
@@ -522,6 +539,8 @@ def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str
             src_path.rename(dest_path)
         elif kind == "rewrite-paths":
             rel = _safe(op["file"], f"{where}.file")
+            if _withheld(rel):
+                continue
             path = _out_path(out, rel)
             if not path.exists():
                 raise RecipeError(f"{where}: rewrite-paths file does not exist: {rel}")
@@ -640,6 +659,11 @@ def merge_recipe_deps(classify_deps: list, assets: list) -> list:
         # line's values, so a classify-supplied size never survives a
         # size-less line by merely being left untouched.
         merged_dep.pop("size", None)
+        # ADR-0138 §11/§16 (MEP-recipe-v1 §3.3): every dep built from an
+        # external_assets line is submitter-supplied by definition — the
+        # client MUST NOT fetch it itself — so classify never gets to say
+        # otherwise (§4's `user_supplied` is decoration, §11 wins).
+        merged_dep["user_supplied"] = True
         merged_dep["sha256"] = asset["sha256"]
         if asset.get("size") is not None:
             merged_dep["size"] = asset["size"]
@@ -683,20 +707,27 @@ def _classify_has_recipe_fragment(classify: dict | None) -> bool:
 def assemble_sources(issue_body: str, classify: dict | None, pack_url: str, pack_sha256: str):
     """Assembles `sources` from the issue body + CI hash + classify's
     ops/deps/pack fragment (ADR-0138 §4/§7/§12/§13). Returns (status,
-    recipe): 'absent' (no external assets declared, or classify emitted no
-    recipe fragment at all) / 'present' / 'refused' (a dep line is
-    malformed or lacks a sha256); recipe is None unless status=='present'.
+    recipe): 'refused' (a declared dep line is malformed or lacks a sha256 —
+    checked first, §13) / 'absent' (no lines, or well-formed lines but
+    classify emitted no recipe content) / 'present'; recipe is None unless
+    status=='present'.
     """
     if not SHA256_HEX.match(pack_sha256 or ""):
         raise RecipeError(f"--pack-sha256 must be 64 hex digits, got {pack_sha256!r}")
     lines = _asset_lines(extract_issue_field_section(issue_body, EXTERNAL_ASSETS_LABEL))
-    if not lines or not _classify_has_recipe_fragment(classify):
+    if not lines:
         return "absent", None
+    # ADR-0138 §13 precedence: the declared lines are parsed BEFORE the
+    # classify fragment is consulted, so a hash-less/malformed line is
+    # `refused` (submitter gets the sha256 guidance) even when classify saw
+    # a complete-looking HD pack and emitted no recipe content.
     try:
         assets = [_parse_asset_line(line) for line in lines]
-        deps = merge_recipe_deps(classify.get("deps") or [], assets)
     except RecipeError:
         return "refused", None
+    if not _classify_has_recipe_fragment(classify):
+        return "absent", None
+    deps = merge_recipe_deps(classify.get("deps") or [], assets)
     return "present", _build_present_recipe(classify, pack_url, pack_sha256, deps)
 
 

@@ -101,7 +101,8 @@ sources. Shape (normative text goes to `docs/specs/MEP-recipe-v1.md`):
 - **CI validates and dry-runs the recipe** with a new stdlib-only
   `scripts/mep_recipe.py` (`validate`, `dry-run`, `apply`): the schema check
   rejects unknown ops/escaping paths; the dry-run applies the ops to the
-  downloaded primary (deps stubbed by their declared names) and runs
+  downloaded primary (no `--dep` supplied — missing `user_supplied` deps
+  follow MEP-recipe-v1 §6's skip semantics, see Clarification §22) and runs
   `mep_lint.py` on the result. A recipe that does not produce a lint-clean
   pack fails the submission.
 - **Bot comment with machine-readable block.** The CI upserts one comment
@@ -360,7 +361,9 @@ again) are folded and deleted.
     verdict comment says the same; MEP-recipe-v1 already carries
     `user_supplied: true` (§11) — no spec change. Fetch-and-verify in CI is
     rejected for v1: it re-introduces the size/host problem the split
-    distribution exists to avoid.
+    distribution exists to avoid. Corollary: `recipe_ok` is also silent
+    about dep-dependent ops — the gate's dry-run runs with no `--dep`, so
+    ops reading from a dep are skipped per MEP-recipe-v1 §6 (§22).
 17. **Issue body is fetched, never taken from the event.** The assembly
     step reads the `external_assets` field with `gh issue view
     "$ISSUE_NUMBER" --repo "$REPO" --json body -q .body` — the same call the
@@ -381,6 +384,51 @@ again) are folded and deleted.
     and logs the mismatch (the field wins; a human-edited comment can never
     upgrade a pack). Both writers are bot-owned; human edits to the comment
     are overwritten on the next validation.
+
+19. **Assembly failure never strands the item (after run 3cca17a3180c).**
+    `assemble-recipe` carries `continue-on-error: true`; `apply-verdict`
+    keeps its plain `steps.classify.outcome == 'success'` condition. An
+    empty `recipe_status` is not `present`, so the downgrade expression is
+    inert and the pre-ADR verdict path runs. `apply-verdict` writes its
+    `verdict`/`labels` outputs *before* the Project writes, so a partial
+    failure there never feeds empty values into mep-meta.
+20. **Classify schema shape and the second handoff.** The classify schema
+    keeps `required: [verdict, assets, comment]` at the top level; the recipe
+    fragment is ONE optional nested `recipe` object whose subschema requires
+    `ops`, `deps`, `pack` (§4/§7's "may omit" is satisfied at the fragment
+    level). The assembly step consumes `jq -r '.recipe // {}'` of the
+    structured output, never the whole object. `absent` means "classify
+    emitted no recipe *content*" (empty containers included). `apply-verdict`
+    exposes `verdict` (effective, post-downgrade) and `labels` (applied) as
+    step outputs — the second named intra-workflow handoff besides §13's
+    `recipe_status`; mep-meta and later F6.3 consume them, never re-derive.
+21. **Lines are the spine.** `sources.deps` is built one-per-`external_assets`
+    line (synthesized `extN` ids when classify has no matching `hints` URL,
+    trailing-slash-normalised matching); classify's `deps[]` only decorates
+    with id/hints/license. `user_supplied` is forced `true` on every such dep
+    (§11 wins over §4). Precedence: lines are parsed before the fragment is
+    consulted, so a hash-less/malformed line is `refused` even when classify
+    emitted no content; `absent` is reserved for "no lines, or well-formed
+    lines but no classify content". mep-meta records `deps`/`recipe_hash`
+    whenever `present`, plus `recipe_ok` so a reader can tell a passing
+    recipe's digests from a gate-rejected one's. `refused` stays
+    non-downgrading but appends a submitter-facing note (how to compute
+    `sha256sum`, `/revalidate`) to the verdict comment (§3).
+22. **"Deps stubbed by name" means MEP-recipe-v1 §6, not a CLI mode.** There
+    is no `--stub-dep`; the gate supplies no `--dep`, and the spec's
+    `apply_patch_only_if_complete` semantics apply: skip ops whose `from` is
+    the missing dep, skip `rename`/`rewrite-paths` whose source would only
+    have been produced by such a skipped op (transitive closure — spec §6
+    amended and `run_recipe` fixed in the same commit), skip patch dests,
+    omit `pack.patches`. Placeholder sources per dep id are rejected (they
+    re-open §16).
+23. **File-size guardrail vs "one file" mandates.** §8's "one verifier" is
+    read as one verifier *entry point*: `verify_community_pack_validate_workflow.py`
+    may import its `CHECKS` from topic modules under `scripts/checks/`.
+    Likewise the CI-side assembly (issue parsing, merge, `assemble-sources`
+    CLI) may move out of `scripts/mep_recipe.py` into a sibling stdlib module
+    sharing `RecipeError`/`SHA256_HEX`. Both splits are a mechanical slice
+    (**F6.2c**) to run before F6.3 adds more checks.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
