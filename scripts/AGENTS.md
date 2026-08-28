@@ -44,6 +44,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
   validators and test-ROM/test-pack generators; no emulator dependency.
+  `validate-specs.py`'s MEI v1.1 catalog validation (`validate_mei`,
+  `validate_mei_catalog`, `MEI_KINDS`) is kind-aware: a "hd-legacy" pack
+  entry needs no `version`/`mep` (it predates MEP), `rom.sha1` MAY be
+  absent regardless of `kind`, and any `deps[]` entry MUST carry `license`
+  (docs/specs/MEI-v1.md §2.2/§2.3). `validate_mei_catalog()` runs those
+  rules over the golden and, when this checkout has a generated
+  `docs/community-packs.json`, over that catalog too.
   `mep_lint.py` mirrors the ADR-0120 structural (name-agnostic) last-priority
   subfolder fallback that `Core::MepPack::FindFallbackSubfolder` (C++, name
   match) and `MepZipValidator.FindStructuralFallbackPrefix` (C#, structural

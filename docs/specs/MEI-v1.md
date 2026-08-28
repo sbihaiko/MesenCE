@@ -1,6 +1,6 @@
-# MEI v1 — MesenCE Enhancement Index
+# MEI v1.1 — MesenCE Enhancement Index
 
-**Status:** v1 (stable) ·
+**Status:** v1.1 (stable) ·
 **License for this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mei/manifest.json`](golden/mei/manifest.json) ·
@@ -24,7 +24,7 @@ content circulates outside the index, in its own hubs.
 
 ```json
 {
-  "mei": "1.0.0",
+  "mei": "1.1.0",
   "name": "Índice oficial MesenCE",
   "maintainer": "sbihaiko",
   "updated": "2026-08-24",
@@ -40,10 +40,37 @@ content circulates outside the index, in its own hubs.
       "url": "https://example.org/packs/after-burner-studio-1.2.0.zip",
       "size": 18342,
       "sha256": "a3f1c2… (64 lowercase hex chars of the .zip artifact)"
+    },
+    {
+      "kind": "hd-legacy",
+      "name": "Zelda HD Pack — community submission",
+      "game": "Legend of Zelda, The (USA)",
+      "system": "nes",
+      "rom": { "crc32": "6C648F63" },
+      "license": "unknown",
+      "url": "https://github.com/example/zelda-hd/releases/download/v1/zelda-hd.zip",
+      "size": 20480,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deps": [
+        {
+          "id": "audio",
+          "url": "https://example.org/audio/zelda-hd-ogg.zip",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 4096,
+          "license": "CC0-1.0"
+        }
+      ]
     }
   ]
 }
 ```
+
+The second entry above is a `kind: "hd-legacy"` example: no `version`/`mep`
+(the original submission predates MEP and has no pack manifest to mirror),
+`license: "unknown"` (the submitter did not declare one), no `rom.sha1`
+(only a legacy `crc32` is known), and a `deps[]` array pointing at a
+third-party audio replacement the client must download and confirm
+separately (§2.3).
 
 ### 2.1 Index fields
 
@@ -59,16 +86,51 @@ content circulates outside the index, in its own hubs.
 
 | Field | Requirement | Semantics |
 |---|---|---|
-| `name`, `version` | MUST | mirror the artifact's `pack.json` |
+| `kind` | MAY (v1.1) | `"mep"` (default when absent) or `"hd-legacy"`; see §2.3 |
+| `name` | MUST | mirrors the artifact's `pack.json` (or the submission title for `hd-legacy`) |
+| `version` | MUST unless `kind: "hd-legacy"` | mirrors the artifact's `pack.json` |
 | `game`, `system` | MUST | target game and system (`system` values as in MEP §4) |
-| `rom` | MUST | `sha1` (40 uppercase hex, No-Intro range from MEP §4) and optionally `crc32` |
-| `mep` | MUST | MEP spec version of the artifact |
-| `license` | MUST | SPDX of the content |
+| `rom` | MUST | object; `sha1` (40 uppercase hex, No-Intro range from MEP §4) MAY (v1.1) be absent, optionally `crc32` |
+| `mep` | MUST unless `kind: "hd-legacy"` | MEP spec version of the artifact |
+| `license` | MUST | SPDX of the content; MAY (v1.1) be `"unknown"` for `kind: "hd-legacy"` |
 | `url` | MUST | URL of the `.zip` artifact — **HTTPS required** |
 | `size` | SHOULD | size of the artifact in bytes |
 | `sha256` | MUST | SHA-256 of the artifact, 64 hex (case-insensitive on read; producers SHOULD write lowercase) |
+| `deps` | MAY (v1.1) | list of third-party artifacts the pack references; see §2.3 |
+| `recipe` | MAY (v1.1) | MEP-recipe-v1 document assembled for `deps`; see §2.3 |
 
 Unknown fields MUST be ignored.
+
+### 2.3 `kind`, `rom.sha1`, `deps[]` and `recipe` (v1.1)
+
+MEI v1.0 assumed every listed pack was a complete, self-contained MEP
+artifact with a known No-Intro ROM hash. v1.1 adds a `kind` discriminator so
+an index MAY also list packs submitted before MEP existed, or packs that
+split part of their content into third-party artifacts:
+
+- `kind: "mep"` (the default, used when the field is absent) — the entry
+  behaves exactly as in v1.0: `version`, `mep` and `rom.sha1` are expected.
+- `kind: "hd-legacy"` — a community submission accepted only as a plain
+  HD/texture pack (MEP-v1 §5.2 "Aceito parcial (HD Mesen)"), with no MEP
+  `pack.json` to mirror. For these entries `version` and `mep` MAY be
+  omitted, and `license` MAY be `"unknown"` when the submitter declared
+  none.
+- `rom.sha1` MAY be absent regardless of `kind` (clients only auto-match an
+  entry against a loaded ROM when it carries a `sha1`; an entry without one
+  is still listable and installable, just not hash-matchable).
+- `deps` (when present) is a list of objects, each MUST carry `license`
+  (SPDX id or a short declared-licence string, mirroring MEP-recipe-v1 §3.3)
+  and SHOULD carry `url`/`sha256`/`size` identifying the third-party
+  artifact. Clients MUST show each dep's `license` before downloading or
+  installing it (mirrors MEI §3's trust obligations).
+- `recipe` (when present) is the MEP-recipe-v1 document that assembles
+  `deps` and the primary artifact into an installable pack; clients that do
+  not implement the recipe interpreter MUST ignore it and MAY still list
+  the pack, but MUST NOT attempt to install `deps` without it.
+
+Unknown fields MUST still be ignored (§2.2), so a v1.0 client sees a v1.1
+entry with `kind`/`deps`/`recipe` stripped and, when `version`/`mep`/
+`rom.sha1` happen to be present, otherwise behaves as before.
 
 ## 3. Trust model (normative — ADR-0006)
 
@@ -96,4 +158,7 @@ data to the index's maintainer beyond the GET request itself.
 ## 5. Golden file
 
 [`golden/mei/manifest.json`](golden/mei/manifest.json) — validated by
-`scripts/validate-specs.py` (required fields, semver, HTTPS, hash formats).
+`scripts/validate-specs.py` (required fields, semver, HTTPS, hash formats,
+and the v1.1 `kind`-aware relaxations of §2.3). The same rules are run over
+the generated `docs/community-packs.json` catalog when it exists in the
+repo (`validate_mei_catalog()`).
