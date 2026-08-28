@@ -331,7 +331,7 @@ P.1/P.2.
 | 0133, 0134, 0135, 0051 | proposed | gate Blocks C/D — user decision |
 | 0123, 0125, 0128 | proposed | H5–H7 — not blocking |
 | 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
-| player-shell identity + chrome | **needed** | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in PRD-player-shell.md §9. Not assigned ids yet |
+| player-shell identity + chrome | ADR-0139/0140/0141 **proposed** | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in PRD-player-shell.md §9; `UiMode` still without an ADR |
 
 ## 7. Risks
 

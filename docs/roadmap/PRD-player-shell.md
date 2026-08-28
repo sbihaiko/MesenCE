@@ -388,7 +388,7 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 
 | Slice | Deliverable | Depends | Acceptance |
 |---|---|---|---|
-| **P.0** | ADRs: (1) `content_id` canonicalisation, the recipe composite, and the two-implementation/parity rule; (2) `pack_id` sources incl. the MEP `id` field and the `local:` fallback; (3) catalog uniqueness (§3.3) + one-slot occupancy (§3.6) as CI/client policy, **amending ADR-0138 §37** (update trigger = `content_id`, no auto-downgrade) | — | accepted ADRs; ADR-0138 §37 carries the amendment; this PRD's Decisions line updated |
+| **P.0** | ADR-0139/0140/0141 (proposed 2026-08-28): (1) `content_id` canonicalisation, the recipe composite, and the two-implementation/parity rule; (2) `pack_id` sources incl. the MEP `id` field and the `local:` fallback; (3) catalog uniqueness (§3.3) + one-slot occupancy (§3.6) as CI/client policy, **amending ADR-0138 §37** (update trigger = `content_id`, no auto-downgrade) | — | accepted ADRs; ADR-0138 §37 carries the amendment; this PRD's Decisions line updated |
 | **P.1** | `content_id` in `scripts/` (normative) **and** in the Core (`MepPackManager`/`MepRecipeInstaller`), both on the discovered pack root and the recipe composite; `mep_lint` / validate workflow writes it to mep-meta; `.mep-install.json` gains `pack_id`/`content_id`. Goldens: same tree in two wrappers → same id; two recipes on one primary → two ids | P.0 | unit tests on goldens under `docs/specs/golden/`; a parity fixture that both implementations must agree on (same shape as F6.4c) |
 | **P.2** | Catalog / mep-meta / MEI grow `pack_id`, `content_id`, `version`, `votes` (all additive; unknown-field ignore already required). One live row per `pack_id` (§3.6). Duplicate comment on same `content_id`. `/revalidate` rewrites provenance and occupies the slot only by §3.6 order | P.1 | wrapper-only `/revalidate` keeps `content_id` and the slot; a real file change with higher semver updates the slot; a lower semver does not; a second issue with the same `content_id` is not a second row; two revisions of one `pack_id` never yield two rows |
 | **P.3** | Per-ROM-sha1 preference (`pack_id` chosen, `local:` fallback for local drops) in `EnhancementPackConfig`. Picker window usable from **Advanced** (ships before Player chrome). The preference overrides lexicographic order; lexicographic stays the default when no preference exists | P.0 (for the `pack_id` rules) | UI.Tests for the preference store incl. the `local:` key; two local packs for one ROM, pick B, reload, B wins; a third container with B's `content_id` is not a new entry |
@@ -400,9 +400,9 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 
 | Topic | Status | Meaning |
 |---|---|---|
-| `content_id` algorithm (tree canonicalisation, recipe composite, excluded files, `version` string excluded, two implementations + parity) | **needed** (P.0) | P.1 cannot start without it |
-| `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness | **needed** (P.0) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
-| Amendment to ADR-0138 §37: client update trigger `source.sha256` → `content_id`; no auto-downgrade; removed slot keeps install | **needed** (P.0) | P.6 conflicts with the accepted text until amended |
+| ADR-0139 — `content_id` algorithm (tree canonicalisation, recipe composite, excluded files, `version` string excluded, two implementations + parity) | proposed (P.0) | P.1 cannot start without it |
+| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness | proposed (P.0) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
+| ADR-0141 — one live slot per `pack_id`; amends ADR-0138 §37 (client update trigger `source.sha256` → `content_id`); no auto-downgrade; removed slot keeps install | proposed (P.0) | P.6 conflicts with the accepted text until amended |
 | Player chrome (`UiMode`, overlay contents, overlay shortcut, upgrade default Advanced) | **needed only if** P.4 finds trade-offs beyond §6 | P.4 |
 | ADR-0039/0040/0044/0049/0120/0121 | accepted | precedence and ROM hash-matching do not change |
 | ADR-0138 (except §37 as above) | accepted | F6.4b is the network installer this shell consumes |
