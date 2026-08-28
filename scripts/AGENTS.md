@@ -141,6 +141,47 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   its framework-free acceptance check (well-formed block round-trips;
   each malformed-input shape above returns `None`; a second fenced block
   later in the comment is never mistaken for the first).
+  `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27) writes
+  `docs/community-packs.json` (an MEI v1.1 catalog, `mei: "1.1.0"`) next to
+  `docs/community-packs.md` in the same run, and adds an "External assets"
+  column to the Markdown table (`yes` when the entry has `deps`) alongside
+  the six pre-existing columns. Per accepted board item it fetches the
+  bot-owned `<!-- mep-meta -->` comment (`gh api .../comments`, same
+  oldest-by-`sbihaiko` selection `community-pack-validate.yml`'s upsert
+  step uses) and parses it with `mep_meta_parser.parse_mep_meta`; on a
+  `source_sha256` mismatch against the Project "Pack Hash" field it omits
+  `deps`/`recipe` for that entry and logs the mismatch (§18, field wins).
+  `mei_entry_preconditions_ok` guards every entry against validate_mei's own
+  constraints before it is built: an item missing an HTTPS Pack URL, a
+  well-formed Pack Hash, or a Console value with an MEI-representable
+  `system` (the Issue Form's first-class "Other" option, and the "?"
+  fallback of a missing/unmapped console, have none) gets no JSON entry at
+  all — a warning is logged and the Markdown row (tolerant of "?"/"other")
+  is still produced. `kind_from_status` derives `kind` (`"mep"`/`"hd-legacy"` from the board
+  Status; no automated verdict currently produces "mep") and
+  `build_pack_entry` assembles one MEI `packs[]` entry per item, reading
+  `deps[]` from mep-meta's embedded `recipe.sources.deps` (never mep-meta's
+  own top-level stripped `deps`, which lacks `license`); `issue_form_fields`
+  holds the Issue Form field parsing shared by the Markdown row and the MEI
+  entry, so `game`/`console`/`license` never drift between the two outputs.
+  `normalized_rom_sha1` upper-cases the Project's human-entered "ROM SHA1"
+  field and checks its 40-hex shape before it is copied into `rom.sha1`,
+  omitting it (not emitting an invalid one) on a mismatch. For a
+  `kind == "mep"` entry, `build_pack_entry` reads `pack.version`/`pack.mep`
+  out of mep-meta's embedded `recipe.pack` (`pack_version_fields`); when
+  the recipe is absent/refused and those fields can't be sourced,
+  `mei_entry_conforms` flags the entry as non-conformant so the caller
+  omits its JSON entry entirely (the Markdown row is unaffected) rather
+  than emit one validate_mei rejects for missing `version`/`mep` — never
+  silently relabeled as `"hd-legacy"`.
+  `scripts/checks/verify_mei_catalog_generator.py` is the offline, no-`gh`
+  checker for this deliverable (AC-2 of the F6.3 task): structural checks
+  assert the generator writes `docs/community-packs.json`, uses
+  `mep_meta_parser`, derives `kind`, and declares the "External assets"
+  column; it also imports the generator's pure functions directly (no
+  mocks, no live `gh`/`main()` run) to round-trip a `kind == "mep"` entry
+  with and without a mep-meta recipe, and a lowercase `rom.sha1`, through
+  the real `validate_mei` (`scripts/validate-specs.py`).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
@@ -309,6 +350,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   payload, and a deeply nested JSON payload (`RecursionError`, not
   `ValueError`) all return `None` without raising; PASS/FAIL per check,
   exit 0 only if all pass.
+- `python3 scripts/checks/verify_mei_catalog_generator.py` (AC-2, F6.3) -
+  offline structural checker for `generate_community_pack_catalog.py`'s
+  JSON-catalog/`kind`/External-assets-column additions; see `checks/`
+  above.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
