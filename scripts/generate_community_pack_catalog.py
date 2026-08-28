@@ -12,6 +12,13 @@ popularity proxy, not a real usage metric, no telemetry exists anywhere in
 this project) and writes docs/community-packs.json as an MEI v1.1 catalog
 (ADR-0138 §26-27), deriving `kind` from the board Status and `deps[]`/
 `recipe` from the issue's `<!-- mep-meta -->` block via `mep_meta_parser`.
+The Project's "ROM SHA1" field is normalized to 40-UPPERCASE-hex before
+being copied into `rom.sha1` (omitted, not emitted invalid, when it
+doesn't fit that shape after normalization — normalized_rom_sha1); a
+`kind == "mep"` item whose mep-meta recipe carries no `pack.version`/
+`pack.mep` has its JSON entry omitted entirely rather than mislabeled as
+"hd-legacy" (mei_entry_conforms) — the Markdown row is unaffected either
+way.
 
 stdlib only. Usage: python3 scripts/generate_community_pack_catalog.py
 """
@@ -40,6 +47,11 @@ CONSOLE_LABELS = {"nes", "snes", "gb", "gbc", "sms", "other"}
 # tolerant Markdown table but not in a validate_mei-conformant JSON entry.
 MEI_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
 SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
+# Mirrors validate-specs.py's SHA1_UPPER shape exactly, but case-insensitive
+# on input -- the Project's "ROM SHA1" field is human-entered and common
+# tools (sha1sum/shasum) emit lowercase, so this normalizes case rather
+# than reject it outright (see normalized_rom_sha1 below).
+ROM_SHA1_HEX = re.compile(r"^[0-9a-fA-F]{40}$")
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.md"
 JSON_OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.json"
 TABLE_HEADER = "| Link | Game | Console | Author | Category | Date | External assets |"
@@ -282,9 +294,27 @@ def recipe_fields(mep_meta, pack_hash):
     return deps, recipe, recipe_hash, recipe_ok, False
 
 
+def normalized_rom_sha1(rom_sha1):
+    """Normalizes the Project "ROM SHA1" field to the 40-UPPERCASE-hex
+    shape validate_rom_id (scripts/validate-specs.py) requires.
+
+    The field is human-entered and common tools (sha1sum/shasum) emit
+    lowercase, so this upper-cases before checking the shape rather than
+    reject a case mismatch outright. Returns None (not an invalid string)
+    when the value is empty or doesn't fit 40 hex digits after
+    normalization -- MEI v1.1 makes `rom.sha1` optional, so the caller
+    omits it rather than emit a catalog entry validate_mei would reject.
+    """
+    if not rom_sha1:
+        return None
+    candidate = rom_sha1.strip().upper()
+    return candidate if ROM_SHA1_HEX.match(candidate) else None
+
+
 def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind):
     """Builds the fields every entry has regardless of `kind` or mep-meta."""
-    rom = {"sha1": rom_sha1} if rom_sha1 else {}
+    sha1 = normalized_rom_sha1(rom_sha1)
+    rom = {"sha1": sha1} if sha1 else {}
     name = f"{game} — community submission" if kind == "hd-legacy" else game
     entry = {
         "issue": issue_number,
@@ -310,6 +340,22 @@ def _apply_mep_meta_passthrough(entry, mep_meta):
             entry[key] = mep_meta[key]
 
 
+def pack_version_fields(recipe):
+    """Extracts `pack.version`/`pack.mep` from a mep-meta recipe document's
+    `pack` object (MEP-recipe-v1 §3.1) for a kind=="mep" entry.
+
+    Returns (version, mep), each None when `recipe` or its `pack` object
+    is absent or malformed -- validate_mei (scripts/validate-specs.py)
+    requires both fields for a "mep"-kind entry, and mei_entry_conforms
+    below is what actually enforces that requirement on the assembled
+    entry.
+    """
+    pack = recipe.get("pack") if isinstance(recipe, dict) else None
+    if not isinstance(pack, dict):
+        return None, None
+    return pack.get("version"), pack.get("mep")
+
+
 def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta):
     """Assembles one MEI v1.1 packs[] entry (ADR-0138 §26/§27).
 
@@ -326,8 +372,31 @@ def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, 
         entry["recipe_hash"] = recipe_hash
     if recipe_ok is not None:
         entry["recipe_ok"] = recipe_ok
+    if kind == "mep":
+        version, mep_version = pack_version_fields(recipe)
+        if version:
+            entry["version"] = version
+        if mep_version:
+            entry["mep"] = mep_version
     _apply_mep_meta_passthrough(entry, mep_meta)
     return entry, mismatch
+
+
+def mei_entry_conforms(entry, kind):
+    """Whether `entry` still satisfies validate_mei's kind-specific
+    requirements (scripts/validate-specs.py) after mep-meta enrichment.
+
+    A "mep"-kind entry additionally requires `version`/`mep` (MEI v1.1
+    §2.2), sourced above from the mep-meta recipe's `pack.version`/
+    `pack.mep`. When the recipe is absent, refused, or lacks those
+    fields, the entry lacks them too and must be dropped like a
+    mei_entry_preconditions_ok failure -- never silently relabeled as
+    "hd-legacy" (that would misrepresent a MEP-complete submission as a
+    legacy HD-only one).
+    """
+    if kind != "mep":
+        return True
+    return bool(entry.get("version")) and bool(entry.get("mep"))
 
 
 def mei_entry_preconditions_ok(pack_url, pack_hash, system):
@@ -447,6 +516,12 @@ def _warn_source_sha256_mismatch(issue_number):
           file=sys.stderr)
 
 
+def _warn_mep_kind_missing_version(issue_number):
+    print(f"WARNING: issue #{issue_number} has kind 'mep' but no mep-meta recipe "
+          f"pack.version/pack.mep; omitting its docs/community-packs.json entry "
+          f"(Markdown row still included).", file=sys.stderr)
+
+
 def _build_entry_for_accepted_item(item):
     """Fetches issue + mep-meta data for one accepted item and returns
     (markdown_row, mei_entry_or_None). mei_entry is None both for an item
@@ -463,14 +538,18 @@ def _build_entry_for_accepted_item(item):
     if not mei_entry_preconditions_ok(pack_url, pack_hash, system):
         _warn_missing_mei_preconditions(issue_number, system)
         return build_row(item, details, form, has_deps=False), None
+    status = item_status(item)
     entry, mismatch = build_pack_entry(
         issue_number=issue_number, game=form["game"].strip(), system=system,
         license_=form["license"], pack_url=pack_url, pack_hash=pack_hash,
-        rom_sha1=item_rom_sha1(item), status=item_status(item),
+        rom_sha1=item_rom_sha1(item), status=status,
         mep_meta=_fetch_mep_meta(issue_number),
     )
     if mismatch:
         _warn_source_sha256_mismatch(issue_number)
+    if not mei_entry_conforms(entry, kind_from_status(status)):
+        _warn_mep_kind_missing_version(issue_number)
+        return build_row(item, details, form, has_deps=False), None
     return build_row(item, details, form, has_deps=bool(entry.get("deps"))), entry
 
 
