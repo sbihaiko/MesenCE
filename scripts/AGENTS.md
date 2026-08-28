@@ -153,7 +153,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   (F6.0) that the Classify pack step has `timeout-minutes`. Sibling
   checkers for the other community-pack deliverables land in this same
   `checks/` subfolder as later tasks add them; none needs its own AGENTS.md
-  (same one-script-one-contract pattern as the checks below).
+  (same one-script-one-contract pattern as the checks below). Its 28+
+  `check_*` functions live in six topic modules under
+  `checks/community_pack_validate/` (a namespace package, no `__init__.py`)
+  — `general`, `classify`, `assemble_recipe`, `recipe_gate`,
+  `apply_verdict`, `mep_meta` — plus a `_shared.py` holding the common
+  `FAILURES`/`fail()` collector every topic module appends to; this file
+  itself only loads the workflow, runs the one YAML-shaped check
+  (`check_workflow_call_inputs`), imports the topic modules' functions
+  into its `CHECKS` tuple, and stays the sole invocation entry point
+  (ADR-0138 Clarification §23, F6.2c — a mechanical split, same contract
+  as before).
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh` - repo-hygiene shell checks. All four are
   now invoked by `make doc-checks` (ADR-0137, roadmap slice H1):
