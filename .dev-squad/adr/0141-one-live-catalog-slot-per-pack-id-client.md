@@ -1,6 +1,6 @@
 # ADR-0141: One live catalog slot per pack_id; client update trigger content_id (amends ADR-0138 §37); no auto-downgrade
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-28
 
 ## Context

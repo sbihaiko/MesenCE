@@ -1,6 +1,6 @@
 # ADR-0139: content_id: canonical hash of the resolved pack tree, recipe composite, two implementations
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-28
 
 ## Context

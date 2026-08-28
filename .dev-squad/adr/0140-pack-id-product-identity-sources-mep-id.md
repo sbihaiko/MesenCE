@@ -1,6 +1,6 @@
 # ADR-0140: pack_id: product identity sources (MEP id field, owner/repo, issue-n, local: fallback) and catalog uniqueness
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-28
 
 ## Context
