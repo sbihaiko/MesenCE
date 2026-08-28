@@ -19,23 +19,28 @@ on:
   issue_comment:
     types: [created]
 
-# Serializes runs per issue and lets a newer trigger supersede a stale one
-# in flight. This is the real fix for the self-trigger duplication (see the
-# now-removed DEBUG step this replaced): the changes.body-based guard below
-# assumed a title-only `gh issue edit --title` could never make GitHub
-# report `changes.body`, but confirmed live (2026-08-27, issue #13, runs
-# #42/#43) that assumption is false — GitHub sent `action: edited,
-# changes: {body: {from: ""}}` for a pure title-only edit traced (via
-# GH_DEBUG=api) to carry no body field in its mutation at all. Rather than
-# depend on that unreliable signal, this group guarantees only one
-# "Community Pack Submitted" run is ever active per issue: a second
-# trigger (whatever its real cause) cancels the first and reruns against
-# the same pack_url, converging on exactly one final comment/label/Status
-# move instead of two. `issue_comment` payloads also carry `.issue.number`,
-# so the same key covers both trigger paths.
+# Serializes runs per issue. A newer `issues` trigger (opened/edited)
+# supersedes a stale in-flight run for the same issue — that is the real
+# fix for the self-trigger duplication (see the now-removed DEBUG step this
+# replaced): the changes.body-based guard below assumed a title-only
+# `gh issue edit --title` could never make GitHub report `changes.body`,
+# but confirmed live (2026-08-27, issue #13, runs #42/#43) that assumption
+# is false — GitHub sent `action: edited, changes: {body: {from: ""}}` for
+# a pure title-only edit traced (via GH_DEBUG=api) to carry no body field
+# in its mutation at all. Rather than depend on that unreliable signal,
+# this group still cancels on `issues` so a second opened/edited trigger
+# reruns against the same pack_url.
+#
+# `cancel-in-progress` is *not* true for `issue_comment`. The classify
+# step posts a verdict comment, which fires this workflow's issue_comment
+# trigger; with `cancel-in-progress: true` that cancelled the run that
+# posted the comment, so the catalog-dispatch step never ran (F6.0,
+# ADR-0138). `/revalidate` comments therefore queue behind an in-flight
+# run instead of killing it. `issue_comment` payloads also carry
+# `.issue.number`, so the same group key covers both trigger paths.
 concurrency:
   group: community-pack-submitted-${{ github.event.issue.number }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'issues' }}
 
 jobs:
   prepare:
@@ -72,12 +77,12 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -euo pipefail
-          # The Issue Form renders the "Link do pack" field as the first
+          # The Issue Form renders the "Pack link" field as the first
           # http(s) URL in the structured body; grep it out defensively
           # rather than assuming a fixed line number.
           PACK_URL=$(printf '%s\n' "$ISSUE_BODY" | grep -oE 'https?://[^[:space:]]+' | head -n1 || true)
           if [ -z "$PACK_URL" ]; then
-            echo "Nenhuma URL de pack encontrada no corpo da issue (campo 'Link do pack')." >&2
+            echo "No pack URL found in the issue body (the 'Pack link' field)." >&2
             exit 1
           fi
           echo "pack_url=$PACK_URL" >> "$GITHUB_OUTPUT"

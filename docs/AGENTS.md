@@ -33,5 +33,5 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 
 ## Child DOX Index
 
-- specs/ — ESP, MEP, MEI, hires-gbsms drafts and `golden/`
+- specs/ — ESP, MEP, MEI, MEP-recipe, hires-gbsms drafts and `golden/`
 - roadmap/ — the single consolidated PRD (product consoles: NES, GB, SMS-family, GBA)

@@ -10,8 +10,9 @@ validation via `python3 scripts/validate-specs.py` (repo root).
 | Spec | File | Status | What it defines |
 |---|---|---|---|
 | **ESP v1** | [`ESP-v1.md`](ESP-v1.md) | stable | grammar and fields of the Enhanced Audio preset (`EnhancedAudioPresets.cfg`) |
-| **MEP v1.1** | [`MEP-v1.md`](MEP-v1.md) | stable | pack envelope (`pack.json` + No-Intro hash + textures/audio/synth sections); 1.1: `patches[]`, folder-form/sibling-folder without `pack.json`, `auto/` layer |
+| **MEP v1.3** | [`MEP-v1.md`](MEP-v1.md) | stable | pack envelope (`pack.json` + No-Intro hash + textures/audio/synth sections); 1.1: `patches[]`, folder-form/sibling-folder without `pack.json`, `auto/` layer; 1.3: §2.1 rule 9 bare-basename discovery, §6 recipes-as-data |
 | **MEI v1** | [`MEI-v1.md`](MEI-v1.md) | stable | federated pack-discovery manifest + trust model |
+| **MEP Recipe v1** | [`MEP-recipe-v1.md`](MEP-recipe-v1.md) | stable | declarative re-packaging of split-distribution packs (`copy`/`glob`/`rename`/`rewrite-paths`) |
 | **hires.txt GB/SMS** | [`hires-gbsms-v1-draft.md`](hires-gbsms-v1-draft.md) | **draft** | backward-compatible extension of the HDNes format for GB/SMS (pending community review — ADR-0004) |
 
 **Reference implementation limitations (MesenCE, MEP v1 host — F3):** the
@@ -25,7 +26,8 @@ lexicographic (case-insensitive) order of the container name, first wins
 F5.1/ADR-0049), which beats everything. `patches[]` and the hash normalized
 to the iNES header size (ADR-0044) are implemented; the "apply patch with
 divergent hash" override remains in *Enhancement Packs*. Offline linter:
-`python3 scripts/mep_lint.py <folder|zip>`. Bootstrap (F5.2, host behavior,
+`python3 scripts/mep_lint.py <folder|zip>`. Recipe interpreter (F6.1):
+`python3 scripts/mep_recipe.py validate|dry-run|apply`. Bootstrap (F5.2, host behavior,
 not part of the spec): with the option enabled and no applicable texture
 pack, playing writes the tiles to `<Game>/auto/textures/` (xBRZ 4×) next to
 the ROM and, on NES, the music to `<Game>/auto/audio/` (`fingerprints.json` +
@@ -45,4 +47,5 @@ Related tools in `scripts/`: `headless_record.cpp` (captures MIDI/VGM
 without a GUI, `make capture-tool`), `make_gb_test_rom.py` (deterministic
 homebrew ROM used by the hash goldens), `gen_mep_test_pack.py` (test MEP
 packs — dir/zip/negatives — for a ROM), `mep_lint.py` (offline validation of
-packs/hires.txt), and `validate-specs.py`.
+packs/hires.txt), `mep_recipe.py` (MEP Recipe v1 interpreter), and
+`validate-specs.py`.

@@ -44,6 +44,15 @@ what CI actually runs; this doc records why they're split the way they are.
   `labels: [community-pack]`
   and links `docs/hd-pack-authoring.md`. Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
+- `workflows/community-pack-submitted.yml` — trigger-only wrapper that
+  extracts the pack URL and mode, then calls the reusable validate
+  workflow. Concurrency group is per issue number. `cancel-in-progress`
+  is `${{ github.event_name == 'issues' }}` (F6.0, ADR-0138): a newer
+  opened/edited submission supersedes a stale run, but an `issue_comment`
+  (including the verdict comment this pipeline posts) must not cancel the
+  in-flight run, or the catalog-dispatch step is lost. `/revalidate`
+  comments queue behind an in-flight run instead of killing it. Checked
+  by `scripts/checks/verify_community_pack_submitted_workflow.py`.
 - `workflows/community-pack-validate.yml` — reusable (`workflow_call` only,
   no trigger of its own) validate/classify pipeline for the "Community
   HD/MEP Packs" triage board (GitHub Project "MesenCE Community Packs",
@@ -57,7 +66,9 @@ what CI actually runs; this doc records why they're split the way they are.
   success — classifies the pack via `anthropics/claude-code-action`
   restricted to comment/label/Project-move tools (no `Bash`), with the
   pack's own file names/`pack.json`/issue text framed as data, never
-  instructions, in the prompt. Dispatches
+  instructions, in the prompt. The classify step carries
+  `timeout-minutes: 15` (F6.0) so a hung Claude Code Action cannot hold
+  the runner for the job's 6-hour default. Dispatches
   `workflows/community-pack-catalog.yml` by name (never opens it) when the
   final Status is one of the two "Aceito" states. Requires the caller to
   supply a `PROJECT_PAT` PAT (`repo` + `project` + `read:org` scopes —
@@ -104,6 +115,10 @@ what CI actually runs; this doc records why they're split the way they are.
   section cites the ADR; the workflow file does not need to)
 - `grep -E "exclude-regex" .github/workflows/clang-format-check.yml`
 - `python3 scripts/checks/verify_community_pack_issue_template.py`
+- `python3 scripts/checks/verify_community_pack_submitted_workflow.py`
+- `python3 scripts/checks/verify_community_pack_validate_workflow.py`
+- `grep -F "cancel-in-progress: \${{ github.event_name == 'issues' }}" .github/workflows/community-pack-submitted.yml`
+- `grep -A2 "id: classify" .github/workflows/community-pack-validate.yml | grep timeout-minutes`
 
 ## Child DOX Index
 

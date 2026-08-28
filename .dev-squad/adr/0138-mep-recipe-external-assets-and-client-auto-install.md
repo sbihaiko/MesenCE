@@ -1,6 +1,6 @@
 # ADR-0138: MEP Recipe v1 — declarative re-packaging of split-distribution packs, issue-held metadata and client auto-install from the web catalog
 
-- Status: accepted (design agreed with the user on 2026-08-27; implementation pending — see Consequences for the ordered work list; the user runs the implementation outside the autonomous dev-squad task)
+- Status: accepted (design agreed with the user on 2026-08-27; F6.0 and F6.1 shipped; F6.2–F6.5 remaining — see Consequences; the user runs the implementation outside the autonomous dev-squad task)
 - Date: 2026-08-27
 - Related: ADR-0040 (central per-ROM pack storage and discovery precedence), ADR-0044 (per-hash `patches[]`, hash gate on patches), ADR-0049 (sibling-folder convention), ADR-0120/ADR-0121 (zip fallback discovery, legacy `hires.txt`), ADR-0039 (No-Intro hash from the ROM file)
 - Spec impact: `docs/specs/MEP-v1.md` §6 (security wording), new `docs/specs/MEP-recipe-v1.md`
@@ -178,10 +178,10 @@ the pre-existing §6 vs `patches[]` tension noted in the 2026-08-27 ADR review.
 Work implied by accepting this ADR, in order:
 
 1. `docs/specs/MEP-recipe-v1.md` (normative recipe schema) + §6 amendment in
-   `docs/specs/MEP-v1.md`; golden recipe fixture under `docs/specs/`.
+   `docs/specs/MEP-v1.md`; golden recipe fixture under `docs/specs/`. **Shipped as F6.1.**
 2. `scripts/mep_recipe.py` (`validate` / `dry-run` / `apply`, stdlib only) +
-   unit tests in the Python test set; wire `dry-run` into
-   `community-pack-validate.yml` after lint, before classify.
+   unit tests in the Python test set (**shipped as F6.1**); wire `dry-run` into
+   `community-pack-validate.yml` after lint, before classify (F6.2).
 3. Issue Form fields `external_assets` / `external_assets_license`; label
    `assets:external` in `ensure_community_pack_labels.sh`; classify prompt
    emits the recipe; new "Upsert mep-meta comment" step.
@@ -206,7 +206,9 @@ Other consequences:
   cancels its own run when the verdict comment fires `issue_comment`
   (`cancel-in-progress: true`), losing the catalog-dispatch step; set
   `cancel-in-progress: ${{ github.event_name == 'issues' }}`. Without it the
-  JSON catalog would go stale after every accepted pack.
+  JSON catalog would go stale after every accepted pack. **Shipped as
+  F6.0** (also `timeout-minutes: 15` on the classify step, catalog
+  backfill of #64/#73).
 
 ## Alternatives
 

@@ -39,7 +39,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
-- `validate-specs.py`, `mep_lint.py`, `mep_compare.py`, `mep_render_audio.py`,
+- `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
   validators and test-ROM/test-pack generators; no emulator dependency.
@@ -78,6 +78,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `find_fallback_subfolder`'s `safe_rel` guard refuses a `..`-segment
   candidate instead of discovering it as the pack root) that exercise it,
   mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
+  `mep_recipe.py` (F6.1, ADR-0138) is the stdlib interpreter of
+  `docs/specs/MEP-recipe-v1.md` (`validate` / `dry-run` / `apply`). It
+  reuses `mep_lint` discovery (`Source`, `discover_sections`,
+  `find_fallback_subfolder`, `find_fallback_subfolder_by_name`,
+  `find_top_level_nested_zip`, `safe_rel`, `parse_line`) and never walks
+  a zip with a parallel implementation. `test_mep_recipe.py` is the
+  framework-free acceptance check (unknown op / escaping path rejected;
+  dry-run of a synthetic split pack is `mep_lint`-clean).
 - `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
   small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
   `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
@@ -99,7 +107,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   tool restriction + data-not-instruction prompt clause, the secret-name
   comment, and — by literal `uses:`/string match against this workflow's
   own text only, never by opening `community-pack-catalog.yml` — that it
-  dispatches that catalog workflow gated on an "Aceito*" Status. Sibling
+  dispatches that catalog workflow gated on an "Aceito*" Status, and
+  (F6.0) that the Classify pack step has `timeout-minutes`. Sibling
   checkers for the other community-pack deliverables land in this same
   `checks/` subfolder as later tasks add them; none needs its own AGENTS.md
   (same one-script-one-contract pattern as the checks below).
@@ -129,6 +138,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `verify_community_pack_drift_check_workflow.py`, and
   `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
   Actions workflows and their GH Project field-provenance assumptions.
+  The submitted-workflow checker also asserts F6.0's concurrency
+  expression (`cancel-in-progress` parsed as
+  `${{ github.event_name == 'issues' }}`, not a comment grep).
   `verify_mep_fallback_adr.sh` (AC-7 of the MEP zip-fallback task) checks
   `.dev-squad/adr/0120-*.md` documents the subfolder fallback as an additive
   last-priority extension of ADR-0040/ADR-0049's precedence, a pure I/O-free
@@ -175,11 +187,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `make roles-probe` / `make capture-tool` / `make spike-sound-driver` -
   each depends on `make core` first.
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
+- `python3 scripts/test_mep_recipe.py` - MEP Recipe v1 interpreter
+  (unknown op / escaping path rejected; synthetic split-pack dry-run is
+  `mep_lint`-clean); PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
 - `python3 scripts/checks/verify_community_pack_issue_template.py` and
   `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
+- `python3 scripts/checks/verify_community_pack_submitted_workflow.py` and
+  `python3 scripts/checks/verify_community_pack_validate_workflow.py` —
+  F6.0 concurrency / classify-timeout structural checks plus the original
+  AC-2/AC-3/AC-6 contracts (see `checks/` above).
 - `./scripts/checks/verify_mep_fallback_adr.sh` and
   `./scripts/checks/verify_mep_fallback_adr_provenance.sh` - see `checks/`
   above (AC-7/AC-8 of the MEP zip-fallback task).

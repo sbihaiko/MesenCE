@@ -1,0 +1,40 @@
+{
+  "recipe": 1,
+  "sources": {
+    "primary": {
+      "url": "https://example.org/packs/synthetic-split-1.0.0.zip",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "deps": [
+      {
+        "id": "audio",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size": 4096,
+        "hints": ["https://example.org/audio/synthetic-split-ogg.zip"],
+        "license": "CC0-1.0",
+        "user_supplied": true
+      }
+    ]
+  },
+  "ops": [
+    { "op": "copy", "from": "primary:hires.txt", "to": "hires.txt" },
+    { "op": "copy", "from": "primary:tiles.png", "to": "tiles.png" },
+    { "op": "copy", "from": "primary:game.ips", "to": "patches/game.ips" },
+    { "op": "glob", "from": "audio:**/*.ogg", "to": "audio/" },
+    { "op": "rewrite-paths", "file": "hires.txt", "tags": ["bgm", "sfx"], "prefix": "audio/" }
+  ],
+  "pack": {
+    "mep": "1.1.0",
+    "name": "Synthetic Split Pack",
+    "version": "1.0.0",
+    "license": "CC0-1.0",
+    "targets": [
+      { "system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B" }
+    ],
+    "patches": [
+      { "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B", "file": "patches/game.ips" }
+    ],
+    "sections": { "textures": { "path": "" } }
+  },
+  "policy": { "apply_patch_only_if_complete": true }
+}

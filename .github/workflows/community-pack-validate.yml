@@ -495,9 +495,14 @@ jobs:
       # every other verdict path in this file (see "Reject on lint failure"
       # above) — Claude gets zero write-capable tools at all, which is
       # strictly safer than the tool-restriction approach this replaces.
+      # Cap the LLM classify step so a hung Claude Code Action cannot hold
+      # the runner for the job's 6-hour default (F6.0). 15 minutes is well
+      # above a successful classify (typically 1–3 min) and well below the
+      # time a stalled run used to sit until a verdict comment cancelled it.
       - name: Classify pack (Claude Code Action)
         id: classify
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'success'
+        timeout-minutes: 15
         uses: anthropics/claude-code-action@v1
         with:
           # github_token here is only so the action's own internal GitHub

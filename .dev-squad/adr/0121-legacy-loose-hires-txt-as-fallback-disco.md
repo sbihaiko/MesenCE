@@ -1,6 +1,6 @@
 # ADR-0121: Legacy loose hires.txt as fallback discovery signal in MEP zip wrapper folders
 
-- Status: accepted (2026-08-27 — option A chosen by the user; already shipped in `805cb10d` across Python, C# and C++; remaining doc item: MEP-v1 §2.1 rule 9 wording, folded into roadmap slice F6.1)
+- Status: accepted (2026-08-27 — option A chosen by the user; already shipped in `805cb10d` across Python, C# and C++; MEP-v1 §2.1 rule 9 wording shipped with F6.1)
 - Date: 2026-08-27
 - Extends ADR-0120 §2/§3 (subfolder fallback for wrapped zips). Motivated by issues #46, #47, #48.
 

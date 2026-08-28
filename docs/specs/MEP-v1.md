@@ -1,6 +1,6 @@
 # MEP v1 — MesenCE Enhancement Pack
 
-**Status:** v1.2 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer; 1.2 adds optional `targets[].md5` — all optional and backward-compatible) ·
+**Status:** v1.3 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer; 1.2 adds optional `targets[].md5`; 1.3 clarifies §2.1 rule 9 bare-basename discovery (ADR-0121) and §6 "as code" wording for recipes (ADR-0138) — all optional and backward-compatible) ·
 **License of this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mep/pack.json`](golden/mep/pack.json) ·
@@ -61,18 +61,22 @@ pack's author.
    `patches[]`, and explicit `sections`; its `targets` need not match
    (location is identity). When publishing, tools SHOULD generate the
    `pack.json` from the folder (`mep pack`).
-9. **Subfolder fallback (v1.1, last priority in the chain).** When a `.zip`
-   matches **none** of the conventions above — no `pack.json` at the root
-   **and** a file name different from the ROM's name (rule 5) — hosts MAY, as
-   a last resort before rejecting the pack, search the zip's already-known
-   entry list (depth and entry count limited, so as not to degenerate into an
-   unrestricted search) for a subfolder that looks like the pack root
-   (contains the fixed layout from rule 6) and use it as the effective
-   extraction root. This rule is strictly **additive and lowest priority**:
-   it runs only after the sibling folder, the named container, and the
-   root-level `pack.json` have all failed, and it never reorders the
-   precedence from rule 7. When there is more than one candidate subfolder,
-   the pack MUST be rejected for ambiguity — hosts MUST NOT guess.
+9. **Subfolder fallback (v1.1, last priority in the chain; v1.3 names the
+   legacy-basename signal).** When a `.zip` matches **none** of the
+   conventions above — no `pack.json` at the root **and** a file name
+   different from the ROM's name (rule 5) — hosts MAY, as a last resort
+   before rejecting the pack, search the zip's already-known entry list
+   (depth and entry count limited, so as not to degenerate into an
+   unrestricted search) for a subfolder that looks like the pack root and
+   use it as the effective extraction root. A subfolder is a candidate
+   when it contains any of: the fixed layout from rule 6; a `pack.json`;
+   or a bare `hires.txt`, `preset.cfg`, or `fingerprints.json` at that
+   subfolder's own root (the pre-MEP HD Mesen layout — ADR-0121). This
+   rule is strictly **additive and lowest priority**: it runs only after
+   the sibling folder, the named container, and the root-level `pack.json`
+   have all failed, and it never reorders the precedence from rule 7.
+   When there is more than one candidate subfolder, the pack MUST be
+   rejected for ambiguity — hosts MUST NOT guess.
 
    **Engine-vs-validators asymmetry (name vs structural — intentional).** The
    reference implementation (C++ engine, `PrepareZip`) resolves the fallback
@@ -211,7 +215,11 @@ underlying format allows it).
 
 - Hosts MUST reject, after path normalization, any zip entry that escapes
   the pack directory (zip-slip).
-- Hosts MUST NOT execute pack content; everything is declarative data.
+- Hosts MUST NOT execute pack content as code. Patches (`patches[]`,
+  ADR-0044) and recipes ([MEP-recipe-v1](MEP-recipe-v1.md)) are
+  declarative data interpreted by a fixed host vocabulary; hosts MUST
+  reject any recipe operation outside that vocabulary and any path that
+  escapes the pack directory.
 
 ## 7. Golden file
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1 specs and the hires-gbsms draft, and enforces
-the wire format of shared cross-language test fixtures (path-cases.txt, see
-ADR-0124). Exits with a non-zero code on the first violation. Run from the repo root:
+of the ESP v1, MEP v1, MEI v1, MEP-recipe v1 specs and the hires-gbsms draft,
+and enforces the wire format of shared cross-language test fixtures
+(path-cases.txt, see ADR-0124). Exits with a non-zero code on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
 """
 import json
@@ -157,18 +157,38 @@ def validate_path_cases(path):
             case_count += 1
     check(case_count > 0, f"{path.name}: no path case recognized")
 
+def validate_recipe(path):
+    """MEP-recipe-v1 golden: same rules as scripts/mep_recipe.py validate."""
+    import mep_recipe
+
+    try:
+        recipe = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        check(False, f"{path.name}: invalid JSON: {exc}")
+        return
+    for err in mep_recipe.validate_recipe(recipe):
+        check(False, f"{path.name}: {err}")
+    check(recipe.get("recipe") == 1, f"{path.name}: 'recipe' must be 1")
+    ops = recipe.get("ops") or []
+    check(any(op.get("op") == "copy" for op in ops), f"{path.name}: golden must exercise copy")
+    check(any(op.get("op") == "glob" for op in ops), f"{path.name}: golden must exercise glob")
+    check(any(op.get("op") == "rewrite-paths" for op in ops),
+          f"{path.name}: golden must exercise rewrite-paths")
+
+
 def main():
     validate_esp(SPECS / "golden" / "esp" / "EnhancedAudioPresets.cfg")
     validate_mep(SPECS / "golden" / "mep" / "pack.json")
     validate_mei(SPECS / "golden" / "mei" / "manifest.json")
     validate_hires_draft(SPECS / "golden" / "hires-gbsms" / "hires.txt")
     validate_path_cases(SPECS / "golden" / "mep" / "path-cases.txt")
+    validate_recipe(SPECS / "golden" / "mep-recipe" / "recipe.json")
     if _failures:
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
     print("validate-specs: all golden files conform "
-          "(ESP, MEP, MEI, hires-gbsms draft, path-cases format)")
+          "(ESP, MEP, MEI, MEP-recipe, hires-gbsms draft, path-cases format)")
 
 if __name__ == "__main__":
     main()

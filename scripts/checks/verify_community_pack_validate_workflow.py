@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structural checker for community-pack-validate.yml (AC-2, AC-6 validate-side).
+"""Structural checker for community-pack-validate.yml (AC-2, AC-6 validate-side, F6.0).
 
 Parses .github/workflows/community-pack-validate.yml with PyYAML and does
 targeted substring/regex checks against the raw text for facts that don't
@@ -178,6 +178,28 @@ def check_catalog_dispatch_gated_on_aceito(text):
         fail("community-pack-catalog.yml call is not gated on an Aceito* status")
 
 
+def check_classify_timeout(text):
+    # F6.0: the LLM classify step must carry timeout-minutes so a hung
+    # Claude Code Action cannot hold the runner for the job's 6-hour
+    # default. The autofix step is a different Claude Code Action and is
+    # not required to have the same cap.
+    blocks = [b for b in text.split("\n      - name:") if "Classify pack" in b]
+    if not blocks:
+        fail("Classify pack step not found")
+        return
+    classify = blocks[0]
+    if "timeout-minutes:" not in classify:
+        fail("Classify pack step has no timeout-minutes (F6.0)")
+        return
+    match = re.search(r"timeout-minutes:\s*(\d+)", classify)
+    if not match:
+        fail("Classify pack step timeout-minutes is not a positive integer")
+        return
+    minutes = int(match.group(1))
+    if minutes < 1:
+        fail(f"Classify pack step timeout-minutes must be >= 1, got {minutes}")
+
+
 CHECKS = (
     check_ids,
     check_project_number_only,
@@ -188,6 +210,7 @@ CHECKS = (
     check_claude_action,
     check_secret_name_comment,
     check_catalog_dispatch_gated_on_aceito,
+    check_classify_timeout,
 )
 
 
