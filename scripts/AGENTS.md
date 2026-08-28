@@ -126,10 +126,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   written by `community-pack-validate.yml`'s "Upsert mep-meta comment"
   step (no `gh`/network of its own) and decodes it, returning `None`
   instead of raising on any malformed input — missing marker, truncated
-  fence, invalid JSON, or a non-object JSON payload — so a caller (the
-  F6.3 catalog generator) can skip that one entry's recipe data and log a
-  warning rather than abort the whole catalog run. `test_mep_meta_parser.py`
-  is its framework-free acceptance check (well-formed block round-trips;
+  fence, invalid JSON, a non-object JSON payload, or a deeply nested JSON
+  payload (which trips `RecursionError`, not `JSONDecodeError`/
+  `ValueError`, and is caught explicitly) — so a caller (the F6.3 catalog
+  generator) can skip that one entry's recipe data and log a warning
+  rather than abort the whole catalog run. `test_mep_meta_parser.py` is
+  its framework-free acceptance check (well-formed block round-trips;
   each malformed-input shape above returns `None`; a second fenced block
   later in the comment is never mistaken for the first).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
@@ -296,8 +298,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   all pass.
 - `python3 scripts/test_mep_meta_parser.py` - `mep_meta_parser.parse_mep_meta`
   (F6.3, ADR-0138 §27): well-formed `<!-- mep-meta -->` block round-trips;
-  missing marker, truncated fence, invalid JSON, and a non-object JSON
-  payload all return `None`; PASS/FAIL per check, exit 0 only if all pass.
+  missing marker, truncated fence, invalid JSON, a non-object JSON
+  payload, and a deeply nested JSON payload (`RecursionError`, not
+  `ValueError`) all return `None` without raising; PASS/FAIL per check,
+  exit 0 only if all pass.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.

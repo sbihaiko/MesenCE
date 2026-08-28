@@ -2,8 +2,9 @@
 """Framework-free checks for scripts/mep_meta_parser.py (F6.3, ADR-0138 §27).
 
 AC-1: a well-formed `<!-- mep-meta -->` block parses to the expected dict;
-a missing marker, a truncated fence, invalid JSON, and a non-object JSON
-payload all return `None` without raising.
+a missing marker, a truncated fence, invalid JSON, a non-object JSON
+payload, and a deeply nested JSON payload (which trips a RecursionError,
+not a JSONDecodeError/ValueError) all return `None` without raising.
 
 Usage: python3 scripts/test_mep_meta_parser.py
 """
@@ -158,6 +159,26 @@ def check_non_object_payload_returns_none():
     ok("a valid but non-object JSON payload (a list) returns None")
 
 
+def check_deeply_nested_payload_returns_none_without_raising():
+    # A submitter-controlled comment body is attacker-influenced input
+    # (ADR-0138 §27): a deeply nested JSON array is well under GitHub's
+    # 65536-char comment limit (this one is ~4KB) yet blows the CPython
+    # json decoder's recursion limit, raising RecursionError rather than
+    # json.JSONDecodeError/ValueError. parse_mep_meta must swallow that
+    # too and return None instead of letting it propagate and abort the
+    # whole catalog run.
+    body = "<!-- mep-meta -->\n```json\n" + "[" * 2000 + "]" * 2000 + "\n```\n"
+    try:
+        parsed = mep_meta_parser.parse_mep_meta(body)
+    except RecursionError:
+        fail("deeply nested JSON payload raised RecursionError instead of returning None")
+        return
+    if parsed is not None:
+        fail(f"deeply nested JSON payload did not return None: {parsed!r}")
+        return
+    ok("deeply nested JSON payload returns None instead of raising RecursionError")
+
+
 def check_second_fenced_block_is_not_swallowed():
     body = "\n".join([
         "<!-- mep-meta -->",
@@ -186,6 +207,7 @@ def main():
     check_missing_fence_after_marker_returns_none()
     check_invalid_json_returns_none()
     check_non_object_payload_returns_none()
+    check_deeply_nested_payload_returns_none_without_raising()
     check_second_fenced_block_is_not_swallowed()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")

@@ -23,7 +23,8 @@ entry" rather than a fatal error: the function returns `None` and never
 raises, so a caller can skip that one catalog entry's recipe fields and
 log a warning instead of aborting the whole run. Issue/comment text is
 external, attacker-influenced input (a submitter could, in principle,
-post a comment that mimics the marker), so this function must stay
+post a comment that mimics the marker, or one shaped to blow the JSON
+decoder's recursion limit via deep nesting), so this function must stay
 defensive against garbage by construction, not by the caller remembering
 to wrap a try/except around it.
 
@@ -67,7 +68,10 @@ def parse_mep_meta(comment_body: str) -> dict | None:
     raw_json = fence_match.group(1)
     try:
         payload = json.loads(raw_json)
-    except (json.JSONDecodeError, ValueError):
+    except (ValueError, RecursionError):
+        # ValueError covers JSONDecodeError; RecursionError (a deeply
+        # nested payload) is a separate, non-ValueError case — see the
+        # module docstring's threat-model note.
         return None
     if not isinstance(payload, dict):
         return None
