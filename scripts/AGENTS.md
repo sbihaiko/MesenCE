@@ -44,13 +44,29 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
   validators and test-ROM/test-pack generators; no emulator dependency.
-  `validate-specs.py`'s MEI v1.1 catalog validation (`validate_mei`,
-  `validate_mei_catalog`, `MEI_KINDS`) is kind-aware: a "hd-legacy" pack
-  entry needs no `version`/`mep` (it predates MEP), `rom.sha1` MAY be
-  absent regardless of `kind`, and any `deps[]` entry MUST carry `license`
-  (docs/specs/MEI-v1.md §2.2/§2.3). `validate_mei_catalog()` runs those
-  rules over the golden and, when this checkout has a generated
-  `docs/community-packs.json`, over that catalog too.
+  `mei_rules.py` (F6.3b, ADR-0138 §28/§29) is the dependency-free leaf
+  holding the MEI v1.1 constraint set: `SYSTEMS`/`SHA1_UPPER`/`CRC32_UPPER`/
+  `MD5_UPPER`/`SHA256_HEX`/`SEMVER`/`MEI_KINDS`, the kind-conditional
+  `required_mei_pack_fields(kind)` (a "hd-legacy" pack needs no
+  `version`/`mep`; any other kind, including `None`, does -
+  docs/specs/MEI-v1.md §2.2/§2.3), and `mei_entry_conforms(entry, kind)`
+  (whether an assembled `packs[]` entry already carries a truthy value for
+  every field `required_mei_pack_fields` demands). It also holds the sole
+  Status-literal -> kind pairing in `scripts/` (`STATUS_TO_KIND`, §29) and
+  `resolve_kind(mep_meta, status)`, which prefers a valid mep-meta `kind`
+  and falls back to `STATUS_TO_KIND.get(status)`, returning `None` (never
+  a kind-less resolution) for an unmapped Status with no usable mep-meta
+  kind. `validate-specs.py` imports all of the above from this leaf
+  instead of defining a second, locally-duplicated copy; its MEI v1.1
+  catalog validation (`validate_mei`, `validate_mei_catalog`) is
+  otherwise unchanged and stays kind-aware: `rom.sha1` MAY be absent
+  regardless of `kind`, and any `deps[]` entry MUST carry `license`.
+  `validate_mei_catalog()` runs those rules over the golden and, when
+  this checkout has a generated `docs/community-packs.json`, over that
+  catalog too. `test_mei_rules.py` is the framework-free acceptance check
+  for the leaf (constant shapes, `required_mei_pack_fields`/
+  `mei_entry_conforms` per kind, `resolve_kind`'s mep-meta-first /
+  Status-fallback / None-when-unmapped precedence).
   `mep_lint.py` mirrors the ADR-0120 structural (name-agnostic) last-priority
   subfolder fallback that `Core::MepPack::FindFallbackSubfolder` (C++, name
   match) and `MepZipValidator.FindStructuralFallbackPrefix` (C#, structural
@@ -356,6 +372,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `make roles-probe` / `make capture-tool` / `make spike-sound-driver` -
   each depends on `make core` first.
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
+- `python3 scripts/test_mei_rules.py` (F6.3b) - `mei_rules.py` leaf: constant
+  shapes, `required_mei_pack_fields`/`mei_entry_conforms` per kind,
+  `resolve_kind`'s mep-meta-first / Status-fallback / None-when-unmapped
+  precedence; PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_recipe.py` - MEP Recipe v1 interpreter
   (unknown op / escaping path rejected; synthetic split-pack dry-run is
   `mep_lint`-clean) plus `assemble-sources` (absent/present/refused per
