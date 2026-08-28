@@ -46,14 +46,14 @@ from pathlib import Path
 
 import mep_lint
 from mep_recipe_assemble import assemble_sources, cmd_assemble_sources  # noqa: F401  (facade)
-from mep_recipe_common import RECIPE_VERSION, SHA256_HEX, RecipeError  # noqa: F401  (facade)
+from mep_recipe_common import RECIPE_VERSION, SHA256_HEX, RecipeError, find_fenced_block  # noqa: F401  (facade)
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SOURCE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 KNOWN_OPS = ("copy", "glob", "rename", "rewrite-paths")
 REWRITE_TAGS = ("bgm", "sfx", "img", "background", "patch")
 PATCH_SUFFIXES = (".ips", ".bps")
-FENCE = re.compile(r"```mep-recipe[^\n]*\n(.*?)```", re.DOTALL)
+FENCE = "mep-recipe"  # fence label; opener/closer matched by length via mep_recipe_common.find_fenced_block (ADR-0138 §33)
 
 
 def sha256_file(path: Path) -> str:
@@ -70,10 +70,10 @@ def load_recipe(path: Path) -> dict:
     if stripped.startswith("{"):
         data = json.loads(text)
     else:
-        match = FENCE.search(text)
-        if not match:
+        body = find_fenced_block(text, FENCE)
+        if body is None:
             raise RecipeError(f"{path}: not JSON and no ```mep-recipe block")
-        data = json.loads(match.group(1))
+        data = json.loads(body)
     if not isinstance(data, dict):
         raise RecipeError(f"{path}: recipe root must be an object")
     return data
