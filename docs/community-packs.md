@@ -13,10 +13,3 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | [link](https://github.com/sbihaiko/MesenCE/issues/70) | Duck Hunt (World) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/72) | Pac-Man (Namco, US, 1993) | NES | sbihaiko | Partial HD | 2026-08-27 |
 | [link](https://github.com/sbihaiko/MesenCE/issues/73) | Zelda II: The Adventure of Link (USA) | NES | sbihaiko | Partial HD | 2026-08-27 |
-
-## Most popular
-
-_Ranked by 👍 reactions on the submission issue. This is a popularity proxy,_
-_not a real usage metric — no usage telemetry is collected by this project._
-
-_no packs with reactions yet._
