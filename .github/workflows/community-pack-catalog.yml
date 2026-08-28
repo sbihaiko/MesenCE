@@ -1,7 +1,8 @@
 name: Community pack catalog
 
-# Regenerates docs/community-packs.md from the "MesenCE Community
-# Packs" board (Project 3, owner sbihaiko, node id PVT_kwHOB1MsbM4BhjpN).
+# Regenerates docs/community-packs.md and docs/community-packs.json from
+# the "MesenCE Community Packs" board (Project 3, owner sbihaiko, node id
+# PVT_kwHOB1MsbM4BhjpN).
 #
 # Trigger: workflow_dispatch only in this file. community-pack-validate.yml
 # also triggers this workflow (via `gh workflow run community-pack-catalog.yml`)
@@ -32,18 +33,18 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-      - name: Generate community-packs.md
+      - name: Generate community-packs.md and community-packs.json
         run: python3 scripts/generate_community_pack_catalog.py
 
       - name: Commit regenerated catalog
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/community-packs.md; then
-            echo "docs/community-packs.md unchanged, nothing to commit."
+          if git diff --quiet -- docs/community-packs.md docs/community-packs.json; then
+            echo "docs/community-packs.md and docs/community-packs.json unchanged, nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/community-packs.md
-          git commit -m "chore: regenerate docs/community-packs.md"
+          git add docs/community-packs.md docs/community-packs.json
+          git commit -m "chore: regenerate docs/community-packs.md and docs/community-packs.json"
           git push
