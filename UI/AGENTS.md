@@ -24,6 +24,13 @@ can be exercised by real xunit tests without Avalonia or the native
   files (via `<Compile Include>`, no `ProjectReference` to `UI.csproj`), so
   any accidental UI/native dependency breaks `dotnet test` immediately
   rather than only being caught in review (see `UI.Tests/AGENTS.md`).
+- `UI/Services/*.cs` (ADR-0138 §37/§41, F6.4b-2) is the host-aware layer
+  that drives the host-free `UI/Logic/Community*` decision classes -
+  `HttpClient`/`Avalonia`/`EmuApi` are all allowed there, and
+  `scripts/verify-ui-logic-firewall.sh` only greps `UI/Logic/*.cs`, never
+  `UI/Services/*.cs`. Keep the boundary intact the other direction: never
+  let an `Avalonia`/`EmuApi`/`HttpClient` dependency leak backward into
+  `UI/Logic/*.cs` while iterating on a `UI/Services/*.cs` caller.
 - `UI/Logic/*.cs` types return plain, host-free records/DTOs — never
   `ViewModelBase`/`ObservableObject` subtypes. The owning ViewModel maps
   the result into its UI-facing type (e.g. `MepPackListEntry` →

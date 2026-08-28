@@ -549,6 +549,11 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `./scripts/checks/verify_mep_fallback_lint_fixture.sh` and
   `./scripts/checks/verify_mep_fallback_constant_parity.sh` - see `checks/`
   above (AC-5/AC-6 of the MEP zip-fallback task).
+- `./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh` (AC-8,
+  F6.4b-2, ADR-0138 §41 PRIORITY 1) - asserts
+  `UI/Services/CommunityPackCatalogFetcher.cs` never references the
+  on-disk allow-list file-path overload or a repo-relative path literal
+  for `scripts/pack_host_allowlist.json`; see `checks/` above.
 
 ## Child DOX Index
 
