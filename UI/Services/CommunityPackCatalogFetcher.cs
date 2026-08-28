@@ -13,20 +13,18 @@ using System.Threading.Tasks;
 
 namespace Mesen.Services
 {
-	//Network-facing half of F6.4b-2 (ADR-0138 §37/§38/§41/§42/§46): fetches the MEI v1.1
-	//community-pack catalog, matches the loaded ROM by No-Intro sha1 (EmuApi.GetMepRomSha1),
-	//and downloads+verifies the matched entry's primary artifact and any directly-downloadable
-	//deps. The only class in UI/ issuing HTTP for community packs - Core/ stays HTTP-free (§37)
-	//and UI/Logic/*.cs stays host-free (UI/AGENTS.md firewall), hence UI/Services/.
-	//CONTRACT (shared with CommunityPackInstallCoordinator, T2): FetchMatchingPackAsync
-	//returns exactly a matched Mesen.Logic catalog-entry DTO plus the verified primary pack's
-	//local path and a dep-id -> verified local path map for deps downloaded directly - nothing
-	//more. Never resolves a `user_supplied` dep (CommunityPackDepResolver, §4), never gates on
-	//CommunityPackReinstallDecision/CommunityPackConsentState (§43/§38), never calls
-	//EmuApi.InstallMepRecipe - the coordinator owns everything downstream of this result.
-	//§41 (PRIORITY 1): allow-list loaded ONLY via Assembly.GetExecutingAssembly()
-	//.GetManifestResourceStream on the logical name below, never the on-disk file-path overload
-	//or a repo-relative path - a published app has no scripts/ tree (backed by verify_fetcher_no_filesystem_allowlist_load.sh).
+	//Network-facing half of F6.4b-2 (ADR-0138 §37/§38/§41/§42/§46): fetches the MEI v1.1 catalog,
+	//matches the loaded ROM by No-Intro sha1 (EmuApi.GetMepRomSha1), downloads+verifies the
+	//matched entry's primary artifact and its directly-downloadable deps. Only class in UI/
+	//issuing HTTP for community packs - Core/ stays HTTP-free (§37), UI/Logic/*.cs stays
+	//host-free (UI/AGENTS.md firewall), hence UI/Services/. CONTRACT (shared with
+	//CommunityPackInstallCoordinator, T2): FetchMatchingPackAsync returns exactly a matched
+	//Mesen.Logic catalog-entry DTO plus the verified primary path and a dep-id -> verified path
+	//map for deps downloaded directly - never resolves a `user_supplied` dep (§4), never gates
+	//on CommunityPackReinstallDecision/CommunityPackConsentState (§43/§38), never calls
+	//EmuApi.InstallMepRecipe (the coordinator owns everything downstream). §41 (PRIORITY 1):
+	//allow-list loaded ONLY via Assembly.GetExecutingAssembly().GetManifestResourceStream, never
+	//the on-disk file-path overload or a repo-relative path (verify_fetcher_no_filesystem_allowlist_load.sh).
 	public static class CommunityPackCatalogFetcher
 	{
 		private const string CatalogUrl = "https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/community-packs.json";
@@ -44,8 +42,8 @@ namespace Mesen.Services
 				return null;
 			}
 
-			string? catalogJson = await LoadCatalogJsonAsync();
-			CommunityPackCatalogEntry? entry = catalogJson == null ? null : FindMatchingEntry(catalogJson, romSha1);
+			CommunityPackCatalog? catalog = await LoadCatalogAsync();
+			CommunityPackCatalogEntry? entry = catalog == null ? null : FindMatchingEntry(catalog, romSha1);
 			if(entry == null) {
 				return null;
 			}
@@ -60,24 +58,18 @@ namespace Mesen.Services
 			return new CommunityPackFetchResult(entry, primaryPath, depPaths);
 		}
 
-		private static CommunityPackCatalogEntry? FindMatchingEntry(string catalogJson, string romSha1)
+		private static CommunityPackCatalogEntry? FindMatchingEntry(CommunityPackCatalog catalog, string romSha1)
 		{
-			CommunityPackCatalog? catalog = (CommunityPackCatalog?)JsonSerializer.Deserialize(
-				catalogJson, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
-			if(catalog == null) {
-				return null;
-			}
 			foreach(CommunityPackCatalogEntry entry in catalog.Packs) {
-				if(!string.IsNullOrWhiteSpace(entry.Rom.Sha1) &&
-					string.Equals(entry.Rom.Sha1, romSha1, StringComparison.OrdinalIgnoreCase)) {
+				if(!string.IsNullOrWhiteSpace(entry.Rom?.Sha1) &&
+					string.Equals(entry.Rom!.Sha1, romSha1, StringComparison.OrdinalIgnoreCase)) {
 					return entry;
 				}
 			}
 			return null;
 		}
 
-		//Downloads deps with a URL+sha256 that are not `user_supplied` - the rest are left for
-		//CommunityPackInstallCoordinator to resolve via CommunityPackDepResolver instead (§4).
+		//Downloads deps with a URL+sha256 that aren't `user_supplied`; the rest are left for CommunityPackInstallCoordinator/CommunityPackDepResolver to resolve instead (§4).
 		private static async Task<Dictionary<string, string>> DownloadDepsAsync(
 			CommunityPackCatalogEntry entry, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
@@ -104,20 +96,30 @@ namespace Mesen.Services
 			return stream == null ? Array.Empty<CommunityPackHostEntry>() : CommunityPackHostAllowlist.LoadFromStream(stream);
 		}
 
-		//ETag/If-None-Match caching (§37/§41): CommunityCatalogCacheDecision is the pure decision; this method only does the I/O.
-		private static async Task<string?> LoadCatalogJsonAsync()
+		//ETag/If-None-Match caching (§37/§41): CommunityCatalogCacheDecision is the pure decision; this does the I/O.
+		//Never persists/returns a body that hasn't parsed as a real catalog - a non-JSON 200, or an explicit JSON "packs": null, degrades to null like any other failure, never an unhandled throw or a bad body cached for replay.
+		private static async Task<CommunityPackCatalog?> LoadCatalogAsync()
 		{
-			Directory.CreateDirectory(CacheFolder);
-			string? cachedBody = File.Exists(CatalogCachePath) ? await File.ReadAllTextAsync(CatalogCachePath) : null;
-			string? cachedETag = File.Exists(CatalogEtagPath) ? await File.ReadAllTextAsync(CatalogEtagPath) : null;
-			bool cacheUsable = CommunityCatalogCacheDecision.IsCacheUsable(cachedETag, cachedBody);
+			try {
+				Directory.CreateDirectory(CacheFolder);
+				string? cachedBody = File.Exists(CatalogCachePath) ? await File.ReadAllTextAsync(CatalogCachePath) : null;
+				string? cachedETag = File.Exists(CatalogEtagPath) ? await File.ReadAllTextAsync(CatalogEtagPath) : null;
+				bool cacheUsable = CommunityCatalogCacheDecision.IsCacheUsable(cachedETag, cachedBody);
 
-			CommunityCatalogFetchOutcome outcome = await FetchCatalogOutcomeAsync(cacheUsable ? cachedETag : null);
-			CommunityCatalogCacheResult resolved = CommunityCatalogCacheDecision.Resolve(outcome, cachedETag, cachedBody);
-			if(resolved.ShouldWriteCache) {
-				await WriteCatalogCacheAsync(resolved.Body, outcome.ETag);
+				CommunityCatalogFetchOutcome outcome = await FetchCatalogOutcomeAsync(cacheUsable ? cachedETag : null);
+				CommunityCatalogCacheResult resolved = CommunityCatalogCacheDecision.Resolve(outcome, cachedETag, cachedBody);
+				CommunityPackCatalog? catalog = string.IsNullOrWhiteSpace(resolved.Body) ? null :
+					(CommunityPackCatalog?)JsonSerializer.Deserialize(resolved.Body, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
+				if(catalog?.Packs == null) {
+					return null;
+				}
+				if(resolved.ShouldWriteCache) {
+					await WriteCatalogCacheAsync(resolved.Body, outcome.ETag);
+				}
+				return catalog;
+			} catch(Exception) {
+				return null;
 			}
-			return resolved.Verdict == CommunityCatalogCacheVerdict.Cold ? null : resolved.Body;
 		}
 
 		private static async Task<CommunityCatalogFetchOutcome> FetchCatalogOutcomeAsync(string? ifNoneMatchETag)
@@ -146,8 +148,7 @@ namespace Mesen.Services
 			}
 		}
 
-		//Gates through the host allow-list (§41, MatchHost), then verifies SHA256 against the
-		//catalog's declared hash; an existing .cache/downloads/ copy is reused only if it still matches.
+		//Gates through the host allow-list (§41, MatchHost), then verifies SHA256 against the catalog's declared hash; an existing .cache/downloads/ copy is reused only if it still matches.
 		private static async Task<string?> DownloadAndVerifyAsync(
 			string url, string expectedSha256, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
@@ -190,8 +191,7 @@ namespace Mesen.Services
 		}
 	}
 
-	//Shared shape with CommunityPackInstallCoordinator (T2): the matched entry, the verified
-	//primary path, and a dep-id -> path map covering only deps downloaded directly (never `user_supplied`).
+	//Shared shape with CommunityPackInstallCoordinator (T2): matched entry, verified primary path, and a dep-id -> path map covering only deps downloaded directly (never `user_supplied`).
 	public sealed record CommunityPackFetchResult(
 		CommunityPackCatalogEntry Entry,
 		string PrimaryPackPath,
