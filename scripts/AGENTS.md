@@ -233,8 +233,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   MAY-be-absent regardless of `kind`, and `validate_mei` itself checks
   `field in p`, never truthiness, for every field.
   `community_pack_markdown.py` (F6.3b, new) holds the Markdown rendering
-  — its "Author" column is the Issue Form's declared `Author/credits`
-  (who made the pack), never the issue login, and `render_table` orders
+  — its "Author" column is mep-meta's `author`, which the classify step
+  reads off the pack itself (the Issue Form stopped asking; its old
+  `Author/credits` answer is only a fallback for issues that predate the
+  change), never the issue login, and `render_table` orders
   rows most-👍-first, which replaced the old `render_popular_section`
   (it re-listed the same packs) along with the Link / Submitted by /
   Category / External assets columns — Link folded into the 👍 cell,

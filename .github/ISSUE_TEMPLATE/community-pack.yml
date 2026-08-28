@@ -1,6 +1,6 @@
 name: "Community HD/MEP Pack Submission"
 description: >-
-  Share an HD or MEP pack you love — four fields, and a bot takes it from
+  Share an HD or MEP pack you love — three fields, and a bot takes it from
   there.
 title: "[Pack] "
 labels:
@@ -9,7 +9,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Four fields and you're done.** 🎮
+        **Three fields and you're done.** 🎮
 
         The moment you hit *Create*, a bot downloads the pack, checks it, and
         **posts the result right here as a comment** — usually within a few
@@ -44,41 +44,6 @@ body:
         - Other
     validations:
       required: true
-  - type: input
-    id: author_credits
-    attributes:
-      label: "Author/credits"
-      description: "Who made the pack? Credit them here — it goes in the catalog."
-      placeholder: "E.g.: some-author, with textures by someone-else"
-    validations:
-      required: true
-  - type: textarea
-    id: description
-    attributes:
-      label: "Description (optional)"
-      description: "Anything else worth knowing — what it covers, how it looks, install notes."
-    validations:
-      required: false
-  - type: textarea
-    id: external_assets
-    attributes:
-      label: "External assets (optional)"
-      description: >-
-        Only if part of the pack lives elsewhere (e.g. big audio files). One
-        per line: `<url> <sha256> [<size>]` — `sha256sum <file>` gives you the
-        hash.
-      placeholder: |
-        https://example.com/asset.zip 3b1e...c0 1048576
-    validations:
-      required: false
-  - type: input
-    id: external_assets_license
-    attributes:
-      label: "External assets license (optional)"
-      description: "License covering those separately-hosted files, if you know it."
-      placeholder: "E.g.: CC-BY-4.0"
-    validations:
-      required: false
   - type: markdown
     attributes:
       value: |

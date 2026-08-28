@@ -5,14 +5,14 @@ and docs/community-packs.json.
 Fetches accepted items from the "MesenCE Community Packs" board (Project 3,
 owner sbihaiko) via `gh project item-list`, then per issue via `gh issue view`
 plus the bot-owned `<!-- mep-meta -->` comment (`mep_meta_parser.parse_mep_
-meta`, ADR-0138 §27). Delegates MEI entry assembly (kind
-"mep"/"hd-legacy" derivation/validation, §26/§28) to `mei_catalog_entry`
-and Markdown rendering (the Game/Console/Author/Date/👍 table, whose 👍 cell
-links to the submission issue -- Author
-is the form's declared pack author, never the issue login; rows ordered via
-`sorted(rows, key=lambda r: r['thumbs_up'], reverse=True)` on community 👍 votes
--- no usage telemetry is collected -- which replaced the old "Most popular"
-section that re-listed the same packs) to `community_pack_markdown`,
+meta`, ADR-0138 §27), whose `author` is the catalog's Author column (the
+classify step reads it off the pack; the Issue Form no longer asks, and the
+old form field is only a fallback for issues that predate the change).
+Delegates MEI entry assembly (kind "mep"/"hd-legacy" derivation/validation,
+§26/§28) to `mei_catalog_entry` and Markdown rendering (the Game/Console/
+Author/Date/👍 table, whose 👍 cell links to the submission issue; rows ordered
+via `sorted(rows, key=lambda r: r['thumbs_up'], reverse=True)` on
+community 👍 votes, no usage telemetry) to `community_pack_markdown`,
 then writes docs/community-packs.md and docs/community-packs.json
 (JSON_OUTPUT_PATH) via json.dumps()/.write_text(). Re-exports `build_pack_
 entry`/`mei_entry_conforms`/`normalized_rom_sha1`/`STATUS_MEP_COMPLETO`/
@@ -56,14 +56,11 @@ def run_gh(args):
 def fetch_accepted_items():
     """Lists the Project 3 items whose Status is one of the two "Aceito*" states.
 
-    CONFIRMED live (gh 2.83.1): `gh project field-list 3 --owner sbihaiko --format json`
-    confirms the Status field id (PVTSSF_lAHOB1MsbM4BhjpNzhge86c) and the Pack Hash one
-    (PVTF_lAHOB1MsbM4BhjpNzhge9Is) against the real GitHub API. Per-item key names from
-    `gh project item-list 3 --owner sbihaiko --format json` remain an open COVERAGE GAP:
-    that call returned zero items at write time (`{"items":[],"totalCount":0}`) -- a gap in
-    the live datastore itself, not merely a cached view -- so any negative/absent-key
-    conclusion here is qualified by it, as are the Pack URL/Pack Hash/ROM SHA1 reads
-    below; all use defensive `dict.get` lookups, not direct indexing.
+    CONFIRMED live (gh 2.83.1) against the real GitHub API: the Status field id
+    (PVTSSF_lAHOB1MsbM4BhjpNzhge86c) and the Pack Hash one (PVTF_lAHOB1MsbM4BhjpNzhge9Is).
+    Per-item key names remain an open COVERAGE GAP -- `gh project item-list` returned zero
+    items at write time -- so this and the Pack URL/Hash/ROM SHA1 reads below all use
+    defensive `dict.get` lookups instead of direct indexing.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])
@@ -161,6 +158,10 @@ def _build_entry_for_accepted_item(item):
         return markdown.build_row(None, status, {}, empty_form), None
     details = fetch_issue_details(issue_number)
     form = issue_form_fields(details)
+    mep_meta = _fetch_mep_meta(issue_number)
+    # Authorship comes from the pack itself (classify writes it into mep-meta);
+    # the form field is only a fallback for issues that predate that change.
+    form["credits"] = (mep_meta or {}).get("author") or form["credits"]
     pack_url, pack_hash = item_pack_url(item), item_pack_hash(item)
     system = (form["console"] or "?").strip().lower()
     if not entry_mod.mei_entry_preconditions_ok(pack_url, pack_hash, system):
@@ -169,8 +170,7 @@ def _build_entry_for_accepted_item(item):
     entry, mismatch = build_pack_entry(
         issue_number=issue_number, game=form["game"].strip(), system=system,
         license_=form["license"], pack_url=pack_url, pack_hash=pack_hash,
-        rom_sha1=item_rom_sha1(item), status=status,
-        mep_meta=_fetch_mep_meta(issue_number),
+        rom_sha1=item_rom_sha1(item), status=status, mep_meta=mep_meta,
     )
     if mismatch:
         _warn(f"issue #{issue_number}: mep-meta source_sha256 disagrees with Pack Hash; omitting deps/recipe.")

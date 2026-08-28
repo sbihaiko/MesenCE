@@ -5,12 +5,14 @@ Confirms that the file is a GitHub Issue Form (not a free-text issue) with:
 - pack link field (URL)
 - target game/ROM + region field
 - console dropdown (NES/GB/GBC/SMS/Other — no SNES: not a product console on main)
-- author/credits field
-- optional description field
-- optional external_assets field documenting the ADR-0138 §12 grammar
-- optional external_assets_license field
 - labels: [community-pack]
 - link to docs/hd-pack-authoring.md
+- nothing else asked of the submitter: the form was cut down to those three
+  required fields, so this check also asserts the author/credits, description,
+  external_assets and external_assets_license fields are GONE. Authorship is
+  discovered by the classify step from the pack itself; the recipe parser
+  still accepts an "External assets" section typed into an issue body by
+  hand, it is simply no longer a form field.
 
 No dependencies beyond PyYAML (already used by other checks in the repo).
 """
@@ -23,14 +25,6 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "community-pack.yml"
 
 CONSOLE_OPTIONS = {"nes", "gb", "gbc", "sms", "other"}
-
-# ADR-0138 §12: substrings the `external_assets` field description must
-# carry to actually document the per-line dependency grammar, not just
-# gesture at "external assets" — one keyword per grammar concept (the
-# `<url> [<sha256>] [<size>]` shape, the sha256/hex-length constraint, the
-# per-line/comment-line parsing rule).
-EXTERNAL_ASSETS_GRAMMAR_KEYWORDS = ("<url>", "sha256", "line")
-
 
 def fail(msg):
     print(f"FAIL: {msg}")
@@ -114,60 +108,16 @@ def check_console_dropdown(dropdowns):
     fail(f"no dropdown covers the expected options {sorted(CONSOLE_OPTIONS)}")
 
 
-def check_author_field(inputs):
-    matches = [
-        e
-        for e in inputs
-        if "author" in str(e.get("id", "")).lower()
-        or "credit" in str(e.get("id", "")).lower()
-    ]
-    if not matches:
-        fail("no author/credits 'input' field found")
-
-
-
-def check_optional_description(textareas):
-    matches = [e for e in textareas if "descri" in str(e.get("id", "")).lower()]
-    if not matches:
-        fail("no description 'textarea' field found")
-    for textarea in matches:
-        validations = textarea.get("validations") or {}
-        if validations.get("required") is True:
-            fail("description field should be optional, but is marked required")
-
-
-def check_optional_external_assets(textareas):
-    matches = [e for e in textareas if str(e.get("id", "")) == "external_assets"]
-    if not matches:
-        fail("no 'external_assets' textarea field found")
-    for textarea in matches:
-        if is_required(textarea):
-            fail("external_assets field should be optional, but is marked required")
-        description = str(textarea.get("attributes", {}).get("description", ""))
-        missing = [
-            kw
-            for kw in EXTERNAL_ASSETS_GRAMMAR_KEYWORDS
-            if kw.lower() not in description.lower()
-        ]
-        if missing:
-            fail(
-                "external_assets description does not document the ADR-0138 "
-                f"§12 grammar (missing: {missing})"
-            )
-
-
-def check_optional_external_assets_license(inputs):
-    matches = [
-        e for e in inputs if str(e.get("id", "")) == "external_assets_license"
-    ]
-    if not matches:
-        fail("no 'external_assets_license' input field found")
-    for field in matches:
-        if is_required(field):
-            fail(
-                "external_assets_license field should be optional, but is "
-                "marked required"
-            )
+def check_removed_fields(body):
+    """The four fields the simplified form dropped must not come back
+    silently: each one was either asking the submitter for something the
+    automation can find on its own (author/credits) or for optional detail
+    that made the form long enough to need reading first."""
+    removed = {"author_credits", "description", "external_assets",
+               "external_assets_license"}
+    present = {str(e.get("id")) for e in body if isinstance(e, dict)} & removed
+    if present:
+        fail(f"form asks for field(s) that were deliberately removed: {sorted(present)}")
 
 
 def main():
@@ -179,12 +129,10 @@ def main():
     check_pack_link(by_type.get("input", []))
     check_rom_target(by_type.get("input", []))
     check_console_dropdown(by_type.get("dropdown", []))
-    check_author_field(by_type.get("input", []))
-    check_optional_description(by_type.get("textarea", []))
-    check_optional_external_assets(by_type.get("textarea", []))
-    check_optional_external_assets_license(by_type.get("input", []))
+    check_removed_fields(data["body"])
 
-    print("PASS: community-pack.yml is a valid Issue Form with all required fields")
+    print("PASS: community-pack.yml is a valid Issue Form asking only for "
+          "pack link, game/ROM and console")
     return 0
 
 

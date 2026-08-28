@@ -38,22 +38,25 @@ what CI actually runs; this doc records why they're split the way they are.
   workflow file itself carries no restatement of them, so read them here,
   not there, and keep this doc in sync when either side changes.
 - `ISSUE_TEMPLATE/community-pack.yml` — GitHub Issue Form for community
-  HD/MEP pack submissions (not a free-text issue): pack link, target
-  game/ROM + region, console dropdown, and author/credits are required;
-  description is optional; `external_assets` (optional `textarea`) and
-  `external_assets_license` (optional single-line `input`) are the
-  ADR-0138 §12 split-distribution fields — `external_assets` is one
-  `<url> [<sha256>] [<size>]` dependency per non-empty line (`#`-comment
-  and blank lines ignored; a line missing `sha256` disables recipe
-  assembly for the whole submission), and its description documents that
-  grammar in condensed form — `<url> <sha256> [<size>]`, hash shown as
-  required, comment lines unmentioned: a submitter never needs those
-  details to submit, and the parser still accepts the full grammar. There
-  is no distribution-rights checkbox (dropped in `b62f0bbc`). The form is
-  deliberately short — an intro that promises four fields and a bot
-  comment with the result, one-line field descriptions, and the
-  `docs/hd-pack-authoring.md` link demoted to a closing note explicitly
-  marked as not required reading. Sets `labels: [community-pack]`. Structurally checked by
+  HD/MEP pack submissions (not a free-text issue). Deliberately minimal:
+  pack link, target game/ROM + region and a console dropdown, all
+  required, and nothing else. An intro promising three fields plus a bot
+  comment with the result, one-line field descriptions, and a closing
+  `docs/hd-pack-authoring.md` link explicitly marked as not required
+  reading. Sets `labels: [community-pack]`.
+  Removed on purpose (`verify_community_pack_issue_template.py` fails if
+  any comes back): `author_credits` — the classify step discovers
+  authorship from the pack's own manifest/README and records it as
+  mep-meta's `author`, which is what the catalog's Author column reads;
+  `description`; and the ADR-0138 §12 split-distribution pair
+  `external_assets`/`external_assets_license`. The recipe parser still
+  accepts an "External assets" section typed into an issue body by hand
+  (`<url> [<sha256>] [<size>]` per non-empty line, `#`-comments and blank
+  lines ignored, a line missing `sha256` disabling recipe assembly), so
+  the pipeline behind it is unchanged — a submission simply no longer
+  asks for it, and its `license` therefore defaults to "unknown".
+  There is no distribution-rights checkbox either (dropped in
+  `b62f0bbc`). Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
 - `workflows/community-pack-submitted.yml` — trigger-only wrapper that
   extracts the pack URL and mode, then calls the reusable validate

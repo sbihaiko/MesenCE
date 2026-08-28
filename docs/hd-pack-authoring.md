@@ -91,17 +91,24 @@ Some releases cannot ship a single self-contained zip: the textures/patch
 live in your release, but the referenced audio (or another dependency) is
 distributed separately — for example because it is too large for the CI
 download cap, or because you do not hold redistribution rights for the
-audio files themselves. For this case the submission form has two optional
-fields, `external_assets` and `external_assets_license`, that let triage
-assemble a **MEP Recipe** — a declarative instruction set (never executable
-code) that tells the host how to combine your primary pack with the
-externally-hosted files at install time. The full normative vocabulary is
-[`docs/specs/MEP-recipe-v1.md`](specs/MEP-recipe-v1.md) (ADR-0138); this
-section only explains what to put in the form.
+audio files themselves. For this case triage can assemble a **MEP
+Recipe** — a declarative instruction set (never executable code) that
+tells the host how to combine your primary pack with the externally-hosted
+files at install time — from two optional sections, `external_assets` and
+`external_assets_license`.
+
+The submission form no longer asks for them (it is down to three required
+fields), so add them yourself: after opening the issue, edit its body and
+append the sections in the same shape the form used to produce, i.e. a
+`### External assets (optional)` heading followed by your dependency
+lines, and a `### External assets license (optional)` heading followed by
+the license. The parser reads them exactly as before. The full normative
+vocabulary is [`docs/specs/MEP-recipe-v1.md`](specs/MEP-recipe-v1.md)
+(ADR-0138); this section only explains what to put in them.
 
 ### `external_assets`
 
-An optional multi-line field. One dependency per non-empty line; blank
+A multi-line section. One dependency per non-empty line; blank
 lines and lines whose first non-space character is `#` are ignored. Each
 line is whitespace-separated:
 
@@ -124,7 +131,7 @@ its hash and how to add it before commenting `/revalidate`.
 
 ### `external_assets_license`
 
-An optional single-line field for the declared license of the files listed
+An optional single-line section for the declared license of the files listed
 in `external_assets` (e.g. an SPDX identifier or a short free-text
 description). This is shown to installers before the dependency is used —
 it does not replace your own distribution-rights responsibility for the
