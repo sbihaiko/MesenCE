@@ -609,6 +609,11 @@
     <EmbeddedResource Include="Dependencies.zip" />
     <EmbeddedResource Include="Localization\resources.en.xml" WithCulture="false" Type="Non-Resx" />
     <EmbeddedResource Include="Utilities\DipSwitchDefinitions.xml" />
+    <!-- ADR-0138 §41: single source of truth is scripts/pack_host_allowlist.json;
+         CommunityPackCatalogFetcher loads it via GetManifestResourceStream using
+         this exact LogicalName, never a repo-relative filesystem path (a published
+         app has no scripts/ tree). -->
+    <EmbeddedResource Include="../scripts/pack_host_allowlist.json" LogicalName="Mesen.pack_host_allowlist.json" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaXaml Update="Controls\FirmwareSelect.axaml">

@@ -217,11 +217,17 @@ check-manifest:
 #ADR-0137: repo-hygiene guardrails wired into one make target so CI fails
 #the PR instead of relying on someone running these checks by hand.
 #Depends on check-manifest (kept separate, not duplicated) then runs the
-#three orphaned shell checks in order, failing on the first non-zero exit.
+#orphaned shell checks in order, failing on the first non-zero exit.
+#ADR-0138 §41: the three F6.4b-2 guardrails (host allow-list embed parity,
+#Core stays HTTP-client-free, the fetcher never loads the allow-list from
+#the filesystem) join the same target.
 doc-checks: check-manifest
 	./scripts/verify-fase0-1-dox.sh
 	./scripts/verify-ui-logic-firewall.sh
 	./scripts/check-file-loc.sh Core/Shared/Audio/MidiExporter.cpp 200
+	./scripts/checks/verify_pack_host_allowlist_embed.sh
+	./scripts/checks/verify_core_no_http_client.sh
+	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
 
 ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p $(OUTFOLDER)/Dependencies
