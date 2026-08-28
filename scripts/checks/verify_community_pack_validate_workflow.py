@@ -200,6 +200,59 @@ def check_classify_timeout(text):
         fail(f"Classify pack step timeout-minutes must be >= 1, got {minutes}")
 
 
+CLASSIFY_TOP_LEVEL_REQUIRED = '"required":["verdict","assets","comment"]'
+CLASSIFY_RECIPE_FRAGMENT_REQUIRED = '"required":["ops","deps","pack"]'
+CLASSIFY_SOURCES_HASH_PROPERTY = '"sources":{"type"'
+
+
+def _classify_block(text):
+    blocks = [b for b in text.split("\n      - name:") if "Classify pack" in b]
+    if not blocks:
+        fail("Classify pack step not found")
+        return None
+    return blocks[0]
+
+
+def check_classify_recipe_fragment_required(text):
+    # F6.2b (ADR-0138 §4): classify's --json-schema gains an OPTIONAL
+    # nested `recipe` property (the non-derivable ops/deps/pack fragment)
+    # whose OWN `required` array is exactly ["ops","deps","pack"] — this
+    # is separate from, and does not replace, the top-level required list.
+    classify = _classify_block(text)
+    if classify is None:
+        return
+    if CLASSIFY_RECIPE_FRAGMENT_REQUIRED not in classify:
+        fail(
+            "Classify pack --json-schema missing nested recipe-fragment "
+            f"required literal: {CLASSIFY_RECIPE_FRAGMENT_REQUIRED}"
+        )
+
+
+def check_classify_top_level_required_unchanged(text):
+    # Adding the optional `recipe` property must never make it, or
+    # anything else, required at the top level (ADR-0138 §2: the gate is
+    # inert when classify emits no recipe at all).
+    classify = _classify_block(text)
+    if classify is None:
+        return
+    if CLASSIFY_TOP_LEVEL_REQUIRED not in classify:
+        fail(
+            "Classify pack --json-schema top-level required literal changed "
+            f"or missing: {CLASSIFY_TOP_LEVEL_REQUIRED}"
+        )
+
+
+def check_classify_schema_no_sources_field(text):
+    # ADR-0138 §4: classify (the LLM) never computes hashes, so `sources`
+    # (the hash-bearing block) MUST NOT appear anywhere in this file's
+    # schemas — it is only ever built by a deterministic step.
+    if CLASSIFY_SOURCES_HASH_PROPERTY in text:
+        fail(
+            "a 'sources' schema property was found — classify must never "
+            "emit/validate a sources/hash field (ADR-0138 §4)"
+        )
+
+
 CHECKS = (
     check_ids,
     check_project_number_only,
@@ -211,6 +264,9 @@ CHECKS = (
     check_secret_name_comment,
     check_catalog_dispatch_gated_on_aceito,
     check_classify_timeout,
+    check_classify_recipe_fragment_required,
+    check_classify_top_level_required_unchanged,
+    check_classify_schema_no_sources_field,
 )
 
 

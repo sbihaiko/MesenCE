@@ -85,7 +85,18 @@ what CI actually runs; this doc records why they're split the way they are.
   workflow only documents those names, never creates them. See
   `scripts/checks/verify_community_pack_validate_workflow.py` for its
   structural contract.
-- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, not yet implemented).**
+- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, partially implemented).**
+  The "Classify pack" step's `--json-schema` now carries an OPTIONAL
+  nested `recipe` property (`ops`/`deps`/`pack`, per
+  `docs/specs/MEP-recipe-v1.md`) with its own `"required":["ops","deps","pack"]`
+  — separate from, and never added to, the unchanged top-level
+  `"required":["verdict","assets","comment"]` — because classify (the LLM)
+  never computes a hash: no `sources` block or hash-bearing field exists
+  anywhere in this schema (ADR-0138 §4). The prompt states this
+  explicitly. Checked by `verify_community_pack_validate_workflow.py`'s
+  `check_classify_recipe_fragment_required`,
+  `check_classify_top_level_required_unchanged`, and
+  `check_classify_schema_no_sources_field`.
   `community-pack-validate.yml`'s future assembly step writes the MEP
   Recipe to `$RUNNER_TEMP/mep_recipe.json` — a GitHub Actions runner-local
   temp path, never a path inside the checkout, so the recipe can never be
@@ -101,9 +112,8 @@ what CI actually runs; this doc records why they're split the way they are.
   branch, `apply-verdict`'s downgrade expression, and the mep-meta
   `recipe_hash` comment — branches on this enum instead of re-deriving
   "is there a recipe?". This bullet only records the contract in prose;
-  the assembly step, the gate, and the workflow's own structural verifier
-  are F6.2b and are out of scope for this slice. Checked by
-  `scripts/checks/verify_agents_md_recipe_handoff.sh`.
+  the assembly step and the gate are the remaining, not-yet-implemented
+  part of F6.2b. Checked by `scripts/checks/verify_agents_md_recipe_handoff.sh`.
 
 ## Work Guidance
 
