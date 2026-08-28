@@ -93,12 +93,14 @@ CHECKS = (
     apply_verdict.check_apply_verdict_downgrade_expression,
     apply_verdict.check_apply_verdict_external_label_branch,
     apply_verdict.check_apply_verdict_exposes_outputs,
+    apply_verdict.check_apply_verdict_kind_matches_mei_rules_status_to_kind,
     mep_meta.check_mep_meta_step_present_and_not_gated_on_recipe_status,
     mep_meta.check_mep_meta_find_then_patch,
     mep_meta.check_mep_meta_marker_in_comment_body,
     mep_meta.check_mep_meta_provenance_line,
     mep_meta.check_mep_meta_body_built_via_python_json,
     mep_meta.check_mep_meta_omits_deps_and_recipe_hash_when_absent,
+    mep_meta.check_mep_meta_fence_not_hardcoded,
 )
 
 

@@ -99,6 +99,27 @@ def check_mep_meta_body_built_via_python_json(text):
         fail("Upsert mep-meta comment step does not call json.dumps/json.dump to build the comment body/payload")
 
 
+def check_mep_meta_fence_not_hardcoded(text):
+    # T4 (ADR-0138 §33): json.dumps does not escape backticks, so a
+    # hardcoded exactly-3-backtick fence truncates early when the payload
+    # itself (a submitter-supplied hints/license value inside the embedded
+    # recipe) contains a run of 3+ backticks. The writer must compute its
+    # fence length via the shared "shortest safe fence" rule
+    # (mep_recipe_common.choose_fence) instead of a literal ```json/```
+    # pair.
+    block = _mep_meta_block(text)
+    if block is None:
+        return
+    if '"```json"' in block:
+        fail("Upsert mep-meta comment step still hardcodes a fixed-length ```json opening fence")
+    if '"```",' in block:
+        fail("Upsert mep-meta comment step still hardcodes a fixed-length ``` closing fence")
+    if "mep_recipe_common" not in block:
+        fail("Upsert mep-meta comment step does not import mep_recipe_common for the shared fence rule")
+    if "choose_fence(" not in block:
+        fail("Upsert mep-meta comment step never calls choose_fence() to size its JSON fence")
+
+
 def check_mep_meta_omits_deps_and_recipe_hash_when_absent(text):
     # T6 (ADR-0138 §13/§18): deps/recipe_hash fields are omitted entirely
     # (never emitted empty/null) when no recipe was assembled.
