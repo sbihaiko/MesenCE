@@ -140,6 +140,12 @@ does not exist.
   of dep-dependent `rename`/`rewrite-paths` (MEP-recipe-v1 §6 amended);
   `verify_community_pack_validate_workflow.py` CHECKS extended. F6.2 done;
   **F6.2c** (mechanical split, §23) precedes F6.3.
+- **F6.2c — mechanical split** (ADR-0138 §23–24, run `05a8927950be` +
+  follow-up): `scripts/mep_recipe_assemble.py` (CI-side assembly) and leaf
+  `scripts/mep_recipe_common.py`; `verify_community_pack_validate_workflow.py`
+  is a 121-line entry point assembling `CHECKS` from six topic modules under
+  `scripts/checks/community_pack_validate/`. Behaviour unchanged; all tests
+  and verifiers green.
 - **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
   `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
   per-system tile/palette widths and explicit errors; sibling golden
@@ -255,7 +261,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.2 shipped; remaining work list = F6.2c (split), F6.3–F6.5 |
+| 0138 | accepted | Phase 6 design; F6.0–F6.2 shipped; remaining work list = F6.3–F6.5 |
 | 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |

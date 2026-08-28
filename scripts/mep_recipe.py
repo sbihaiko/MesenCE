@@ -28,23 +28,12 @@ and, when --out is given, written there), or `refused` (an
 
 The assemble-sources implementation (issue-body parsing, dep merge, its
 own CLI arg parsing) lives in the sibling module `mep_recipe_assemble`
-(F6.2c, ADR-0138 Clarification §23) and is re-exposed here as
-`assemble_sources`/`cmd_assemble_sources`; validate/dry-run/apply and the
-dispatch below stay in this file. mep_recipe_assemble.py imports
-RecipeError/SHA256_HEX from this module. The two re-exposing wrappers
-below import mep_recipe_assemble lazily (inside the function body,
-instead of at module load time) so that running this file directly as
-`python3 scripts/mep_recipe.py ...` (where Python executes it as
-`__main__`, a distinct module identity from `mep_recipe`) never forces a
-second, nested top-level execution of this same file under the name
-`mep_recipe` while mep_recipe_assemble.py's own
-`from mep_recipe import RecipeError, SHA256_HEX` is still resolving —
-that nested execution would otherwise reach a module-level
-`mep_recipe_assemble.assemble_sources` attribute access before
-mep_recipe_assemble.py has defined it, an AttributeError on a
-partially-initialized module. A plain `import mep_recipe` (as
-test_mep_recipe.py does) never hits that nested path at all, since the
-name `mep_recipe` already resolves to the one in-progress module.
+(F6.2c, ADR-0138 Clarification §23) and is re-exported here as
+`assemble_sources`/`cmd_assemble_sources` for back-compat (test call
+sites); new code imports the assembly helpers from `mep_recipe_assemble`.
+`RecipeError`/`SHA256_HEX`/`RECIPE_VERSION` live in the leaf module
+`mep_recipe_common` and are re-exported from here, so there is no import
+cycle in either direction (§24).
 """
 from __future__ import annotations
 
@@ -56,33 +45,15 @@ import zipfile
 from pathlib import Path
 
 import mep_lint
+from mep_recipe_assemble import assemble_sources, cmd_assemble_sources  # noqa: F401  (facade)
+from mep_recipe_common import RECIPE_VERSION, SHA256_HEX, RecipeError  # noqa: F401  (facade)
 
-RECIPE_VERSION = 1
-SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SOURCE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 KNOWN_OPS = ("copy", "glob", "rename", "rewrite-paths")
 REWRITE_TAGS = ("bgm", "sfx", "img", "background", "patch")
 PATCH_SUFFIXES = (".ips", ".bps")
 FENCE = re.compile(r"```mep-recipe[^\n]*\n(.*?)```", re.DOTALL)
-
-
-class RecipeError(Exception):
-    """User-facing validation or apply failure."""
-
-
-def assemble_sources(issue_body: str, classify: dict | None, pack_url: str, pack_sha256: str):
-    """Re-exposes mep_recipe_assemble.assemble_sources (F6.2c split)."""
-    import mep_recipe_assemble
-
-    return mep_recipe_assemble.assemble_sources(issue_body, classify, pack_url, pack_sha256)
-
-
-def cmd_assemble_sources(rest: list) -> int:
-    """Re-exposes mep_recipe_assemble.cmd_assemble_sources (F6.2c split)."""
-    import mep_recipe_assemble
-
-    return mep_recipe_assemble.cmd_assemble_sources(rest)
 
 
 def sha256_file(path: Path) -> str:

@@ -225,6 +225,15 @@
       "scoutMs": null,
       "classification": "new-feature",
       "diverged": false
+    },
+    {
+      "sid": "05a8927950be",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "refactor",
+      "diverged": false
     }
   ]
 }

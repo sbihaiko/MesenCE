@@ -85,31 +85,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `find_fallback_subfolder`, `find_fallback_subfolder_by_name`,
   `find_top_level_nested_zip`, `safe_rel`, `parse_line`) and never walks
   a zip with a parallel implementation.
-  `mep_recipe_assemble.py` (F6.2c, ADR-0138 Clarification §23 — a
-  mechanical, behaviour-preserving split off `mep_recipe.py` so neither
-  file stays several times over the 200-line guardrail) holds the
+  `mep_recipe_assemble.py` (F6.2c, ADR-0138 Clarification §23) holds the
   CI-only `assemble-sources` implementation (issue-body parsing, dep
-  merge, its own CLI arg parsing); it imports `RecipeError`/`SHA256_HEX`/
-  `RECIPE_VERSION` from `mep_recipe.py` (`from mep_recipe import ...`),
-  not from a third shared module.
-  `mep_recipe.py` re-exposes `assemble_sources`/`cmd_assemble_sources` as
-  its own module-level functions — thin wrappers that `import
-  mep_recipe_assemble` lazily, inside the function body, rather than at
-  module load time. That laziness matters only for the direct-script
-  case: `python3 scripts/mep_recipe.py ...` runs the file as `__main__`,
-  a module identity distinct from `mep_recipe`, so
-  `mep_recipe_assemble.py`'s own `from mep_recipe import ...` forces a
-  second, nested top-level execution of `mep_recipe.py` under the name
-  `mep_recipe`; an eager module-level
-  `mep_recipe_assemble.assemble_sources` attribute grab in that nested
-  execution would race mep_recipe_assemble.py's own still-resolving
-  import and fail with an AttributeError on a partially-initialized
-  module. `import mep_recipe` (as `test_mep_recipe.py` does) never takes
-  that nested path, since the name `mep_recipe` already resolves to the
-  one in-progress module — so `mep_recipe.assemble_sources(...)` and the
-  `mep_recipe.py assemble-sources` CLI subcommand both keep working
-  exactly as before the split; `validate`/`dry-run`/`apply` and the
-  dispatch in `main()` never left `mep_recipe.py`.
+  merge, its own CLI arg parsing). `mep_recipe_common.py` is the
+  dependency-free leaf holding `RecipeError`/`SHA256_HEX`/`RECIPE_VERSION`
+  that both import — so there is no import cycle and a direct
+  `python3 scripts/mep_recipe.py ...` run never re-executes the CLI under a
+  second module name (ADR-0138 §24: splits in `scripts/` break cycles with
+  a leaf module, never with lazy in-function imports). `mep_recipe.py`
+  re-exports `assemble_sources`/`cmd_assemble_sources` and the three leaf
+  symbols as a back-compat facade (test call sites); new code imports the
+  assembly helpers from `mep_recipe_assemble` directly. `validate`/
+  `dry-run`/`apply` and the dispatch in `main()` never left `mep_recipe.py`.
   `mep_recipe.py assemble-sources` (F6.2b, ADR-0138 §7/§12/§13) is the
   deterministic step that builds `sources`: it parses the issue body's
   `external_assets` lines (`<url> [<sha256>] [<size>]`, reusing

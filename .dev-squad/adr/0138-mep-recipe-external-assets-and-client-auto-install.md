@@ -429,6 +429,16 @@ again) are folded and deleted.
     CLI) may move out of `scripts/mep_recipe.py` into a sibling stdlib module
     sharing `RecipeError`/`SHA256_HEX`. Both splits are a mechanical slice
     (**F6.2c**) to run before F6.3 adds more checks.
+24. **Split convention for `scripts/` (after the F6.2c run 05a8927950be).**
+    When a script is split, shared symbols move to a dependency-free leaf
+    module (`mep_recipe_common.py`; `checks/community_pack_validate/_shared.py`)
+    that both halves import — never a back-import from the sibling broken by
+    lazy in-function imports (which double-executes the CLI under a second
+    module name and forks exception identities). The original file stays a
+    back-compat facade re-exporting the moved names; new code imports from
+    the new module. Topic-module packages under `scripts/checks/` are
+    direct-script-invocation only (PEP 420 namespace package, relative
+    imports; `python -m` is not a supported entry).
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
