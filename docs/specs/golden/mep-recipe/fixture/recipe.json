@@ -1,0 +1,78 @@
+{
+  "recipe": 1,
+  "sources": {
+    "primary": {
+      "url": "https://example.org/packs/mep-recipe-fixture-1.0.0.zip",
+      "sha256": "dde48065db80def94e64d7e7e9f4561b96dbc80e54c20138bc4558b55a29d723"
+    },
+    "deps": [
+      {
+        "id": "audio",
+        "sha256": "7c23f81464d95cdfea4324adf6ad18021391a915a8df67b791f1519ebc2682ba",
+        "size": 69,
+        "hints": [
+          "https://example.org/audio/mep-recipe-fixture-ogg.zip"
+        ],
+        "license": "CC0-1.0",
+        "user_supplied": true
+      }
+    ]
+  },
+  "ops": [
+    {
+      "op": "copy",
+      "from": "primary:hires.txt",
+      "to": "hires.txt"
+    },
+    {
+      "op": "copy",
+      "from": "primary:tiles.png",
+      "to": "tiles.png"
+    },
+    {
+      "op": "copy",
+      "from": "primary:game.ips",
+      "to": "patches/game.ips"
+    },
+    {
+      "op": "glob",
+      "from": "audio:**/*.ogg",
+      "to": "audio/"
+    },
+    {
+      "op": "rewrite-paths",
+      "file": "hires.txt",
+      "tags": [
+        "bgm",
+        "sfx"
+      ],
+      "prefix": "audio/"
+    }
+  ],
+  "pack": {
+    "mep": "1.1.0",
+    "name": "MEP Recipe Fixture Pack",
+    "version": "1.0.0",
+    "license": "CC0-1.0",
+    "targets": [
+      {
+        "system": "nes",
+        "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"
+      }
+    ],
+    "patches": [
+      {
+        "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B",
+        "file": "patches/game.ips"
+      }
+    ],
+    "sections": {
+      "textures": {
+        "path": ""
+      }
+    }
+  },
+  "policy": {
+    "apply_patch_only_if_complete": true
+  }
+}

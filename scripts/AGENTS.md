@@ -42,8 +42,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
   `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
-  `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
-  validators and test-ROM/test-pack generators; no emulator dependency.
+  `gen_mep_recipe_fixture.py`, `make_gb_test_rom.py`, `validate_hdpack_dump.py` -
+  Python spec/golden/pack validators and test-ROM/test-pack generators; no
+  emulator dependency.
   `mei_rules.py` (F6.3b, ADR-0138 §28/§29) is the dependency-free leaf
   holding the MEI v1.1 constraint set: `SYSTEMS`/`SHA1_UPPER`/`CRC32_UPPER`/
   `MD5_UPPER`/`SHA256_HEX`/`SEMVER`/`MEI_KINDS`, the kind-conditional
@@ -165,6 +166,25 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   including an empty-but-present classify fragment, an unmatched
   `external_assets` line surviving into `sources.deps`, and the CLI round
   trip).
+  `gen_mep_recipe_fixture.py` (F6.4a) writes the real-bytes MEP-recipe-v1
+  golden under `docs/specs/golden/mep-recipe/fixture/` (`primary.zip`,
+  `audio-dep.zip`, `recipe.json`, `recipe-missing-dep.json`) that a
+  `MepRecipeInstaller`/`mep_recipe.py apply` parity test runs against —
+  the pre-existing `docs/specs/golden/mep-recipe/recipe.json` stays
+  format-only (its `sha256` fields are the empty string, MEP-recipe-v1
+  §9) and is untouched. Each zip is written with a fixed per-entry
+  timestamp and STORED compression so re-running the generator reproduces
+  the committed bytes exactly (no wall-clock or compressor drift);
+  `recipe.json` and `recipe-missing-dep.json` are the identical recipe
+  document under two names — the "missing-dep" scenario is exercised by
+  omitting the `audio` dep path at apply time, not by a different
+  document. `test_gen_mep_recipe_fixture.py` is its framework-free
+  acceptance check: the generator's declared `sha256` fields equal the
+  real sha256 of the bytes it writes (never the empty-string placeholder
+  the older golden used), the generated documents pass
+  `mep_recipe.validate_recipe`, the committed fixture on disk matches its
+  own declared hashes, and regenerating it into a temp dir reproduces the
+  committed bytes byte-for-byte.
   `mep_meta_parser.py` (F6.3, ADR-0138 §27) is a dependency-free leaf
   exposing a pure `parse_mep_meta(comment_body: str) -> dict | None`: it
   locates the `<!-- mep-meta -->` marker and its fenced ```json block
@@ -441,6 +461,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `mep_lint`-clean) plus `assemble-sources` (absent/present/refused per
   ADR-0138 §7/§13, CLI round trip); PASS/FAIL per check, exit 0 only if
   all pass.
+- `python3 scripts/test_gen_mep_recipe_fixture.py` (F6.4a) -
+  `gen_mep_recipe_fixture.py`'s hash-correctness check: declared `sha256`
+  fields equal the real sha256 of the bytes written (never the
+  empty-string placeholder), generated documents pass
+  `mep_recipe.validate_recipe`, the committed
+  `docs/specs/golden/mep-recipe/fixture/` matches its own on-disk bytes,
+  and regenerating it is byte-identical; PASS/FAIL per check, exit 0
+  only if all pass.
 - `python3 scripts/test_mep_recipe_fence.py` (F6.3b, AC-7/AC-9) - the
   ADR-0138 §33 "shortest safe fence" round trip: `choose_fence` +
   `mep_recipe.py`'s `FENCE`/`load_recipe` recover a backtick-laden
