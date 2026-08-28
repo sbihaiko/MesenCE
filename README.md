@@ -8,7 +8,7 @@
 [![Systems](https://img.shields.io/badge/systems-NES%20%7C%20GB%2FGBC%20%7C%20SMS%2FGG%2FSG--1000%20%7C%20GBA-8a2be2.svg)](#what-it-runs)
 [![Specs: CC0](https://img.shields.io/badge/open%20specs-CC0-lightgrey.svg)](docs/specs/)
 
-**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)
+**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)<br/>
 
 </div>
 
