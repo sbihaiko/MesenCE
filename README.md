@@ -1,7 +1,7 @@
 <div align="center">
 
 # MesenCE · Bihaiko's Edition
-Your NES, Game Boy, Master System and GBA games<br/>
+## Your NES, Game Boy, Master System and GBA games<br/>
 **[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)
 
 [![Build](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
