@@ -86,6 +86,16 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   a zip with a parallel implementation. `test_mep_recipe.py` is the
   framework-free acceptance check (unknown op / escaping path rejected;
   dry-run of a synthetic split pack is `mep_lint`-clean).
+- `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
+  fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
+  `SHAPE_A` is captured under two distinct 8-hex-char palettes and
+  `SHAPE_B` under one, giving `palettes_per_shape == 1.5`. It is a sibling
+  root next to the GB golden at `docs/specs/golden/mep/` - never nested
+  under it, since the two goldens exercise different `<system>` values
+  (`nes` vs `gb`) and neither supersedes the other. Linted by
+  `validate-specs.py`'s `lint_golden_packs()` tripwire alongside the GB
+  golden, and consumed as the shared NES fixture by
+  `test_mep_compare_auto_palettes.py` below.
 - `test_mep_compare_auto_palettes.py` - fixture-based check (self-compares
   the shared NES golden at `docs/specs/golden/mep-nes/textures` (ADR-0136)
   against itself via `mep_compare.main()`, no ROM/build dependency, no
@@ -94,6 +104,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `stats["artist"]`; the expected `1.5` value is checked against that
   golden's actual 3-key/2-shape layout (`SHAPE_A` x {`PAL_1`, `PAL_2`} +
   `SHAPE_B` x {`PAL_1`}), not assumed.
+- `test_mep_compare_render_dispatch.py` (ADR-0136) - framework-free check
+  that `mep_compare.py`'s `render_original` dispatches per `<system>`:
+  decodes `nes`/`gb`/`gbc`/`sms` tile+palette fixtures shaped per
+  `docs/specs/hires-gbsms-v1-draft.md` S3.2 without raising, and raises a
+  `ValueError` naming the rejected system and the supported list
+  (`nes, gb, gbc, sms`) before any per-tile decode work, both for an
+  unsupported `<system>` (e.g. `gba`) and for a palette hex string of the
+  wrong width for the declared system.
 - `validate_palette_variants.py` (F5.4b) - builds `headless_record` via
   `make capture-tool` if missing, records `roms/Zelda.nes` with the `hdpack`
   flag, and checks that `HdPackBuilder::ProcessTile` captures more than one
@@ -196,6 +214,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `mep_lint`-clean); PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
+  only if all pass.
+- `python3 scripts/test_mep_compare_render_dispatch.py` - `render_original`
+  decodes every supported `<system>` and rejects an unsupported one (or a
+  wrong-width palette) before per-tile work; PASS/FAIL per check, exit 0
   only if all pass.
 - `python3 scripts/checks/verify_community_pack_issue_template.py` and
   `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
