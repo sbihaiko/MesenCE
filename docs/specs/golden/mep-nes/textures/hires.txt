@@ -1,0 +1,12 @@
+<ver>101
+<system>nes
+<scale>1
+<supportedRom>E23DBDCA1D5654F26E8BA41E251E449A6EB52143
+<img>tiles.png
+
+#tiles.png — SHAPE_A captured under two palettes (PAL_1, PAL_2), SHAPE_B
+#under only PAL_1: 3 (shape,palette) keys over 2 distinct shapes ->
+#palettes_per_shape == 1.5 (mirrors scripts/test_mep_compare_auto_palettes.py).
+<tile>0,3C004200B900A500B900A50042003C00,0F001A2C,0,0,1,N
+<tile>0,3C004200B900A500B900A50042003C00,0F102636,8,0,1,N
+<tile>0,F300F300F000F000F000F000F000F000,0F001A2C,16,0,1,N

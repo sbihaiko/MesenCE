@@ -1,0 +1,17 @@
+{
+  "mep": "1.0.0",
+  "name": "MEP NES Golden — palettes-per-shape fixture",
+  "version": "1.0.0",
+  "author": "MesenCE",
+  "license": "CC0-1.0",
+  "targets": [
+    {
+      "system": "nes",
+      "sha1": "E23DBDCA1D5654F26E8BA41E251E449A6EB52143",
+      "name": "MesenCE NES golden fixture (synthetic, no real ROM)"
+    }
+  ],
+  "sections": {
+    "textures": { "path": "textures/" }
+  }
+}
