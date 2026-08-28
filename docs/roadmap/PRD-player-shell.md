@@ -163,11 +163,32 @@ Stable across revisions. Source, first match wins:
    `local:<container-name>` (the ADR-0040/0049 discovery key). Two local
    containers with the same `content_id` are one pack (§5). A local
    container whose `content_id` equals a catalog entry's is that catalog
-   `pack_id`, not a second choice.
+   `pack_id`, not a second choice. The local `content_id` is computed
+   **once** and cached under `EnhancementPacks/.cache/` keyed by the
+   container's path + size + mtime (recomputed only when those change);
+   it is never computed on the synchronous ROM-load path. Until the cache
+   is warm the container is treated as `local:<container-name>`; the
+   catalog merge happens on the next load. HD trees run to hundreds of
+   MB — hashing them at every boot is not acceptable.
 
 **Catalog uniqueness** (product requirement; enforcement is the P.0 ADR).
 The catalog holds **one live row per `pack_id`** (§3.6) — never two
-revisions of the same product:
+revisions of the same product.
+
+**Origin binding (anti-hijack).** A `pack_id` is bound to the **origin**
+of its first accepted submission: the `owner/repo` of the pack URL, or,
+for hosts without one (gist, raw, Drive), the GitHub login that opened the
+issue. A later submission that claims an existing `pack_id` (via `id` in
+`pack.json` or via the same `owner/repo`) but comes from a **different
+origin** is *not* a revision: it does not compete for the slot, is not
+listed, and gets a comment + the `pack:needs-review` label for human
+triage — a maintainer may re-bind the origin (author moved repos) or
+treat it as a competing pack. Without this rule anyone could publish
+`id: contra80s`, `version: 99.0.0` and have §3.6 push it to every
+client. The catalog stores the bound origin in mep-meta
+(`pack_origin`). Amends ADR-0140/0141 (recorded in both, 2026-08-28).
+
+Actions when the incoming submission is from the **same** origin:
 
 | Incoming vs existing | Meaning | Action |
 |---|---|---|
@@ -225,7 +246,10 @@ decides wins:
 
 1. **semver** of `pack.json` `version`, when both have a comparable
    version — higher wins. The catalog knowingly accepts that an inflated
-   `version` can win; triage warns, it does not block.
+   `version` can win **from the same origin** (§3.3 origin binding);
+   triage warns, it does not block. `mep_lint` already rejects any
+   non-`x.y.z` `version` (error), so "comparable" only fails for
+   `hd-legacy`, which has none.
 2. Else **`validated_at`** — later wins.
 3. Else **issue number** — higher wins (later submission).
 
@@ -315,8 +339,10 @@ pack).
   the submission title), `version` (or validation date + short
   `content_id` for `hd-legacy`), layers (textures / audio / synth /
   patch), licence (or "not declared"), and catalog 👍 as **sort key**, not
-  as auto-pick. The choice is remembered **per ROM sha1** — a pack with
-  three `targets[]` is chosen up to three times, once per ROM.
+  as auto-pick. The choice is remembered **per ROM sha1** — the No-Intro
+  sha1 of the ROM as loaded, **before** any `patches[]` apply (§4 step 1
+  precedes step 5) — a pack with three `targets[]` is chosen up to three
+  times, once per ROM.
 - Changing the choice later: overlay → current pack chip → picker.
   Applies on power cycle.
 - Mixing section A from pack 1 with section B from pack 2 is **Advanced
@@ -333,7 +359,11 @@ which container is the chosen one.
 whose `content_id` equals the pack already chosen for this ROM is the same
 pack, not a second choice. A local container with a different
 `content_id` and no `id` joins the picker as `local:<container-name>`
-(§3.3 rule 4).
+(§3.3 rule 4). The merge only works for packs whose `content_id` is a
+tree hash: the *output* folder of a recipe install copied elsewhere
+without its `.mep-install.json` cannot be re-associated with the catalog
+row (§3.2 — the recipe composite is never derived from the output tree);
+it shows up as a `local:` entry. Documented non-goal (§7).
 
 **Where 👍 comes from.** The client has no GitHub access. P.2 adds an
 additive MEI field (`votes`, integer, MAY, non-normative like `issue`)
@@ -349,7 +379,8 @@ One process. `PreferencesConfig.UiMode`: `Player` | `Advanced`.
 | Menu bar | hidden | classic File / Game / Options / Tools / Debug / Help |
 | Home (no ROM) | the existing recent-games grid (`RecentGamesViewModel`), always shown; drop a ROM anywhere | same grid, as today (`GameSelectionScreenMode` keeps its current meaning: what happens when a recent game is clicked; `Disabled` still hides the grid) |
 | Playing | game fills the window; the overlay shortcut opens a thin overlay: Resume, Save/Load slot, Pack (if 2+ `pack_id`s, or to inspect the current one), Settings (video / audio / input essentials), Advanced GUI, Quit | current menus and windows |
-| Overlay shortcut | a new configurable `EmulatorShortcut` (default Esc). P.4 resolves the collision with Esc's existing bindings (exit fullscreen etc.) inside the shortcut config, not by hard-coding | n/a |
+| Overlay shortcut | a new configurable `EmulatorShortcut` (default Esc on keyboard; `KeyCombination` already accepts controller buttons, so a gamepad binding is a config choice, no new code). Default rule in Player: while a ROM runs, Esc opens the overlay and never leaves fullscreen; "Exit fullscreen" is an overlay item. P.4 implements that precedence inside the shortcut config, not by hard-coding | n/a |
+| Gamepad navigation | the overlay and the pack picker are fully operable with D-pad/A/B (Avalonia focus navigation; no pointer required). Acceptance of P.4/P.5 includes a keyboard-arrows pass as proxy | n/a |
 | Pack feedback | OSD toast on apply/update ("Applied Contra 80s — textures"); pack name on the overlay chip | Enhancement Packs window |
 | Debugger, HD Pack Builder, Lua, netplay, movies, cheats, Record Music | not in the overlay; reachable only after switching to Advanced | unchanged |
 | Existing `AutoHideMenu` | ignored in Player (no menu bar); left in Advanced preferences | unchanged |
@@ -377,6 +408,8 @@ settings page, the pack picker). Advanced is the current `MainMenuView`.
 - Changing discovery precedence (sibling still wins).
 - Product-level deduplication for packs without `id` hosted outside
   GitHub (§3.3 rule 3).
+- Re-associating a recipe *output* folder copied without its
+  `.mep-install.json` with its catalog row (§5).
 - SNES / PCE / WonderSwan / ColecoVision chrome.
 
 ## 8. Slices
@@ -389,8 +422,8 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 |---|---|---|---|
 | **P.0** | ADR-0139/0140/0141 (accepted 2026-08-28): (1) `content_id` canonicalisation, the recipe composite, and the two-implementation/parity rule; (2) `pack_id` sources incl. the MEP `id` field and the `local:` fallback; (3) catalog uniqueness (§3.3) + one-slot occupancy (§3.6) as CI/client policy, **amending ADR-0138 §37** (update trigger = `content_id`, no auto-downgrade) | — | **done 2026-08-28** — ADR-0139/0140/0141 accepted; ADR-0141 carries the ADR-0138 §37 amendment |
 | **P.1** | `content_id` in `scripts/` (normative) **and** in the Core (`MepPackManager`/`MepRecipeInstaller`), both on the discovered pack root and the recipe composite; `mep_lint` / validate workflow writes it to mep-meta; `.mep-install.json` gains `pack_id`/`content_id`. Goldens: same tree in two wrappers → same id; two recipes on one primary → two ids | P.0 | unit tests on goldens under `docs/specs/golden/`; a parity fixture that both implementations must agree on (same shape as F6.4c) |
-| **P.2** | Catalog / mep-meta / MEI grow `pack_id`, `content_id`, `version`, `votes` (all additive; unknown-field ignore already required). One live row per `pack_id` (§3.6). Duplicate comment on same `content_id`. `/revalidate` rewrites provenance and occupies the slot only by §3.6 order | P.1 | wrapper-only `/revalidate` keeps `content_id` and the slot; a real file change with higher semver updates the slot; a lower semver does not; a second issue with the same `content_id` is not a second row; two revisions of one `pack_id` never yield two rows |
-| **P.3** | Per-ROM-sha1 preference (`pack_id` chosen, `local:` fallback for local drops) in `EnhancementPackConfig`. Picker window usable from **Advanced** (ships before Player chrome). The preference overrides lexicographic order; lexicographic stays the default when no preference exists | P.0 (for the `pack_id` rules) | UI.Tests for the preference store incl. the `local:` key; two local packs for one ROM, pick B, reload, B wins; a third container with B's `content_id` is not a new entry |
+| **P.2** | Catalog / mep-meta / MEI grow `pack_id`, `content_id`, `version`, `votes` (all additive; unknown-field ignore already required). One live row per `pack_id` (§3.6). Duplicate comment on same `content_id`. `/revalidate` rewrites provenance and occupies the slot only by §3.6 order. Origin binding (§3.3): mep-meta `pack_origin`; different origin → not listed, `pack:needs-review` (label added to `ensure_community_pack_labels.sh`) | P.1 | wrapper-only `/revalidate` keeps `content_id` and the slot; a real file change with higher semver updates the slot; a lower semver does not; a second issue with the same `content_id` is not a second row; two revisions of one `pack_id` never yield two rows; a same-`id` submission from another `owner/repo` with a higher semver does **not** take the slot |
+| **P.3** | Per-ROM-sha1 preference (`pack_id` chosen, `local:` fallback for local drops) persisted in `EnhancementPackConfig`; the **resolution logic** (sha1 → `pack_id`, `local:` fallback, `content_id` merge, lexicographic default) lives in a host-free class under `UI/Logic/` (ADR-0123: `UI.Tests` dual-compiles only `UI/Logic/**`, never `UI/Config`). Picker window usable from **Advanced** (ships before Player chrome). The preference overrides lexicographic order; lexicographic stays the default when no preference exists | P.0 (for the `pack_id` rules) | UI.Tests on the `UI/Logic/` resolver incl. the `local:` key; two local packs for one ROM, pick B, reload, B wins; a third container with B's `content_id` is not a new entry |
 | **P.4** | `UiMode` + Player chrome: hide menu, overlay + its shortcut, recent games as home, Settings subset, Advanced switch. Existing settings file → Advanced; none → Player | — (chrome only) | UI.Tests for the default rule (file present / absent); manual pass: Player cannot reach Debug without switching; Esc collision resolved in shortcut config |
 | **P.5** | Player pack UX: toast, overlay chip, picker from §5 wired to P.3; un-enhanced start while the picker is open | P.3, P.4 | two local packs: first launch picks, second launch silent; dismissing the picker plays un-enhanced and asks again next launch; sibling folder suppresses the picker |
 | **P.6** | Player overlay talks to F6.4b install/update using §3.6 (`content_id` trigger, no auto-downgrade, removed-from-catalog keeps install); `votes` sorts the picker | P.5, F6.4b | catalog update of the chosen `pack_id` reinstalls and keeps `DisabledPacks`/section flags; wrapper-only does not reinstall; installed semver > slot does not downgrade; removed slot keeps the install; competing `pack_id`s still open the picker |
@@ -400,7 +433,7 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 | Topic | Status | Meaning |
 |---|---|---|
 | ADR-0139 — `content_id` algorithm (tree canonicalisation, recipe composite, excluded files, `version` string excluded, two implementations + parity) | **accepted** (2026-08-28) | P.1 cannot start without it |
-| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness | **accepted** (2026-08-28) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
+| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness + origin binding (amended 2026-08-28) | **accepted** (2026-08-28) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
 | ADR-0141 — one live slot per `pack_id`; amends ADR-0138 §37 (client update trigger `source.sha256` → `content_id`); no auto-downgrade; removed slot keeps install | **accepted** (2026-08-28) | P.6 conflicts with the accepted text until amended |
 | Player chrome (`UiMode`, overlay contents, overlay shortcut, upgrade default Advanced) | **needed only if** P.4 finds trade-offs beyond §6 | P.4 |
 | ADR-0039/0040/0044/0049/0120/0121 | accepted | precedence and ROM hash-matching do not change |
@@ -414,7 +447,10 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 | Catalog yank / republished older semver | no auto-downgrade (§3.6); Advanced confirms |
 | Authors omit `id` / `version` (`hd-legacy`) | fallbacks in §3.3/§3.4; keyed by origin repo or issue; picker shows date + hash prefix |
 | Two issues, same product, different `pack_id` fallbacks (non-GitHub hosts) | `content_id` still collapses byte-duplicates; remaining cases open the picker (safe default); documented non-goal until `id` is common |
-| Inflated `version` wins the slot | accepted trade-off (§3.6 rule 1); triage warns; no auto-downgrade protects installs |
+| Inflated `version` wins the slot | accepted trade-off (§3.6 rule 1) **within one origin**; triage warns; no auto-downgrade protects installs |
+| Third party claims an existing `pack_id` (`id` or `owner/repo` spoof) with a high `version` | origin binding (§3.3): different origin never occupies the slot; `pack:needs-review` for a human |
+| Hashing local HD trees stalls the ROM load | `content_id` of local containers cached by path+size+mtime, computed off the load path (§3.3 rule 4) |
+| Overlay unusable from the couch | overlay shortcut bindable to a controller button; overlay/picker navigable by D-pad (§6) |
 | Recipe identity without dep bytes | composite in §3.2; computed at install time from the primary bytes, stored, not re-derived |
 | `scripts/` and Core hashers drift | parity fixture in P.1, same pattern as ADR-0138 §39 |
 | Local-pack identity ambiguous | `local:<container>` rule (§3.3 rule 4); `content_id` merges local ↔ catalog |
@@ -424,19 +460,12 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 
 ## 11. Open questions
 
-Still for the P.0 ADRs (product text above is settled):
-
-1. Exact tree hash: files included, sort order, path normalisation,
-   newline folding; confirm that `pack.json` `version` is excluded from
-   the payload (recommended in §3.2).
-2. Whether MEP-v1 gains the `id` field now (recommended) or `owner/repo`
-   is enough for the first catalog with `pack_id`.
-3. Duplicate-submit policy when `pack_id` matches a different issue:
-   auto-close the newer issue, or accept it as an update of the original
-   row. Recommendation: comment + close, pointing at the original.
-4. Whether `local:` preferences should migrate automatically to the
-   catalog `pack_id` when a matching `content_id` is later installed from
-   the catalog (recommended: yes, silently).
+None for P.0 — the four questions this section held (tree-hash
+canonicalisation; MEP `id` field now; duplicate-submit policy; silent
+`local:` → catalog `pack_id` migration) were closed by ADR-0139/0140/0141
+on 2026-08-28 (hash: ADR-0139; `id` as MEP v1.4 SHOULD, comment + close
+the newer duplicate issue, silent migration: ADR-0140). New questions go
+here only when a slice surfaces a trade-off §3–§6 do not settle.
 
 ## 12. References
 
