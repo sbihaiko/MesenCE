@@ -1,0 +1,3 @@
+<ver>200
+<system>gb
+<scale>1

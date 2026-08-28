@@ -135,6 +135,15 @@
       "scoutMs": null,
       "classification": "chore",
       "diverged": true
+    },
+    {
+      "sid": "2fd5d89d0471",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": null,
+      "diverged": false
     }
   ]
 }

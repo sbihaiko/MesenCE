@@ -8,3 +8,9 @@ receives audio, via a `hires.txt` with `<bgm>`/`<sfx>` tags pointing to OGG
 files in this folder). The folder exists so the golden pack.json points to
 a real path; when the extension freezes, content will go here without
 changing the `pack.json`.
+
+`hires.txt` here is a header-only placeholder (`<ver>`, `<system>gb`,
+`<scale>`, no tags): `mep_lint.py` requires every declared `sections.*`
+layer to resolve to a `hires.txt`, and the C++ golden test asserts all three
+sections are declared, so the file keeps the canonical pack lint-green
+without pretending GB audio is hosted (ADR-0136 Clarifications §3).

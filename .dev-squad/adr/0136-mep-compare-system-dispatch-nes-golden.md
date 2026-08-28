@@ -72,3 +72,40 @@ Do both halves; they are cheap and complementary:
 - **Convert the existing GB golden to NES** — rejected: the GB golden exercises
   the GB/SMS draft format paths in `mep_lint.py`; both systems need coverage.
 - **Include GBA in the dispatch** — rejected: no GBA HD pack format exists.
+
+## Clarifications (after run 2fd5d89d0471, 2026-08-28)
+
+The first H4 run failed at Decompose: the proxy never approved because the
+Decision above left four points open. They are settled here (the five
+auto-minted review ADRs, which reused the retired ids 0139–0143, are folded
+and deleted):
+
+1. **Layout — sibling roots, never nested.** The NES golden lives at
+   `docs/specs/golden/mep-nes/` (own `pack.json`, `textures/hires.txt` with
+   `<system>nes`, one small PNG), next to the GB golden at
+   `docs/specs/golden/mep/`. A MEP pack root must never contain another pack
+   root: `mep_lint.py` ignores unknown subfolders today, but that is an
+   implementation detail, not a MEP layout guarantee. The Decision's "under
+   `docs/specs/golden/mep/`" is superseded by this paragraph. The GB golden is
+   **not** moved (its path is a literal in `scripts/core_unit_tests.cpp` and
+   `validate-specs.py`).
+2. **No `path-cases.txt` line.** The Consequences bullet asking for "one line
+   in `path-cases.txt`" was wrong: that file is the zip-slip path-safety
+   corpus (ADR-0124), not a fixture index. Fixture registration is
+   `scripts/AGENTS.md` (golden bullet) plus a `validate_mep(...)` call for
+   `mep-nes/pack.json` in `validate-specs.py` `main()`.
+3. **Golden lint green-ness is owned by `validate-specs.py`.** The GB golden
+   was red under its own linter (declared `audio` section without
+   `audio/hires.txt`) and nothing caught it. Fixed by hand before the rerun
+   with a header-only `audio/hires.txt` (the C++ golden test requires all
+   three sections declared, so dropping the section was not an option).
+   H4 adds a `lint_golden_packs()` step to `validate-specs.py` that runs
+   `scripts/mep_lint.py` as a subprocess over `docs/specs/golden/mep/` and
+   `docs/specs/golden/mep-nes/` and fails on a non-zero exit — the tripwire
+   that makes "mep_lint green on both goldens" a checked invariant.
+4. **`render_original` API.** Keep the free function; add a keyword
+   `system: str = "nes"` and make `Pack` expose the header's `<system>`
+   (default `nes`) as `pack.system`, so the three call sites pass
+   `system=artist.system`. The `(chr_hex, pal_hex)` tuple stays the dict
+   key for coverage math. A bound `pack.render(key)` method was considered
+   and rejected as churn for a 235-line script.
