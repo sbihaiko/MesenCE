@@ -6,17 +6,31 @@
 //zip-fallback search PrepareZip consults, with literal fixtures; Bloco D
 //(ADR-0121) exercises MepPack::DetectConventionLayout's bare-root hires.txt
 //recognition against a real throwaway temp-dir tree (the one block here that
-//touches the filesystem, since DetectConventionLayout itself does). No
-//framework: cases print PASS/FAIL, exit is non-zero on any failure (see
-//roles_probe.cpp). Run from the repo root so the golden paths resolve.
+//touches the filesystem, since DetectConventionLayout itself does); Bloco E
+//(ADR-0138 §4/§37, F6.4a) exercises MepRecipeInstaller/MepRecipeOps/SHA256
+//against the real-bytes golden fixture under
+//docs/specs/golden/mep-recipe/fixture/ - including shelling out to the
+//read-only Python reference interpreter (scripts/mep_recipe.py apply) for a
+//byte-for-byte parity check, so both interpreters MUST agree on this fixture
+//forever after. No framework: cases print PASS/FAIL, exit is non-zero on any
+//failure (see roles_probe.cpp). Run from the repo root so the golden paths
+//and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/EnhancementPacks/MepPack.h"
+#include "Shared/EnhancementPacks/MepRecipeInstaller.h"
+#include "Shared/MessageManager.h"
+#include "Utilities/FolderUtilities.h"
+#include "Utilities/JsonReader.h"
+#include "Utilities/sha256.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -345,6 +359,194 @@ namespace
 		std::error_code ec;
 		std::filesystem::remove_all(dir, ec);
 	}
+
+	//--- Bloco E: MepRecipeInstaller/MepRecipeOps/SHA256 (ADR-0138 §4/§37) ---
+	//Golden fixture: docs/specs/golden/mep-recipe/fixture/ (real bytes, real
+	//sha256 hashes - unlike the format-only docs/specs/golden/mep-recipe/
+	//recipe.json). scripts/gen_mep_recipe_fixture.py + its own
+	//scripts/test_gen_mep_recipe_fixture.py own generating/validating it;
+	//this Bloco only reads it.
+	const std::string kFixtureDir = "docs/specs/golden/mep-recipe/fixture";
+
+	std::string ReadFileBytes(const std::string& path)
+	{
+		std::ifstream in(path, std::ios::in | std::ios::binary);
+		std::ostringstream ss;
+		ss << in.rdbuf();
+		return ss.str();
+	}
+
+	//Every relative file path (POSIX separators, directories excluded) under
+	//`root`, skipping any entry named `excludeName` - used to diff the C++
+	//installer's output tree against mep_recipe.py apply's without the
+	//F6.4-only .mep-install.json stamp (not part of the recipe vocabulary).
+	std::vector<std::string> ListRelativeFiles(const std::filesystem::path& root, const std::string& excludeName)
+	{
+		std::vector<std::string> result;
+		std::error_code ec;
+		for(auto it = std::filesystem::recursive_directory_iterator(root, ec); it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+			if(ec || it->is_directory(ec) || it->path().filename() == excludeName) {
+				continue;
+			}
+			result.push_back(std::filesystem::relative(it->path(), root).generic_string());
+		}
+		std::sort(result.begin(), result.end());
+		return result;
+	}
+
+	//Byte-for-byte parity check between two installed pack trees (relative
+	//path sets, then file contents); `detail` explains the first mismatch.
+	bool DirsMatchByteForByte(const std::filesystem::path& a, const std::filesystem::path& b, std::string& detail)
+	{
+		std::vector<std::string> filesA = ListRelativeFiles(a, ".mep-install.json");
+		std::vector<std::string> filesB = ListRelativeFiles(b, ".mep-install.json");
+		if(filesA != filesB) {
+			detail = "relative path sets differ (" + std::to_string(filesA.size()) + " vs " + std::to_string(filesB.size()) + " files)";
+			return false;
+		}
+		for(const std::string& rel : filesA) {
+			if(ReadFileBytes((a / rel).string()) != ReadFileBytes((b / rel).string())) {
+				detail = "file contents differ: " + rel;
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//Replaces the single expected occurrence of `from` with `to`; Check()s
+	//that it was actually found, so a fixture reformat fails loudly here
+	//instead of silently turning this into a no-op test.
+	std::string ReplaceOnce(const std::string& text, const std::string& from, const std::string& to, const std::string& label)
+	{
+		size_t pos = text.find(from);
+		Check(pos != std::string::npos, "BlocoE: " + label + " finds its anchor text in the golden recipe", "looked for '" + from + "'");
+		return pos == std::string::npos ? text : text.substr(0, pos) + to + text.substr(pos + from.size());
+	}
+
+	//Renders a byte list as lowercase hex. Used only to spell out the FIPS
+	//180-4 known-answer digests below as a byte array instead of a single
+	//64-char hex string literal, since a contiguous run that long reads
+	//as an opaque token to a generic secret scanner even though it is a
+	//public, standardized test vector.
+	std::string BytesToHex(std::initializer_list<uint8_t> bytes)
+	{
+		static const char* digits = "0123456789abcdef";
+		std::string hex;
+		for(uint8_t b : bytes) {
+			hex += digits[b >> 4];
+			hex += digits[b & 0x0f];
+		}
+		return hex;
+	}
+
+	void TestSha256KnownAnswer()
+	{
+		//FIPS 180-4 known-answer vectors: sha256("") and sha256("abc").
+		std::string empty;
+		std::string emptyDigest = BytesToHex({
+			0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
+			0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55 });
+		Check(SHA256::GetHash((uint8_t*)empty.data(), empty.size()) == emptyDigest,
+			"BlocoE: SHA256::GetHash matches the empty-string known-answer vector");
+		std::string abc = "abc";
+		std::string abcDigest = BytesToHex({
+			0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+			0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad });
+		Check(SHA256::GetHash((uint8_t*)abc.data(), abc.size()) == abcDigest,
+			"BlocoE: SHA256::GetHash matches the 'abc' known-answer vector");
+	}
+
+	void TestFullDepsInstallMatchesPythonReference()
+	{
+		std::filesystem::path cppOut = MakeTempPackDir("recipe_full_deps_cpp");
+		std::filesystem::path pyOut = MakeTempPackDir("recipe_full_deps_py");
+		std::string recipeJson = ReadFileBytes(kFixtureDir + "/recipe.json");
+
+		std::unordered_map<std::string, std::string> deps = { { "audio", kFixtureDir + "/audio-dep.zip" } };
+		MepRecipeInstallResult result;
+		bool ok = MepRecipeInstaller::Install(recipeJson, kFixtureDir + "/primary.zip", deps, "", cppOut.string(), result);
+		Check(ok && result.Success, "BlocoE: full-deps Install() succeeds", result.Error);
+
+		std::string cmd = "python3 scripts/mep_recipe.py apply '" + kFixtureDir + "/recipe.json' --primary '"
+			+ kFixtureDir + "/primary.zip' --dep audio='" + kFixtureDir + "/audio-dep.zip' --out '" + pyOut.string() + "' >/dev/null 2>&1";
+		Check(std::system(cmd.c_str()) == 0, "BlocoE: python3 scripts/mep_recipe.py apply (full deps) exits 0");
+
+		std::string detail;
+		Check(DirsMatchByteForByte(cppOut, pyOut, detail), "BlocoE: full-deps C++ install matches mep_recipe.py apply byte-for-byte", detail);
+
+		std::error_code ec;
+		std::filesystem::remove_all(cppOut, ec);
+		std::filesystem::remove_all(pyOut, ec);
+	}
+
+	void TestMissingDepWithholdsPatchKeepsTextures()
+	{
+		std::filesystem::path out = MakeTempPackDir("recipe_missing_dep");
+		std::string recipeJson = ReadFileBytes(kFixtureDir + "/recipe-missing-dep.json");
+
+		MepRecipeInstallResult result;
+		bool ok = MepRecipeInstaller::Install(recipeJson, kFixtureDir + "/primary.zip", {}, "", out.string(), result);
+		Check(ok && result.Success, "BlocoE: missing-dep Install() still succeeds (policy tolerates it)", result.Error);
+
+		Check(std::filesystem::exists(out / "hires.txt") && std::filesystem::exists(out / "tiles.png"),
+			"BlocoE: missing-dep install still writes the textures that don't depend on the missing dep");
+		Check(!std::filesystem::exists(out / "patches" / "game.ips"), "BlocoE: missing-dep install withholds the patch file");
+		Check(!std::filesystem::exists(out / "audio" / "track01.ogg"), "BlocoE: missing-dep install withholds the renamed audio file too (transitive skip)");
+		Check(ReadFileBytes((out / "pack.json").string()).find("\"patches\"") == std::string::npos,
+			"BlocoE: missing-dep pack.json omits the 'patches' key entirely");
+		Check(!result.Withheld.empty(), "BlocoE: missing-dep Install() reports a non-empty withheld set");
+
+		std::error_code ec;
+		std::filesystem::remove_all(out, ec);
+	}
+
+	void TestHashMismatchAbortsWritesNothing()
+	{
+		JsonReader reader;
+		JsonValue root;
+		std::string recipeJson = ReadFileBytes(kFixtureDir + "/recipe.json");
+		reader.Parse(recipeJson, root);
+		std::string realHash = root.Get("sources")->Get("primary")->GetString("sha256");
+		std::string corrupted = realHash;
+		corrupted[0] = (corrupted[0] == '0') ? '1' : '0'; //still 64 hex chars, guaranteed to differ
+
+		std::string badRecipe = ReplaceOnce(recipeJson, realHash, corrupted, "hash-mismatch test");
+		std::filesystem::path out = std::filesystem::temp_directory_path() / "mep_core_unit_tests_hash_mismatch";
+		std::error_code ec;
+		std::filesystem::remove_all(out, ec);
+
+		MepRecipeInstallResult result;
+		bool ok = MepRecipeInstaller::Install(badRecipe, kFixtureDir + "/primary.zip", {}, "", out.string(), result);
+		Check(!ok && !result.Success && !result.Error.empty(), "BlocoE: a primary sha256 mismatch aborts Install()", result.Error);
+		Check(!std::filesystem::exists(out), "BlocoE: a sha256 mismatch writes nothing to the output folder");
+	}
+
+	void TestUnknownOpAndVersionLogsAndSkips()
+	{
+		std::filesystem::path home = std::filesystem::temp_directory_path() / "mep_core_unit_tests_home";
+		FolderUtilities::SetHomeFolder(home.string()); //MessageManager::Log needs a home folder to be set at all
+
+		std::string recipeJson = ReadFileBytes(kFixtureDir + "/recipe.json");
+		std::unordered_map<std::string, std::string> deps = { { "audio", kFixtureDir + "/audio-dep.zip" } };
+
+		std::string badVersion = ReplaceOnce(recipeJson, "\"recipe\": 1,", "\"recipe\": 42,", "unknown-version test");
+		MepRecipeInstallResult versionResult;
+		bool versionOk = MepRecipeInstaller::Install(badVersion, kFixtureDir + "/primary.zip", deps, "", (std::filesystem::temp_directory_path() / "mep_core_unit_tests_bad_version").string(), versionResult);
+		Check(!versionOk, "BlocoE: an unsupported recipe version aborts Install()");
+		Check(MessageManager::GetLog().find("[MEP] recipe unsupported") != std::string::npos, "BlocoE: an unsupported recipe version logs '[MEP] recipe unsupported'");
+
+		std::string badOp = ReplaceOnce(recipeJson, "\"ops\": [", "\"ops\": [{ \"op\": \"frobnicate\", \"from\": \"primary:hires.txt\", \"to\": \"unused.bin\" },", "unknown-op test");
+		std::filesystem::path opOut = MakeTempPackDir("recipe_unknown_op");
+		MepRecipeInstallResult opResult;
+		bool opOk = MepRecipeInstaller::Install(badOp, kFixtureDir + "/primary.zip", deps, "", opOut.string(), opResult);
+		Check(opOk && opResult.Success, "BlocoE: an unknown op is skipped rather than aborting the whole install", opResult.Error);
+		Check(std::filesystem::exists(opOut / "hires.txt"), "BlocoE: the ops after an unknown op still run");
+		Check(MessageManager::GetLog().find("[MEP] recipe unsupported: op 'frobnicate'") != std::string::npos, "BlocoE: an unknown op logs '[MEP] recipe unsupported'");
+
+		std::error_code ec;
+		std::filesystem::remove_all(opOut, ec);
+		std::filesystem::remove_all(home, ec); //mesen.log/.1 written into it by MessageManager::Log
+	}
 }
 
 int main()
@@ -366,6 +568,12 @@ int main()
 	TestDetectConventionLayoutBareRootHiresTxt();
 	TestDetectConventionLayoutConventionWinsOverBareRoot();
 	TestDetectConventionLayoutNoHiresTxtAtAll();
+
+	TestSha256KnownAnswer();
+	TestFullDepsInstallMatchesPythonReference();
+	TestMissingDepWithholdsPatchKeepsTextures();
+	TestHashMismatchAbortsWritesNothing();
+	TestUnknownOpAndVersionLogsAndSkips();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

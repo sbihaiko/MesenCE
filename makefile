@@ -240,10 +240,14 @@ core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 #only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
 #then runs the binary; a failing case exits non-zero.
 core-unit-tests:
-	$(CXX) -std=c++17 -O2 -w -I . -I Core scripts/core_unit_tests.cpp \
+	$(CXX) -std=c++17 -O2 -w -I . -I Core -I Utilities scripts/core_unit_tests.cpp \
 	  Core/Shared/Audio/ChannelRoleClassifier.cpp \
 	  Core/Shared/EnhancementPacks/MepPack.cpp \
+	  Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp \
+	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \
+	  Core/Shared/MessageManager.cpp \
 	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
+	  Utilities/sha256.cpp Utilities/SimpleLock.cpp Utilities/Timer.cpp Utilities/miniz.cpp \
 	  -o scripts/core_unit_tests
 	scripts/core_unit_tests
 
