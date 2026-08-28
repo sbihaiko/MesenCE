@@ -1,6 +1,6 @@
 # ADR-0123: UI/Logic host-free firewall: csproj strictness parity, csproj-derived scan, CI-wired
 
-- Status: proposed (needs code + doc changes; nothing in the checklist is implemented yet)
+- Status: accepted (needs code + doc changes; nothing in the checklist is implemented yet)
 - Date: 2026-08-27
 - Consolidates: ADR-0055, ADR-0057, ADR-0061 (part a: firewall wiring), ADR-0062, ADR-0063, ADR-0067, ADR-0071, ADR-0073
 

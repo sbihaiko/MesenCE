@@ -1,6 +1,6 @@
 # ADR-0125: UI/Logic types may expose public helpers for direct unit testing
 
-- Status: proposed (needs a human pick between the two options below; recommendation given)
+- Status: accepted (Option A picked by the user on 2026-08-28; checklist below is the work)
 - Date: 2026-08-27
 - Consolidates: ADR-0059, ADR-0066 (public-surface half; the sln half is ADR-0122)
 
@@ -53,16 +53,19 @@ genuinely reusable pure predicate. The value of a rule here is consistency, and
 the cheapest consistent rule is "public is fine if the header says why".
 
 ## Consequences
-- Whichever option is chosen, the rule lives in `UI/AGENTS.md` so future
-  extractions follow one convention.
-- Option A: slightly wider public API in `UI/Logic`; each test-facing public
-  helper carries a header note. No code behaviour change.
-- Option B: one visibility edit today; future helpers default to `internal`,
-  and any UI-side reuse requires making them public deliberately.
+- The rule lives in `UI/AGENTS.md` so future extractions follow one
+  convention.
+- Slightly wider public API in `UI/Logic`; each test-facing public helper
+  carries a header note. No code behaviour change.
 - Either way, `UI.Tests` continues to compile the sources directly; no
   `InternalsVisibleTo` is added to `UI/UI.csproj`.
 
 ## Alternatives
+- Option B — single entry point, helpers stay `internal` (change `IsSafePath`
+  to `internal static`; record in `UI/AGENTS.md` that `UI/Logic` exposes only
+  the production entry point publicly): rejected 2026-08-28 — one visibility
+  edit today and a deliberate re-publicising for every future UI-side reuse,
+  for no encapsulation gain under the dual-compile.
 - Leave `UI/AGENTS.md` silent and keep deciding per file (status quo):
   rejected by ADR-0059/0066 — cheap to settle now while the surface is small.
 - Route every test through `Validate(ZipArchive)` and build in-memory zips per

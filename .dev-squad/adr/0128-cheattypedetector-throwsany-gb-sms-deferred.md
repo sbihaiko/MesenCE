@@ -1,6 +1,6 @@
 # ADR-0128: CheatTypeDetector parity tests use Assert.ThrowsAny; Gb/Sms support deferred
 
-- Status: proposed (test change pending; product decision on Gb/Sms explicitly deferred)
+- Status: accepted (test change pending; product decision on Gb/Sms explicitly deferred)
 - Date: 2026-08-27
 - Consolidates: ADR-0069, ADR-0070
 
