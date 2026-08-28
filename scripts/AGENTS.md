@@ -104,6 +104,23 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   symbols as a back-compat facade (test call sites); new code imports the
   assembly helpers from `mep_recipe_assemble` directly. `validate`/
   `dry-run`/`apply` and the dispatch in `main()` never left `mep_recipe.py`.
+  `mep_recipe_common.py` also holds the "shortest safe fence" rule
+  (F6.3b, ADR-0138 §33): `choose_fence(payload)` picks the shortest
+  backtick fence (3 or more) strictly longer than any backtick run
+  `json.dumps` (which does not escape backticks) may have left inside
+  `payload`, and `find_fenced_block(text, label)` is the matching reader —
+  it accepts an opening run of 3+ backticks and matches the closing run
+  by that exact same length, never a hardcoded 3-backtick assumption.
+  `mep_recipe.py`'s `FENCE` (the ```mep-recipe fence label) and
+  `load_recipe` are the CLI-side consumer of the reader half; the writer
+  half is meant for any script or CI step that embeds a backtick-fenced
+  payload it did not author verbatim (e.g. a submitter-supplied string).
+  `test_mep_recipe_fence.py` is the framework-free round-trip proof: a
+  payload embedding backtick runs of varying lengths (including a run
+  already shaped like a fenced block) survives `choose_fence` +
+  `load_recipe` byte-for-byte, the no-backticks case still gets a
+  3-backtick fence (no regression), and `load_recipe`'s pre-existing
+  "not JSON and no fence" failure mode is unchanged.
   `mep_recipe.py assemble-sources` (F6.2b, ADR-0138 §7/§12/§13) is the
   deterministic step that builds `sources`: it parses the issue body's
   `external_assets` lines (`<url> [<sha256>] [<size>]`, reusing
@@ -344,6 +361,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `mep_lint`-clean) plus `assemble-sources` (absent/present/refused per
   ADR-0138 §7/§13, CLI round trip); PASS/FAIL per check, exit 0 only if
   all pass.
+- `python3 scripts/test_mep_recipe_fence.py` (F6.3b, AC-7/AC-9) - the
+  ADR-0138 §33 "shortest safe fence" round trip: `choose_fence` +
+  `mep_recipe.py`'s `FENCE`/`load_recipe` recover a backtick-laden
+  payload byte-for-byte, the no-backticks case still gets a 3-backtick
+  fence, and `load_recipe`'s pre-existing failure mode is unchanged;
+  PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_meta_parser.py` - `mep_meta_parser.parse_mep_meta`
   (F6.3, ADR-0138 §27): well-formed `<!-- mep-meta -->` block round-trips;
   missing marker, truncated fence, invalid JSON, a non-object JSON
