@@ -30,7 +30,9 @@ The assemble-sources implementation (issue-body parsing, dep merge, its
 own CLI arg parsing) lives in the sibling module `mep_recipe_assemble`
 (F6.2c, ADR-0138 Clarification §23) and is re-exposed here as
 `assemble_sources`/`cmd_assemble_sources`; validate/dry-run/apply and the
-dispatch below stay in this file.
+dispatch below stay in this file. RecipeError/SHA256_HEX/RECIPE_VERSION
+live in the sibling `mep_recipe_common` module so neither this file nor
+mep_recipe_assemble.py imports the other for them (no import cycle).
 """
 from __future__ import annotations
 
@@ -42,37 +44,15 @@ import zipfile
 from pathlib import Path
 
 import mep_lint
+import mep_recipe_assemble
+from mep_recipe_common import RECIPE_VERSION, RecipeError, SHA256_HEX
 
-RECIPE_VERSION = 1
-SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SOURCE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 KNOWN_OPS = ("copy", "glob", "rename", "rewrite-paths")
 REWRITE_TAGS = ("bgm", "sfx", "img", "background", "patch")
 PATCH_SUFFIXES = (".ips", ".bps")
 FENCE = re.compile(r"```mep-recipe[^\n]*\n(.*?)```", re.DOTALL)
-
-
-class RecipeError(Exception):
-    """User-facing validation or apply failure."""
-
-
-# mep_recipe_assemble (F6.2c, ADR-0138 Clarification §23) holds the
-# CI-only assemble-sources code (issue-body parsing, dep merge, its own
-# CLI arg parsing) and imports RecipeError/SHA256_HEX/RECIPE_VERSION back
-# from this module — imported here only after those three are defined, so
-# a normal `import mep_recipe` (test_mep_recipe.py) resolves the sibling's
-# back-import against this module's already-populated attributes instead
-# of recursing. When this file is run directly (`python3
-# scripts/mep_recipe.py ...`) its own module name is '__main__', not
-# 'mep_recipe' — aliasing sys.modules first means mep_recipe_assemble's
-# `from mep_recipe import ...` resolves against the single module object
-# already executing here, instead of re-executing this whole file under a
-# second 'mep_recipe' module object and recursing back into this same
-# import before mep_recipe_assemble finishes defining its attributes.
-sys.modules.setdefault("mep_recipe", sys.modules[__name__])
-
-import mep_recipe_assemble  # noqa: E402  (must follow RecipeError/SHA256_HEX)
 
 assemble_sources = mep_recipe_assemble.assemble_sources
 cmd_assemble_sources = mep_recipe_assemble.cmd_assemble_sources
