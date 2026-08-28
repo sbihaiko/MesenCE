@@ -276,8 +276,14 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 		return false;
 	}
 
-	if(!RequireString(root, "name", out.Name, error) || !RequireString(root, "version", out.Version, error) || !RequireString(root, "license", out.License, error)) {
+	if(!RequireString(root, "name", out.Name, error) || !RequireString(root, "version", out.Version, error)) {
 		return false;
+	}
+	//MEP-v1 §3.1: `license` is SHOULD (optional since v1.1) — absent reads as "not declared",
+	//the same placeholder MepPackManager uses for convention-only sibling folders.
+	out.License = root.GetString("license", "unspecified");
+	if(out.License.empty()) {
+		out.License = "unspecified";
 	}
 	if(!IsValidSemver(out.Version)) {
 		error = "'version' is not a semver version: " + out.Version;

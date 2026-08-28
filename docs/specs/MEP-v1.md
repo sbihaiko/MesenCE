@@ -121,7 +121,7 @@ pack's author.
 | `name` | MUST | human-readable name of the pack |
 | `version` | MUST | pack version, semver |
 | `author` | SHOULD | author(s) |
-| `license` | MUST | SPDX identifier for the pack's content (e.g. `CC0-1.0`, `CC-BY-4.0`) |
+| `license` | SHOULD | SPDX identifier for the pack's content (e.g. `CC0-1.0`, `CC-BY-4.0`). Optional since v1.1 (2026-08-28): when absent, hosts MUST treat the pack as `NOASSERTION` (licence not declared), MUST NOT refuse it for that reason alone, and SHOULD surface "not declared" wherever they show pack metadata |
 | `targets` | MUST, ≥1 | ROMs the pack applies to (see §4) |
 | `patches` | MAY (v1.1) | `[{ "sha1", "file" }]` — patch (IPS/BPS) per ROM revision. The host MUST apply only the entry whose `sha1` (No-Intro, §4) matches the loaded ROM; with no matching entry, it MUST load the remaining sections and **skip** the patch with a warning. An explicit user override MAY apply a patch from a different revision, always with a warning |
 | `sections` | MUST, ≥1 section | pack content (see §5) |

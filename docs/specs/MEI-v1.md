@@ -92,12 +92,13 @@ separately (§2.3).
 | `game`, `system` | MUST | target game and system (`system` values as in MEP §4) |
 | `rom` | MUST | object; `sha1` (40 uppercase hex, No-Intro range from MEP §4) MAY (v1.1) be absent, optionally `crc32` |
 | `mep` | MUST unless `kind: "hd-legacy"` | MEP spec version of the artifact |
-| `license` | MUST | SPDX of the content; MAY (v1.1) be `"unknown"` for `kind: "hd-legacy"` |
+| `license` | SHOULD | SPDX of the content, or `"unknown"` when the submitter declared none (any `kind`, v1.1); an absent field is read as `"unknown"` |
 | `url` | MUST | URL of the `.zip` artifact — **HTTPS required** |
 | `size` | SHOULD | size of the artifact in bytes |
 | `sha256` | MUST | SHA-256 of the artifact, 64 hex (case-insensitive on read; producers SHOULD write lowercase) |
 | `deps` | MAY (v1.1) | list of third-party artifacts the pack references; see §2.3 |
 | `recipe` | MAY (v1.1) | MEP-recipe-v1 document assembled for `deps`; see §2.3 |
+| `issue`, `verdict`, `validated_at`, `labels`, `recipe_hash`, `recipe_ok` | MAY (v1.1) | producer provenance: issue number (integer), triage verdict string, ISO-8601 validation date, list of label strings, SHA-256 hex of the `recipe` document, boolean recipe dry-run result. Non-normative — clients MUST ignore them for install decisions and MAY display them |
 
 Unknown fields MUST be ignored.
 
@@ -113,16 +114,26 @@ split part of their content into third-party artifacts:
 - `kind: "hd-legacy"` — a community submission accepted only as a plain
   HD/texture pack (MEP-v1 §5.2 "Aceito parcial (HD Mesen)"), with no MEP
   `pack.json` to mirror. For these entries `version` and `mep` MAY be
-  omitted, and `license` MAY be `"unknown"` when the submitter declared
-  none.
+  omitted (`license` MAY be `"unknown"` for any `kind`, §2.2).
 - `rom.sha1` MAY be absent regardless of `kind` (clients only auto-match an
   entry against a loaded ROM when it carries a `sha1`; an entry without one
-  is still listable and installable, just not hash-matchable).
-- `deps` (when present) is a list of objects, each MUST carry `license`
+  is still listable and installable, just not hash-matchable). This is a
+  deliberate v1.1 downgrade of a v1.0 MUST for every `kind`, not gated on
+  the declared `mei` minor: a v1.0 document stays valid under v1.1 rules, and
+  the only opt-in relaxation is the explicit `kind: "hd-legacy"` (absent
+  `kind` means `mep`).
+- `deps` (when present) is a list of objects, each SHOULD carry `license`
   (SPDX id or a short declared-licence string, mirroring MEP-recipe-v1 §3.3)
   and SHOULD carry `url`/`sha256`/`size` identifying the third-party
-  artifact. Clients MUST show each dep's `license` before downloading or
-  installing it (mirrors MEI §3's trust obligations).
+  artifact. Clients MUST show each dep's `license` — or that none was
+  declared — before downloading or installing it (mirrors MEI §3's trust
+  obligations). Index producers copy `deps[]` from the recipe's
+  `sources.deps` (the licence-bearing shape), never from a stripped summary.
+- An index producer MUST omit an entry it cannot make conformant to this
+  section (missing `url`/`sha256`, unresolvable `kind`) rather than emit an
+  incomplete one; it SHOULD log the omission naming the source item. A
+  committed index is therefore valid by construction and its validator stays
+  strict.
 - `recipe` (when present) is the MEP-recipe-v1 document that assembles
   `deps` and the primary artifact into an installable pack; clients that do
   not implement the recipe interpreter MUST ignore it and MAY still list
@@ -144,7 +155,8 @@ MEI clients (an emulator's pack browser, or any other):
    pack's installation directory (zip-slip).
 4. MUST require explicit user confirmation when adding/installing from a
    manifest that is not the host's default index.
-5. SHOULD present `license` and `maintainer` before installation.
+5. SHOULD present `license` (or "not declared") and `maintainer` before
+   installation.
 
 These rules are the **spec's contract**, not an implementation detail:
 third-party clients inherit the same obligations.

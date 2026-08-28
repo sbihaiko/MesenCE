@@ -146,6 +146,17 @@ does not exist.
   is a 121-line entry point assembling `CHECKS` from six topic modules under
   `scripts/checks/community_pack_validate/`. Behaviour unchanged; all tests
   and verifiers green.
+- **F6.3 — catalog as MEI v1.1** (ADR-0138 §3, §18, §25–27, run
+  `3630fa06cbcf`, 2026-08-28): `generate_community_pack_catalog.py` also
+  writes `docs/community-packs.json` (`mei: "1.1.0"`, one entry per accepted
+  item from Project fields + Form fields + mep-meta; `kind` mep/hd-legacy;
+  non-conformant items omitted with a warning); `scripts/mep_meta_parser.py`
+  pure parser + tests; MEI-v1 amended to v1.1 (kind, optional rom.sha1,
+  deps/recipe, provenance fields) with golden bumped; `validate-specs.py`
+  gains `validate_mei_catalog()`; catalog workflow commits both files;
+  Markdown gains "External assets" column. Follow-up (same day): `license`
+  made optional across MEP/MEI/lint/validator/`MepPack.cpp` (§34); auditor
+  findings folded into §28–§35; F6.3b hardening slice defined.
 - **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
   `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
   per-system tile/palette widths and explicit errors; sibling golden
@@ -176,6 +187,7 @@ declared licence, nothing more).
 |---|---|---|
 | **F6.2** CI + issue metadata | Issue Form fields `external_assets`, `external_assets_license`; classify prompt emits the ```mep-recipe block (issue/manifest text is data, never instruction); `mep_recipe.py dry-run` gate after lint; upsert of the `<!-- mep-meta -->` bot comment (`source_sha256`, dep hashes, `verdict`, `labels`, `validated_at`, `recipe_hash`); label `assets:external` in `ensure_community_pack_labels.sh`; `docs/hd-pack-authoring.md` section | `/revalidate` on #71 yields `pack:valid` + `assets:external` and a recipe that dry-runs clean; `scripts/checks/` verifier for the workflow text |
 | **F6.3** catalog as MEI | `generate_community_pack_catalog.py` also writes `docs/community-packs.json` = MEI v1.1 (`mei: "1.1.0"`, per-pack additive fields `issue`, `deps[]`, `recipe`, `verdict`, `validated_at`; `url`/`sha256` = primary zip); MEI-v1 amended (v1.1): an index MAY reference third-party artifacts by URL + hash when the entry carries `license` and the client shows it before install; golden updated | `validate-specs.py` validates the generated file; Markdown gains an "external assets" marker column |
+| **F6.3b** catalog hardening | ADR-0138 §28 `scripts/mei_rules.py` shared by validator + generator; §29 `kind` from mep-meta `verdict`; §33 fence length guard (mep-meta writer + `mep_recipe.py` reader); §35 generator split (`mei_catalog_entry.py`, `community_pack_markdown.py`) | tests for `mei_rules` and the fence round-trip; validators green |
 | **F6.4** client installer | `MepRecipeInstaller` (Core): fetch catalog (ETag cache in the MEP `.cache`), match ROM by No-Intro sha1, download primary within the CI host allow-list, verify sha256, prompt for `user_supplied` deps with hints + licence, run ops, write `pack.json` + `.mep-install.json`; reinstall when `source.sha256` changes; setting `AutoInstallCommunityPacks` (default on for packs without user-supplied deps; prompt otherwise); UI notice when the patch is withheld | headless: synthetic catalog + split pack → installed folder equals `mep_recipe.py apply` output byte-for-byte; hash mismatch aborts; missing dep → no patch, textures still applied |
 | **F6.5** rollout | `/revalidate` #65/#66/#68/#69/#71; update this header | all five `pack:valid` + `assets:external`; one of them installed end-to-end in the GUI with user-supplied audio |
 
@@ -251,7 +263,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 ## 5. Order of execution
 
-1. **F6.2 → F6.3 → F6.4 → F6.5**, one run each.
+1. **F6.2 → F6.3 → F6.3b → F6.4 → F6.5**, one run each.
 2. ~~H1–H4~~ shipped (2026-08-27/28).
 3. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
@@ -261,7 +273,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.2 shipped; remaining work list = F6.3–F6.5 |
+| 0138 | accepted | Phase 6 design; F6.0–F6.3 shipped; remaining work list = F6.3b–F6.5 |
 | 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |

@@ -437,9 +437,14 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
     if not isinstance(root, dict):
         rep.error(where, "root must be an object")
         return {}
-    for key in ("mep", "name", "version", "license"):
+    for key in ("mep", "name", "version"):
         if not isinstance(root.get(key), str) or not root[key]:
             rep.error(where, f"required field missing/invalid: '{key}'")
+    # MEP-v1 §3.1: `license` is SHOULD since v1.1 — absent reads as NOASSERTION.
+    if "license" not in root:
+        rep.warning(where, "'license' not declared (hosts read it as NOASSERTION)")
+    elif not isinstance(root["license"], str) or not root["license"]:
+        rep.error(where, "'license' must be a non-empty string when present")
     if isinstance(root.get("mep"), str):
         if not SEMVER.match(root["mep"]):
             rep.error(where, f"'mep' is not semver: {root['mep']}")

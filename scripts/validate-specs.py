@@ -77,8 +77,10 @@ def safe_relative_path(p):
 
 def validate_mep(path):
     d = json.loads(path.read_text())
-    for field in ("mep", "name", "version", "license", "targets", "sections"):
+    for field in ("mep", "name", "version", "targets", "sections"):
         check(field in d, f"{path.name}: required field missing: {field}")
+    # MEP-v1 §3.1: `license` is optional (SHOULD) since v1.1; when present it is a non-empty string.
+    check("license" not in d or (isinstance(d["license"], str) and d["license"]), f"{path.name}: license must be a non-empty string when present")
     check(bool(SEMVER.match(d.get("mep", ""))), f"{path.name}: 'mep' is not semver")
     check(bool(SEMVER.match(d.get("version", ""))), f"{path.name}: 'version' is not semver")
     targets = d.get("targets", [])
@@ -99,7 +101,7 @@ def lint_golden_packs():
         check(result.returncode == 0, f"mep_lint.py exited {result.returncode} on {root}:\n{result.stdout}{result.stderr}")
 
 def validate_mei(path):
-    # MEI v1.1 §2.2/§2.3: "hd-legacy" `kind` needs no `version`/`mep`; `rom.sha1` MAY be absent regardless of `kind`; each `deps[]` entry MUST carry `license`.
+    # MEI v1.1 §2.2/§2.3: "hd-legacy" `kind` needs no `version`/`mep`; `rom.sha1` MAY be absent regardless of `kind`; `license` (entry and each `deps[]` item) is SHOULD — a non-empty string when present.
     d = json.loads(path.read_text())
     for field in ("mei", "name", "packs"):
         check(field in d, f"{path.name}: required field missing: {field}")
@@ -108,7 +110,7 @@ def validate_mei(path):
         where = f"{path.name}: packs[{i}]"
         kind = p.get("kind")
         check(kind is None or kind in MEI_KINDS, f"{where}: invalid kind: {kind!r}")
-        required = ["name", "game", "system", "rom", "license", "url", "sha256"]
+        required = ["name", "game", "system", "rom", "url", "sha256"]
         required += [] if kind == "hd-legacy" else ["version", "mep"]
         for field in required:
             check(field in p, f"{where}: required field missing: {field}")
@@ -119,8 +121,9 @@ def validate_mei(path):
         rom = dict(p.get("rom", {}))
         rom.setdefault("system", p.get("system"))
         validate_rom_id(rom, f"{where}.rom", require_sha1=False)
+        check("license" not in p or (isinstance(p["license"], str) and p["license"]), f"{where}: license must be a non-empty string when present")
         for j, dep in enumerate(p.get("deps", [])):
-            check("license" in dep, f"{where}.deps[{j}]: required field missing: license")
+            check("license" not in dep or (isinstance(dep["license"], str) and dep["license"]), f"{where}.deps[{j}]: license must be a non-empty string when present")
 
 def validate_mei_catalog():
     # ADR-0138 §§26-27: also validates docs/community-packs.json when present (a generated artifact; skipped, not failed, when this checkout has none).

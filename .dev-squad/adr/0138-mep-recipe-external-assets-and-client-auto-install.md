@@ -455,11 +455,13 @@ again) are folded and deleted.
     mep-meta block (`deps[]`, `recipe`, `recipe_hash`, `recipe_ok`, `verdict`,
     `validated_at`, `labels`). MEI **v1.1** amendments: (a) new optional
     `kind` ∈ {`mep`, `hd-legacy`}; for `hd-legacy` entries `version` and
-    `mep` are omitted and `license` MAY be `"unknown"`; (b) `rom.sha1` MAY be
+    `mep` are omitted; `license` is SHOULD for any `kind` (§34); (b) `rom.sha1` MAY be
     absent (clients only auto-match entries that carry it); (c) an entry MAY
     carry `deps[]`/`recipe` referencing third-party artifacts by URL + hash,
-    provided each dep carries `license` and the client shows it before
-    install (PRD row); (d) `catalog_version` is not used — `mei` is the
+    each dep SHOULD carry `license` and the client shows it — or "not
+    declared" — before install (PRD row, §34); `deps[]` is copied from
+    mep-meta's embedded `recipe.sources.deps` (the licence-bearing shape),
+    never from mep-meta's top-level display-only `deps` summary; (d) `catalog_version` is not used — `mei` is the
     version. Golden `docs/specs/golden/mei/manifest.json` bumps to 1.1.0 and
     gains one `hd-legacy` entry with `deps`/`recipe`; MEI-v1.md §2.2 gains
     the v1.1 rows. Unknown-field tolerance (MEI §2.2) keeps 1.0 readers safe.
@@ -474,6 +476,58 @@ again) are folded and deleted.
     with its own tests; a malformed block skips the entry's recipe data and
     logs, never aborts the whole catalog.
 
+28. **MEI entry rules have one owner (F6.3b).** `validate-specs.py` (not
+    importable — hyphenated name) and `generate_community_pack_catalog.py`
+    currently mirror the v1.1 entry constraints by hand; two of F6.3's four
+    revision cycles were drift repairs on that mirror. F6.3b extracts the
+    constraint set (`MEI_SYSTEMS`, hash regexes, kind-conditional required
+    fields, `mei_entry_conforms`) into a stdlib-only leaf
+    `scripts/mei_rules.py` imported by both; the generator runs every
+    assembled entry through it before writing.
+29. **`kind` derivation.** `kind` is derived from the mep-meta `verdict`
+    (versioned in the issue timeline) with the Project Status literal as the
+    fallback only; the Status→kind mapping is one constant shared by the
+    generator and `community-pack-validate.yml`'s label/verdict step, guarded
+    by a parity check in the `verify_mep_fallback_constant_parity.sh` style.
+    An unmapped Status yields no entry (§32), never a `kind`-less one.
+30. **Provenance fields are spec'd, not namespaced.** `issue`, `verdict`,
+    `validated_at`, `labels`, `recipe_hash`, `recipe_ok` are listed in MEI
+    §2.2 as optional (MAY, v1.1) non-normative provenance fields with their
+    types (done 2026-08-28). Namespacing under a `provenance` object was
+    rejected: nothing gains from the reshape and it would break the first
+    consumer for free.
+31. **Versioning precedent.** MEI v1.1 downgrades `rom.sha1` to optional for
+    every `kind`, deliberately and not gated on the declared `mei` minor —
+    recorded in MEI §2.3 (done 2026-08-28). Absent `kind` means `mep` with the
+    full 1.0 field set; only explicit `hd-legacy` relaxes `version`/`mep`.
+32. **Generator is the gatekeeper.** An accepted board item that cannot
+    produce a spec-valid MEI entry is omitted from `packs[]` with a warning
+    naming the issue; the Markdown row still lists it. Recorded in MEI §2.3
+    (done 2026-08-28); `validate_mei_catalog()` stays strict.
+33. **Fence length guard (F6.3b, workflow side).** `json.dumps` does not
+    escape backticks, so a submitter-supplied ``` inside `hints`/`license`
+    truncates the fixed three-backtick mep-meta block (data loss, not
+    forgery — the prefix fails to parse and `parse_mep_meta` returns
+    `None`). One format rule for both the mep-meta writer and the
+    ```mep-recipe reader in `mep_recipe.py`: emit the shortest backtick run
+    longer than any run in the payload; readers accept a fence of 3+
+    backticks and match the closing run by length.
+34. **`license` is optional everywhere (user decision, 2026-08-28).**
+    MEP-v1 §3.1 `license` is SHOULD (was MUST): absent reads as
+    `NOASSERTION`, hosts never refuse a pack for it and surface "not
+    declared". `mep_lint.py` warns instead of erroring; `validate-specs.py`
+    only type-checks it when present; `MepPack.cpp` reads it with the
+    `"unspecified"` default `MepPackManager` already uses for sibling
+    folders. MEI §2.2 entry `license` and §2.3 dep `license` are SHOULD too;
+    clients show "not declared" in place of a value. MEP-recipe-v1 already had
+    it as SHOULD (default `NOASSERTION`), so recipe assembly is unchanged.
+35. **File-size gate vs declared-file scope.** For generator scripts the
+    200-line-per-file threshold wins: a task that will need a module split
+    pre-declares the extracted files in its file list so the scope critic
+    cannot reject the split (F6.3 lost a cycle folding a correct split back).
+    Two small checkers covering one script from different angles are fine;
+    no convention slice is spent on it.
+
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
 creation, authoring-doc section, Issue-Form/labels verifiers, and the
@@ -482,3 +536,12 @@ creation, authoring-doc section, Issue-Form/labels verifiers, and the
 step + `mep_recipe.py` sources-assembly helper, gate, `apply-verdict`
 expression and `external` branch, mep-meta upsert) plus the extended
 workflow verifier.
+
+**F6.3b — catalog hardening (2026-08-28, after F6.3).** §28 (`scripts/mei_rules.py`
+leaf + generator self-check), §29 (`kind` from mep-meta `verdict`, one shared
+Status mapping + parity check), §33 (fence length guard in
+`community-pack-validate.yml`'s mep-meta writer and `mep_recipe.py`'s
+```mep-recipe reader), and the §35 split of
+`generate_community_pack_catalog.py` into MEI entry assembly (`scripts/mei_catalog_entry.py`), Markdown
+rendering (`scripts/community_pack_markdown.py`) and the fetch/orchestration
+that stays behind — file list pre-declared. Runs before F6.4.
