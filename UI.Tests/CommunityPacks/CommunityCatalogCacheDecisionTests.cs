@@ -132,5 +132,23 @@ namespace Mesen.Tests.CommunityPacks
 			Assert.Equal("{\"packs\":[{\"id\":1}]}", result.Body);
 			Assert.False(result.ShouldWriteCache);
 		}
+
+		[Theory]
+		[InlineData("")]
+		[InlineData("   ")]
+		public void Resolve_200WithEmptyOrWhitespaceBody_FallsBackToUsableCacheRatherThanFresh(string body)
+		{
+			// HttpContent.ReadAsStringAsync() returns "" (never null) for a
+			// zero-length response: a CDN/proxy answering 200 with an empty
+			// body must not destroy a usable cache.
+			CommunityCatalogFetchOutcome outcome = new(200, "\"new-etag\"", body);
+
+			CommunityCatalogCacheResult result = CommunityCatalogCacheDecision.Resolve(
+				outcome, "\"old-etag\"", "{\"packs\":[{\"id\":1}]}");
+
+			Assert.Equal(CommunityCatalogCacheVerdict.Reused, result.Verdict);
+			Assert.Equal("{\"packs\":[{\"id\":1}]}", result.Body);
+			Assert.False(result.ShouldWriteCache);
+		}
 	}
 }

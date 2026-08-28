@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Mesen.Logic
@@ -53,6 +54,10 @@ namespace Mesen.Logic
 		[JsonPropertyName("size")] public long? Size { get; set; }
 		[JsonPropertyName("sha256")] public string Sha256 { get; set; } = "";
 		[JsonPropertyName("deps")] public CommunityPackDep[]? Deps { get; set; }
+		//MEI-v1.md §2.3: the MEP-recipe-v1 document assembled for `deps`. Kept
+		//opaque (JsonElement, source-gen/AOT-safe) and handed verbatim to
+		//MepRecipeInstaller::Install - the UI never interprets it (ADR-0138 §45).
+		[JsonPropertyName("recipe")] public JsonElement? Recipe { get; set; }
 
 		//Provenance fields (MEI-v1.md §2.2: "MAY, non-normative - clients
 		//MUST ignore them for install decisions and MAY display them").

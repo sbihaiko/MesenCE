@@ -43,7 +43,10 @@ namespace Mesen.Logic
 		{
 			bool cacheUsable = IsCacheUsable(cachedETag, cachedBody);
 
-			if(outcome.StatusCode == 200 && outcome.Body != null) {
+			//Same body test as IsCacheUsable: a 200 whose body is empty/whitespace
+			//(HttpContent yields "" for a zero-length response, never null) is
+			//"a 200 with no body" and must not overwrite a usable cache.
+			if(outcome.StatusCode == 200 && !string.IsNullOrWhiteSpace(outcome.Body)) {
 				return new CommunityCatalogCacheResult(CommunityCatalogCacheVerdict.Fresh, outcome.Body, true);
 			}
 

@@ -7,6 +7,10 @@
 		without SDL2/MesenCore/Avalonia being present. See UI.Tests/AGENTS.md.
 	-->
 	<PropertyGroup>
+		<!-- Parity with UI.csproj: UI/Logic files dual-compiled here must be AOT/trim-safe too
+		     (reflection-based System.Text.Json would pass tests and fail in the published app). -->
+		<JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+		<IsAotCompatible>true</IsAotCompatible>
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>

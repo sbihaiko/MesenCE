@@ -608,6 +608,66 @@ again) are folded and deleted.
     and the actor has already answered it, the run operator merges the task
     branch by hand instead of burning cycles.
 
+41. **Allow-list packaging (F6.4b audit, PRIORITY 1).**
+    `scripts/pack_host_allowlist.json` stays the single source. `UI/UI.csproj`
+    embeds it as an `EmbeddedResource` (`LogicalName`
+    `Mesen.pack_host_allowlist.json`, `Include="../scripts/pack_host_allowlist.json"`)
+    and the service loads it via `CommunityPackHostAllowlist.LoadFromStream`
+    from the assembly manifest — never from a repo-relative path, which does
+    not exist in a published app. A check under `scripts/checks/` asserts the
+    csproj references exactly that path. `MatchHost` mirrors
+    `fetch_pack.py:match_host` (HTTPS-only, exact netloc, `path_contains_any`).
+42. **Wire shape authority.** `docs/specs/MEI-v1.md` is normative; §3's
+    sketch (`source.{url,sha256}`, `rom.sha1` array) is superseded by the
+    real MEI shape: `url`/`size`/`sha256` at the entry top level, `rom.sha1` a
+    scalar, `mei`/`name`/`packs` envelope. Wherever this ADR says "catalog
+    `source.sha256`" read "the entry's `sha256`"; `.mep-install.json` keeps
+    the key name `source.sha256` for the recorded value.
+43. **Reinstall policy vs user-owned state (PRIORITY 3).** Automatic
+    reinstall happens only when (a) the target folder holds a
+    `.mep-install.json` written by the installer, (b) its `source.sha256`
+    differs from the catalog entry's `sha256`, and (c) the container is not
+    in `DisabledPacks`. A folder without the stamp is user-owned and is never
+    overwritten (UI notice offering a manual install instead); a disabled
+    pack is skipped silently.
+44. **UI.Tests compiles UI/Logic under the same AOT contract.**
+    `UI.Tests.csproj` sets `JsonSerializerIsReflectionEnabledByDefault=false`
+    and `IsAotCompatible=true` like `UI.csproj`, so a UI/Logic file that
+    relies on reflection-based JSON fails `dotnet test` (done 2026-08-28).
+45. **`recipe` travels opaque.** `CommunityPackCatalogEntry.Recipe` is a
+    `JsonElement?`; the service serialises it back to text (`GetRawText()`)
+    and hands it to `InstallMepRecipe` unchanged — the UI never interprets a
+    recipe (done 2026-08-28).
+46. **Downloads cache = `<EnhancementPackFolder>/.cache/downloads/`**
+    (ADR-0040 scratch space, safe to delete). Downloaded primaries and
+    user-supplied deps are looked up there by sha256; the `user_supplied`
+    prompt names this folder as the drop location.
+47. **Interop encoding for `InstallMepRecipe`.** The dep-id → path map
+    crosses the boundary as UTF-8 text, one `id<TAB>path` row per line
+    (`EmuApiWrapperMep.cpp`, shipped in F6.4b/T5, same row grammar as
+    `GetMepPackList`); the recipe crosses as raw JSON text; the result comes
+    back through the existing char* out-buffer convention. Recorded here so
+    the choice is not re-litigated; JSON-object encoding was the runner-up.
+48. **Interop registries are exempt from the 200-line cap.** `UI/Interop/EmuApi.cs`
+    and `InteropDLL/EmuApiWrapper.cpp` are flat one-declaration-per-line
+    registries; new export families go in sibling files
+    (`EmuApiWrapperMep.cpp` precedent) rather than splitting the registries.
+49. **UI-only settings.** A field in `EnhancementPackConfig` (C#) that no
+    native code reads (`CommunityPackAutoInstallConsentGiven`) is not
+    mirrored into `InteropEnhancementPackConfig`; `AutoInstallCommunityPacks`
+    stays mirrored because `SettingTypes.h` declares it. The rule: mirror iff
+    a native consumer exists.
+
+**F6.4b second half (2026-08-28).** Run `2ef26ba839d1` landed the UI/Logic
+decision classes, DTOs and the interop export (T1–T5; T1 recovered per §40 and
+fixed for the empty-body 200). The remaining run — **F6.4b-2** — ships, in one
+task file list: `UI/Services/CommunityPackCatalogFetcher.cs`,
+`UI/Services/CommunityPackInstallCoordinator.cs`,
+`UI/Services/CommunityPackInstallService.cs`, the `UI.csproj` embedded
+allow-list + its check (§41), `CommunityPackAutoInstallConsentGiven` in
+`EnhancementPackConfig.cs`, the Settings checkbox and consent dialog in
+`EnhancementPacksWindow`, and the ROM-load hook that triggers the service.
+
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
 creation, authoring-doc section, Issue-Form/labels verifiers, and the
