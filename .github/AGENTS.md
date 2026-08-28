@@ -156,8 +156,28 @@ what CI actually runs; this doc records why they're split the way they are.
   `verify_community_pack_validate_workflow.py`'s
   `check_recipe_gate_step_present_and_gated` and
   `check_recipe_gate_never_uses_inverted_condition`.
-  `apply-verdict`'s downgrade expression/`external` label branch and the
-  mep-meta comment upsert remain the not-yet-implemented rest of F6.2b.
+  `apply-verdict` (`id: apply-verdict`, "Apply classification verdict")
+  stays the SOLE verdict/label writer (§10): it reads
+  `steps.assemble-recipe.outputs.recipe_status` and
+  `steps.recipe-gate.outputs.recipe_ok` and downgrades `accepted` to
+  `invalid` with one literal bash condition inside its `run:` block —
+  `[ "$RECIPE_STATUS" = "present" ] && [ "$RECIPE_OK" != "true" ]` —
+  deliberately not a step-level `if:`, since that would decide whether the
+  whole verdict/label step runs at all rather than downgrading its
+  outcome. The same step's existing asset-label case loop gains an
+  `external` arm applying `assets:external`, fed in only when
+  `recipe_status == 'present'` and the assembled recipe's
+  `sources.deps` array (read back from `$RUNNER_TEMP/mep_recipe.json`) is
+  non-empty (§6) — never derived from classify's own `assets` enum, which
+  has no "external" member. `apply-verdict` exposes its own two step
+  outputs, `verdict` (the effective, post-downgrade verdict) and `labels`
+  (every label actually applied to the issue), so a later step (the
+  mep-meta comment upsert, still the not-yet-implemented rest of F6.2b)
+  can consume them without recomputing. Checked by
+  `verify_community_pack_validate_workflow.py`'s
+  `check_apply_verdict_downgrade_expression`,
+  `check_apply_verdict_external_label_branch`, and
+  `check_apply_verdict_exposes_outputs`.
 
 ## Work Guidance
 
