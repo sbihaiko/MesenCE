@@ -7,25 +7,25 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-555.svg)](#download)
 [![Systems](https://img.shields.io/badge/systems-NES%20%7C%20GB%2FGBC%20%7C%20SMS%2FGG%2FSG--1000%20%7C%20GBA-8a2be2.svg)](#what-it-runs)
 [![Specs: CC0](https://img.shields.io/badge/open%20specs-CC0-lightgrey.svg)](docs/specs/)
+[![Community packs](https://img.shields.io/badge/community%20packs-catalog-2ea043.svg)](docs/community-packs.md)
+[![Submit a pack](https://img.shields.io/badge/submit-a%20pack-orange.svg)](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml)
 
-**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)<br/>
+**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Community packs](#community-packs) · [Why this fork](#why-this-fork) · [FAQ](#faq)<br/>
 
 </div><br/>
 
-## The 30-second pitch — Your NES, Game Boy, Master System, and GBA games, enhanced
+## Your NES, Game Boy, Master System and GBA games — faithful, then enhanced
 
-**HD art and modern instruments, seamlessly integrated into a single enhancement pack.**  
-Everything works automatically, right out of the box — and the enhancements are **on by default**.  
-Most emulators stop at *faithful*. **This one starts there and keeps going.**
-- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files required. It just works, and it ships **on**.
-- **HD art across three console families, not just one.** Mesen's proven NES HD Pack pipeline now extends to **Game Boy and Master System**. And when no pack exists yet, the emulator can start **building one for you** — automatically upscaling tiles and extracting music from the first time you play.
-- **One pack format ties it all together.** Textures, music, and synth presets live in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it into a folder and the emulator finds it automatically. Every enhancement layer can still be toggled independently.
-- **Found a great HD pack? Just submit the link.** A simple GitHub form is all it takes — the [community pack pipeline](#community-packs) automatically downloads, validates, classifies, and catalogs it. Legacy Mesen `hires.txt` packs and full MEP `pack.json` packs are both supported, bringing years of existing community work into the same ecosystem.
-- **Built to stay reliable.** Unit tests gate every push — not just *"it compiled."*
+**Same accuracy as Mesen. Plus HD art, modern instruments, and packs that find themselves.**  
+Most emulators stop at *faithful*. This one starts there and keeps going — and the enhancements are **on by default**, so the very first ROM you open already sounds better.
 
-Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead, and rewind.
+- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, zero per-game files. Five styles, optional SoundFont, one checkbox to go back to stock.
+- **HD art on three console families, not one.** Mesen's proven NES HD Pack pipeline now covers **Game Boy/GBC and Master System/Game Gear** too. No pack for your game yet? The emulator **starts building one while you play** — upscaled tiles, static screens and extracted music, ready for an artist to finish.
+- **One pack, every layer.** Textures, music and synth presets ship together in a hash-matched [MEP](#enhancement-packs-mep) pack. Drop a folder or `.zip` next to the ROM and it's found automatically; toggle each layer independently.
+- **Know a great HD pack? [Submit the link](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml).** Opening a pre-filled GitHub Issue is all it takes: a bot downloads the pack, validates it, labels it and adds it to the [public catalog](docs/community-packs.md). Classic Mesen `hires.txt` packs and full MEP `pack.json` packs both qualify — years of existing community work, one ecosystem. Details in [Community packs](#community-packs).
+- **Built to stay reliable.** CI-gated unit tests on every push — not just *"it compiled."*
 
-**This fork keeps the emulation faithful — then adds an enhancement layer on top.**
+Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead and rewind. Upstream fixes are ported in regularly.
 
 ## Download
 
@@ -66,7 +66,7 @@ Enhanced Audio is the sound half. The visual half is what the HD-pack community 
 
 <p align="center"><sub><i>Contra</i> (NES, 1988) through <b><a href="https://github.com/TasticHacks/Contra80s">Contra 80s</a></b>, an HD pack by <b>Tastic</b> — 8-bit graphics replaced in real time with hand-made HD art (<a href="https://www.youtube.com/watch?v=Ho1-30w41RU">trailer</a>). More packs: <a href="https://github.com/lyonhrt/hdnes-projects">lyonhrt</a> · <a href="https://forums.nesdev.org/viewtopic.php?t=17110">NESDev thread</a>.</sub></p>
 
-This fork takes that pipeline to **Game Boy and Master System**, bundles it with Enhanced Audio in one pack format, and makes packs discoverable from inside the emulator.
+This fork takes that pipeline to **Game Boy and Master System**, bundles it with Enhanced Audio in one pack format, and keeps a [validated catalog](docs/community-packs.md) of community packs so you don't have to dig through forum threads.
 
 ## What you get
 
@@ -76,6 +76,7 @@ This fork takes that pipeline to **Game Boy and Master System**, bundles it with
 | **HD textures** | NES only | **NES, Game Boy/GBC, SMS/Game Gear/SG-1000** |
 | **Starter packs** | Hand-authored from a blank canvas | **Auto-bootstrapped** beside the ROM: xBRZ-upscaled tiles, static screens, extracted music |
 | **Pack format** | `hires.txt` per game | **MEP**: one hash-keyed pack for textures + audio + synth presets, folder or `.zip`, per-layer toggles |
+| **Finding packs** | Forum threads | **Validated [community catalog](docs/community-packs.md)** — every entry lint-checked, hash-tracked, labeled by content |
 | **Music export** | — | **Record Music (MIDI/VGM)** while you play |
 | **Correctness** | Build check | **CI-gated unit tests** on every push |
 | **Consoles** | 10+ systems | **4 families**, chosen because their enhancement ecosystems already exist ([why](#why-this-fork)) |
@@ -119,6 +120,21 @@ Current limits: the `audio` layer is applied on NES only (GB/SMS wait for the hi
 
 **Legal footing:** the project ships tools, mappings and specs — never other people's game assets. Extraction happens on your machine and stays there.
 
+## Community packs
+
+Packs stay with their authors — this project only **validates and catalogs** them, so players have one trustworthy list to browse and pack makers get their work found.
+
+**Browse:** [docs/community-packs.md](docs/community-packs.md) — the catalog, regenerated automatically from the [Community Packs board](https://github.com/users/sbihaiko/projects/3), with a "Most popular" ranking by 👍 reactions.
+
+**Submit a pack (yours or someone else's you love):**
+
+1. **[Open a pack submission](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml)** — it's a GitHub Issue with a short pre-filled template: pack link, game + region, console, author/credits. No account beyond GitHub, nothing to upload.
+2. A workflow **downloads the pack** (GitHub releases, gists and raw links are accepted, up to 300 MB), runs the same `scripts/mep_lint.py` you can run offline, and computes its hash.
+3. The Issue gets **labeled** — `pack:valid` or `pack:invalid`, plus what's inside (`assets:textures`, `assets:audio`, `patch:ips`/`patch:bps`, `console:*`) — with a comment citing the exact section of [MEP v1](docs/specs/MEP-v1.md) behind the verdict.
+4. Valid packs land in the **catalog** on the next refresh. Updated the pack? Comment `/revalidate` on the Issue; a daily check also re-runs when the link's content changes.
+
+Both formats are welcome: a plain **Mesen `hires.txt` HD pack** (all the existing NES community work) or a **full MEP `pack.json`** with textures, audio and synth presets. Making one? Start with the [pack authoring guide](docs/hd-pack-authoring.md).
+
 ## Built to stay correct
 
 Every push and PR runs [`unit-tests.yml`](.github/workflows/unit-tests.yml) in addition to the native build:
@@ -144,12 +160,14 @@ No SDL2, no full core, results in seconds. It's not full-core coverage — it's 
 
 **Do existing NES HD packs work?** Yes, the HDNes `hires.txt` format is unchanged; drop them in `HdPacks/` as always, or wrap them in a MEP pack.
 
-**Will you host packs?** No. The emulator can consume any [MEI](docs/specs/MEI-v1.md) index; packs stay with their authors and the existing community hubs.
+**Will you host packs?** No. Packs stay with their authors; this project validates and [catalogs](docs/community-packs.md) them, and the emulator can consume any [MEI](docs/specs/MEI-v1.md) index.
+
+**Is it a drop-in replacement for Mesen?** For NES, GB/GBC, SMS/GG/SG-1000 and GBA — yes: same core, same debugger, same save/state formats, plus the enhancement layer. If you need SNES, PCE or WonderSwan, keep stock Mesen alongside.
 
 ## Contributing & community
 
-- **Found a game that sounds wrong / a pack that doesn't load?** [Open an issue](https://github.com/sbihaiko/MesenCE/issues) with the ROM's No-Intro name — never the ROM.
-- **Made a pack?** Publish it in your own repo and open an issue so it can be listed.
+- **Found a game that sounds wrong / a pack that doesn't load?** [Open a bug](https://github.com/sbihaiko/MesenCE/issues/new) with the ROM's No-Intro name — never the ROM.
+- **Made or found a pack?** [Submit it](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml) — see [Community packs](#community-packs).
 - **Tuned a style by ear?** Presets are just `.cfg` files — PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits & license
