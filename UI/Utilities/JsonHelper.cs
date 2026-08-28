@@ -2,6 +2,7 @@
 using Mesen.Debugger;
 using Mesen.Debugger.Labels;
 using Mesen.Debugger.Utilities;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using System;
@@ -38,6 +39,11 @@ namespace Mesen.Utilities
 [JsonSerializable(typeof(GameConfig))]
 [JsonSerializable(typeof(DebugWorkspace))]
 [JsonSerializable(typeof(UpdateInfo))]
+[JsonSerializable(typeof(CommunityPackCatalog))]
+[JsonSerializable(typeof(CommunityPackCatalogEntry))]
+[JsonSerializable(typeof(CommunityPackRom))]
+[JsonSerializable(typeof(CommunityPackSource))]
+[JsonSerializable(typeof(CommunityPackDep))]
 [JsonSourceGenerationOptions(
 	WriteIndented = true,
 	IgnoreReadOnlyProperties = true,
