@@ -2,12 +2,10 @@
 """Validates the golden files under docs/specs/ against the normative rules
 of the ESP v1, MEP v1, MEI v1, MEP-recipe v1 specs and the hires-gbsms draft,
 and enforces the wire format of shared cross-language test fixtures
-(path-cases.txt, see ADR-0124). Exits with a non-zero code on the first violation. Run from the repo root:
+(path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
 """
-import json
-import re
-import sys
+import json, re, subprocess, sys
 from pathlib import Path
 
 SPECS = Path(__file__).resolve().parent.parent / "docs" / "specs"
@@ -100,6 +98,13 @@ def validate_mep(path):
         check("path" in sec and safe_relative_path(sec["path"]),
               f"{path.name}: sections.{name}.path missing or unsafe")
 
+def lint_golden_packs():
+    # ADR-0136 tripwire: previously nothing ran mep_lint.py over the goldens.
+    mep_lint = str(Path(__file__).resolve().parent / "mep_lint.py")
+    for root in (SPECS / "golden" / "mep", SPECS / "golden" / "mep-nes"):
+        result = subprocess.run([sys.executable, mep_lint, str(root)], capture_output=True, text=True)
+        check(result.returncode == 0, f"mep_lint.py exited {result.returncode} on {root}:\n{result.stdout}{result.stderr}")
+
 def validate_mei(path):
     d = json.loads(path.read_text())
     for field in ("mei", "name", "packs"):
@@ -175,20 +180,21 @@ def validate_recipe(path):
     check(any(op.get("op") == "rewrite-paths" for op in ops),
           f"{path.name}: golden must exercise rewrite-paths")
 
-
 def main():
     validate_esp(SPECS / "golden" / "esp" / "EnhancedAudioPresets.cfg")
     validate_mep(SPECS / "golden" / "mep" / "pack.json")
+    validate_mep(SPECS / "golden" / "mep-nes" / "pack.json")
     validate_mei(SPECS / "golden" / "mei" / "manifest.json")
     validate_hires_draft(SPECS / "golden" / "hires-gbsms" / "hires.txt")
     validate_path_cases(SPECS / "golden" / "mep" / "path-cases.txt")
     validate_recipe(SPECS / "golden" / "mep-recipe" / "recipe.json")
+    lint_golden_packs()
     if _failures:
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
-    print("validate-specs: all golden files conform "
-          "(ESP, MEP, MEI, MEP-recipe, hires-gbsms draft, path-cases format)")
+    print("validate-specs: all golden files conform (ESP, MEP, MEI, MEP-recipe, "
+          "hires-gbsms draft, path-cases format); mep-nes/pack.json structurally validated; mep + mep-nes lint-checked")
 
 if __name__ == "__main__":
     main()
