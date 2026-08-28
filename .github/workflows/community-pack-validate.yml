@@ -709,6 +709,20 @@ jobs:
               exit 1
               ;;
           esac
+          # ADR-0138 §29: KIND mirrors the CATEGORY selection above rather
+          # than re-deriving anything from VERDICT — today's binary
+          # accepted/invalid verdict can't tell "mep" from "hd-legacy" by
+          # itself, so the mep-meta payload needs this explicit field
+          # instead. Kept as its own case on $CATEGORY (not folded into
+          # the verdict case above) so a future human-set CATEGORY_FULL_MEP
+          # path picks up KIND="mep" for free, without touching the
+          # verdict case. Literal values mirror mei_rules.STATUS_TO_KIND's
+          # pairing (checked by verify_community_pack_validate_workflow.py).
+          KIND=""
+          case "$CATEGORY" in
+            "$CATEGORY_FULL_MEP") KIND="mep" ;;
+            "$CATEGORY_PARTIAL_HD") KIND="hd-legacy" ;;
+          esac
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file verdict_comment.txt
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
           APPLIED_LABELS="$LABEL"
@@ -743,6 +757,7 @@ jobs:
           # comment.
           echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
           echo "labels=$APPLIED_LABELS" >> "$GITHUB_OUTPUT"
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$FINAL" >/dev/null
           if [ -n "$CATEGORY" ]; then
@@ -782,6 +797,7 @@ jobs:
           RECIPE_OK: ${{ steps.recipe-gate.outputs.recipe_ok }}
           VERDICT: ${{ steps.apply-verdict.outputs.verdict }}
           LABELS: ${{ steps.apply-verdict.outputs.labels }}
+          KIND: ${{ steps.apply-verdict.outputs.kind }}
         run: |
           set -euo pipefail
           RECIPE_PATH="$RUNNER_TEMP/mep_recipe.json"
@@ -795,6 +811,18 @@ jobs:
           python3 - <<'PYEOF'
           import json
           import os
+          import sys
+
+          # ADR-0138 §33: mep_recipe_common's choose_fence() is the shared
+          # "shortest safe fence" rule -- json.dumps does not escape
+          # backticks, so a hardcoded exactly-3-backtick fence truncates
+          # early when the payload itself (a submitter's hints/license
+          # value, embedded via the recipe below) contains a run of 3+
+          # backticks. sys.path gets 'scripts' the same way the host-
+          # allowlist step above does, since this heredoc runs with its
+          # working directory at the checkout root.
+          sys.path.insert(0, 'scripts')
+          from mep_recipe_common import choose_fence
 
           recipe_status = os.environ["RECIPE_STATUS"]
           recipe_path = os.environ["RECIPE_PATH"]
@@ -806,6 +834,13 @@ jobs:
               "labels": os.environ["LABELS"].split(),
               "validated_at": os.environ["VALIDATED_AT"],
           }
+          # ADR-0138 §29: kind is set by apply-verdict from its own
+          # CATEGORY selection (never re-derived from VERDICT here) and
+          # omitted entirely -- never emitted empty -- when apply-verdict
+          # picked no CATEGORY (e.g. an invalid verdict).
+          kind = os.environ.get("KIND", "")
+          if kind:
+              meta["kind"] = kind
           # ADR-0138 §13/§18: 'absent' and 'refused' both mean "no
           # assembled recipe" -- the deps/recipe_hash fields are omitted
           # entirely (never emitted empty/null) so a reader can branch on
@@ -828,11 +863,13 @@ jobs:
               # (F6.3 catalog generator) tells them apart by this flag.
               meta["recipe_ok"] = os.environ.get("RECIPE_OK") == "true"
 
+          meta_json = json.dumps(meta, indent=2, sort_keys=True)
+          fence = choose_fence(meta_json)
           body_lines = [
               "<!-- mep-meta -->",
-              "```json",
-              json.dumps(meta, indent=2, sort_keys=True),
-              "```",
+              fence + "json",
+              meta_json,
+              fence,
               "",
               "dep digests: submitter-declared, verified on install",
           ]

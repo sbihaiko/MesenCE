@@ -169,33 +169,56 @@ what CI actually runs; this doc records why they're split the way they are.
   `recipe_status == 'present'` and the assembled recipe's
   `sources.deps` array (read back from `$RUNNER_TEMP/mep_recipe.json`) is
   non-empty (§6) — never derived from classify's own `assets` enum, which
-  has no "external" member. `apply-verdict` exposes its own two step
-  outputs, `verdict` (the effective, post-downgrade verdict) and `labels`
-  (every label actually applied to the issue), so the mep-meta upsert
-  step below can consume them without recomputing. Checked by
-  `verify_community_pack_validate_workflow.py`'s
+  has no "external" member. `apply-verdict` exposes three step outputs:
+  `verdict` (the effective, post-downgrade verdict), `labels` (every label
+  actually applied to the issue), and, since F6.3b (ADR-0138 §29), `kind`
+  — set by a second `case` on the already-decided `$CATEGORY`
+  (`"$CATEGORY_FULL_MEP") KIND="mep"`, `"$CATEGORY_PARTIAL_HD")
+  KIND="hd-legacy"`, mirroring rather than re-deriving the CATEGORY
+  selection, since today's binary accepted/invalid verdict can't tell
+  "mep" from "hd-legacy" by itself) so the mep-meta upsert step below can
+  consume all three without recomputing. The two `KIND=` literals are
+  textually consistent with `scripts/mei_rules.STATUS_TO_KIND`'s own
+  values (checked by reading `mei_rules.py`'s source directly, never by
+  importing it). Checked by `verify_community_pack_validate_workflow.py`'s
   `check_apply_verdict_downgrade_expression`,
-  `check_apply_verdict_external_label_branch`, and
-  `check_apply_verdict_exposes_outputs`.
-  **"Upsert mep-meta comment" (`id: upsert-mep-meta`, F6.2b complete).**
-  Runs right after `apply-verdict`, on EVERY successful classify pass
-  (`if: steps.classify.outcome == 'success'`) — deliberately never gated
-  on `recipe_status == 'present'` (§5/§13/§18): a submission with no
-  assembled recipe (`absent`/`refused`) still gets its verdict, labels
-  and `source_sha256` recorded, just without the `deps`/`recipe_hash`
-  fields (omitted entirely, never emitted empty/null). `verdict` and
-  `labels` are read verbatim from `apply-verdict`'s own outputs — never
-  recomputed. The `<!-- mep-meta -->`-marked comment is bot-owned and
-  rewritten WHOLESALE on every pass (§5): the step finds it via `gh api`
-  (`GET /repos/$REPO/issues/$ISSUE_NUMBER/comments`, `--jq` matching the
-  marker), then `gh api --method PATCH` its body outright — never a
+  `check_apply_verdict_external_label_branch`,
+  `check_apply_verdict_exposes_outputs`, and
+  `check_apply_verdict_kind_matches_mei_rules_status_to_kind`.
+  **"Upsert mep-meta comment" (`id: upsert-mep-meta`, F6.2b complete;
+  fence fix + `kind` field F6.3b).** Runs right after `apply-verdict`, on
+  EVERY successful classify pass (`if: steps.classify.outcome ==
+  'success'`) — deliberately never gated on `recipe_status == 'present'`
+  (§5/§13/§18): a submission with no assembled recipe (`absent`/
+  `refused`) still gets its verdict, labels and `source_sha256` recorded,
+  just without the `deps`/`recipe_hash` fields (omitted entirely, never
+  emitted empty/null). `verdict` and `labels` are read verbatim from
+  `apply-verdict`'s own outputs — never recomputed; `kind` (F6.3b, §29) is
+  read the same way and, when non-empty, copied into the payload's own
+  `kind` field (also omitted, never emitted empty, when apply-verdict
+  picked no CATEGORY). The `<!-- mep-meta -->`-marked comment is bot-owned
+  and rewritten WHOLESALE on every pass (§5): the step finds it via `gh
+  api` (`GET /repos/$REPO/issues/$ISSUE_NUMBER/comments`, `--jq` matching
+  the marker), then `gh api --method PATCH` its body outright — never a
   read-modify-merge with whatever it said before — or `gh api --method
   POST` a new comment when none exists yet. The comment body (embedded
   JSON metadata block plus the literal provenance line, "dep digests:
   submitter-declared, verified on install", §16) and the API request
   payload are both built with Python's `json` module (a `python3 -
   <<'PYEOF'` heredoc reading the step's own env vars), never bash string
-  concatenation. `recipe_hash` is `sha256sum` of
+  concatenation. Since F6.3b (ADR-0138 §33), the JSON block's opening/
+  closing fence is no longer a hardcoded literal `` ```json ``/`` ``` ``
+  pair — `json.dumps` does not escape backticks, so a submitter's
+  `hints`/`license` value containing a run of 3+ backticks used to
+  truncate the block early. The heredoc now does `sys.path.insert(0,
+  'scripts')` (the same pattern the "Enforce host allow-list" step above
+  already uses) and calls `mep_recipe_common.choose_fence(meta_json)` to
+  pick a fence strictly longer than any backtick run already in the
+  serialized payload, matching the reader-side rule `mep_recipe.py`'s
+  `FENCE`/`load_recipe` use (see `mep_recipe_common.py` below;
+  `mep_meta_parser.py`'s own `JSON_FENCE_RE` reader is a known, tracked
+  gap — still bare-3-backticks, out of F6.3b's file list, not silently
+  patched here). `recipe_hash` is `sha256sum` of
   `$RUNNER_TEMP/mep_recipe.json` itself — a hash of the recipe DOCUMENT,
   never of dep contents; dep `sha256`/`size` are copied straight from the
   assembled recipe's `sources.deps` (submitter-declared, never
@@ -204,9 +227,10 @@ what CI actually runs; this doc records why they're split the way they are.
   `check_mep_meta_step_present_and_not_gated_on_recipe_status`,
   `check_mep_meta_find_then_patch`, `check_mep_meta_marker_in_comment_body`,
   `check_mep_meta_provenance_line`, `check_mep_meta_body_built_via_python_json`,
-  and `check_mep_meta_omits_deps_and_recipe_hash_when_absent`. F6.2b is now
-  complete end-to-end (classify schema → assembly → gate →
-  apply-verdict → mep-meta upsert).
+  `check_mep_meta_omits_deps_and_recipe_hash_when_absent`, and
+  `check_mep_meta_fence_not_hardcoded`. F6.2b is complete end-to-end
+  (classify schema → assembly → gate → apply-verdict → mep-meta upsert);
+  F6.3b hardens the `kind` field and the fence on top of it.
 
 ## Work Guidance
 
