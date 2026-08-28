@@ -103,6 +103,21 @@ jobs:
           fi
           gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_EM_VALIDACAO" >/dev/null
+      # Seeds the 👍 count docs/community-packs.md ranks on ("Most popular"):
+      # submitting a pack is itself an endorsement, so every submission
+      # starts at one reaction instead of zero. The reactions API is
+      # idempotent (an already-present reaction returns 200, not an error),
+      # so /revalidate re-runs never double-count. Never fatal: a failure
+      # here must not block validation.
+      - name: Seed the submission's 👍 reaction
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/${REPO}/issues/${ISSUE_NUMBER}/reactions" \
+            -f content='+1' --silent
       # Runs unconditionally (before host/lint/classify even start) since
       # game/console/pack-link are submitter-declared Issue Form metadata,
       # not a validation result — useful for browsing/filtering the board

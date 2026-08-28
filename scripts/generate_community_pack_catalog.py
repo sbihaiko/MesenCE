@@ -2,20 +2,20 @@
 """generate_community_pack_catalog.py — regenerates docs/community-packs.md
 and docs/community-packs.json.
 
-Fetches accepted items from the "MesenCE Community Packs" board (Project
-3, owner sbihaiko) via `gh project item-list`, then per issue via `gh issue
-view` plus the bot-owned `<!-- mep-meta -->` comment (`mep_meta_parser.
-parse_mep_meta`, ADR-0138 §27). Delegates MEI entry assembly (kind
+Fetches accepted items from the "MesenCE Community Packs" board (Project 3,
+owner sbihaiko) via `gh project item-list`, then per issue via `gh issue view`
+plus the bot-owned `<!-- mep-meta -->` comment (`mep_meta_parser.parse_mep_
+meta`, ADR-0138 §27). Delegates MEI entry assembly (kind
 "mep"/"hd-legacy" derivation/validation, §26/§28) to `mei_catalog_entry`
-and Markdown rendering (the Link/Game/Console/Author/Category/Date +
-External assets table, plus a "Most popular" section ranked via
-`sorted(rows, key=lambda r: r['thumbs_up'], ...)` on 👍 reactions -- a
-popularity proxy, not a real usage metric) to `community_pack_markdown`
-(§35's 200-line-per-file split), then writes docs/community-packs.md and
-docs/community-packs.json (JSON_OUTPUT_PATH) via json.dumps()/.write_text().
-Re-exports `build_pack_entry`/`mei_entry_conforms`/`normalized_rom_sha1`/
-`STATUS_MEP_COMPLETO`/`STATUS_HD_PARCIAL` as a back-compat facade
-(ADR-0138 §24) so verify_mei_catalog_generator.py needs no changes.
+and Markdown rendering (the Link/Game/Console/Author/Submitted by/Category/Date/
+👍 + External assets table -- Author is the form's declared pack author,
+"Submitted by" the issue login -- plus a "Most popular" section ranked via
+`sorted(rows, key=lambda r: r['thumbs_up'], ...)` on 👍 reactions, a
+popularity proxy, not a real usage metric) to `community_pack_markdown`,
+then writes docs/community-packs.md and docs/community-packs.json
+(JSON_OUTPUT_PATH) via json.dumps()/.write_text(). Re-exports `build_pack_
+entry`/`mei_entry_conforms`/`normalized_rom_sha1`/`STATUS_MEP_COMPLETO`/
+`STATUS_HD_PARCIAL` as a back-compat facade (ADR-0138 §24).
 
 stdlib only. Usage: python3 scripts/generate_community_pack_catalog.py
 """
@@ -55,15 +55,14 @@ def run_gh(args):
 def fetch_accepted_items():
     """Lists the Project 3 items whose Status is one of the two "Aceito*" states.
 
-    CONFIRMED live this session (gh 2.83.1): `gh project field-list 3 --owner sbihaiko
-    --format json` confirms the Status field id (PVTSSF_lAHOB1MsbM4BhjpNzhge86c) and the
-    Pack Hash one (PVTF_lAHOB1MsbM4BhjpNzhge9Is) against the real GitHub API. Per-item key
-    names from `gh project item-list 3 --owner sbihaiko --format json` remain an open
-    COVERAGE GAP: that call returned zero items at write time (`{"items":[],"totalCount":0}`)
-    -- a gap in the live datastore itself, not merely a cached view -- so any negative/absent-key
-    conclusion here is qualified by it. The Pack URL/Pack Hash/ROM SHA1 reads
-    (item_pack_url/item_pack_hash/item_rom_sha1 below) share this same gap, so all of them use
-    defensive, non-crashing `dict.get` lookups instead of direct indexing.
+    CONFIRMED live (gh 2.83.1): `gh project field-list 3 --owner sbihaiko --format json`
+    confirms the Status field id (PVTSSF_lAHOB1MsbM4BhjpNzhge86c) and the Pack Hash one
+    (PVTF_lAHOB1MsbM4BhjpNzhge9Is) against the real GitHub API. Per-item key names from
+    `gh project item-list 3 --owner sbihaiko --format json` remain an open COVERAGE GAP:
+    that call returned zero items at write time (`{"items":[],"totalCount":0}`) -- a gap in
+    the live datastore itself, not merely a cached view -- so any negative/absent-key
+    conclusion here is qualified by it, as are the Pack URL/Pack Hash/ROM SHA1 reads
+    below; all use defensive `dict.get` lookups, not direct indexing.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])
@@ -131,12 +130,13 @@ def parse_form_field(body, heading):
 
 
 def issue_form_fields(details):
-    """Parses the Issue Form fields the Markdown row and MEI entry share."""
+    """Form fields the row/MEI entry share ("credits" = declared pack author)."""
     body = details.get("body") or ""
     game = parse_form_field(body, "Target game/ROM and region") or details.get("title") or "(no title)"
     console = parse_form_field(body, "Console") or markdown.console_from_labels(details.get("labels"))
     license_ = parse_form_field(body, "External assets license (optional)") or "unknown"
-    return {"game": game, "console": console, "license": license_}
+    credits = parse_form_field(body, "Author/credits")
+    return {"game": game, "console": console, "license": license_, "credits": credits}
 
 
 def _fetch_mep_meta(issue_number):
@@ -156,7 +156,7 @@ def _build_entry_for_accepted_item(item):
     issue_number = item_issue_number(item)
     status = item_status(item)
     if issue_number is None:
-        empty_form = {"game": "", "console": "", "license": "unknown"}
+        empty_form = {"game": "", "console": "", "license": "unknown", "credits": None}
         return markdown.build_row(None, status, {}, empty_form), None
     details = fetch_issue_details(issue_number)
     form = issue_form_fields(details)

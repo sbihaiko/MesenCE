@@ -170,8 +170,13 @@ https://github.com/users/sbihaiko/projects/3
   validation when the link's hash changed since the last pass.
 - `scripts/generate_community_pack_catalog.py` generates
   `docs/community-packs.md` from the board's accepted items
-  (link/game/console/author/category/date + a "Most popular" section by
-  👍 reactions, a popularity proxy, not a real usage metric).
+  (link/game/console/author/submitted by/category/date/👍 + a "Most
+  popular" section by 👍 reactions, a popularity proxy, not a real usage
+  metric). "Author" is the Issue Form's declared "Author/credits" (who
+  made the pack); "Submitted by" is the login that opened the issue —
+  whoever submits a pack is not necessarily its author. The validation
+  workflow seeds one 👍 per submission (idempotent, so `/revalidate`
+  never double-counts), so every listed pack starts at 1.
 - `scripts/ensure_community_pack_labels.sh` ensures (idempotently) the
   `community-pack`, `pack:valid`, `pack:invalid`, `assets:textures`,
   `assets:audio`, `patch:ips`, `patch:bps`, `console:nes`, `console:gb`,
