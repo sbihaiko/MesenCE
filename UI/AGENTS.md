@@ -6,7 +6,10 @@
 the native interop bridge to Core via `EmuApi`. `UI/Logic/` is a carved-out,
 host-free subset consumed by `UI.Tests` (delivered in Phase 0/1 of the
 now-completed unit-test plan — see git history for
-`docs/roadmap/plano-testes-unitarios.md`).
+`docs/roadmap/plano-testes-unitarios.md`). `UI/Services/` (F6.4b-2,
+ADR-0138) is the opposite: host-aware orchestrators (network/File
+I/O/`EmuApi` all allowed) that drive `UI/Logic/`'s host-free decision
+types instead of reimplementing them.
 
 ## Ownership
 
@@ -74,6 +77,18 @@ can be exercised by real xunit tests without Avalonia or the native
   `.editorconfig` (tabs) under `dotnet format`. See `.github/AGENTS.md` for
   how the CI split reflects this.
 
+- **`UI/Services/*.cs`** (ADR-0138 §37/§38/§43/§45-§47, F6.4b-2) is
+  deliberately outside the `UI/Logic` firewall: `scripts/verify-ui-logic-firewall.sh`
+  only greps `UI/Logic/*.cs`, so `Avalonia`/`EmuApi`/`HttpClient`/`File` I/O
+  are all fine in `UI/Services/`. Each class there is a thin, host-aware
+  orchestrator over the host-free `UI/Logic/Community*` decision types —
+  the network fetch, dep resolution/reinstall-gating/consent-gating and the
+  `EmuApi.InstallMepRecipe` call itself all live here, never in
+  `UI/Logic/`. `CommunityPackInstallCoordinator.Install()` is the seam: it
+  takes the fetcher's already-verified output (matched catalog entry,
+  primary artifact path, dep-id → path map) and is the only call site of
+  `EmuApi.InstallMepRecipe` for this feature.
+
 ## Work Guidance
 
 - New host-free helpers extracted from ViewModels go under `UI/Logic/`,
@@ -93,5 +108,5 @@ can be exercised by real xunit tests without Avalonia or the native
 
 ## Child DOX Index
 
-(none — `Logic/` is a convention-only subfolder, not a separately
-governed subtree)
+(none — `Logic/` and `Services/` are convention-only subfolders, not
+separately governed subtrees)
