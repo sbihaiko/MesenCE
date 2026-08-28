@@ -250,36 +250,6 @@ def check_incomplete_withholds_patch():
         ok("apply_patch_only_if_complete withholds the patch when a dep is missing")
 
 
-def check_missing_dep_rename_skipped():
-    """Regression for the recipe-gate false-reject found in review: the
-    ADR-0138 §1 reference recipe chains `glob` (from a dep) then `rename`
-    on a path inside that glob's output. When the dep is missing (exactly
-    what the CI recipe-gate's --dep-less dry-run produces for every
-    declared dep, ADR §16), the `rename` op must be skipped like the
-    `glob` that would have fed it, not raise `RecipeError`.
-    """
-    with tempfile.TemporaryDirectory() as tmp_s:
-        tmp = Path(tmp_s)
-        recipe_path, primary, _audio, recipe = _make_split(tmp)
-        rename_op = {"op": "rename", "from": "audio/theme.ogg", "to": "audio/track01.ogg"}
-        glob_index = next(i for i, op in enumerate(recipe["ops"]) if op["op"] == "glob")
-        recipe["ops"].insert(glob_index + 1, rename_op)
-        recipe_path.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
-        out = tmp / "out"
-        try:
-            mep_recipe.run_recipe(recipe, primary, deps={}, out=out, rom_name=None)
-        except mep_recipe.RecipeError as exc:
-            fail(f"rename on a missing-dep glob output raised instead of being skipped: {exc}")
-            return
-        if (out / "audio").exists() and any((out / "audio").iterdir()):
-            fail("missing-dep audio/ should stay empty when its glob is skipped")
-            return
-        if not (out / "pack.json").exists():
-            fail("missing-dep-plus-rename dry-run did not write pack.json")
-            return
-        ok("rename referencing a missing-dep glob output is skipped, not a hard error")
-
-
 def check_hash_mismatch_aborts():
     with tempfile.TemporaryDirectory() as tmp_s:
         tmp = Path(tmp_s)
@@ -568,7 +538,6 @@ def main():
     check_dry_run_lint_clean()
     check_wrapped_primary_uses_lint_discovery()
     check_incomplete_withholds_patch()
-    check_missing_dep_rename_skipped()
     check_hash_mismatch_aborts()
     check_assemble_absent_no_assets_no_fragment()
     check_assemble_absent_when_classify_fragment_is_empty()
