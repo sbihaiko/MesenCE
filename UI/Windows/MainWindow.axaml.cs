@@ -13,6 +13,7 @@ using Mesen.Debugger.Utilities;
 using Mesen.Debugger.Windows;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Services;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using Mesen.Views;
@@ -343,6 +344,7 @@ namespace Mesen.Windows
 					GameConfig.LoadGameConfig(romInfo).ApplyConfig();
 
 					GameLoadedEventParams evtParams = Marshal.PtrToStructure<GameLoadedEventParams>(e.Parameter);
+					CommunityPackInstallService.OnGameLoaded(evtParams.IsPowerCycle);
 					if(!evtParams.IsPowerCycle) {
 						Dispatcher.UIThread.Post(() => {
 							_model.RecentGames.Visible = false;

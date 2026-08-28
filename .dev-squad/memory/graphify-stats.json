@@ -270,6 +270,15 @@
       "scoutMs": null,
       "classification": "new-feature",
       "diverged": false
+    },
+    {
+      "sid": "119e1031a25f",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "new-feature",
+      "diverged": false
     }
   ]
 }

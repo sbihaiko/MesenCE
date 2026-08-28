@@ -83,7 +83,7 @@ namespace Mesen.Services
 			List<CommunityPackLocalFile> cacheFiles = HashFolder(GetDownloadsCacheFolder());
 
 			foreach(CommunityPackDep dep in entry.Deps) {
-				if(depPaths.ContainsKey(dep.Id) || string.IsNullOrEmpty(dep.Sha256)) {
+				if(string.IsNullOrEmpty(dep.Id) || depPaths.ContainsKey(dep.Id) || string.IsNullOrEmpty(dep.Sha256)) {
 					continue;
 				}
 
