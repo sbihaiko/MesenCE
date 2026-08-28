@@ -50,12 +50,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `required_mei_pack_fields(kind)` (a "hd-legacy" pack needs no
   `version`/`mep`; any other kind, including `None`, does -
   docs/specs/MEI-v1.md §2.2/§2.3), and `mei_entry_conforms(entry, kind)`
-  (whether an assembled `packs[]` entry already carries every field
-  `required_mei_pack_fields` demands, matching `validate_mei`'s own
-  field-by-field semantics: `rom` only needs to be *present* - an empty
-  dict is valid, since `rom.sha1` MAY be absent regardless of `kind` and
-  `validate_mei` itself only checks `"rom" in p` - while every other
-  required field must additionally be non-empty). It also holds the sole
+  (whether an assembled `packs[]` entry already carries a truthy value for
+  every field `required_mei_pack_fields` demands - stricter than
+  `validate_mei`'s own presence-only check, and unused by
+  `mei_catalog_entry.py`'s own same-named function below, which needs
+  `rom`'s looser, `validate_mei`-matching semantics; `mei_rules.
+  mei_entry_conforms` stays for `test_mei_rules.py`'s own coverage of the
+  leaf). It also holds the sole
   Status-literal -> kind pairing in `scripts/` (`STATUS_TO_KIND`, §29) and
   `resolve_kind(mep_meta, status)`, which prefers a valid mep-meta `kind`
   and falls back to `STATUS_TO_KIND.get(status)`, returning `None` (never
@@ -218,11 +219,19 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   entry, `build_pack_entry` reads `pack.version`/`pack.mep` out of
   mep-meta's embedded `recipe.pack` (`pack_version_fields`); when the
   recipe is absent/refused and those fields can't be sourced,
-  `build_catalog` self-checks every entry through `mei_rules.
-  mei_entry_conforms` before it is kept (§28) and drops it rather than
-  emit one `validate_mei` rejects for missing `version`/`mep` — never
-  silently relabeled as `"hd-legacy"` — even if the facade's own caller-
-  side check (`entry.get("kind")`) already filtered it.
+  `build_catalog` self-checks every entry through this module's own
+  `mei_entry_conforms(entry, kind)` before it is kept (§28) and drops it
+  rather than emit one `validate_mei` rejects for missing `version`/`mep`
+  — never silently relabeled as `"hd-legacy"` — even if the facade's own
+  caller-side check (`entry.get("kind")`) already filtered it.
+  `mei_entry_conforms` here is built on `mei_rules.required_mei_pack_
+  fields`/`MEI_KINDS` (never a restated field list or kind set) but
+  matches `validate_mei`'s (`scripts/validate-specs.py`) real field-by-
+  field semantics rather than `mei_rules.mei_entry_conforms`'s stricter
+  shortcut: every required field MUST be *present*, and only `rom` is
+  exempt from also being non-empty — MEI v1.1 §2.3 makes `rom.sha1`
+  MAY-be-absent regardless of `kind`, and `validate_mei` itself checks
+  `field in p`, never truthiness, for every field.
   `community_pack_markdown.py` (F6.3b, new) holds the Markdown rendering
   (`escape_table_cell`/`thumbs_up_count`/`console_from_labels`/
   `category_from_status`/`build_row`/`render_table`/`render_popular_
@@ -242,11 +251,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   five names by attribute. `scripts/checks/verify_mei_catalog_split.py`
   (F6.3b, AC-4) is the offline structural checker for the split itself:
   each of the four files is <= 200 lines, `mei_catalog_entry.py` imports
-  `mei_rules` and calls `mei_entry_conforms`/`resolve_kind`,
+  `mei_rules`, its own `mei_entry_conforms` is built on `mei_rules.
+  required_mei_pack_fields`/`MEI_KINDS` (never a restated field list or
+  kind set), and it calls `mei_rules.resolve_kind`;
   `community_pack_markdown.py` defines `build_markdown`/`render_table`/
-  `build_row`, the facade still exposes the five re-exported names, and
-  `build_catalog` really does drop a non-conforming entry rather than keep
-  it (self-check behavior, not just text presence).
+  `build_row`; the facade still exposes the five re-exported names, with
+  `gen.mei_entry_conforms` really identical to `mei_catalog_entry.
+  mei_entry_conforms` (not a second, facade-local copy); a fully-
+  populated entry is still rejected for a kind absent from `mei_rules.
+  MEI_KINDS`; and `build_catalog` really does drop a non-conforming entry
+  while keeping a conforming one whose `rom` is `{}` (self-check
+  behavior, not just text presence).
   `scripts/checks/verify_status_kind_parity.sh` (F6.3b, AC-6, in the
   `verify_mep_fallback_constant_parity.sh` style) asserts the two
   Status-literal -> kind pairs are textually defined exactly once across

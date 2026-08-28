@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """mei_catalog_entry — MEI v1.1 `packs[]` entry assembly for the community
-pack catalog (ADR-0138 §26/§27/§28, split out of `generate_community_pack_
-catalog.py` per §35's 200-line-per-file guardrail).
-
-Depends only on the stdlib-only leaf `mei_rules` (never on
-`community_pack_markdown` or the facade -- ADR-0138 §24, mirroring
-`mep_recipe_common.py`). `build_pack_entry` derives `kind` via
-`mei_rules.resolve_kind` (mep-meta first, Status fallback, §29);
-`build_catalog` self-checks every entry through `mei_rules.mei_entry_conforms`
-before it is kept (§28), dropping a "mep"-kind entry missing `version`/`mep`
-rather than relabeling it "hd-legacy". `STATUS_MEP_COMPLETO`/
-`STATUS_HD_PARCIAL`/`kind_from_status` are derived FROM
-`mei_rules.STATUS_TO_KIND` (never a second pairing -- verify_status_kind_
-parity.sh, §29) so the facade's back-compat re-export (§24) keeps working.
+pack catalog (ADR-0138 §26/§27/§28, split off `generate_community_pack_
+catalog.py` per §35's 200-line-per-file guardrail). Depends only on the
+stdlib-only leaf `mei_rules` (never on `community_pack_markdown` or the
+facade -- §24). `build_pack_entry` derives `kind` via `mei_rules.
+resolve_kind` (§29); `build_catalog` self-checks each entry via this
+module's own `mei_entry_conforms` (§28), built on `mei_rules.required_
+mei_pack_fields`/`MEI_KINDS` but matching `validate_mei`'s real semantics:
+presence for every required field, truthy for all but `rom` (§2.3: `rom.
+sha1` MAY be absent). `STATUS_MEP_COMPLETO`/`STATUS_HD_PARCIAL`/
+`kind_from_status` derive FROM `mei_rules.STATUS_TO_KIND` (never a second
+pairing -- verify_status_kind_parity.sh, §29).
 
 stdlib only.
 """
@@ -35,6 +33,21 @@ def kind_from_status(status):
     return mei_rules.STATUS_TO_KIND.get(status)
 
 
+def mei_entry_conforms(entry, kind):
+    """Whether `entry` conforms to §28 for `kind`: every field named by
+    `mei_rules.required_mei_pack_fields(kind)` MUST be present, truthy for
+    all but `rom`. Kind validity reuses `mei_rules.MEI_KINDS`.
+    """
+    if kind is not None and kind not in mei_rules.MEI_KINDS:
+        return False
+    for field in mei_rules.required_mei_pack_fields(kind):
+        if field not in entry:
+            return False
+        if field != "rom" and not entry[field]:
+            return False
+    return True
+
+
 def _dep_entry(dep):
     """Maps one `recipe.sources.deps[]` item to its MEI `deps[]` shape."""
     entry = {"id": dep.get("id"), "license": dep.get("license") or "unknown"}
@@ -50,8 +63,8 @@ def _dep_entry(dep):
 
 def dep_entries_from_recipe(mep_meta):
     """Extracts MEI `deps[]` from mep-meta's embedded `recipe.sources.deps`
-    (not mep-meta's own top-level stripped `deps`, which lacks `license` --
-    MEI-v1 §2.3/MEP-recipe-v1 §3.3). Returns None (not `[]`) when there is
+    (not mep-meta's own stripped `deps`, which lacks `license` -- MEI-v1
+    §2.3/MEP-recipe-v1 §3.3). Returns None (not `[]`) when there is
     nothing to report, so the caller can omit the key.
     """
     if not isinstance(mep_meta, dict):
@@ -66,10 +79,9 @@ def dep_entries_from_recipe(mep_meta):
 
 
 def recipe_fields(mep_meta, pack_hash):
-    """Returns (deps, recipe, recipe_hash, recipe_ok, mismatch). ADR-0138
-    §18 "two stores, one rule": when mep-meta's `source_sha256` disagrees
-    with the Project "Pack Hash" field, the field wins -- deps/recipe are
-    omitted and `mismatch` is True (never a fatal error for the whole run).
+    """Returns (deps, recipe, recipe_hash, recipe_ok, mismatch); a `source_
+    sha256`/Pack Hash disagreement means the field wins -- deps/recipe
+    omitted, `mismatch` True (ADR-0138 §18, never fatal).
     """
     if not isinstance(mep_meta, dict):
         return None, None, None, None, False
@@ -85,12 +97,9 @@ def recipe_fields(mep_meta, pack_hash):
 
 
 def normalized_rom_sha1(rom_sha1):
-    """Normalizes the Project "ROM SHA1" field to 40-UPPERCASE-hex, reusing
-    `mei_rules.SHA1_UPPER` rather than a second, locally-declared regex.
-    Human-entered tools (sha1sum/shasum) emit lowercase, so this
-    upper-cases before checking shape. Returns None (not an invalid
-    string) when empty/malformed -- `rom.sha1` is optional in MEI v1.1, so
-    the caller omits it rather than emit an entry `validate_mei` rejects.
+    """Normalizes the "ROM SHA1" field to 40-UPPERCASE-hex via `mei_rules.
+    SHA1_UPPER`. Returns None when empty/malformed -- `rom.sha1` is
+    optional in MEI v1.1, so the caller omits it.
     """
     if not rom_sha1:
         return None
@@ -99,7 +108,9 @@ def normalized_rom_sha1(rom_sha1):
 
 
 def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind):
-    """Builds the fields every entry has regardless of `kind` or mep-meta."""
+    """Builds the fields every entry has; `rom` is always present (§2.3:
+    key required, not a non-empty value).
+    """
     sha1 = normalized_rom_sha1(rom_sha1)
     rom = {"sha1": sha1} if sha1 else {}
     name = f"{game} — community submission" if kind == "hd-legacy" else game
@@ -128,10 +139,8 @@ def _apply_mep_meta_passthrough(entry, mep_meta):
 
 
 def pack_version_fields(recipe):
-    """Extracts `pack.version`/`pack.mep` from a mep-meta recipe document's
-    `pack` object (MEP-recipe-v1 §3.1) for a kind=="mep" entry. Returns
-    (version, mep), each None when absent/malformed -- `mei_rules.
-    mei_entry_conforms` enforces both being present for a "mep" entry.
+    """Extracts `pack.version`/`pack.mep` from a mep-meta recipe's `pack`
+    object (MEP-recipe-v1 §3.1); each None when absent/malformed.
     """
     pack = recipe.get("pack") if isinstance(recipe, dict) else None
     if not isinstance(pack, dict):
@@ -140,9 +149,8 @@ def pack_version_fields(recipe):
 
 
 def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta):
-    """Assembles one MEI v1.1 packs[] entry (ADR-0138 §26/§27). `kind`
-    comes from `mei_rules.resolve_kind` (mep-meta first, Status fallback,
-    §29), never Status alone. Returns (entry, mismatch) -- see
+    """Assembles one MEI v1.1 packs[] entry (§26/§27). `kind` comes from
+    `mei_rules.resolve_kind` (§29). Returns (entry, mismatch) -- see
     `recipe_fields` for `mismatch`.
     """
     kind = mei_rules.resolve_kind(mep_meta, status)
@@ -167,15 +175,9 @@ def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, 
 
 
 def mei_entry_preconditions_ok(pack_url, pack_hash, system):
-    """Whether this item has everything `validate_mei` (scripts/validate-
-    specs.py) requires of a `packs[]` entry's `url`/`sha256`/`system`
-    (MEI-v1 §2), reusing `mei_rules.SYSTEMS`/`mei_rules.SHA256_HEX` rather
-    than a second, locally-declared copy. Returns False when the Project's
-    Pack URL/Pack Hash are absent/malformed, or the Console value has no
-    MEI-representable system (the Form's "Other" lowercases to "other",
-    unmapped falls back to "?" -- neither is in `mei_rules.SYSTEMS`). The
-    caller omits the JSON entry rather than emit one `validate_mei`
-    rejects; the Markdown row still renders.
+    """Whether this item has everything `validate_mei` requires of a
+    `packs[]` entry's `url`/`sha256`/`system`, reusing `mei_rules.SYSTEMS`/
+    `SHA256_HEX`. False when Pack URL/Hash are malformed/absent.
     """
     return (
         bool(pack_url) and pack_url.startswith("https://")
@@ -186,11 +188,9 @@ def mei_entry_preconditions_ok(pack_url, pack_hash, system):
 
 def build_catalog(entries, updated):
     """Wraps entries into the top-level MEI v1.1 catalog document (§26),
-    self-checking each through `mei_rules.mei_entry_conforms` first (§28)
-    -- a non-conforming entry is dropped here even if a caller forgot to
-    filter it, rather than reaching docs/community-packs.json.
+    self-checking each via `mei_entry_conforms` first (§28).
     """
-    packs = [e for e in entries if mei_rules.mei_entry_conforms(e, e.get("kind"))]
+    packs = [e for e in entries if mei_entry_conforms(e, e.get("kind"))]
     return {
         "mei": MEI_VERSION,
         "name": CATALOG_NAME,

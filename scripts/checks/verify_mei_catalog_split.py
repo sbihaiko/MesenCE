@@ -14,20 +14,27 @@ their real source text/attributes -- never invokes `main()`.
 Checks:
   1. mei_rules.py / mei_catalog_entry.py / community_pack_markdown.py /
      generate_community_pack_catalog.py each have <= 200 lines.
-  2. mei_catalog_entry.py imports mei_rules and calls
-     mei_rules.mei_entry_conforms and mei_rules.resolve_kind somewhere in
-     its own source (never a locally re-implemented copy of either).
+  2. mei_catalog_entry.py imports mei_rules and its own mei_entry_conforms
+     is built on mei_rules.required_mei_pack_fields/MEI_KINDS (never a
+     restated field list or kind set), and it calls mei_rules.resolve_kind
+     (§29) -- neither is a locally re-implemented copy.
   3. community_pack_markdown.py defines build_markdown/render_table/
      build_row.
   4. The facade still exposes (as real attributes) build_pack_entry,
      mei_entry_conforms, normalized_rom_sha1, STATUS_MEP_COMPLETO, and
      STATUS_HD_PARCIAL -- the five names verify_mei_catalog_generator.py
      imports via `gen.<name>` -- and mei_entry_conforms there really is
-     mei_rules.mei_entry_conforms (not a second, independent copy).
-  5. Behavioral (real modules, no mocks): mei_catalog_entry.build_catalog
-     drops a non-conforming entry (kind "mep" missing version/mep) rather
-     than writing it into the catalog document, self-checking via
-     mei_rules -- never trusting the caller to have filtered already.
+     mei_catalog_entry.mei_entry_conforms (not a second, independent
+     copy defined by the facade itself).
+  5. Behavioral (real modules, no mocks): mei_entry_conforms's kind-validity
+     gate really is mei_rules.MEI_KINDS -- a fully-populated entry is still
+     rejected for a kind that set excludes.
+  6. Behavioral: mei_catalog_entry.build_catalog drops a non-conforming
+     entry (kind "mep" missing version/mep) rather than writing it into the
+     catalog document, self-checking via its own mei_entry_conforms --
+     never trusting the caller to have filtered already -- while keeping a
+     conforming entry whose `rom` is `{}` (MEI v1.1 §2.3: `rom.sha1` MAY be
+     absent).
 
 Usage: python3 scripts/checks/verify_mei_catalog_split.py
 """
@@ -68,9 +75,12 @@ def check_entry_module_uses_mei_rules(failures):
     text = (SCRIPTS_DIR / "mei_catalog_entry.py").read_text(encoding="utf-8")
     if "import mei_rules" not in text:
         failures.append("mei_catalog_entry.py does not import mei_rules")
-    if "mei_rules.mei_entry_conforms" not in text:
-        failures.append("mei_catalog_entry.py never calls mei_rules.mei_entry_conforms "
-                         "(§28 self-check)")
+    if "mei_rules.required_mei_pack_fields" not in text:
+        failures.append("mei_catalog_entry.py's mei_entry_conforms does not build on "
+                         "mei_rules.required_mei_pack_fields (§28 self-check)")
+    if "mei_rules.MEI_KINDS" not in text:
+        failures.append("mei_catalog_entry.py's mei_entry_conforms does not reuse "
+                         "mei_rules.MEI_KINDS for kind validity")
     if "mei_rules.resolve_kind" not in text:
         failures.append("mei_catalog_entry.py never calls mei_rules.resolve_kind (§29)")
 
@@ -86,9 +96,23 @@ def check_facade_reexports(failures):
         if not hasattr(gen, name):
             failures.append(f"generate_community_pack_catalog.py no longer exposes {name} "
                              f"(verify_mei_catalog_generator.py needs gen.{name})")
-    if hasattr(gen, "mei_entry_conforms") and gen.mei_entry_conforms is not mei_rules.mei_entry_conforms:
-        failures.append("gen.mei_entry_conforms is not mei_rules.mei_entry_conforms "
+    if hasattr(gen, "mei_entry_conforms") and gen.mei_entry_conforms is not mei_catalog_entry.mei_entry_conforms:
+        failures.append("gen.mei_entry_conforms is not mei_catalog_entry.mei_entry_conforms "
                          "(a second, independent copy exists)")
+
+
+def check_conforms_matches_mei_rules_kinds(failures):
+    """Behavioral: mei_catalog_entry.mei_entry_conforms's kind-validity gate
+    really is mei_rules.MEI_KINDS -- an entry with every field present is
+    still rejected for a kind that set does not contain."""
+    entry = {"name": "X", "game": "X", "system": "nes", "rom": {},
+             "url": "https://example.org/x.zip", "sha256": "c" * 64,
+             "version": "1.0.0", "mep": "1.0.0"}
+    if "bogus-kind" in mei_rules.MEI_KINDS:
+        failures.append("test fixture kind 'bogus-kind' unexpectedly in mei_rules.MEI_KINDS")
+        return
+    if mei_catalog_entry.mei_entry_conforms(entry, "bogus-kind"):
+        failures.append("mei_entry_conforms accepted a kind absent from mei_rules.MEI_KINDS")
 
 
 def check_build_catalog_self_checks(failures):
@@ -111,6 +135,7 @@ def main():
     check_entry_module_uses_mei_rules(failures)
     check_markdown_module_shape(failures)
     check_facade_reexports(failures)
+    check_conforms_matches_mei_rules_kinds(failures)
     check_build_catalog_self_checks(failures)
     if failures:
         print("FAIL: AC-4 (MEI catalog generator split)")

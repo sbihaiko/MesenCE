@@ -32,9 +32,9 @@ from mei_catalog_entry import (  # noqa: F401 -- facade re-export (ADR-0138 §24
     STATUS_HD_PARCIAL,
     STATUS_MEP_COMPLETO,
     build_pack_entry,
+    mei_entry_conforms,
     normalized_rom_sha1,
 )
-from mei_rules import mei_entry_conforms  # noqa: F401 -- facade re-export
 from mep_meta_parser import MARKER as MEP_META_MARKER, parse_mep_meta
 
 REPO = "sbihaiko/MesenCE"

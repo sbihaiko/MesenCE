@@ -102,26 +102,6 @@ def check_mei_entry_conforms_mep_requires_version_and_mep():
     ok("mei_entry_conforms('mep') requires version/mep")
 
 
-def check_mei_entry_conforms_accepts_empty_rom_dict():
-    # MEI v1.1: rom.sha1 MAY be absent regardless of kind; validate_mei only
-    # checks "rom" in p (presence), never its truthiness -- an entry whose
-    # `rom` is `{}` (no ROM SHA1 available) must still conform.
-    hd_legacy = _base_entry(rom={})
-    if not mei_rules.mei_entry_conforms(hd_legacy, "hd-legacy"):
-        fail("hd-legacy entry with an empty rom dict should still conform")
-        return
-    mep = _base_entry(rom={}, version="1.0.0", mep="1.1.0")
-    if not mei_rules.mei_entry_conforms(mep, "mep"):
-        fail("mep entry with an empty rom dict should still conform")
-        return
-    missing_rom = dict(_base_entry())
-    del missing_rom["rom"]
-    if mei_rules.mei_entry_conforms(missing_rom, "hd-legacy"):
-        fail("an entry with no 'rom' key at all should not conform")
-        return
-    ok("mei_entry_conforms accepts an empty rom dict but requires the key to be present")
-
-
 def check_mei_entry_conforms_rejects_unknown_kind():
     if mei_rules.mei_entry_conforms(_base_entry(version="1.0.0", mep="1.1.0"), "bogus"):
         fail("an unknown kind should never conform")
@@ -172,7 +152,6 @@ def main():
     check_required_fields_mep_and_none_include_version_mep()
     check_mei_entry_conforms_hd_legacy_without_version()
     check_mei_entry_conforms_mep_requires_version_and_mep()
-    check_mei_entry_conforms_accepts_empty_rom_dict()
     check_mei_entry_conforms_rejects_unknown_kind()
     check_resolve_kind_prefers_mep_meta()
     check_resolve_kind_falls_back_to_status()
