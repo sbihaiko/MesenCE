@@ -14,48 +14,21 @@ namespace Mesen.Services
 	//CommunityPackCatalogFetcher's output shape (matched entry, verified
 	//primary path, dep-id -> verified path map), drives the host-free
 	//UI/Logic decision helpers plus the File/EmuApi calls those can't make
-	//themselves (UI/Logic firewall, UI/AGENTS.md), and hands the recipe's
-	//raw JSON text - never re-interpreted client-side (clarification 45) -
-	//to EmuApi.InstallMepRecipe. Outside the firewall's scope on purpose.
+	//themselves, and hands the recipe's raw JSON text (never re-interpreted
+	//client-side, clarification 45) to EmuApi.InstallMepRecipe.
 	public static class CommunityPackInstallCoordinator
 	{
 		public static CommunityPackInstallOutcome Install(
 			CommunityPackCatalogEntry entry, string primaryPackPath, IReadOnlyDictionary<string, string> resolvedDepPaths)
 		{
 			EnhancementPackConfig config = ConfigManager.Config.EnhancementPacks;
-
-			//Clarification 38: first automatic download of a session is gated
-			//behind a one-time consent, on top of the toggle.
-			CommunityPackConsentDecision consent = CommunityPackConsentState.Evaluate(
-				config.AutoInstallCommunityPacks, config.CommunityPackAutoInstallConsentGiven);
-			if(consent.MustShowConsentDialog) {
-				return CommunityPackInstallOutcome.NeedsConsent();
-			}
-			if(!consent.CanDownloadNow) {
-				return CommunityPackInstallOutcome.Skipped("AutoInstallCommunityPacks is off");
-			}
-
 			string containerName = GetContainerName(entry);
-			if(config.DisabledPacks.Contains(containerName, StringComparer.OrdinalIgnoreCase)) {
-				return CommunityPackInstallOutcome.Skipped("pack disabled by user"); //clarification 43(c)
+			(CommunityPackInstallOutcome? gate, string outFolder) = EvaluateGates(config, entry, containerName);
+			if(gate != null) {
+				return gate;
 			}
-
-			string outFolder = Path.Combine(ConfigManager.EnhancementPackFolder, containerName);
-			CommunityPackReinstallVerdict verdict = CommunityPackReinstallDecision.Decide(entry.Sha256, ReadInstallStamp(outFolder));
-			if(verdict == CommunityPackReinstallVerdict.UpToDate) {
-				return CommunityPackInstallOutcome.Skipped("already up to date");
-			}
-			if(verdict == CommunityPackReinstallVerdict.Reinstall) {
-				//43(a)/(b) held, (c) just checked above: this folder is our own
-				//prior install (its stamp is what got us here) - safe to clear.
-				//The native installer refuses to write into a non-empty folder.
-				ClearFolderForReinstall(outFolder);
-			}
-			//NotInstalled + stampless-but-non-empty outFolder (user-owned): left
-			//alone, the native non-empty-folder guard fails it below instead.
 
 			(Dictionary<string, string> depPaths, List<CommunityPackDepPrompt> pending) = ResolveDeps(entry, resolvedDepPaths, outFolder);
-
 			bool success = EmuApi.InstallMepRecipe(
 				entry.Recipe?.GetRawText() ?? "", primaryPackPath, BuildDepPathsBlob(depPaths),
 				EmuApi.GetRomInfo().GetRomName(), outFolder, out string resultText);
@@ -65,12 +38,38 @@ namespace Mesen.Services
 				: CommunityPackInstallOutcome.Failed(ParseError(resultText));
 		}
 
-		//ADR-0138 clarification 46 scratch folder; downloaded/user-supplied
-		//deps are looked up here by sha256.
+		//Clarification 38 consent + 43(c) DisabledPacks gate, then the 43(a)/(b)
+		//reinstall verdict: Reinstall means our own prior install, safe to clear.
+		private static (CommunityPackInstallOutcome? Gate, string OutFolder) EvaluateGates(
+			EnhancementPackConfig config, CommunityPackCatalogEntry entry, string containerName)
+		{
+			CommunityPackConsentDecision consent = CommunityPackConsentState.Evaluate(
+				config.AutoInstallCommunityPacks, config.CommunityPackAutoInstallConsentGiven);
+			if(consent.MustShowConsentDialog) {
+				return (CommunityPackInstallOutcome.NeedsConsent(), "");
+			}
+			if(!consent.CanDownloadNow) {
+				return (CommunityPackInstallOutcome.Skipped("AutoInstallCommunityPacks is off"), "");
+			}
+			if(config.DisabledPacks.Contains(containerName, StringComparer.OrdinalIgnoreCase)) {
+				return (CommunityPackInstallOutcome.Skipped("pack disabled by user"), "");
+			}
+
+			string outFolder = ResolveOutFolder(containerName);
+			CommunityPackReinstallVerdict verdict = CommunityPackReinstallDecision.Decide(entry.Sha256, ReadInstallStamp(outFolder));
+			if(verdict == CommunityPackReinstallVerdict.UpToDate) {
+				return (CommunityPackInstallOutcome.Skipped("already up to date"), "");
+			}
+			if(verdict == CommunityPackReinstallVerdict.Reinstall) {
+				ClearFolderForReinstall(outFolder);
+			}
+			return (null, outFolder);
+		}
+
+		//Clarification 46 scratch folder; downloaded/user-supplied deps live here by sha256.
 		public static string GetDownloadsCacheFolder() => Path.Combine(ConfigManager.EnhancementPackFolder, ".cache", "downloads");
 
-		//Resolves deps not already in resolvedDepPaths via CommunityPackDepResolver;
-		//an unresolved dep becomes a prompt (this class never opens a dialog itself).
+		//Resolves deps not already in resolvedDepPaths; unresolved becomes a prompt.
 		private static (Dictionary<string, string>, List<CommunityPackDepPrompt>) ResolveDeps(
 			CommunityPackCatalogEntry entry, IReadOnlyDictionary<string, string> resolvedDepPaths, string outFolder)
 		{
@@ -101,8 +100,7 @@ namespace Mesen.Services
 			return (depPaths, pending);
 		}
 
-		//Clarification 47 row grammar ("depId\tlocalPath" per line, matching
-		//GetMepPackList); empty blob means no deps (EmuApiWrapperMep.cpp).
+		//Clarification 47 row grammar: "depId\tlocalPath" per line, empty means no deps.
 		private static string BuildDepPathsBlob(Dictionary<string, string> depPaths) =>
 			string.Join("\n", depPaths.Select(kv => kv.Key + "\t" + kv.Value));
 
@@ -146,32 +144,39 @@ namespace Mesen.Services
 				return files;
 			}
 			foreach(string path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)) {
-				string? sha256 = TryHashFile(path);
-				if(sha256 != null) {
-					files.Add(new CommunityPackLocalFile(path, sha256));
+				try {
+					using FileStream stream = File.OpenRead(path);
+					files.Add(new CommunityPackLocalFile(path, Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant()));
+				} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) {
 				}
 			}
 			return files;
 		}
 
-		private static string? TryHashFile(string path)
-		{
-			try {
-				using FileStream stream = File.OpenRead(path);
-				return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) {
-				return null;
-			}
-		}
-
-		//Destination-folder/DisabledPacks-key name (ADR-0040): sanitized
-		//entry.Name (fallback Game) - matched by ROM sha1, not by this name.
+		//Destination-folder/DisabledPacks-key name (ADR-0040): entry.Name (fallback
+		//Game) is remote, submitter-influenced data (MEI-v1.md §2.2) reaching a
+		//path sink, so beyond swapping invalid chars this rejects dot-only names
+		//('.'/'..'), strips trailing dots/spaces (Windows), and caps length.
 		private static string GetContainerName(CommunityPackCatalogEntry entry)
 		{
 			string raw = string.IsNullOrWhiteSpace(entry.Name) ? entry.Game : entry.Name;
 			char[] invalid = Path.GetInvalidFileNameChars();
-			string sanitized = new string(raw.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
-			return sanitized.Length > 0 ? sanitized : "community-pack";
+			string sanitized = new string(raw.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim().TrimEnd('.', ' ');
+			if(sanitized.Length > 96) {
+				sanitized = sanitized.Substring(0, 96).TrimEnd('.', ' '); //truncation can re-expose a trailing dot/space
+			}
+			return sanitized.Length == 0 || sanitized.All(c => c == '.') ? "community-pack" : sanitized;
+		}
+
+		//Defense in depth on GetContainerName's sanitization: asserts the folder is still rooted under EnhancementPackFolder.
+		private static string ResolveOutFolder(string containerName)
+		{
+			string root = Path.GetFullPath(ConfigManager.EnhancementPackFolder);
+			string outFolder = Path.GetFullPath(Path.Combine(root, containerName));
+			if(outFolder != root && !outFolder.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)) {
+				throw new InvalidOperationException("Community pack container name escaped the enhancement pack folder: " + containerName);
+			}
+			return outFolder;
 		}
 	}
 
@@ -182,18 +187,13 @@ namespace Mesen.Services
 		CommunityPackInstallStatus Status, string ContainerName, string Message,
 		IReadOnlyList<string> Withheld, IReadOnlyList<CommunityPackDepPrompt> PendingDeps)
 	{
-		public static CommunityPackInstallOutcome NeedsConsent() =>
-			new(CommunityPackInstallStatus.NeedsConsent, "", "", Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
-		public static CommunityPackInstallOutcome Skipped(string reason) =>
-			new(CommunityPackInstallStatus.Skipped, "", reason, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
-		public static CommunityPackInstallOutcome Failed(string error) =>
-			new(CommunityPackInstallStatus.Failed, "", error, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
-		public static CommunityPackInstallOutcome Installed(
-			string containerName, IReadOnlyList<string> withheld, IReadOnlyList<CommunityPackDepPrompt> pendingDeps) =>
+		public static CommunityPackInstallOutcome NeedsConsent() => new(CommunityPackInstallStatus.NeedsConsent, "", "", Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
+		public static CommunityPackInstallOutcome Skipped(string reason) => new(CommunityPackInstallStatus.Skipped, "", reason, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
+		public static CommunityPackInstallOutcome Failed(string error) => new(CommunityPackInstallStatus.Failed, "", error, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
+		public static CommunityPackInstallOutcome Installed(string containerName, IReadOnlyList<string> withheld, IReadOnlyList<CommunityPackDepPrompt> pendingDeps) =>
 			new(CommunityPackInstallStatus.Installed, containerName, "", withheld, pendingDeps);
 	}
 
-	//Unresolved user_supplied dep (MEI-v1.md §2.3): caller prompts with
-	//Hints/License and DropFolder (clarification 46 downloads cache).
+	//Unresolved user_supplied dep (MEI-v1.md §2.3): caller prompts with Hints/License/DropFolder.
 	public sealed record CommunityPackDepPrompt(string DepId, string Hints, string License, string DropFolder);
 }
