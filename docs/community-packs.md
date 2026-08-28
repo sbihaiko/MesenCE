@@ -12,6 +12,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | [link](https://github.com/sbihaiko/MesenCE/issues/67) | Ice Climber (USA, Europe) | NES | LiQuiDzGit (HDnes) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 | [link](https://github.com/sbihaiko/MesenCE/issues/70) | Duck Hunt (World) | NES | LiQuiDzGit (HDnes) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 | [link](https://github.com/sbihaiko/MesenCE/issues/72) | Pac-Man (Namco, US, 1993) | NES | PepCodes (HDNes Graphics Pac) | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
+| [link](https://github.com/sbihaiko/MesenCE/issues/73) | Zelda II: The Adventure of Link (USA) | NES | ModernRetroDesign — Coding: Giric; Main Art: HaddianKey; Music Patch: Kurrono; Music: Niskala; Tiled Tools: Lilo-san; Additional Art: Aclectico, Cristata, Jojamart, Hexi_Eibhin04, Evan.F, Szadi art., Max Deacon VR, Pepeztyle, ChaosMiles07, Jmanvelez, FierceTheBandit, Alexander Landgren; Retranslation: GlitterBerri. | sbihaiko | Partial HD | 2026-08-27 | 1 |  |
 
 ## Most popular
 
@@ -25,3 +26,4 @@ _metric — no usage telemetry is collected by this project._
 - [Ice Climber (USA, Europe)](https://github.com/sbihaiko/MesenCE/issues/67) — 👍 1
 - [Duck Hunt (World)](https://github.com/sbihaiko/MesenCE/issues/70) — 👍 1
 - [Pac-Man (Namco, US, 1993)](https://github.com/sbihaiko/MesenCE/issues/72) — 👍 1
+- [Zelda II: The Adventure of Link (USA)](https://github.com/sbihaiko/MesenCE/issues/73) — 👍 1
