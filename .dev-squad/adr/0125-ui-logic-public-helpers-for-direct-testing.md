@@ -29,9 +29,9 @@ the test assembly. That changes the trade-off compared with a conventional
 test project.
 
 ## Decision
-Pending human pick. Two coherent options:
+**Option A — allow public test-facing helpers, documented** (chosen by the
+user on 2026-08-28; Option B is recorded under Alternatives).
 
-**Option A (recommended): allow public test-facing helpers, documented.**
 - [ ] Add to `UI/AGENTS.md` Work Guidance: "`UI/Logic/` types may expose pure
       helpers publicly when a test needs to drive them directly (e.g.
       `MepZipValidator.IsSafePath` over `path-cases.txt`). Keep the production
@@ -40,24 +40,19 @@ Pending human pick. Two coherent options:
       intentional."
 - [ ] Add the same one-line note above `IsSafePath` in `MepZipValidator.cs`.
 
-**Option B: single entry point; helpers stay `internal`.**
-- [ ] Change `IsSafePath` to `internal static` (the dual-compile keeps it
-      reachable from `UI.Tests`), and record in `UI/AGENTS.md` that `UI/Logic`
-      exposes only the production entry point publicly; tests reach helpers
-      via `internal`.
-
-Recommendation: Option A. The dual-compile already erases the public/internal
-distinction from the tests' point of view, so Option B buys no encapsulation
-for the tests and only restricts reuse by other UI code; `IsSafePath` is a
-genuinely reusable pure predicate. The value of a rule here is consistency, and
-the cheapest consistent rule is "public is fine if the header says why".
+Rationale: the dual-compile already erases the public/internal distinction
+from the tests' point of view, so keeping helpers `internal` buys no
+encapsulation for the tests and only restricts reuse by other UI code;
+`IsSafePath` is a genuinely reusable pure predicate. The value of a rule here
+is consistency, and the cheapest consistent rule is "public is fine if the
+header says why".
 
 ## Consequences
 - The rule lives in `UI/AGENTS.md` so future extractions follow one
   convention.
 - Slightly wider public API in `UI/Logic`; each test-facing public helper
   carries a header note. No code behaviour change.
-- Either way, `UI.Tests` continues to compile the sources directly; no
+- `UI.Tests` continues to compile the sources directly; no
   `InternalsVisibleTo` is added to `UI/UI.csproj`.
 
 ## Alternatives
