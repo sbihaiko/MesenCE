@@ -250,85 +250,6 @@ def check_incomplete_withholds_patch():
         ok("apply_patch_only_if_complete withholds the patch when a dep is missing")
 
 
-def check_incomplete_derives_sections_ignoring_phantom_claim():
-    """A classify-supplied `pack.sections.audio` naming a directory the
-    missing `audio` dep's (skipped) ops never populated must never survive
-    into pack.json — mep_lint.py would hard-error on the missing probe
-    file (section 'audio': 'audio/hires.txt' does not exist) rather than
-    treat it as gracefully withheld, since MEP-recipe-v1 §6 only names
-    *patches* as something withheld by policy, not sections."""
-    with tempfile.TemporaryDirectory() as tmp_s:
-        tmp = Path(tmp_s)
-        _recipe_path, primary, _audio, recipe = _make_split(tmp)
-        recipe["pack"]["sections"]["audio"] = {"path": "audio"}
-        out = tmp / "out"
-        mep_recipe.run_recipe(recipe, primary, deps={}, out=out, rom_name=None)
-        pack = json.loads((out / "pack.json").read_text(encoding="utf-8"))
-        if "audio" in pack.get("sections", {}):
-            fail("pack.json still claims an 'audio' section the missing dep never populated")
-            return
-        lint_rc = mep_lint.main(["mep_lint.py", str(out), "--quiet"])
-        if lint_rc != 0:
-            fail(f"incomplete install with a phantom section claim failed mep_lint.py (exit {lint_rc})")
-            return
-        ok("pack.json derives sections from disk (drops a phantom audio claim) when a dep is missing")
-
-
-def check_stub_deps_bypasses_required_dep_abort():
-    """CI never fetches a dep regardless of its `user_supplied` flag
-    (ADR-0138 §16) — `stub_deps=True` must suppress the 'missing required
-    dep' abort a `user_supplied: false` dep would otherwise raise, while
-    still withholding whatever ops depended on it."""
-    with tempfile.TemporaryDirectory() as tmp_s:
-        tmp = Path(tmp_s)
-        _recipe_path, primary, _audio, recipe = _make_split(tmp)
-        recipe["sources"]["deps"][0]["user_supplied"] = False
-        out = tmp / "out"
-        try:
-            mep_recipe.run_recipe(recipe, primary, deps={}, out=out, rom_name=None)
-        except mep_recipe.RecipeError as exc:
-            if "missing required dep" not in str(exc):
-                fail(f"user_supplied=False raised the wrong error: {exc}")
-                return
-        else:
-            fail("user_supplied=False dep did not abort without --stub-deps")
-            return
-        out2 = tmp / "out2"
-        mep_recipe.run_recipe(recipe, primary, deps={}, out=out2, rom_name=None, stub_deps=True)
-        lint_rc = mep_lint.main(["mep_lint.py", str(out2), "--quiet"])
-        if lint_rc != 0:
-            fail(f"--stub-deps output failed mep_lint.py (exit {lint_rc})")
-            return
-        ok("--stub-deps bypasses 'missing required dep' for a user_supplied=False dep")
-
-
-def check_stub_deps_bypasses_policy_false_abort():
-    """Same as above for `policy.apply_patch_only_if_complete: false` —
-    CI's structural dry-run must not depend on that client-install policy
-    either, since it never has real dep content to satisfy it with."""
-    with tempfile.TemporaryDirectory() as tmp_s:
-        tmp = Path(tmp_s)
-        _recipe_path, primary, _audio, recipe = _make_split(tmp)
-        recipe["policy"]["apply_patch_only_if_complete"] = False
-        out = tmp / "out"
-        try:
-            mep_recipe.run_recipe(recipe, primary, deps={}, out=out, rom_name=None)
-        except mep_recipe.RecipeError as exc:
-            if "missing dep(s)" not in str(exc):
-                fail(f"apply_patch_only_if_complete=False raised the wrong error: {exc}")
-                return
-        else:
-            fail("apply_patch_only_if_complete=False did not abort without --stub-deps")
-            return
-        out2 = tmp / "out2"
-        mep_recipe.run_recipe(recipe, primary, deps={}, out=out2, rom_name=None, stub_deps=True)
-        lint_rc = mep_lint.main(["mep_lint.py", str(out2), "--quiet"])
-        if lint_rc != 0:
-            fail(f"--stub-deps output failed mep_lint.py (exit {lint_rc})")
-            return
-        ok("--stub-deps bypasses 'missing dep(s)' under apply_patch_only_if_complete=False")
-
-
 def check_hash_mismatch_aborts():
     with tempfile.TemporaryDirectory() as tmp_s:
         tmp = Path(tmp_s)
@@ -617,9 +538,6 @@ def main():
     check_dry_run_lint_clean()
     check_wrapped_primary_uses_lint_discovery()
     check_incomplete_withholds_patch()
-    check_incomplete_derives_sections_ignoring_phantom_claim()
-    check_stub_deps_bypasses_required_dep_abort()
-    check_stub_deps_bypasses_policy_false_abort()
     check_hash_mismatch_aborts()
     check_assemble_absent_no_assets_no_fragment()
     check_assemble_absent_when_classify_fragment_is_empty()

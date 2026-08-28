@@ -10,7 +10,7 @@ implementation (ADR-0138).
 Usage:
   python3 scripts/mep_recipe.py validate <recipe.json>
   python3 scripts/mep_recipe.py dry-run <recipe.json> --primary PATH
-      [--dep ID=PATH ...] [--stub-deps] --out DIR [--rom-name NAME]
+      [--dep ID=PATH ...] --out DIR [--rom-name NAME]
   python3 scripts/mep_recipe.py apply <recipe.json> --primary PATH
       [--dep ID=PATH ...] --out DIR [--rom-name NAME]
   python3 scripts/mep_recipe.py assemble-sources --issue-body PATH
@@ -403,21 +403,6 @@ def _derive_sections(out: Path) -> dict:
 
 
 def _write_pack_json(recipe: dict, out: Path, include_patches: bool):
-    """Writes pack.json for the tree just built at `out`.
-
-    `include_patches` doubles as "every dep was present" (run_recipe sets
-    it to `not missing`). A classify-supplied `pack.sections` is trusted
-    verbatim only in that complete case; whenever any dep was missing, the
-    ops that would have populated a dep-backed section were skipped
-    (`if source_id in missing: continue`, run_recipe), so a copied-through
-    `sections.audio` could claim a directory that was never written —
-    `mep_lint.py` then hard-errors on the missing probe file instead of
-    treating it as a withheld section (docs/specs/MEP-recipe-v1.md §6 only
-    withholds *patches* by name, not sections). Deriving from what is
-    actually on disk instead keeps the written manifest truthful in the
-    incomplete case, matching the same "textures (and any other complete
-    sections) are still written" rule §6 already states for patches.
-    """
     pack = dict(recipe["pack"])
     body = {
         "mep": pack.get("mep") or "1.1.0",
@@ -430,37 +415,14 @@ def _write_pack_json(recipe: dict, out: Path, include_patches: bool):
         body["author"] = pack["author"]
     if include_patches and pack.get("patches"):
         body["patches"] = pack["patches"]
-    sections = pack.get("sections") if include_patches else None
+    sections = pack.get("sections")
     if not isinstance(sections, dict) or not sections:
         sections = _derive_sections(out)
     body["sections"] = sections
     (out / "pack.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
-def run_recipe(
-    recipe: dict,
-    primary: Path,
-    deps: dict,
-    out: Path,
-    rom_name: str | None,
-    stub_deps: bool = False,
-) -> None:
-    """Applies `recipe` against `primary` (+ any provided `deps`), writing
-    the result to `out`.
-
-    `stub_deps=True` is CI's recipe-gate mode (ADR-0138 §16, "deps stubbed
-    by their declared names"): CI never fetches or hashes external
-    dependency content for *any* dep, regardless of what a dep's
-    `user_supplied` flag or the recipe's `apply_patch_only_if_complete`
-    policy says — those two fields describe how the real client install
-    should behave once a human actually supplies the file, not whether
-    CI's structural dry-run may proceed without it. Passing it suppresses
-    only the two hard aborts below that exist for that real-install
-    semantics (`missing dep(s)`, `missing required dep`); every dep is
-    still tracked as missing, its ops still skipped, and its section
-    still withheld from `pack.json` (see `_write_pack_json`) exactly as
-    the default policy already does for a `user_supplied` dep.
-    """
+def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str | None) -> None:
     errors = validate_recipe(recipe)
     if errors:
         raise RecipeError("\n".join(errors))
@@ -494,7 +456,7 @@ def run_recipe(
 
     policy = recipe.get("policy") or {}
     apply_complete = policy.get("apply_patch_only_if_complete", True)
-    if missing and not stub_deps:
+    if missing:
         if not apply_complete:
             raise RecipeError(f"missing dep(s): {', '.join(missing)}")
         for dep_id in missing:
@@ -789,7 +751,6 @@ def _parse_kv_args(argv):
     out = None
     rom_name = None
     deps = {}
-    stub_deps = False
     rest = argv[2:]
     i = 0
     positional = []
@@ -811,9 +772,6 @@ def _parse_kv_args(argv):
             dep_id, _, path = spec.partition("=")
             deps[dep_id] = Path(path)
             i += 2
-        elif arg == "--stub-deps":
-            stub_deps = True
-            i += 1
         elif arg.startswith("--"):
             raise RecipeError(f"unknown flag: {arg}")
         else:
@@ -821,7 +779,7 @@ def _parse_kv_args(argv):
             i += 1
     if positional:
         recipe = Path(positional[0])
-    return command, recipe, primary, deps, out, rom_name, stub_deps
+    return command, recipe, primary, deps, out, rom_name
 
 
 def main(argv=None) -> int:
@@ -832,15 +790,12 @@ def main(argv=None) -> int:
     if argv[1] == "assemble-sources":
         return cmd_assemble_sources(argv[2:])
     try:
-        command, recipe_path, primary, deps, out, rom_name, stub_deps = _parse_kv_args(argv)
+        command, recipe_path, primary, deps, out, rom_name = _parse_kv_args(argv)
     except RecipeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if command not in ("validate", "dry-run", "apply") or recipe_path is None:
         print(__doc__)
-        return 2
-    if stub_deps and command != "dry-run":
-        print("error: --stub-deps is only valid with dry-run (CI's recipe gate)", file=sys.stderr)
         return 2
     try:
         recipe = load_recipe(recipe_path)
@@ -854,7 +809,7 @@ def main(argv=None) -> int:
             return 0
         if primary is None or out is None:
             raise RecipeError(f"{command} requires --primary and --out")
-        run_recipe(recipe, primary, deps, out, rom_name, stub_deps=stub_deps)
+        run_recipe(recipe, primary, deps, out, rom_name)
         if command == "dry-run":
             rc = mep_lint.main(["mep_lint.py", str(out), *( [rom_name] if rom_name else [] ), "--quiet"])
             if rc != 0:
