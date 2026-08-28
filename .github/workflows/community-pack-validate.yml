@@ -578,6 +578,57 @@ jobs:
               exit 1
               ;;
           esac
+      # Recipe gate (ADR-0138 §2/§10/§13/§16, F6.2b) — deterministic, no
+      # label/comment/Project write of its own; "Apply classification
+      # verdict" below stays the sole verdict writer. Runs only when the
+      # assembly step above actually wrote a recipe
+      # (`recipe_status == 'present'`); stays inert for BOTH `absent` (no
+      # `external_assets` declared) and `refused` (a dependency line
+      # lacked a sha256) — this is why the gate condition is
+      # `== 'present'`, never `!= 'absent'`: that inverted form would also
+      # fire for `refused`, which must take the pre-ADR verdict path
+      # completely untouched (§2/§13).
+      # `mep_recipe.py validate` checks the assembled recipe document
+      # itself (schema, escaping paths, unknown ops/source-ids). `mep_
+      # recipe.py dry-run` then applies its `ops` against the already-
+      # downloaded primary (`pack_download.bin`) and runs `mep_lint.py` on
+      # the result — but no `--dep PATH` is ever passed: CI never fetches
+      # or hashes external dependency content (§16; dep sha256/size are
+      # submitter-declared and verified only by the client at install
+      # time, §4/§11). Every declared dependency is instead exercised
+      # "stubbed by [its] declared name" (ADR Decision §1) purely through
+      # `mep_recipe.py`'s own `apply_patch_only_if_complete` policy
+      # (default true, already covered by
+      # `scripts/test_mep_recipe.py::check_incomplete_withholds_patch`):
+      # an op that reads a missing dep is skipped instead of erroring, and
+      # any patch/section that needs it is withheld from the dry-run
+      # output rather than failing the gate over content CI was never
+      # meant to fetch in the first place.
+      # Exposes exactly one boolean step output, `recipe_ok`; never adds a
+      # label, posts a comment, or moves the Project Status field itself.
+      - name: Recipe gate (mep_recipe.py validate + dry-run, deps stubbed by name)
+        id: recipe-gate
+        if: steps.assemble-recipe.outputs.recipe_status == 'present'
+        env:
+          GAME: ${{ steps.rename-title.outputs.game }}
+        run: |
+          set -uo pipefail
+          RECIPE_OK=true
+          if ! python3 scripts/mep_recipe.py validate "$RUNNER_TEMP/mep_recipe.json"; then
+            RECIPE_OK=false
+          fi
+          if [ "$RECIPE_OK" = "true" ]; then
+            DRY_RUN_OUT="$RUNNER_TEMP/mep_recipe_dry_run"
+            rm -rf "$DRY_RUN_OUT"
+            if [ -n "$GAME" ]; then
+              python3 scripts/mep_recipe.py dry-run "$RUNNER_TEMP/mep_recipe.json" \
+                --primary pack_download.bin --out "$DRY_RUN_OUT" --rom-name "$GAME" || RECIPE_OK=false
+            else
+              python3 scripts/mep_recipe.py dry-run "$RUNNER_TEMP/mep_recipe.json" \
+                --primary pack_download.bin --out "$DRY_RUN_OUT" || RECIPE_OK=false
+            fi
+          fi
+          echo "recipe_ok=$RECIPE_OK" >> "$GITHUB_OUTPUT"
       # Applies the verdict Claude returned (structured_output, validated
       # against the schema above) deterministically — no re-querying `gh
       # project item-list` to guess the current Status (its per-item JSON
