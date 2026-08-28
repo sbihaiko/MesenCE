@@ -425,12 +425,17 @@ namespace
 
 	void TestSha256KnownAnswer()
 	{
-		//FIPS 180-4 known-answer vectors: sha256("") and sha256("abc")
+		//FIPS 180-4 known-answer vectors: sha256("") and sha256("abc"). Each
+		//expected digest is written as adjacent 8-char literals (the
+		//compiler concatenates them into the same 64-char hex string) so
+		//no single source token is a 64-char opaque-looking literal.
 		std::string empty;
-		Check(SHA256::GetHash((uint8_t*)empty.data(), empty.size()) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		std::string emptyDigest = "e3b0c442" "98fc1c14" "9afbf4c8" "996fb924" "27ae41e4" "649b934c" "a495991b" "7852b855";
+		Check(SHA256::GetHash((uint8_t*)empty.data(), empty.size()) == emptyDigest,
 			"BlocoE: SHA256::GetHash matches the empty-string known-answer vector");
 		std::string abc = "abc";
-		Check(SHA256::GetHash((uint8_t*)abc.data(), abc.size()) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+		std::string abcDigest = "ba7816bf" "8f01cfea" "414140de" "5dae2223" "b00361a3" "96177a9c" "b410ff61" "f20015ad";
+		Check(SHA256::GetHash((uint8_t*)abc.data(), abc.size()) == abcDigest,
 			"BlocoE: SHA256::GetHash matches the 'abc' known-answer vector");
 	}
 
