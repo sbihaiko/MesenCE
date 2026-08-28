@@ -85,7 +85,7 @@ what CI actually runs; this doc records why they're split the way they are.
   workflow only documents those names, never creates them. See
   `scripts/checks/verify_community_pack_validate_workflow.py` for its
   structural contract.
-- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, partially implemented).**
+- **Recipe handoff (ADR-0138 §13, amends §9; F6.2b, gate implemented).**
   The "Classify pack" step's `--json-schema` now carries an OPTIONAL
   nested `recipe` property (`ops`/`deps`/`pack`, per
   `docs/specs/MEP-recipe-v1.md`) with its own `"required":["ops","deps","pack"]`
@@ -126,9 +126,38 @@ what CI actually runs; this doc records why they're split the way they are.
   `check_assemble_recipe_runner_temp_handoff`,
   `check_recipe_status_three_values`, and `check_no_github_event_issue`,
   and by `scripts/checks/verify_agents_md_recipe_handoff.sh` for this
-  prose. The gate, `apply-verdict`'s downgrade expression/`external`
-  label branch, and the mep-meta comment upsert remain the
-  not-yet-implemented rest of F6.2b.
+  prose.
+  A "Recipe gate (mep_recipe.py validate + dry-run, deps stubbed by name)"
+  step (`id: recipe-gate`, runs right after "Assemble MEP recipe" and
+  before "Apply classification verdict") is gated on
+  `steps.assemble-recipe.outputs.recipe_status == 'present'` — **never**
+  `!= 'absent'`, which would also wrongly fire for `refused` (§2/§13: a
+  refused submission's pre-ADR verdict path must stay completely
+  untouched). It runs `python3 scripts/mep_recipe.py validate` against
+  the handoff path above, then (only if that passed) `python3
+  scripts/mep_recipe.py dry-run` against the already-downloaded primary
+  (`pack_download.bin`) — with no `--dep PATH` ever passed, since CI
+  never fetches or hashes external dependency content (§16). Every
+  declared dependency is therefore "stubbed by [its] declared name"
+  simply by never being supplied: `mep_recipe.py`'s existing missing-dep
+  handling treats every dep id from `sources.deps` as missing, skips its
+  ops, and withholds its patch/section from `pack.json`, exactly as the
+  default `apply_patch_only_if_complete` policy already does for a
+  `user_supplied` dep — no dedicated CI-only flag is needed. `RECIPE_OK`
+  is set to `false` (never a hard workflow failure) whenever either call
+  exits non-zero, which also covers the rarer case of a `user_supplied:
+  false` dep or an explicit `apply_patch_only_if_complete: false` policy
+  demanding content CI cannot supply; the gate simply reports
+  `recipe_ok=false` and leaves the outcome to `apply-verdict`'s
+  downgrade-only expression (§10). The step exposes exactly
+  one boolean output, `recipe_ok`, and never adds a
+  label, posts a comment, or moves the Project Status field itself —
+  `apply-verdict` remains the sole verdict writer (§10). Checked by
+  `verify_community_pack_validate_workflow.py`'s
+  `check_recipe_gate_step_present_and_gated` and
+  `check_recipe_gate_never_uses_inverted_condition`.
+  `apply-verdict`'s downgrade expression/`external` label branch and the
+  mep-meta comment upsert remain the not-yet-implemented rest of F6.2b.
 
 ## Work Guidance
 
