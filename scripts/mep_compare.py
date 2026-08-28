@@ -39,6 +39,7 @@ class Pack:
     def __init__(self, folder: Path):
         self.folder = folder
         self.scale = 1
+        self.system = "nes"  # matches Mesen's HD pack default when <system> is absent
         self.images = []
         self.tiles = {}  # (chr, palette) -> dict(img, x, y, cond)
         self.conditioned = 0
@@ -54,6 +55,8 @@ class Pack:
             line = line.strip()
             if line.startswith("<scale>"):
                 self.scale = int(line[7:])
+            elif line.startswith("<system>"):
+                self.system = line[8:].strip().lower()
             elif line.startswith("<img>"):
                 self.images.append(line[5:].strip())
             elif line.startswith("<condition>"):
@@ -106,18 +109,95 @@ class Pack:
         return self._best[key][1] / 255.0
 
 
-def render_original(chr_hex: str, pal_hex: str) -> Image.Image:
-    data = bytes.fromhex(chr_hex)
-    pal = [NES_PALETTE[int(pal_hex[i:i + 2], 16) & 0x3F] for i in range(0, 8, 2)]
-    img = Image.new("RGBA", (8, 8))
-    px = img.load()
+# Classic DMG 4-shade green ramp (lightest -> darkest), used to render GB
+# tiles: the BGP/OBPx register only maps a tile's 2bpp color index to one of
+# these 4 shades, it does not carry real RGB (docs/specs/hires-gbsms-v1-draft.md S3.2).
+GB_SHADES = ((0x9B, 0xBC, 0x0F), (0x8B, 0xAC, 0x0F), (0x30, 0x62, 0x30), (0x0F, 0x38, 0x0F))
+
+SYSTEMS = ("nes", "gb", "gbc", "sms")
+# Palette-key hex width per system's <tile> line (hires-gbsms-v1-draft.md S3.2):
+# nes: 4 x 2-hex NES palette indices; gb: 2-hex tile-type + 2-hex BGP/OBPx
+# value ("TTPP"); gbc: 2-hex tile-type + 4 x RGB555 big-endian colors (16 hex);
+# sms: 2-hex tile-type + 2-hex CRAM base + 16 CRAM RGB222 entries (32 hex).
+_PALETTE_HEX_WIDTH = {"nes": 8, "gb": 4, "gbc": 18, "sms": 36}
+
+
+def _unsupported(system: str) -> ValueError:
+    return ValueError(f"unsupported <system>{system}; mep_compare supports {', '.join(SYSTEMS)}")
+
+
+def _decode_2bpp(data: bytes, colors: list, row_bytes) -> list:
+    """Shared 8x8, 2-bits-per-pixel unpack: `row_bytes(data, y)` returns the
+    (lo, hi) bit-plane byte pair for row `y` -- the two formats below only
+    differ in how those bytes are laid out, not in how pixels are built."""
+    out = []
     for y in range(8):
-        lo, hi = data[y], data[y + 8]
+        lo, hi = row_bytes(data, y)
         for x in range(8):
             bit = 7 - x
-            c = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1)
-            px[x, y] = pal[c] + (255,)
+            out.append(colors[((lo >> bit) & 1) | (((hi >> bit) & 1) << 1)])
+    return out
+
+
+def _decode_nes(data: bytes, pal_hex: str) -> list:
+    # NES CHR: the 8 low-plane bytes come first, then the 8 high-plane bytes.
+    pal = [NES_PALETTE[int(pal_hex[i:i + 2], 16) & 0x3F] for i in range(0, 8, 2)]
+    return _decode_2bpp(data, pal, lambda d, y: (d[y], d[y + 8]))
+
+
+def _interleaved_row(data: bytes, y: int) -> tuple:
+    # GB/GBC tile data: each row is its own (lo, hi) byte pair, back to back.
+    return data[2 * y], data[2 * y + 1]
+
+
+def _decode_gb(data: bytes, pal_hex: str) -> list:
+    bgp = int(pal_hex[2:4], 16)
+    shades = [GB_SHADES[(bgp >> (2 * c)) & 3] for c in range(4)]
+    return _decode_2bpp(data, shades, _interleaved_row)
+
+
+def _rgb555_to_rgb8(value: int) -> tuple:
+    r5, g5, b5 = value & 0x1F, (value >> 5) & 0x1F, (value >> 10) & 0x1F
+    return tuple((c * 255) // 31 for c in (r5, g5, b5))
+
+
+def _decode_gbc(data: bytes, pal_hex: str) -> list:
+    colors = [_rgb555_to_rgb8(int(pal_hex[2 + 4 * c:6 + 4 * c], 16)) for c in range(4)]
+    return _decode_2bpp(data, colors, _interleaved_row)
+
+
+def _rgb222_to_rgb8(byte: int) -> tuple:
+    r2, g2, b2 = byte & 0x3, (byte >> 2) & 0x3, (byte >> 4) & 0x3
+    return tuple(c * 85 for c in (r2, g2, b2))
+
+
+def _decode_sms(data: bytes, pal_hex: str) -> list:
+    entries = [_rgb222_to_rgb8(int(pal_hex[4 + 2 * i:6 + 2 * i], 16)) for i in range(16)]
+    out = []
+    for y in range(8):
+        b0, b1, b2, b3 = data[4 * y], data[4 * y + 1], data[4 * y + 2], data[4 * y + 3]
+        for x in range(8):
+            bit = 7 - x
+            idx = ((b0 >> bit) & 1) | (((b1 >> bit) & 1) << 1) | (((b2 >> bit) & 1) << 2) | (((b3 >> bit) & 1) << 3)
+            out.append(entries[idx])
+    return out
+
+
+_DECODERS = {"nes": _decode_nes, "gb": _decode_gb, "gbc": _decode_gbc, "sms": _decode_sms}
+
+
+def _paint(colors: list) -> Image.Image:
+    img = Image.new("RGBA", (8, 8))
+    px = img.load()
+    for i, rgb in enumerate(colors):
+        px[i % 8, i // 8] = rgb + (255,)
     return img
+
+
+def render_original(chr_hex: str, pal_hex: str, system: str = "nes") -> Image.Image:
+    if system not in SYSTEMS or len(pal_hex) != _PALETTE_HEX_WIDTH[system]:
+        raise _unsupported(system)
+    return _paint(_DECODERS[system](bytes.fromhex(chr_hex), pal_hex))
 
 
 def flatten(img: Image.Image, size: int, resample=Image.NEAREST) -> np.ndarray:
@@ -186,7 +266,7 @@ def main(argv):
     size = 32
     m_xbrz, m_near, closer = [], [], 0
     for key in comparable:
-        orig = render_original(*key)
+        orig = render_original(*key, system=artist.system)
         near = flatten(orig, size)
         xb = flatten(auto.crop(key), size, Image.BILINEAR if auto.scale * 8 > size else Image.NEAREST)
         art = flatten(artist.crop(key), size, Image.BILINEAR if artist.scale * 8 > size else Image.NEAREST)
@@ -201,13 +281,13 @@ def main(argv):
         return keys[:samples]
 
     sc = sample(comparable)
-    montage([[render_original(*k) for k in sc], [auto.crop(k) for k in sc], [artist.crop(k) for k in sc]], 40,
+    montage([[render_original(*k, system=artist.system) for k in sc], [auto.crop(k) for k in sc], [artist.crop(k) for k in sc]], 40,
             ["original", f"auto xBRZ {auto.scale}x", f"artist {artist.scale}x"], out / f"{name}-common.png")
     so = sample(artist_only)
-    montage([[render_original(*k) for k in so], [artist.crop(k) for k in so]], 40,
+    montage([[render_original(*k, system=artist.system) for k in so], [artist.crop(k) for k in so]], 40,
             ["original", "artist"], out / f"{name}-artist-only.png")
     sa = sample(auto_only)
-    montage([[render_original(*k) for k in sa], [auto.crop(k) for k in sa]], 40,
+    montage([[render_original(*k, system=artist.system) for k in sa], [auto.crop(k) for k in sa]], 40,
             ["original", f"auto xBRZ {auto.scale}x"], out / f"{name}-auto-only.png")
 
     stats = dict(
