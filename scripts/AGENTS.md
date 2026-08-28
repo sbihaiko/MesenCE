@@ -120,6 +120,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   including an empty-but-present classify fragment, an unmatched
   `external_assets` line surviving into `sources.deps`, and the CLI round
   trip).
+  `mep_meta_parser.py` (F6.3, ADR-0138 §27) is a dependency-free leaf
+  exposing a pure `parse_mep_meta(comment_body: str) -> dict | None`: it
+  locates the `<!-- mep-meta -->` marker and its fenced ```json block
+  written by `community-pack-validate.yml`'s "Upsert mep-meta comment"
+  step (no `gh`/network of its own) and decodes it, returning `None`
+  instead of raising on any malformed input — missing marker, truncated
+  fence, invalid JSON, or a non-object JSON payload — so a caller (the
+  F6.3 catalog generator) can skip that one entry's recipe data and log a
+  warning rather than abort the whole catalog run. `test_mep_meta_parser.py`
+  is its framework-free acceptance check (well-formed block round-trips;
+  each malformed-input shape above returns `None`; a second fenced block
+  later in the comment is never mistaken for the first).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
@@ -282,6 +294,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `mep_lint`-clean) plus `assemble-sources` (absent/present/refused per
   ADR-0138 §7/§13, CLI round trip); PASS/FAIL per check, exit 0 only if
   all pass.
+- `python3 scripts/test_mep_meta_parser.py` - `mep_meta_parser.parse_mep_meta`
+  (F6.3, ADR-0138 §27): well-formed `<!-- mep-meta -->` block round-trips;
+  missing marker, truncated fence, invalid JSON, and a non-object JSON
+  payload all return `None`; PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
