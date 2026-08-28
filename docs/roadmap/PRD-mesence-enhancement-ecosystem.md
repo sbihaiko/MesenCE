@@ -118,6 +118,12 @@ does not exist.
   MEP-v1 §6 "as code" wording and §2.1 rule 9 bare-basename (ADR-0121),
   `scripts/mep_recipe.py validate|dry-run|apply` reusing `mep_lint`
   discovery.
+- **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
+  `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
+  per-system tile/palette widths and explicit errors; sibling golden
+  `docs/specs/golden/mep-nes/`; `validate-specs.py` runs `mep_lint` over both
+  goldens (`lint_golden_packs`); `test_mep_compare_auto_palettes.py` uses the
+  golden; `test_mep_compare_render_dispatch.py` added.
 
 ## 4. Roadmap — pending work, by slice
 
@@ -218,7 +224,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 ## 5. Order of execution
 
 1. **F6.2 → F6.3 → F6.4 → F6.5**, one run each.
-2. **H4** at any time (small, independent, no Core impact). H1–H3 shipped.
+2. ~~H1–H4~~ shipped (2026-08-27/28).
 3. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
 4. **Input tester I.0–I.2** independent of everything above.
@@ -228,7 +234,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
 | 0138 | accepted | Phase 6 design; F6.0 and F6.1 shipped; remaining work list = F6.2–F6.5 |
-| 0137, 0131, 0124, 0136 | accepted 2026-08-27 | H1–H4 |
+| 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |
 | 0133, 0134, 0135, 0051 | proposed | gate Blocks C/D — user decision |

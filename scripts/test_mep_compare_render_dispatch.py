@@ -102,8 +102,27 @@ def check_rejects_wrong_width_palette(mep_compare) -> bool:
         return False
     except ValueError as exc:
         message = str(exc)
-        ok = "nes" in message and SUPPORTED_LIST in message
-        print(("PASS" if ok else "FAIL") + f": wrong-width palette for a valid system raises naming it ({message!r})")
+        ok = "nes" in message and "8-hex" in message and "got 2" in message
+        print(("PASS" if ok else "FAIL") + f": wrong-width palette for a valid system names the expected and actual widths ({message!r})")
+        return ok
+
+
+def check_sms_tiles_parse(mep_compare) -> bool:
+    # An SMS tile is 32 bytes = 64 hex (draft S3.2); before ADR-0136 §6 the
+    # parser hard-coded the NES 32-hex width and silently dropped every SMS
+    # tile, so the comparator "worked" on SMS packs by comparing nothing.
+    import tempfile
+    from pathlib import Path
+    sms_chr, sms_pal = FIXTURES["sms"]
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "hires.txt").write_text(
+            "<ver>200\n<scale>1\n<img>tiles.png\n"
+            f"<tile>0,{sms_chr},{sms_pal},0,0,1,N\n"
+            "<system>sms\n")  # header deliberately after the tile line
+        pack = mep_compare.Pack(folder)
+        ok = pack.system == "sms" and len(pack.tiles) == 1
+        print(("PASS" if ok else "FAIL") + f": Pack parses a 64-hex SMS tile with a late <system> header (system={pack.system!r}, tiles={len(pack.tiles)})")
         return ok
 
 
@@ -112,6 +131,7 @@ def main() -> int:
     results = [
         check_decodes_every_supported_system(mep_compare),
         check_rejects_unsupported_system(mep_compare),
+        check_sms_tiles_parse(mep_compare),
         check_rejects_before_per_tile_work(mep_compare),
         check_rejects_wrong_width_palette(mep_compare),
     ]

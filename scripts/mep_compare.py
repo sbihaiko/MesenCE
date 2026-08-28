@@ -2,8 +2,9 @@
 """mep_compare — compares the automatic layer (`auto/textures`, xBRZ) with an
 artist-made HD pack, tile by tile (F5, qualitative bootstrap evaluation).
 
-Works for NES packs whose tile key is intrinsic (CHR RAM: 32-hex bitmap +
-palette). For each key present on both sides it builds a
+Works for NES, GB, GBC and SMS packs whose tile key is intrinsic (tile bitmap
+hex + palette key; widths per system in _TILE_HEX_WIDTH/_PALETTE_HEX_WIDTH,
+ADR-0136). For each key present on both sides it builds a
 `original | xBRZ (auto) | artist` strip and computes simple metrics:
 
   * coverage: how many of the artist's keys the bootstrap also saw (and vice
@@ -51,12 +52,20 @@ class Pack:
 
     def _parse(self):
         text = (self.folder / "hires.txt").read_text(errors="replace")
-        for line in text.splitlines():
-            line = line.strip()
+        lines = [l.strip() for l in text.splitlines()]
+        # Header first: nothing in the format orders <system> before the first
+        # <tile>, and the tile-data width filter below depends on it.
+        for line in lines:
+            if line.startswith("<system>"):
+                self.system = line[8:].strip().lower()
+        if self.system not in SYSTEMS:
+            raise _unsupported(self.system)
+        tile_hex = _TILE_HEX_WIDTH[self.system]
+        for line in lines:
             if line.startswith("<scale>"):
                 self.scale = int(line[7:])
             elif line.startswith("<system>"):
-                self.system = line[8:].strip().lower()
+                continue
             elif line.startswith("<img>"):
                 self.images.append(line[5:].strip())
             elif line.startswith("<condition>"):
@@ -68,8 +77,8 @@ class Pack:
                 if not m:
                     continue
                 f = m.group("body").split(",")
-                if len(f) < 5 or len(f[1]) != 32:
-                    continue  # CHR ROM index keys are out of scope here
+                if len(f) < 5 or len(f[1]) != tile_hex:
+                    continue  # CHR ROM index keys (and wrong-system widths) are out of scope here
                 self.total_lines += 1
                 key = (f[1].upper(), f[2].upper())
                 cond = m.group("cond")
@@ -120,10 +129,24 @@ SYSTEMS = ("nes", "gb", "gbc", "sms")
 # value ("TTPP"); gbc: 2-hex tile-type + 4 x RGB555 big-endian colors (16 hex);
 # sms: 2-hex tile-type + 2-hex CRAM base + 16 CRAM RGB222 entries (32 hex).
 _PALETTE_HEX_WIDTH = {"nes": 8, "gb": 4, "gbc": 18, "sms": 36}
+# Tile-data hex width per system (S3.2): nes/gb/gbc are 16-byte 2bpp tiles,
+# sms is a 32-byte 4bpp tile. Pack._parse drops <tile> lines of any other width.
+_TILE_HEX_WIDTH = {"nes": 32, "gb": 32, "gbc": 32, "sms": 64}
+# Valid per hires-gbsms-v1-draft.md S3.1 / mep_lint, but not implemented here
+# yet (gg's 68-hex palette key; sg1000/coleco are outside the builder's v1).
+_KNOWN_UNIMPLEMENTED = ("gg", "sg1000", "coleco")
 
 
 def _unsupported(system: str) -> ValueError:
+    if system in _KNOWN_UNIMPLEMENTED:
+        return ValueError(f"<system>{system} is a valid pack format but not implemented in mep_compare yet; "
+                          f"mep_compare supports {', '.join(SYSTEMS)}")
     return ValueError(f"unsupported <system>{system}; mep_compare supports {', '.join(SYSTEMS)}")
+
+
+def _bad_palette_width(system: str, pal_hex: str) -> ValueError:
+    return ValueError(f"<system>{system} expects a {_PALETTE_HEX_WIDTH[system]}-hex palette key, "
+                      f"got {len(pal_hex)} ({pal_hex!r})")
 
 
 def _decode_2bpp(data: bytes, colors: list, row_bytes) -> list:
@@ -195,8 +218,10 @@ def _paint(colors: list) -> Image.Image:
 
 
 def render_original(chr_hex: str, pal_hex: str, system: str = "nes") -> Image.Image:
-    if system not in SYSTEMS or len(pal_hex) != _PALETTE_HEX_WIDTH[system]:
+    if system not in SYSTEMS:
         raise _unsupported(system)
+    if len(pal_hex) != _PALETTE_HEX_WIDTH[system]:
+        raise _bad_palette_width(system, pal_hex)
     return _paint(_DECODERS[system](bytes.fromhex(chr_hex), pal_hex))
 
 

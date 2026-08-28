@@ -84,7 +84,7 @@ FALLBACK_SUFFIXES = (
     + sorted(FALLBACK_PROBE_BASENAMES)
 )
 KNOWN_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
-NES_TAGS = {"ver", "scale", "supportedRom", "img", "tile", "background", "condition", "bgm", "sfx", "patch", "overscan", "options", "addition", "fallback"}
+NES_TAGS = {"ver", "scale", "system", "supportedRom", "img", "tile", "background", "condition", "bgm", "sfx", "patch", "overscan", "options", "addition", "fallback"}
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
 COND_TYPES = {"tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange", "positionCheckX", "positionCheckY", "originPositionCheckX", "originPositionCheckY"}
 GLOBAL_CONDS = {"hmirror", "vmirror", "bgpriority", "sppalette0", "sppalette1", "sppalette2", "sppalette3"}
@@ -572,6 +572,11 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             scale = int(tokens[0]) if tokens and tokens[0].isdigit() else 0
             if scale < 1 or scale > 10:
                 rep.error(where, f"<scale> invalid: {params}")
+        elif tag == "system":
+            # Optional in NES packs (HdPackLoader ignores unknown tags); when
+            # present it must agree with the format branch (ADR-0136 §5).
+            if params.strip().lower() != "nes":
+                rep.error(where, f"<system> invalid for a NES hires.txt: {params} (expected nes)")
         elif tag == "supportedRom":
             for h in tokens:
                 if not HEX40.match(h.strip()):

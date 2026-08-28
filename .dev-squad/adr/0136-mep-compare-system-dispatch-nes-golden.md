@@ -109,3 +109,38 @@ and deleted):
    `system=artist.system`. The `(chr_hex, pal_hex)` tuple stays the dict
    key for coverage math. A bound `pack.render(key)` method was considered
    and rejected as churn for a 235-line script.
+
+## Clarifications (after run a2f602e039ee, 2026-08-28) — shipped
+
+Run `a2f602e039ee` shipped both halves (merged as `2c4aefb9`: dispatch,
+`docs/specs/golden/mep-nes/`, `lint_golden_packs()`, migrated
+`test_mep_compare_auto_palettes.py`, new `test_mep_compare_render_dispatch.py`).
+Its review raised eight findings, folded here (auto-minted files reused the
+retired ids 0139–0146 again — deleted); the real ones were fixed in the
+follow-up commit:
+
+5. **`<system>` is a legal NES header tag.** `mep_lint.py` `NES_TAGS` now
+   includes `system`, whose value must be `nes` in a NES `hires.txt` (error
+   otherwise); `HdPackLoader` ignores unknown tags, so the golden's header is
+   harmless to Mesen. This keeps `pack.system` as the one declaration
+   mechanism every fixture uses, instead of relying on the absent-header
+   default. The NES golden now lints with 0 warnings.
+6. **Tile-data width is per system too.** `Pack._parse` filtered `<tile>`
+   lines on a hard-coded 32-hex width, so every SMS tile (32 bytes 4bpp =
+   64 hex) was dropped and an SMS pack "compared" as empty. Fixed with a
+   `_TILE_HEX_WIDTH` table; the parser reads the header (`<system>`) in a
+   first pass because nothing in the format orders it before the first
+   `<tile>`. Covered by `check_sms_tiles_parse` (late header, 64-hex tile).
+7. **Two error messages, not one.** An unsupported system and a wrong-width
+   palette for a supported system were both reported as "unsupported
+   <system>X". Now: `unsupported <system>gba; mep_compare supports …` for
+   formats that do not exist; `<system>gg is a valid pack format but not
+   implemented in mep_compare yet; …` for `gg`/`sg1000`/`coleco` (legal per
+   the draft and `mep_lint`, deliberately outside this v1); and
+   `<system>nes expects a 8-hex palette key, got 2` for a malformed key.
+8. **Deferred, on purpose.** The system membership is encoded in several
+   places (`mep_lint.KNOWN_SYSTEMS`, `validate-specs.SYSTEMS`, the GB/SMS
+   `<system>` check, the draft §3.1, `mep_compare.SYSTEMS`). A single shared
+   table (system → tile width, palette width, comparator support) would turn
+   each divergence into an explicit flag. Not done here: it crosses three
+   scripts for a cosmetic gain today; revisit when a fifth consumer appears.
