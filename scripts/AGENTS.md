@@ -83,9 +83,29 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   reuses `mep_lint` discovery (`Source`, `discover_sections`,
   `find_fallback_subfolder`, `find_fallback_subfolder_by_name`,
   `find_top_level_nested_zip`, `safe_rel`, `parse_line`) and never walks
-  a zip with a parallel implementation. `test_mep_recipe.py` is the
-  framework-free acceptance check (unknown op / escaping path rejected;
-  dry-run of a synthetic split pack is `mep_lint`-clean).
+  a zip with a parallel implementation. `mep_recipe.py assemble-sources`
+  (F6.2b, ADR-0138 §7/§12/§13) is the deterministic step that builds
+  `sources`: it parses the issue body's `external_assets` lines
+  (`<url> [<sha256>] [<size>]`, reusing `SHA256_HEX` rather than a new
+  regex) and treats every parsed line as an authoritative dependency
+  (ADR-0138 §12) — each one becomes a `sources.deps` entry regardless of
+  whether classify's `deps[]` has a matching item, merging in classify's
+  id/hints/license/user_supplied when a `hints` URL matches (trailing
+  slash ignored) and synthesizing an id otherwise, so a declared asset is
+  never silently dropped even when classify under- or over-counts `deps`.
+  `recipe_status` is `absent` when there are no `external_assets` lines,
+  or when classify's `ops`/`deps`/`pack` fragment has no actual content
+  (schema-required-but-empty containers count as no fragment, ADR-0138
+  §7) — never a schema-clean-looking `present` that `validate_recipe`
+  would reject; `present` only when a real fragment and well-formed lines
+  both exist; `refused` when any line is malformed or missing its
+  sha256. Only `present` writes a document (`--out`).
+  `test_mep_recipe.py` is the framework-free acceptance check (unknown op
+  / escaping path rejected; dry-run of a synthetic split pack is
+  `mep_lint`-clean; `assemble-sources`'s absent/present/refused outcomes,
+  including an empty-but-present classify fragment, an unmatched
+  `external_assets` line surviving into `sources.deps`, and the CLI round
+  trip).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
@@ -235,7 +255,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
 - `python3 scripts/test_mep_recipe.py` - MEP Recipe v1 interpreter
   (unknown op / escaping path rejected; synthetic split-pack dry-run is
-  `mep_lint`-clean); PASS/FAIL per check, exit 0 only if all pass.
+  `mep_lint`-clean) plus `assemble-sources` (absent/present/refused per
+  ADR-0138 §7/§13, CLI round trip); PASS/FAIL per check, exit 0 only if
+  all pass.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
