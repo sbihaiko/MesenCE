@@ -10,24 +10,22 @@
 
 **[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)
 
-**Your NES, Game Boy, Master System and GBA games**<br/>
-HD art and modern instruments, seamlessly integrated into a single pack.<br/> 
-Everything works together automatically, right out of the box, and it’s on by default.<br/>
-
 </div>
 
----
+## The 30-second pitch — Your NES, Game Boy, Master System, and GBA games, enhanced
 
-## The 30-second pitch
+**HD art and modern instruments, seamlessly integrated into a single enhancement pack.**  
+Everything works automatically, right out of the box — and the enhancements are **on by default**.  
+Most emulators stop at *faithful*. **This one starts there and keeps going.**
 
-Most emulators stop at *faithful*. This one starts there and keeps going:
+- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files required. It just works, and it ships **on**.
+- **HD art across three console families, not just one.** Mesen's proven NES HD Pack pipeline now extends to **Game Boy and Master System**. And when no pack exists yet, the emulator can start **building one for you** — automatically upscaling tiles and extracting music from the first time you play.
+- **One pack format ties it all together.** Textures, music, and synth presets live in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it into a folder and the emulator finds it automatically. Every enhancement layer can still be toggled independently.
+- **Built to stay reliable.** Unit tests gate every push — not just *"it compiled."*
 
-- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files. Ships **on**.
-- **HD art on three families, not one.** Mesen's proven NES HD Pack pipeline now runs on **Game Boy and Master System** too, and the emulator starts **building a starter pack for you** (upscaled tiles, extracted music) the first time you play a game nobody has packed yet.
-- **One pack format for everything.** Textures + music + synth presets in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it in a folder; the emulator finds it. Every layer toggles independently.
-- **Kept honest by CI.** Unit tests gate every push — not just "it compiled".
+Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead, and rewind.
 
-Built on [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead and rewind. This fork adds the enhancement layer on top.
+**This fork keeps the emulation faithful — then adds an enhancement layer on top.**
 
 ## Download
 
