@@ -101,6 +101,29 @@ namespace Mesen.Interop
 		public static string GetMepRomSha1() { return Utf8Utilities.CallStringApi(GetMepRomSha1Wrapper, 100); }
 		[DllImport(DllPath)] public static extern void SetMepPackEnabled([MarshalAs(UnmanagedType.LPUTF8Str)] string containerName, [MarshalAs(UnmanagedType.I1)] bool enabled);
 
+		//F6.4b - client-side MEP-recipe-v1 auto-install (ADR-0138 clarifications 4/37/38);
+		//wraps the F6.4a offline installer (Core/Shared/EnhancementPacks/MepRecipeInstaller::Install).
+		//depPathsBlob is a "depId\tlocalPath" row per line (empty string when there are no deps),
+		//matching the same tab-separated/newline-separated convention as GetMepPackList's rows.
+		[DllImport(DllPath, EntryPoint = "InstallMepRecipe")]
+		[return: MarshalAs(UnmanagedType.I1)]
+		private static extern bool InstallMepRecipeWrapper(
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string recipeJson,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string primaryPath,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string depPathsBlob,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string romName,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string outFolder,
+			IntPtr outResult, Int32 maxResultLength
+		);
+		public static bool InstallMepRecipe(string recipeJson, string primaryPath, string depPathsBlob, string romName, string outFolder, out string resultText)
+		{
+			bool success = false;
+			resultText = Utf8Utilities.CallStringApi((IntPtr outBuffer, Int32 maxLength) => {
+				success = InstallMepRecipeWrapper(recipeJson, primaryPath, depPathsBlob, romName, outFolder, outBuffer, maxLength);
+			}, 100000);
+			return success;
+		}
+
 		[DllImport(DllPath)] public static extern void WriteLogEntry([MarshalAs(UnmanagedType.LPUTF8Str)] string message);
 		[DllImport(DllPath)] public static extern void DisplayMessage([MarshalAs(UnmanagedType.LPUTF8Str)] string title, [MarshalAs(UnmanagedType.LPUTF8Str)] string message, [MarshalAs(UnmanagedType.LPUTF8Str)] string? param1 = null);
 
