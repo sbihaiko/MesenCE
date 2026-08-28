@@ -10,7 +10,7 @@
 
 **[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)<br/>
 
-</div>
+</div><br/>
 
 ## The 30-second pitch — Your NES, Game Boy, Master System, and GBA games, enhanced
 
