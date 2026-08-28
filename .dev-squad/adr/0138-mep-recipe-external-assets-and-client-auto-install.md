@@ -439,6 +439,40 @@ again) are folded and deleted.
     the new module. Topic-module packages under `scripts/checks/` are
     direct-script-invocation only (PEP 420 namespace package, relative
     imports; `python -m` is not a supported entry).
+25. **The recipe document lives in mep-meta (pre-F6.3).** `$RUNNER_TEMP`
+    dies with the job, so the `<!-- mep-meta -->` JSON block carries the
+    full assembled `recipe` object (alongside `deps`, `recipe_hash`,
+    `recipe_ok`) whenever `recipe_status == 'present'`. The catalog
+    generator copies `recipe`/`recipe_hash` verbatim and never re-assembles.
+26. **Catalog shape (reconciles §3's sketch with the PRD's F6.3 row).**
+    `docs/community-packs.json` is an MEI document, `mei: "1.1.0"`, with the
+    index fields of MEI §2.1 (`name` "MesenCE community packs", `maintainer`
+    `sbihaiko`, `updated` = generation date). One `packs[]` entry per board
+    item in an accepted Status, built from the Project fields (Pack URL →
+    `url`, Pack Hash → `sha256` — §18 precedence — ROM SHA1 → `rom.sha1`,
+    Game → `game`), the issue (`issue` number, `game`/`system` from the Form
+    fields, `license` from `external_assets_license` or `"unknown"`) and the
+    mep-meta block (`deps[]`, `recipe`, `recipe_hash`, `recipe_ok`, `verdict`,
+    `validated_at`, `labels`). MEI **v1.1** amendments: (a) new optional
+    `kind` ∈ {`mep`, `hd-legacy`}; for `hd-legacy` entries `version` and
+    `mep` are omitted and `license` MAY be `"unknown"`; (b) `rom.sha1` MAY be
+    absent (clients only auto-match entries that carry it); (c) an entry MAY
+    carry `deps[]`/`recipe` referencing third-party artifacts by URL + hash,
+    provided each dep carries `license` and the client shows it before
+    install (PRD row); (d) `catalog_version` is not used — `mei` is the
+    version. Golden `docs/specs/golden/mei/manifest.json` bumps to 1.1.0 and
+    gains one `hd-legacy` entry with `deps`/`recipe`; MEI-v1.md §2.2 gains
+    the v1.1 rows. Unknown-field tolerance (MEI §2.2) keeps 1.0 readers safe.
+27. **Generation and validation seams.** `generate_community_pack_catalog.py`
+    writes the JSON next to the Markdown in the same run (the existing
+    `community-pack-catalog.yml` commits both files); the Markdown table
+    gains an "External assets" marker column (`yes` when the entry has
+    `deps`). `validate-specs.py` gains `validate_mei_catalog()` that validates
+    the golden AND, when present, the committed `docs/community-packs.json`
+    against the same v1.1 rules — offline, no `gh`. mep-meta parsing is a
+    pure function over the comment body (`<!-- mep-meta -->` + fenced JSON)
+    with its own tests; a malformed block skips the entry's recipe data and
+    logs, never aborts the whole catalog.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label

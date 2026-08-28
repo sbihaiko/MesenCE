@@ -819,6 +819,10 @@ jobs:
                   for dep in deps
               ]
               meta["recipe_hash"] = recipe_hash
+              # ADR-0138 §25: the comment is the ONLY durable store of the
+              # assembled recipe document (the runner-temp file dies with
+              # the job); F6.3's catalog generator copies it verbatim.
+              meta["recipe"] = recipe
               # ADR-0138 §18/§21: digests are recorded even for a
               # gate-rejected recipe ("record what was seen"); the reader
               # (F6.3 catalog generator) tells them apart by this flag.
