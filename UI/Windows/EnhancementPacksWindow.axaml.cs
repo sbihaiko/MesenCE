@@ -1,9 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Mesen.Config;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using System;
+using System.Threading.Tasks;
 
 namespace Mesen.Windows
 {
@@ -61,6 +64,50 @@ namespace Mesen.Windows
 				LoadRomHelper.PowerCycle();
 			}
 			_model.Refresh();
+		}
+
+		//ADR-0138 §38: gates the very first automatic community-pack download
+		//behind an explicit Yes/No prompt, on top of the AutoInstallCommunityPacks
+		//toggle above. Called from the ROM-load hook (not from opening this
+		//settings window) before CommunityPackInstallService attempts a download;
+		//CommunityPackConsentState.Evaluate is the single source of truth for
+		//whether the dialog is due and whether a download may proceed.
+		//
+		//CommunityPackAutoInstallConsentGiven is recorded as soon as the dialog
+		//has been shown once, regardless of the answer, so the user is never
+		//asked twice - a "No" answer also turns AutoInstallCommunityPacks off so
+		//no download is attempted until the user re-enables it manually.
+		public static async Task<bool> EnsureCommunityPackAutoInstallConsent()
+		{
+			EnhancementPackConfig config = ConfigManager.Config.EnhancementPacks;
+			CommunityPackConsentDecision decision = CommunityPackConsentState.Evaluate(
+				config.AutoInstallCommunityPacks,
+				config.CommunityPackAutoInstallConsentGiven
+			);
+
+			if(!decision.MustShowConsentDialog) {
+				return decision.CanDownloadNow;
+			}
+
+			//Uses MessageBox.Show directly (not MesenMsgBox.Show) with a literal string,
+			//not a resources.en.xml key - that file is outside this task's declared scope.
+			DialogResult result = await MessageBox.Show(
+				null,
+				"MesenCE can automatically download and install a matching enhancement pack from the online community catalog for games that don't have one installed yet. This contacts an external server and downloads files onto your computer." + Environment.NewLine + Environment.NewLine + "Allow automatic downloads?",
+				"MesenCE",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Question
+			);
+			bool consented = result == DialogResult.Yes;
+
+			config.CommunityPackAutoInstallConsentGiven = true;
+			if(!consented) {
+				config.AutoInstallCommunityPacks = false;
+			}
+			config.ApplyConfig();
+			ConfigManager.Config.Save();
+
+			return consented;
 		}
 	}
 }
