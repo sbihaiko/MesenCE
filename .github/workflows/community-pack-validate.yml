@@ -815,8 +815,24 @@ jobs:
           with open(os.environ["PAYLOAD_PATH"], "w", encoding="utf-8") as handle:
               json.dump(payload, handle)
           PYEOF
+          # Bot-owned lookup (ADR-0138 §5): `--paginate` re-runs the `--jq`
+          # filter once PER PAGE, so an aggregating `[.[] | ...]`/`.[-1]`
+          # filter prints one line per page and command substitution keeps
+          # every embedded newline except a trailing one -- corrupting
+          # COMMENT_ID whenever the match isn't on the first page (30
+          # comments/page by default). Emitting one bare `.id` per match
+          # instead makes every page's output just more lines in the same
+          # stream, so `head -n1` alone is well-defined across any number
+          # of pages. Restricting to `.user.login == "$OWNER"` (PROJECT_PAT
+          # is a classic PAT, so API-authored comments are attributed to
+          # its owning account) stops a submitter's own issue text from
+          # ever being mistaken for the bot's provenance comment, and
+          # `head -n1` (oldest first, GitHub's default order) always keeps
+          # the FIRST such comment so a later injected marker can never
+          # take its place.
           COMMENT_ID=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --paginate \
-            --jq '[.[] | select(.body | test("<!-- mep-meta -->"))] | if length > 0 then (.[-1].id | tostring) else "" end')
+            --jq ".[] | select((.user.login == \"$OWNER\") and (.body | test(\"<!-- mep-meta -->\"))) | .id" \
+            | head -n1)
           if [ -n "$COMMENT_ID" ]; then
             gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" --input "$PAYLOAD_PATH" >/dev/null
           else
