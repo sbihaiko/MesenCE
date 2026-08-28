@@ -42,7 +42,8 @@
 			</c:OptionSection>
 			<CheckBox Content="{l:Translate chkBootstrapEnhancementFolder}" IsChecked="{Binding Config.BootstrapEnhancementFolder}" IsEnabled="{Binding Config.EnableMepPacks}" />
 			<CheckBox Content="{l:Translate chkApplyPatchOnHashMismatch}" IsChecked="{Binding Config.ApplyPatchOnHashMismatch}" IsEnabled="{Binding Config.EnableMepPacks}" />
-			<CheckBox Content="{l:Translate chkAutoInstallCommunityPacks}" IsChecked="{Binding Config.AutoInstallCommunityPacks}" IsEnabled="{Binding Config.EnableMepPacks}" ToolTip.Tip="{l:Translate tipAutoInstallCommunityPacks}" />
+			<!-- Literal text (not a resources.en.xml localization key) - that file is outside this task's declared scope; see ADR-0138 §38 -->
+			<CheckBox Content="Automatically install matching community packs" IsChecked="{Binding Config.AutoInstallCommunityPacks}" IsEnabled="{Binding Config.EnableMepPacks}" ToolTip.Tip="When a ROM is loaded and no local pack matches it, download and install a matching community pack from the online catalog, if one exists. The first automatic download always asks for confirmation." />
 			<TextBlock Text="{l:Translate lblPacksHelp}" TextWrapping="Wrap" Margin="0 3" />
 		</StackPanel>
 

@@ -89,7 +89,15 @@ namespace Mesen.Windows
 				return decision.CanDownloadNow;
 			}
 
-			DialogResult result = await MesenMsgBox.Show(null, "CommunityPackAutoInstallConsent", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+			//Uses MessageBox.Show directly (not MesenMsgBox.Show) with a literal string,
+			//not a resources.en.xml key - that file is outside this task's declared scope.
+			DialogResult result = await MessageBox.Show(
+				null,
+				"MesenCE can automatically download and install a matching enhancement pack from the online community catalog for games that don't have one installed yet. This contacts an external server and downloads files onto your computer." + Environment.NewLine + Environment.NewLine + "Allow automatic downloads?",
+				"MesenCE",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Question
+			);
 			bool consented = result == DialogResult.Yes;
 
 			config.CommunityPackAutoInstallConsentGiven = true;
