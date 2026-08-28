@@ -154,7 +154,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   file prefix) while a new "Triagem de Community HD/MEP Packs (GitHub
   Project)" section is appended after it. `verify_community_pack_issue_template.py`
   parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
-  the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
+  the required fields/labels/doc-link, plus (ADR-0138 §12) that the optional
+  `external_assets` textarea and `external_assets_license` input exist, are
+  not required, and that `external_assets`'s description documents the
+  `<url> [<sha256>] [<size>]` per-line grammar. `verify_hd_pack_authoring_doc.sh`
   checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
   `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_submitted_workflow.py`,
   `verify_community_pack_drift_check_workflow.py`, and

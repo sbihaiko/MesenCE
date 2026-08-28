@@ -67,3 +67,28 @@ body:
         installation instructions, etc.
     validations:
       required: false
+  - type: textarea
+    id: external_assets
+    attributes:
+      label: "External assets (optional)"
+      description: >-
+        Assets not included in the pack link above (e.g. large audio
+        files hosted separately). One dependency per non-empty line;
+        blank lines and lines whose first non-space character is `#` are
+        ignored. Format: `<url> [<sha256>] [<size>]` — `sha256` is 64
+        lowercase hex characters, `size` is in decimal bytes. A line
+        missing the `sha256` disables recipe assembly for the whole
+        submission.
+      placeholder: |
+        https://example.com/asset.zip 3b1e...c0 1048576
+    validations:
+      required: false
+  - type: input
+    id: external_assets_license
+    attributes:
+      label: "External assets license (optional)"
+      description: >-
+        License or usage terms covering the external assets listed above.
+      placeholder: "E.g.: CC-BY-4.0, all rights reserved to original author"
+    validations:
+      required: false

@@ -39,10 +39,16 @@ what CI actually runs; this doc records why they're split the way they are.
   not there, and keep this doc in sync when either side changes.
 - `ISSUE_TEMPLATE/community-pack.yml` — GitHub Issue Form for community
   HD/MEP pack submissions (not a free-text issue): pack link, target
-  game/ROM + region, console dropdown, author/credits, a required
-  rights-confirmation checkbox, and an optional description. Sets
-  `labels: [community-pack]`
-  and links `docs/hd-pack-authoring.md`. Structurally checked by
+  game/ROM + region, console dropdown, and author/credits are required;
+  description is optional; `external_assets` (optional `textarea`) and
+  `external_assets_license` (optional single-line `input`) are the
+  ADR-0138 §12 split-distribution fields — `external_assets` is one
+  `<url> [<sha256>] [<size>]` dependency per non-empty line (`#`-comment
+  and blank lines ignored; a line missing `sha256` disables recipe
+  assembly for the whole submission), and its description documents that
+  grammar. There is no distribution-rights checkbox (dropped in
+  `b62f0bbc`). Sets `labels: [community-pack]` and links
+  `docs/hd-pack-authoring.md`. Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
 - `workflows/community-pack-submitted.yml` — trigger-only wrapper that
   extracts the pack URL and mode, then calls the reusable validate
