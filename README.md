@@ -25,9 +25,6 @@ Most emulators stop at *faithful*. This one starts there and keeps going — and
 - **Know a great HD pack? [Submit the link](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml).** Opening a pre-filled GitHub Issue is all it takes: a bot downloads the pack, validates it, labels it and adds it to the [public catalog](docs/community-packs.md). Classic Mesen `hires.txt` packs and full MEP `pack.json` packs both qualify — years of existing community work, one ecosystem. Details in [Community packs](#community-packs).
 - **Built to stay reliable.** CI-gated unit tests on every push — not just *"it compiled."*
 
-> ### ▶ [Browse the community pack catalog](https://github.com/sbihaiko/MesenCE/blob/main/docs/community-packs.md)
-> Every entry downloaded, lint-checked and hash-tracked by CI, ranked by community 👍 votes. Find a pack for your game, try it, and vote for the ones worth playing.
-
 Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead and rewind. Upstream fixes are ported in regularly.
 
 ## Download
