@@ -44,8 +44,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   complete` transitive-skip withholding a patch while textures still
   install, a sha256 mismatch aborting and writing nothing, and an unknown
   op/recipe version logging `[MEP] recipe unsupported` and skipping. Links
-  `Core/Shared/EnhancementPacks/MepPack.cpp` + the `MepRecipe*.cpp` split +
-  `Core/Shared/MessageManager.cpp` + `Utilities/{JsonReader,FolderUtilities,
+  `Core/Shared/EnhancementPacks/MepPack.cpp` + `MepRecipeInstaller.cpp`/
+  `MepRecipeOps.cpp` (the whole interpreter stays these two declared
+  units - ADR-0138 §35's file-size-gate exception only applies when a
+  task pre-declares the split files in its own file list, which this
+  task's did not, so `MepRecipeInstaller.cpp`/`MepRecipeOps.cpp` exceed
+  the usual 200-line-per-file guideline rather than growing an
+  undeclared sibling file) + `Core/Shared/MessageManager.cpp` +
+  `Utilities/{JsonReader,FolderUtilities,
   UTF8Util,sha256,SimpleLock,Timer,miniz}.cpp` directly - no `MesenCore`
   link at all, the only harness here that doesn't need `make core` first.
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run

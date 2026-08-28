@@ -981,27 +981,6 @@
     <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp">
       <Filter>Shared\EnhancementPacks</Filter>
     </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeInstaller.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeOps.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeApply.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeSource.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeVerify.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeWriter.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
-    <ClCompile Include="Shared\EnhancementPacks\MepRecipeStamp.cpp">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClCompile>
     <ClCompile Include="Shared\EnhancementPacks\AudioFingerprint.cpp">
       <Filter>Shared\EnhancementPacks</Filter>
     </ClCompile>
@@ -1036,27 +1015,6 @@
       <Filter>Shared\EnhancementPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\EnhancementPacks\MepPackManager.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeInstaller.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeOps.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeApply.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeSource.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeVerify.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeWriter.h">
-      <Filter>Shared\EnhancementPacks</Filter>
-    </ClInclude>
-    <ClInclude Include="Shared\EnhancementPacks\MepRecipeStamp.h">
       <Filter>Shared\EnhancementPacks</Filter>
     </ClInclude>
     <ClInclude Include="Shared\EnhancementPacks\AudioFingerprint.h">
