@@ -1,57 +1,16 @@
 #pragma once
 #include "pch.h"
-#include "Utilities/miniz.h"
 
 class JsonValue;
 
-//Everything MepRecipeInstaller.cpp needs to actually apply a parsed
-//MEP-recipe-v1 recipe (ADR-0138 §4, Clarification §37) once every hash has
-//verified: the read-only zip-backed source abstraction + §7 primary-root
-//discovery, the pure glob (§4.2) / rewrite-paths (§4.4) / path-safety
-//algorithms, the shared op-execution context, and the four op runners
-//themselves (§4). Not a standalone public API - MepRecipeInstaller.cpp is
-//the only caller of everything declared here.
-
-//A read-only view over one recipe artifact (always a zip - MEP-recipe-v1
-//§3.2/§3.3, both "primary" and every dep are downloaded/user-supplied zip
-//files). Calls into Utilities/miniz.h directly instead of the
-//Utilities/ZipReader + ArchiveReader wrapper: ArchiveReader::GetReader also
-//references SZReader (7z), which would drag the whole SevenZip/ sources
-//into the lightweight core-unit-tests link for a format this interpreter
-//never reads. Same underlying miniz calls ZipReader.cpp already uses, just
-//without the ArchiveReader/SZReader indirection.
-class MepRecipeSource
-{
-public:
-	~MepRecipeSource();
-	bool LoadFile(const string& path, string& error);
-	bool LoadBytes(vector<uint8_t> bytes, string& error);
-	bool Exists(const string& rel) const;
-	bool Read(const string& rel, vector<uint8_t>& out) const;
-	//Safe-normalized file paths under RootPrefix (directories excluded)
-	vector<string> ListRelative() const;
-	//Raw normalized entry names of the whole archive (RootPrefix NOT
-	//applied) - what root-discovery's probes scan
-	vector<string> RawEntries() const;
-	void SetRootPrefix(const string& prefix) { _rootPrefix = prefix; }
-
-private:
-	void Close();
-
-	mz_zip_archive _zip{};
-	bool _loaded = false;
-	vector<uint8_t> _bytes;
-	unordered_map<string, string> _normalizedToOriginal; //normalized -> raw zip entry name
-	string _rootPrefix;
-};
-
-//MEP-recipe-v1 §7: opens `src`'s pack root the same way mep_lint.py's
-//open_primary does (root hits, then MepPack::FindFallbackSubfolder, then a
-//single top-level nested zip, reloading `src` in place when that last
-//resort wins) and returns the discovered prefix ("" at the container
-//root). Never fails - an unmatched container defaults to the root prefix,
-//same as the Python reference.
-string DiscoverPrimaryRoot(MepRecipeSource& src, const string& romName);
+//Pre-declared split of MepRecipeInstaller (200-line-per-file guardrail,
+//memory L-ff73acd33912-000, ADR-0138 Clarification §35): the pure,
+//I/O-free MEP-recipe-v1 algorithms - the glob-pattern matcher (§4.2) and
+//the rewrite-paths tag rewriting (§4.4) - plus the small path-safety
+//helpers every op needs. The four op implementations that call into these
+//sit in MepRecipeApply.h/.cpp (a further split of the same guardrail);
+//neither file is a standalone public API, MepRecipeInstaller.cpp is the
+//only caller of both.
 
 //True when `rel` (already safe-normalized) is a patch destination that
 //policy.apply_patch_only_if_complete withholds (MEP-recipe-v1 §6):
@@ -77,40 +36,3 @@ string RewriteHiresText(const string& text, const vector<string>& tags, const st
 //op field that is a JSON array of strings (currently only rewrite-paths's
 //"tags").
 vector<string> CollectStringArray(const JsonValue& parent, const char* key);
-
-//Execution context shared by the four op runners below, built once by
-//MepRecipeInstaller per Install() call.
-struct MepRecipeOpContext
-{
-	unordered_map<string, MepRecipeSource*> Sources; //source-id ("primary" + dep ids) -> source
-	unordered_set<string> Missing; //dep ids withheld by policy (§6)
-	//Output paths (or "dir/" prefixes) a skipped op would have produced -
-	//the §6/§22 transitive-skip set consulted by rename/rewrite-paths
-	unordered_set<string> Withheld;
-	string OutFolder;
-	bool IncludePatches = true;
-
-	//True when `rel` is itself withheld, or sits under a withheld "dir/"
-	//prefix (§6/§22 transitive closure)
-	bool IsWithheld(const string& rel) const
-	{
-		if(Withheld.count(rel)) {
-			return true;
-		}
-		for(const string& w : Withheld) {
-			if(!w.empty() && w.back() == '/' && rel.compare(0, w.size(), w) == 0) {
-				return true;
-			}
-		}
-		return false;
-	}
-};
-
-//Each returns false only on a structural/hard failure (source missing,
-//rename dest collision, ...); `error` is set only in that case. A
-//policy-driven skip (missing dep, patch suppression) returns true having
-//updated `ctx` instead.
-bool RunCopyOp(const JsonValue& op, MepRecipeOpContext& ctx, string& error);
-bool RunGlobOp(const JsonValue& op, MepRecipeOpContext& ctx, string& error);
-bool RunRenameOp(const JsonValue& op, MepRecipeOpContext& ctx, string& error);
-bool RunRewritePathsOp(const JsonValue& op, MepRecipeOpContext& ctx, string& error);

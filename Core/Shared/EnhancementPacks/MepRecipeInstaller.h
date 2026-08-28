@@ -14,9 +14,9 @@
 //provided artifact's sha256 before any op runs (MEP-recipe-v1 §8),
 //applies policy.apply_patch_only_if_complete's transitive-skip semantics
 //(§6) when a dependency is missing, delegates the four op implementations
-//to MepRecipeOps.h/.cpp (source reading, glob/rewrite-paths algorithms,
-//the op runners), and writes pack.json + the F6.4-only .mep-install.json
-//into the caller's output folder - normally MepPackManager::GetPacksFolder() + the ROM's
+//to MepRecipeOps/MepRecipeApply, and writes pack.json + the F6.4-only
+//.mep-install.json (MepRecipeWriter/MepRecipeStamp) into the caller's
+//output folder - normally MepPackManager::GetPacksFolder() + the ROM's
 //convention name (ADR-0040), which this class does not own or compute
 //itself (it takes the destination folder as a parameter, mirroring
 //MepPack's "pure data, manager decides placement" split, ADR-0005).

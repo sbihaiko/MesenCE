@@ -496,6 +496,11 @@
     <ClInclude Include="Shared\EnhancementPacks\AudioFingerprint.h" />
     <ClInclude Include="Shared\EnhancementPacks\MepRecipeInstaller.h" />
     <ClInclude Include="Shared\EnhancementPacks\MepRecipeOps.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepRecipeApply.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepRecipeSource.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepRecipeVerify.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepRecipeWriter.h" />
+    <ClInclude Include="Shared\EnhancementPacks\MepRecipeStamp.h" />
     <ClInclude Include="Shared\BaseControlManager.h" />
     <ClInclude Include="Shared\BaseState.h" />
     <ClInclude Include="Gameboy\GbControlManager.h" />
@@ -797,6 +802,11 @@
     <ClCompile Include="Shared\EnhancementPacks\AudioFingerprint.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepRecipeInstaller.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepRecipeOps.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepRecipeApply.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepRecipeSource.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepRecipeVerify.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepRecipeWriter.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepRecipeStamp.cpp" />
     <ClCompile Include="Shared\Video\BaseVideoFilter.cpp" />
     <ClCompile Include="Shared\BatteryManager.cpp" />
     <ClCompile Include="Debugger\Breakpoint.cpp" />
