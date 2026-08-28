@@ -524,6 +524,60 @@ jobs:
             Also fill `assets`: a quick visual index of what the pack DECLARES, independent from the verdict above and from whether every referenced file actually resolves — include `"textures"` if hires.txt (or an MEP textures section) has any `<img>`/`<tile>`/`<background>` tag; `"audio"` if it has any `<bgm>`/`<sfx>` tag (or an MEP audio section); `"ips"` if a bundled ROM patch file's first 5 bytes are `PATCH` (IPS format); `"bps"` if a bundled ROM patch file's first 4 bytes are `BPS1` (BPS format). Include every type that applies (a pack can be both, e.g. audio + ips); empty array if none.
             Fill `comment` with the full text of the comment to be posted on the issue, in en-US, citing the MEP-v1.md section that backs the decision.
             Only when the pack is a split-distribution pack that needs a separately-hosted dependency (declared in the issue's "External assets" field) to become usable, also fill the optional `recipe` object with its `ops` (docs/specs/MEP-recipe-v1.md §4), `deps` (id/hints/license/user_supplied only — no `sha256`/`size`), and `pack` fields; omit `recipe` entirely for any pack that is already complete on its own. You never compute, guess, or copy a hash of any kind (no `sha256`, no `sources` block, no dep `size`) — that is always done by a separate deterministic step downstream from your output, never by you.
+      # Deterministic MEP Recipe assembly (ADR-0138 §4/§12/§13, F6.2b) — the
+      # sources block (hash-bearing) is never something the LLM computes,
+      # so this step, not "Classify pack" above, builds it: fetches the
+      # issue body itself via `gh issue view` (same call as "Record
+      # submission metadata" above) rather than reading it off the
+      # triggering event's payload, because this is a reusable
+      # `workflow_call` workflow whose caller may not even be an `issues`
+      # event (the drift-check caller fires on `workflow_dispatch`/
+      # schedule, where no such issue payload exists at all) —
+      # `inputs.issue_number` is the only identity this job can rely on
+      # (§17). Merges classify's optional `recipe` fragment
+      # (ops/deps/pack only — classify never emits `sources`/hashes, §4)
+      # with the CI-computed primary sha256 (steps.hash.outputs.sha256)
+      # and the submitted pack URL. Writes the assembled recipe to
+      # `$RUNNER_TEMP/mep_recipe.json` — a GitHub Actions runner-local temp
+      # path, never inside the checkout (§13), so it can never be mistaken
+      # for, or committed as, a repo artefact. Exposes exactly one step
+      # output, `recipe_status`, with exactly three values: `absent` (no
+      # `external_assets` declared, or classify emitted no recipe fragment
+      # at all), `present` (recipe assembled and written to the path
+      # above), or `refused` (a dependency line lacks a sha256, §3/§12).
+      # Every downstream reader (the gate step, `apply-verdict`'s downgrade
+      # expression, the `assets:external` label branch, the mep-meta
+      # `recipe_hash` comment — none implemented yet, F6.2b remainder)
+      # branches on this enum instead of re-deriving "is there a recipe?".
+      - name: Assemble MEP recipe
+        id: assemble-recipe
+        if: steps.classify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          PACK_URL: ${{ inputs.pack_url }}
+          PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
+          STRUCTURED_OUTPUT: ${{ steps.classify.outputs.structured_output }}
+        run: |
+          set -euo pipefail
+          gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body -q .body > "$RUNNER_TEMP/mep_recipe_issue_body.txt"
+          jq -r '.recipe // {}' <<<"$STRUCTURED_OUTPUT" > "$RUNNER_TEMP/mep_recipe_classify.json"
+          ASSEMBLE_OUTPUT=$(python3 scripts/mep_recipe.py assemble-sources \
+            --issue-body "$RUNNER_TEMP/mep_recipe_issue_body.txt" \
+            --classify "$RUNNER_TEMP/mep_recipe_classify.json" \
+            --pack-url "$PACK_URL" \
+            --pack-sha256 "$PACK_SHA256" \
+            --out "$RUNNER_TEMP/mep_recipe.json")
+          RECIPE_STATUS="${ASSEMBLE_OUTPUT#recipe_status: }"
+          case "$RECIPE_STATUS" in
+            absent) echo "recipe_status=absent" >> "$GITHUB_OUTPUT" ;;
+            present) echo "recipe_status=present" >> "$GITHUB_OUTPUT" ;;
+            refused) echo "recipe_status=refused" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::error::Unrecognized recipe_status '$RECIPE_STATUS' from assemble-sources." >&2
+              exit 1
+              ;;
+          esac
       # Applies the verdict Claude returned (structured_output, validated
       # against the schema above) deterministically — no re-querying `gh
       # project item-list` to guess the current Status (its per-item JSON
