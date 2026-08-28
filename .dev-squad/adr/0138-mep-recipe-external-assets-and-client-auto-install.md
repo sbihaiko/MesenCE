@@ -548,6 +548,35 @@ again) are folded and deleted.
     Two small checkers covering one script from different angles are fine;
     no convention slice is spent on it.
 
+37. **F6.4 is split at the network boundary (2026-08-28).** `Core/` has no
+    HTTP client and gains none (no libcurl dependency); the UI already uses
+    `HttpClient` (`UpdatePromptViewModel`). So §4 is delivered as two
+    slices. **F6.4a — Core installer, offline:**
+    `Core/Shared/EnhancementPacks/MepRecipeInstaller.{h,cpp}` is a fixed
+    interpreter of the four ops working only on local files: input = a
+    recipe document (the MEI entry's `recipe`, JSON via `Utilities/JsonReader`),
+    the primary zip path and a map dep-id → local path (possibly incomplete);
+    it verifies every sha256 against the recipe (mismatch aborts with an
+    error string), applies `policy.apply_patch_only_if_complete` (missing
+    dep → patch and its dependent rename/rewrite-paths withheld, textures
+    still applied, `withheld` reported), writes `pack.json` and
+    `.mep-install.json` (`recipe_hash`, `source.sha256`, dep hashes,
+    `installed_at`) into the ADR-0040 central per-ROM folder, and skips
+    with `[MEP] recipe unsupported` on an unknown op or `recipe` version.
+    `EnhancementPackConfig` gains `bool AutoInstallCommunityPacks = true`
+    (stored; consulted by F6.4b). Verification is headless in
+    `scripts/core_unit_tests.cpp`: the golden `mep-recipe` fixture installed
+    by the C++ installer equals `mep_recipe.py apply` byte-for-byte (a
+    Python-side helper dumps both trees), hash mismatch aborts, missing dep
+    withholds the patch. **F6.4b — UI fetch and prompt (C#):** catalog fetch
+    with ETag/If-None-Match cached under the MEP `.cache`, No-Intro sha1
+    match, download of `source.url` within the CI host allow-list (shared
+    constant, parity-checked against `community-pack-validate.yml`),
+    downloads-cache lookup by sha256, prompt listing `hints` + licence for
+    `user_supplied` deps, then an interop call into the F6.4a installer;
+    reinstall when `source.sha256` changed; UI notice when the patch is
+    withheld. Auto-install default per §4 applies in F6.4b.
+
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
 creation, authoring-doc section, Issue-Form/labels verifiers, and the

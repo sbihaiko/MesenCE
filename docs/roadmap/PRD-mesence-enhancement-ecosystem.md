@@ -273,7 +273,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 ## 5. Order of execution
 
-1. **F6.2 → F6.3 → F6.3b → F6.4 → F6.5**, one run each.
+1. **F6.2 → F6.3 → F6.3b → F6.4a (Core, offline) → F6.4b (UI, network) → F6.5**, one run each (ADR-0138 §37).
 2. ~~H1–H4~~ shipped (2026-08-27/28).
 3. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
