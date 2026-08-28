@@ -180,8 +180,10 @@ Work implied by accepting this ADR, in order:
 1. `docs/specs/MEP-recipe-v1.md` (normative recipe schema) + §6 amendment in
    `docs/specs/MEP-v1.md`; golden recipe fixture under `docs/specs/`. **Shipped as F6.1.**
 2. `scripts/mep_recipe.py` (`validate` / `dry-run` / `apply`, stdlib only) +
-   unit tests in the Python test set (**shipped as F6.1**); wire `dry-run` into
-   `community-pack-validate.yml` after lint, before classify (F6.2).
+   unit tests in the Python test set (**shipped as F6.1**); wire `validate` +
+   `dry-run` into `community-pack-validate.yml` as a gate **after classify,
+   before apply-verdict** (F6.2; the recipe is classify's own output, so it
+   cannot be checked before classify runs — see Clarifications §1).
 3. Issue Form fields `external_assets` / `external_assets_license`; label
    `assets:external` in `ensure_community_pack_labels.sh`; classify prompt
    emits the recipe; new "Upsert mep-meta comment" step.
@@ -228,3 +230,49 @@ Other consequences:
 - **Store the recipe only in the catalog JSON (not in the issue)** —
   rejected: the user requires the issue to be the auditable source of truth;
   the JSON is derived and regenerable.
+
+## Clarifications (after run 9967a42e92f1, 2026-08-28)
+
+The first F6.2 run failed at Decompose because the points below were open.
+Settled here; the nine auto-minted review ADRs (retired ids 0139–0147 reused
+again) are folded and deleted.
+
+1. **Pipeline seam.** `lint` → `classify` → **recipe gate** (`mep_recipe.py
+   validate` then `dry-run` against the downloaded primary, deps stubbed) →
+   `apply-verdict` → upsert `<!-- mep-meta -->`. Consequences item 2 above is
+   corrected accordingly; "after lint, before classify" was unsatisfiable.
+2. **Verdict precedence (two sources, one rule).** The deterministic gate is
+   *inert* when classify emitted no recipe — the existing binary verdict path
+   is untouched. When a recipe is present the gate may only **downgrade**
+   `accepted` → `invalid` (schema failure or lint-unclean dry-run); it never
+   upgrades an `invalid` classify verdict. `assets:external` is an additive
+   content-index label like `assets:textures`/`assets:audio`, never a third
+   verdict state; the verdict stays binary with Status "Aceito parcial (HD
+   Mesen)". This rule is also stated in the workflow header comment and
+   asserted by the `scripts/checks/` verifier.
+3. **Dependency hashes come from the submitter.** MEP-recipe-v1 keeps
+   `sources.deps[].sha256` as MUST (spec unchanged; the client contract of §4
+   depends on it) and CI never downloads external deps. Therefore each
+   `external_assets` line is `<url> [<sha256>] [<size>]`. A dep line **without**
+   a sha256 means "no recipe for this submission": classify does not emit one,
+   the verdict path is the pre-ADR one (`invalid` when files are missing, MEP-v1
+   §5), and the verdict comment tells the submitter how to compute the hash
+   (`sha256sum <file>`) and re-run `/revalidate`. Option (b) — hash-less deps
+   pinned at first install — is rejected: it moves trust from the issue to the
+   first downloader.
+4. **The LLM never writes hashes.** Classify's structured output carries only
+   the non-derivable parts: `ops`, `deps[]` (`id`, `hints`, `license`,
+   `user_supplied`), `pack` metadata. A deterministic step assembles the
+   hash-bearing `sources` block — `primary.url` from the form's pack link,
+   `primary.sha256` from `steps.hash`, dep `sha256`/`size` from the parsed
+   `external_assets` lines — and writes the final recipe before the gate runs.
+   Prompt/schema growth stays bounded under the F6.0 15-minute cap.
+5. **`<!-- mep-meta -->` is bot-owned.** The comment is rewritten wholesale on
+   every pass (find the marked comment → PATCH its body; never merged with
+   existing content); a missing or malformed block means "no prior metadata",
+   not an error. Concurrency: `community-pack-submitted.yml` already groups
+   all events of one issue under `community-pack-submitted-<number>` — GitHub
+   serialises runs in a group (one running, one pending), so two `/revalidate`
+   comments cannot interleave their read-modify-write; only *cancellation* is
+   restricted to `issues` events (F6.0). No change needed; recorded so the
+   race is not re-litigated.
