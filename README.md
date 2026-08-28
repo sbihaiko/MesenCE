@@ -1,6 +1,6 @@
 <div align="center">
 
-# MesenCE · Enhancement Edition
+# MesenCE · Bihaiko's Edition
 
 **Your NES, Game Boy, Master System and GBA games — with modern instruments, HD art and one pack format that ties it all together. Automatically. On by default.**
 
