@@ -5,7 +5,7 @@ catalog.py` per §35's 200-line-per-file guardrail). Depends only on the
 stdlib-only leaf `mei_rules` (never on `community_pack_markdown` or the
 facade -- §24). `build_pack_entry` derives `kind` via `mei_rules.
 resolve_kind` (§29); `build_catalog` self-checks each entry via this
-module's own `mei_entry_conforms` (§28), built on `mei_rules.required_
+leaf's `mei_rules.mei_entry_conforms` (§28, re-exported here; built on `required_
 mei_pack_fields`/`MEI_KINDS` but matching `validate_mei`'s real semantics:
 presence for every required field, truthy for all but `rom` (§2.3: `rom.
 sha1` MAY be absent). `STATUS_MEP_COMPLETO`/`STATUS_HD_PARCIAL`/
@@ -33,19 +33,9 @@ def kind_from_status(status):
     return mei_rules.STATUS_TO_KIND.get(status)
 
 
-def mei_entry_conforms(entry, kind):
-    """Whether `entry` conforms to §28 for `kind`: every field named by
-    `mei_rules.required_mei_pack_fields(kind)` MUST be present, truthy for
-    all but `rom`. Kind validity reuses `mei_rules.MEI_KINDS`.
-    """
-    if kind is not None and kind not in mei_rules.MEI_KINDS:
-        return False
-    for field in mei_rules.required_mei_pack_fields(kind):
-        if field not in entry:
-            return False
-        if field != "rom" and not entry[field]:
-            return False
-    return True
+# The §28 conformance predicate lives in the leaf; re-exported here so the
+# generator facade and its checkers keep one name for one function.
+mei_entry_conforms = mei_rules.mei_entry_conforms
 
 
 def _dep_entry(dep):

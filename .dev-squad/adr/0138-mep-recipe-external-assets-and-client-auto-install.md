@@ -490,6 +490,14 @@ again) are folded and deleted.
     generator and `community-pack-validate.yml`'s label/verdict step, guarded
     by a parity check in the `verify_mep_fallback_constant_parity.sh` style.
     An unmapped Status yields no entry (§32), never a `kind`-less one.
+    *Amended 2026-08-28 (F6.3b):* mep-meta v1 carries an optional `kind`
+    written by `apply-verdict`; its allowed values are exactly
+    `mei_rules.MEI_KINDS`. `mei_rules.resolve_kind` uses a valid mep-meta
+    `kind` first, ignores unrecognised values, falls back to
+    `STATUS_TO_KIND[status]`, and returns `None` when neither yields one — a
+    pre-change comment without `kind` therefore still resolves via Status.
+    mep-meta-over-Status is intentional (the comment is versioned; the board
+    literal is live-editable).
 30. **Provenance fields are spec'd, not namespaced.** `issue`, `verdict`,
     `validated_at`, `labels`, `recipe_hash`, `recipe_ok` are listed in MEI
     §2.2 as optional (MAY, v1.1) non-normative provenance fields with their
@@ -512,6 +520,18 @@ again) are folded and deleted.
     ```mep-recipe reader in `mep_recipe.py`: emit the shortest backtick run
     longer than any run in the payload; readers accept a fence of 3+
     backticks and match the closing run by length.
+    *Shipped 2026-08-28 (F6.3b + fast-follow):* `mep_recipe_common.choose_fence`
+    / `find_fenced_block` are the rule; the workflow writer, `mep_recipe.py`'s
+    reader and `mep_meta_parser.py` all use them (the parser's fixed regex was
+    the asymmetric leftover the auditor caught).
+36. **Convergence slices are not parallelisable across the files they
+    unify.** F6.3b's two real defects (fence rule asymmetric in
+    `mep_meta_parser.py`; a second `mei_entry_conforms` in
+    `mei_catalog_entry.py`) came from per-task file allowlists that split a
+    single-source-of-truth rule across tasks. A slice whose purpose is to
+    collapse duplicates puts the leaf and every call site in one task's file
+    list, even if that task is larger. Critic report volume is not issue
+    count (8 reports → 3 concerns): dedup before scheduling work.
 34. **`license` is optional everywhere (user decision, 2026-08-28).**
     MEP-v1 §3.1 `license` is SHOULD (was MUST): absent reads as
     `NOASSERTION`, hosts never refuse a pack for it and surface "not

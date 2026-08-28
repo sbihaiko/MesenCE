@@ -14,10 +14,9 @@ their real source text/attributes -- never invokes `main()`.
 Checks:
   1. mei_rules.py / mei_catalog_entry.py / community_pack_markdown.py /
      generate_community_pack_catalog.py each have <= 200 lines.
-  2. mei_catalog_entry.py imports mei_rules and its own mei_entry_conforms
-     is built on mei_rules.required_mei_pack_fields/MEI_KINDS (never a
-     restated field list or kind set), and it calls mei_rules.resolve_kind
-     (§29) -- neither is a locally re-implemented copy.
+  2. mei_catalog_entry.py imports mei_rules, re-exports (never redefines)
+     mei_rules.mei_entry_conforms as the single §28 predicate, and calls
+     mei_rules.resolve_kind (§29) -- neither is a locally re-implemented copy.
   3. community_pack_markdown.py defines build_markdown/render_table/
      build_row.
   4. The facade still exposes (as real attributes) build_pack_entry,
@@ -75,12 +74,11 @@ def check_entry_module_uses_mei_rules(failures):
     text = (SCRIPTS_DIR / "mei_catalog_entry.py").read_text(encoding="utf-8")
     if "import mei_rules" not in text:
         failures.append("mei_catalog_entry.py does not import mei_rules")
-    if "mei_rules.required_mei_pack_fields" not in text:
-        failures.append("mei_catalog_entry.py's mei_entry_conforms does not build on "
-                         "mei_rules.required_mei_pack_fields (§28 self-check)")
-    if "mei_rules.MEI_KINDS" not in text:
-        failures.append("mei_catalog_entry.py's mei_entry_conforms does not reuse "
-                         "mei_rules.MEI_KINDS for kind validity")
+    if "def mei_entry_conforms" in text:
+        failures.append("mei_catalog_entry.py defines its own mei_entry_conforms "
+                         "(§28: the leaf mei_rules owns the single predicate)")
+    if mei_catalog_entry.mei_entry_conforms is not mei_rules.mei_entry_conforms:
+        failures.append("mei_catalog_entry.mei_entry_conforms is not mei_rules.mei_entry_conforms")
     if "mei_rules.resolve_kind" not in text:
         failures.append("mei_catalog_entry.py never calls mei_rules.resolve_kind (§29)")
 

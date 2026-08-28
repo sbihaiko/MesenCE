@@ -243,6 +243,15 @@
       "scoutMs": null,
       "classification": "new-feature",
       "diverged": false
+    },
+    {
+      "sid": "0613b444cee2",
+      "exposed": true,
+      "status": "used",
+      "queries": 3,
+      "scoutMs": null,
+      "classification": "refactor",
+      "diverged": false
     }
   ]
 }

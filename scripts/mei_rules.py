@@ -46,8 +46,10 @@ def required_mei_pack_fields(kind):
 
 def mei_entry_conforms(entry, kind):
     """Whether `entry` (a MEI `packs[]` entry under construction) already
-    carries every field `required_mei_pack_fields(kind)` demands, with a
-    non-empty ("truthy") value for each.
+    carries every field `required_mei_pack_fields(kind)` demands -- present
+    for all of them, non-empty for all but `rom`. This is the single §28
+    conformance predicate: `mei_catalog_entry` and the generator facade
+    re-export it rather than defining their own.
 
     Used by catalog assembly to self-check an entry before it is kept
     (§28) -- a "mep"-kind entry that is missing `version`/`mep` (e.g. its
@@ -56,7 +58,14 @@ def mei_entry_conforms(entry, kind):
     """
     if kind is not None and kind not in MEI_KINDS:
         return False
-    return all(entry.get(field) for field in required_mei_pack_fields(kind))
+    for field in required_mei_pack_fields(kind):
+        if field not in entry:
+            return False
+        # `rom` is an object whose `sha1` MAY be absent (MEI v1.1 §2.3), so
+        # `{}` is a wire-valid value -- presence, not truthiness, is checked.
+        if field != "rom" and not entry[field]:
+            return False
+    return True
 
 
 def resolve_kind(mep_meta, status):

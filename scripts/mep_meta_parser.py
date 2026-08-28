@@ -28,22 +28,22 @@ decoder's recursion limit via deep nesting), so this function must stay
 defensive against garbage by construction, not by the caller remembering
 to wrap a try/except around it.
 
-stdlib only.
+stdlib only (plus the stdlib-only leaf `mep_recipe_common`).
 """
 from __future__ import annotations
 
 import json
-import re
+
+from mep_recipe_common import find_fenced_block
 
 MARKER = "<!-- mep-meta -->"
 
-# Matches a fenced ```json ... ``` block: allows either bare ``` or
-# ```json as the opening fence (the workflow always emits ```json, but the
-# parser accepts the looser form too since it costs nothing and matches
-# how Markdown fences are commonly written by hand). Non-greedy body so a
-# second fenced block later in the comment (e.g. inside a re-quoted
-# submitter message) is never swallowed into the first block's contents.
-JSON_FENCE_RE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+# The fence is located with the shared ADR-0138 §33 rule (`find_fenced_block`
+# in the stdlib-only leaf `mep_recipe_common`): the writer emits the
+# shortest backtick run longer than any run in the payload, so the reader
+# accepts an opener of 3+ backticks (bare or `json`-labelled) and matches
+# the closer by the same run length. A fixed three-backtick regex here
+# would silently truncate any block whose payload carries backticks.
 
 
 def parse_mep_meta(comment_body: str) -> dict | None:
@@ -62,10 +62,9 @@ def parse_mep_meta(comment_body: str) -> dict | None:
     if marker_pos == -1:
         return None
     after_marker = comment_body[marker_pos + len(MARKER):]
-    fence_match = JSON_FENCE_RE.search(after_marker)
-    if fence_match is None:
+    raw_json = find_fenced_block(after_marker, "")
+    if raw_json is None:
         return None
-    raw_json = fence_match.group(1)
     try:
         payload = json.loads(raw_json)
     except (ValueError, RecursionError):

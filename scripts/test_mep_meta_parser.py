@@ -179,6 +179,25 @@ def check_deeply_nested_payload_returns_none_without_raising():
     ok("deeply nested JSON payload returns None instead of raising RecursionError")
 
 
+def check_backtick_laden_payload_round_trips_with_shared_fence():
+    """ADR-0138 §33: writer picks the fence via mep_recipe_common.choose_fence;
+    the reader must accept that (longer) fence and recover the payload."""
+    from mep_recipe_common import choose_fence
+    payload = {"verdict": "accepted", "recipe": {"sources": {"deps": [
+        {"id": "x", "hints": ["see ```` docs ````"], "license": "`weird`"}]}}}
+    raw = json.dumps(payload)
+    fence = choose_fence(raw)
+    if len(fence) <= 4:
+        fail(f"choose_fence did not exceed the payload's 4-backtick run: {fence!r}")
+        return
+    body = "\n".join(["<!-- mep-meta -->", fence + "json", raw, fence, "", "trailer"])
+    parsed = mep_meta_parser.parse_mep_meta(body)
+    if parsed != payload:
+        fail(f"backtick-laden payload did not round-trip through the shared fence: {parsed!r}")
+        return
+    ok("backtick-laden payload round-trips writer->reader via the shared §33 fence rule")
+
+
 def check_second_fenced_block_is_not_swallowed():
     body = "\n".join([
         "<!-- mep-meta -->",
@@ -209,6 +228,7 @@ def main():
     check_non_object_payload_returns_none()
     check_deeply_nested_payload_returns_none_without_raising()
     check_second_fenced_block_is_not_swallowed()
+    check_backtick_laden_payload_round_trips_with_shared_fence()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1
