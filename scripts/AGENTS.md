@@ -390,12 +390,16 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   now invoked by `make doc-checks` (ADR-0137, roadmap slice H1):
   `check-core-manifest.sh` via the target's `check-manifest` dependency
   (itself still a dependency of `ui`/`core` on its own), then
-  `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh`, and
-  `check-file-loc.sh` (against `Core/Shared/Audio/MidiExporter.cpp 200`)
-  run directly by `doc-checks`, in order, failing on the first non-zero
-  exit. CI runs `make doc-checks` as its own step on the Linux and macOS
-  build jobs, before "Build Mesen". `check-f5-4b-doc.sh` was deleted on
-  2026-08-27 together with the plan header it guarded.
+  `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh`,
+  `check-file-loc.sh` (against `Core/Shared/Audio/MidiExporter.cpp 200`),
+  and the ADR-0138 §41 F6.4b-2 trio -
+  `checks/verify_pack_host_allowlist_embed.sh`,
+  `checks/verify_core_no_http_client.sh`, and
+  `checks/verify_fetcher_no_filesystem_allowlist_load.sh` (see `checks/`
+  below) - run directly by `doc-checks`, in order, failing on the first
+  non-zero exit. CI runs `make doc-checks` as its own step on the Linux
+  and macOS build jobs, before "Build Mesen". `check-f5-4b-doc.sh` was
+  deleted on 2026-08-27 together with the plan header it guarded.
 - `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
   runs (one script per AC, invoked directly by its AC's Verification
   command). Same PASS/FAIL-and-exit-code convention as the top-level shell
@@ -549,6 +553,24 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `./scripts/checks/verify_mep_fallback_lint_fixture.sh` and
   `./scripts/checks/verify_mep_fallback_constant_parity.sh` - see `checks/`
   above (AC-5/AC-6 of the MEP zip-fallback task).
+- `./scripts/checks/verify_pack_host_allowlist_embed.sh` (ADR-0138 §41,
+  F6.4b-2, AC-17/AC-18) - asserts `UI/UI.csproj` embeds
+  `scripts/pack_host_allowlist.json` as an `EmbeddedResource` with the
+  exact `Include="../scripts/pack_host_allowlist.json"` and
+  `LogicalName="Mesen.pack_host_allowlist.json"` pair on the same
+  element - the only handle `CommunityPackCatalogFetcher` has for the
+  allow-list once packaged, since a published app has no `scripts/` tree.
+- `./scripts/checks/verify_core_no_http_client.sh` (ADR-0138 §37, F6.4b-2,
+  AC-20) - asserts `Core/` never grows real HTTP-client code
+  (`#include <curl/...>`, `curl_easy_*`, `CURLOPT_*`, a `CURL*` handle, or
+  an `HttpClient` identifier); strips `//` and `/* */` comments line-for-
+  line first so a prose mention (e.g. `MepRecipeInstaller.h`'s own "no
+  HTTP, no libcurl" disclaimer) is never mistaken for a violation - the
+  network boundary stays entirely inside `UI/Services/`.
+- `./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh`
+  (ADR-0138 §41 PRIORITY 1, F6.4b-2, AC-8) - asserts
+  `UI/Services/CommunityPackCatalogFetcher.cs` never references
+  `LoadFromFile` or a repo-relative-path literal for the allow-list.
 
 ## Child DOX Index
 
