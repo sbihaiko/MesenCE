@@ -245,6 +245,7 @@
     <ClInclude Include="Scale2x\scalebit.h" />
     <ClInclude Include="Serializer.h" />
     <ClInclude Include="sha1.h" />
+    <ClInclude Include="sha256.h" />
     <ClInclude Include="spng.h" />
     <ClInclude Include="StaticFor.h" />
     <ClInclude Include="StringUtilities.h" />
@@ -390,6 +391,7 @@
     </ClCompile>
     <ClCompile Include="Serializer.cpp" />
     <ClCompile Include="sha1.cpp" />
+    <ClCompile Include="sha256.cpp" />
     <ClCompile Include="SimpleLock.cpp" />
     <ClCompile Include="Socket.cpp" />
     <ClCompile Include="spng.c">
