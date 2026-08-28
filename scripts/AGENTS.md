@@ -86,10 +86,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   a zip with a parallel implementation. `test_mep_recipe.py` is the
   framework-free acceptance check (unknown op / escaping path rejected;
   dry-run of a synthetic split pack is `mep_lint`-clean).
-- `test_mep_compare_auto_palettes.py` - fixture-based check (writes its own
-  small NES-shaped HD pack fixture on disk, no ROM/build dependency) that
-  `mep_compare.py`'s `stats["auto"]` dict reports `palettes_per_shape`
-  alongside `stats["artist"]`.
+- `test_mep_compare_auto_palettes.py` - fixture-based check (self-compares
+  the shared NES golden at `docs/specs/golden/mep-nes/textures` (ADR-0136)
+  against itself via `mep_compare.main()`, no ROM/build dependency, no
+  inline hand-rolled fixture of its own) that `mep_compare.py`'s
+  `stats["auto"]` dict reports `palettes_per_shape` alongside
+  `stats["artist"]`; the expected `1.5` value is checked against that
+  golden's actual 3-key/2-shape layout (`SHAPE_A` x {`PAL_1`, `PAL_2`} +
+  `SHAPE_B` x {`PAL_1`}), not assumed.
 - `validate_palette_variants.py` (F5.4b) - builds `headless_record` via
   `make capture-tool` if missing, records `roms/Zelda.nes` with the `hdpack`
   flag, and checks that `HdPackBuilder::ProcessTile` captures more than one
