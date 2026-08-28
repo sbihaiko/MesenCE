@@ -546,9 +546,9 @@ jobs:
       # at all), `present` (recipe assembled and written to the path
       # above), or `refused` (a dependency line lacks a sha256, §3/§12).
       # Every downstream reader (the gate step, `apply-verdict`'s downgrade
-      # expression, the `assets:external` label branch, the mep-meta
-      # `recipe_hash` comment — none implemented yet, F6.2b remainder)
-      # branches on this enum instead of re-deriving "is there a recipe?".
+      # expression, the `assets:external` label branch, and the mep-meta
+      # `recipe_hash` comment below) branches on this enum instead of
+      # re-deriving "is there a recipe?".
       - name: Assemble MEP recipe
         id: assemble-recipe
         if: steps.classify.outcome == 'success'
@@ -729,12 +729,115 @@ jobs:
           fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"
           # Effective verdict (post-downgrade) and the labels actually
-          # applied to the issue, exposed as this step's own outputs so a
-          # later step (e.g. the mep-meta comment upsert, F6.2b remainder)
-          # can consume them without re-deriving/re-computing anything
-          # already decided here.
+          # applied to the issue, exposed as this step's own outputs so the
+          # mep-meta comment upsert below can consume them without
+          # re-deriving/re-computing anything already decided here.
           echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
           echo "labels=$APPLIED_LABELS" >> "$GITHUB_OUTPUT"
+      # Upsert mep-meta comment (ADR-0138 §5/§11/§16/§18, F6.2b complete).
+      # Runs on EVERY successful classify+apply-verdict pass, regardless of
+      # `recipe_status` — deliberately never gated on
+      # `recipe_status == 'present'` (§13: `absent`/`refused` both mean "no
+      # assembled recipe", not "skip provenance" — a non-split pack still
+      # gets its verdict/labels/hash recorded here, just without the
+      # `deps`/`recipe_hash` fields). `verdict`/`labels` are consumed
+      # verbatim from `apply-verdict`'s own step outputs (§10/§13) — never
+      # recomputed here. The comment is bot-owned and rewritten WHOLESALE
+      # on every pass (§5): find the `<!-- mep-meta -->`-marked comment via
+      # `gh api`, then PATCH its body outright — never read-modify-merged
+      # with whatever it said before; POST a new comment when none exists
+      # yet (first submission). The request body, including the embedded
+      # JSON metadata block, is built entirely with Python's `json` module
+      # so nothing here depends on bash string-escaping the recipe's own
+      # content correctly. Per §16/§18: `source_sha256` is the CI-computed
+      # hash of the primary zip (Pack Hash field stays the authoritative
+      # store for that one); `recipe_hash` is a hash of the recipe
+      # DOCUMENT, never of dep contents; dep `sha256`/`size` are
+      # submitter-declared and verified only by the client at install
+      # time — hence the literal provenance line in the comment body.
+      - name: Upsert mep-meta comment
+        id: upsert-mep-meta
+        if: steps.classify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
+          RECIPE_STATUS: ${{ steps.assemble-recipe.outputs.recipe_status }}
+          VERDICT: ${{ steps.apply-verdict.outputs.verdict }}
+          LABELS: ${{ steps.apply-verdict.outputs.labels }}
+        run: |
+          set -euo pipefail
+          RECIPE_PATH="$RUNNER_TEMP/mep_recipe.json"
+          RECIPE_HASH=""
+          if [ "$RECIPE_STATUS" = "present" ] && [ -f "$RECIPE_PATH" ]; then
+            RECIPE_HASH=$(sha256sum "$RECIPE_PATH" | awk '{print $1}')
+          fi
+          PAYLOAD_PATH="$RUNNER_TEMP/mep_meta_payload.json"
+          VALIDATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export RECIPE_PATH RECIPE_HASH PAYLOAD_PATH VALIDATED_AT
+          python3 - <<'PYEOF'
+          import json
+          import os
+
+          recipe_status = os.environ["RECIPE_STATUS"]
+          recipe_path = os.environ["RECIPE_PATH"]
+          recipe_hash = os.environ["RECIPE_HASH"]
+
+          meta = {
+              "source_sha256": os.environ["PACK_SHA256"],
+              "verdict": os.environ["VERDICT"],
+              "labels": os.environ["LABELS"].split(),
+              "validated_at": os.environ["VALIDATED_AT"],
+          }
+          # ADR-0138 §13/§18: 'absent' and 'refused' both mean "no
+          # assembled recipe" -- the deps/recipe_hash fields are omitted
+          # entirely (never emitted empty/null) so a reader can branch on
+          # their presence instead of parsing a sentinel value.
+          if recipe_status == "present" and os.path.isfile(recipe_path):
+              with open(recipe_path, encoding="utf-8") as handle:
+                  recipe = json.load(handle)
+              deps = recipe.get("sources", {}).get("deps") or []
+              meta["deps"] = [
+                  {"id": dep.get("id"), "sha256": dep.get("sha256"), "size": dep.get("size")}
+                  for dep in deps
+              ]
+              meta["recipe_hash"] = recipe_hash
+
+          body_lines = [
+              "<!-- mep-meta -->",
+              "```json",
+              json.dumps(meta, indent=2, sort_keys=True),
+              "```",
+              "",
+              "dep digests: submitter-declared, verified on install",
+          ]
+          payload = {"body": "\n".join(body_lines)}
+          with open(os.environ["PAYLOAD_PATH"], "w", encoding="utf-8") as handle:
+              json.dump(payload, handle)
+          PYEOF
+          # Bot-owned lookup (ADR-0138 §5): `--paginate` re-runs the `--jq`
+          # filter once PER PAGE, so an aggregating `[.[] | ...]`/`.[-1]`
+          # filter prints one line per page and command substitution keeps
+          # every embedded newline except a trailing one -- corrupting
+          # COMMENT_ID whenever the match isn't on the first page (30
+          # comments/page by default). Emitting one bare `.id` per match
+          # instead makes every page's output just more lines in the same
+          # stream, so `head -n1` alone is well-defined across any number
+          # of pages. Restricting to `.user.login == "$OWNER"` (PROJECT_PAT
+          # is a classic PAT, so API-authored comments are attributed to
+          # its owning account) stops a submitter's own issue text from
+          # ever being mistaken for the bot's provenance comment, and
+          # `head -n1` (oldest first, GitHub's default order) always keeps
+          # the FIRST such comment so a later injected marker can never
+          # take its place.
+          COMMENT_ID=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --paginate \
+            --jq ".[] | select((.user.login == \"$OWNER\") and (.body | test(\"<!-- mep-meta -->\"))) | .id" \
+            | head -n1)
+          if [ -n "$COMMENT_ID" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" --input "$PAYLOAD_PATH" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/$ISSUE_NUMBER/comments" --input "$PAYLOAD_PATH" >/dev/null
+          fi
       # Dispatches community-pack-catalog.yml (on: workflow_dispatch) by
       # name only — never opened/parsed here. AC-6 (validate side).
       - name: Dispatch catalog regeneration on acceptance
