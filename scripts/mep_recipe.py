@@ -583,26 +583,57 @@ def _parse_asset_line(line: str) -> dict:
     return {"url": url, "sha256": sha256.lower(), "size": size}
 
 
-def _match_asset(dep: dict, assets_by_url: dict) -> dict:
-    for url in dep.get("hints") or []:
-        if url in assets_by_url:
-            return assets_by_url[url]
-    raise RecipeError(f"no external_assets line matches dep {dep.get('id')!r} hints")
-
-
-def merge_recipe_deps(classify_deps: list, assets: list) -> list:
-    """Merges classify's non-derivable dep fields (id/hints/license/
-    user_supplied) with each dep's CI-parsed sha256/size, matched by the
-    dep's declared `hints` URL (the only data both sides share — classify
-    never sees a hash, ADR-0138 §4/§11).
+def _normalize_hint_url(url: str) -> str:
+    """Trailing-slash-insensitive comparison key for hint/line URL matching
+    (a bare cosmetic difference must not flip a real match into 'refused').
     """
-    assets_by_url = {a["url"]: a for a in assets}
-    merged = []
+    return url.rstrip("/")
+
+
+def _classify_deps_by_url(classify_deps: list) -> dict:
+    by_url = {}
     for dep in classify_deps:
         if not isinstance(dep, dict):
             raise RecipeError("classify dep entry must be an object")
-        asset = _match_asset(dep, assets_by_url)
-        merged_dep = dict(dep)
+        for url in dep.get("hints") or []:
+            by_url.setdefault(_normalize_hint_url(url), dep)
+    return by_url
+
+
+def _synth_dep_id(seed: int, taken: set) -> str:
+    """Deterministic dep id for a line that no classify dep hints at —
+    ADR-0138 §12 makes the line itself the authoritative dependency, so it
+    still needs an id even without classify metadata to borrow one from.
+    """
+    n = seed
+    candidate = f"ext{n}"
+    while candidate == "primary" or candidate in taken:
+        n += 1
+        candidate = f"ext{n}"
+    return candidate
+
+
+def merge_recipe_deps(classify_deps: list, assets: list) -> list:
+    """Builds one MEP Recipe dep per parsed `external_assets` line — the
+    lines are the authoritative dependency list (ADR-0138 §12: "one
+    dependency per non-empty line"), so every line becomes a dep even when
+    classify's `deps[]` has no matching entry (fewer classify deps than
+    lines, or `deps: []` outright, must never silently drop a declared
+    asset). Each line is matched to classify's non-derivable id/hints/
+    license/user_supplied fragment by its hints URL when one exists
+    (classify never sees a hash, ADR-0138 §4/§11); a line with no classify
+    match gets a synthesized id and hints=[url] instead of being skipped.
+    """
+    by_url = _classify_deps_by_url(classify_deps)
+    merged = []
+    taken_ids = set()
+    for i, asset in enumerate(assets):
+        dep = by_url.get(_normalize_hint_url(asset["url"]))
+        if dep is not None:
+            merged_dep = dict(dep)
+        else:
+            merged_dep = {"id": _synth_dep_id(i + 1, taken_ids), "hints": [asset["url"]], "user_supplied": True}
+        taken_ids.add(merged_dep.get("id"))
         merged_dep["sha256"] = asset["sha256"]
         if asset.get("size") is not None:
             merged_dep["size"] = asset["size"]
@@ -625,6 +656,24 @@ def _build_present_recipe(classify: dict, pack_url: str, pack_sha256: str, deps:
     return recipe
 
 
+def _classify_has_recipe_fragment(classify: dict | None) -> bool:
+    """True only when classify emitted actual ops/deps/pack *content*.
+
+    The same F6.2b work narrows the classify JSON schema to
+    `required: ["ops", "deps", "pack"]`, so all three keys are always
+    present — literal key-presence can never distinguish a genuine
+    split-pack fragment from a non-split pack's empty defaults
+    (`{"ops": [], "deps": [], "pack": {}}`). Checking for non-empty
+    content instead keeps that case mapped to 'absent' (ADR-0138 §7)
+    instead of a schema-clean-looking 'present' that validate_recipe
+    would reject (ops/pack are required non-empty), which would wrongly
+    downgrade an otherwise-accepted plain pack to invalid (§2/§10).
+    """
+    if not classify:
+        return False
+    return bool(classify.get("ops")) or bool(classify.get("deps")) or bool(classify.get("pack"))
+
+
 def assemble_sources(issue_body: str, classify: dict | None, pack_url: str, pack_sha256: str):
     """Assembles `sources` from the issue body + CI hash + classify's
     ops/deps/pack fragment (ADR-0138 §4/§7/§12/§13). Returns (status,
@@ -635,8 +684,7 @@ def assemble_sources(issue_body: str, classify: dict | None, pack_url: str, pack
     if not SHA256_HEX.match(pack_sha256 or ""):
         raise RecipeError(f"--pack-sha256 must be 64 hex digits, got {pack_sha256!r}")
     lines = _asset_lines(extract_issue_field_section(issue_body, EXTERNAL_ASSETS_LABEL))
-    has_fragment = classify is not None and any(k in classify for k in ("ops", "deps", "pack"))
-    if not lines or not has_fragment:
+    if not lines or not _classify_has_recipe_fragment(classify):
         return "absent", None
     try:
         assets = [_parse_asset_line(line) for line in lines]

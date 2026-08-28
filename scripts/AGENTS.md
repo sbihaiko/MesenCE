@@ -87,14 +87,25 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   (F6.2b, ADR-0138 §7/§12/§13) is the deterministic step that builds
   `sources`: it parses the issue body's `external_assets` lines
   (`<url> [<sha256>] [<size>]`, reusing `SHA256_HEX` rather than a new
-  regex), merges each dep's parsed `sha256`/`size` with classify's own
-  `ops`/`deps`/`pack` fragment (matched by the dep's declared `hints` URL
-  — the LLM never sees a hash), and emits exactly one of `recipe_status`
-  `absent` / `present` / `refused`; only `present` writes a document
-  (`--out`). `test_mep_recipe.py` is the framework-free acceptance check
-  (unknown op / escaping path rejected; dry-run of a synthetic split pack
-  is `mep_lint`-clean; `assemble-sources`'s absent/present/refused
-  outcomes, including the CLI round trip).
+  regex) and treats every parsed line as an authoritative dependency
+  (ADR-0138 §12) — each one becomes a `sources.deps` entry regardless of
+  whether classify's `deps[]` has a matching item, merging in classify's
+  id/hints/license/user_supplied when a `hints` URL matches (trailing
+  slash ignored) and synthesizing an id otherwise, so a declared asset is
+  never silently dropped even when classify under- or over-counts `deps`.
+  `recipe_status` is `absent` when there are no `external_assets` lines,
+  or when classify's `ops`/`deps`/`pack` fragment has no actual content
+  (schema-required-but-empty containers count as no fragment, ADR-0138
+  §7) — never a schema-clean-looking `present` that `validate_recipe`
+  would reject; `present` only when a real fragment and well-formed lines
+  both exist; `refused` when any line is malformed or missing its
+  sha256. Only `present` writes a document (`--out`).
+  `test_mep_recipe.py` is the framework-free acceptance check (unknown op
+  / escaping path rejected; dry-run of a synthetic split pack is
+  `mep_lint`-clean; `assemble-sources`'s absent/present/refused outcomes,
+  including an empty-but-present classify fragment, an unmatched
+  `external_assets` line surviving into `sources.deps`, and the CLI round
+  trip).
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and

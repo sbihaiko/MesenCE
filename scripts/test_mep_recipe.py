@@ -366,6 +366,71 @@ def check_assemble_present_merges_classify():
     ok("well-formed external_assets line -> present, sources merged with classify's ops/deps/pack")
 
 
+def check_assemble_absent_when_classify_fragment_is_empty():
+    """A well-formed external_assets line with classify emitting the
+    schema-required keys but all empty (`{"ops": [], "deps": [], "pack":
+    {}}`, the shape a non-split pack gets once the schema requires the
+    keys) must still be 'absent', not a schema-clean-looking 'present'
+    that validate_recipe would then reject (ADR-0138 §2/§7/§10)."""
+    line = f"{AUDIO_URL} {AUDIO_SHA256} 1048576"
+    body = _issue_body_with_assets(line)
+    status, recipe = mep_recipe.assemble_sources(body, {"ops": [], "deps": [], "pack": {}}, PACK_URL, PACK_SHA256)
+    if status != "absent" or recipe is not None:
+        fail(f"empty-but-present classify fragment should be absent, got {status!r}/{recipe!r}")
+        return
+    ok("classify ops/deps/pack all empty -> absent even with a declared external asset")
+
+
+def check_assemble_present_keeps_unmatched_line_as_dep():
+    """classify's `deps` can be shorter than the declared external_assets
+    lines (or empty outright) — every line must still surface as a dep;
+    ADR-0138 §12 makes the lines themselves the authoritative dependency
+    list, so a line with no matching classify dep must never be silently
+    dropped from `sources.deps`."""
+    line = f"{AUDIO_URL} {AUDIO_SHA256} 1048576"
+    body = _issue_body_with_assets(line)
+    classify = {
+        "ops": [{"op": "copy", "from": "primary:hires.txt", "to": "hires.txt"}],
+        "deps": [],
+        "pack": {"name": "Synthetic Split Pack", "version": "1.0.0", "targets": [{"system": "nes", "sha1": SHA1}]},
+    }
+    status, recipe = mep_recipe.assemble_sources(body, classify, PACK_URL, PACK_SHA256)
+    if status != "present" or recipe is None:
+        fail(f"unmatched line with real classify content should be present, got {status!r}/{recipe!r}")
+        return
+    deps = recipe["sources"]["deps"]
+    if len(deps) != 1:
+        fail(f"declared external asset line was dropped from sources.deps: {deps!r}")
+        return
+    if deps[0]["sha256"] != AUDIO_SHA256 or deps[0]["size"] != 1048576 or deps[0]["hints"] != [AUDIO_URL]:
+        fail(f"synthesized dep missing the line's own sha256/size/hints: {deps[0]!r}")
+        return
+    errors = mep_recipe.validate_recipe(recipe)
+    if errors:
+        fail(f"recipe with a synthesized dep failed validate_recipe: {errors}")
+        return
+    ok("external_assets line with no matching classify dep still becomes sources.deps entry")
+
+
+def check_assemble_present_matches_hint_despite_trailing_slash():
+    """A hints URL differing from the declared line only by a trailing
+    slash must still match — a purely cosmetic difference must not flip
+    a real dependency into 'refused'."""
+    line = f"{AUDIO_URL} {AUDIO_SHA256} 1048576"
+    body = _issue_body_with_assets(line)
+    classify = _classify_fragment()
+    classify["deps"][0]["hints"] = [AUDIO_URL + "/"]
+    status, recipe = mep_recipe.assemble_sources(body, classify, PACK_URL, PACK_SHA256)
+    if status != "present" or recipe is None:
+        fail(f"trailing-slash hint mismatch should still match, got {status!r}/{recipe!r}")
+        return
+    deps = recipe["sources"]["deps"]
+    if len(deps) != 1 or deps[0]["id"] != "audio" or deps[0]["sha256"] != AUDIO_SHA256:
+        fail(f"trailing-slash hint did not merge classify's dep metadata: {deps!r}")
+        return
+    ok("hints URL differing only by a trailing slash still matches its external_assets line")
+
+
 def check_assemble_refused_missing_sha256():
     body = _issue_body_with_assets(AUDIO_URL)
     status, recipe = mep_recipe.assemble_sources(body, _classify_fragment(), PACK_URL, PACK_SHA256)
@@ -451,7 +516,10 @@ def main():
     check_incomplete_withholds_patch()
     check_hash_mismatch_aborts()
     check_assemble_absent_no_assets_no_fragment()
+    check_assemble_absent_when_classify_fragment_is_empty()
     check_assemble_present_merges_classify()
+    check_assemble_present_keeps_unmatched_line_as_dep()
+    check_assemble_present_matches_hint_despite_trailing_slash()
     check_assemble_refused_missing_sha256()
     check_assemble_refused_malformed_line()
     check_assemble_sources_cli_roundtrip()
