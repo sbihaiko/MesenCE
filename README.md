@@ -1,9 +1,6 @@
 <div align="center">
 
-# MesenCE · Enhancement Edition
-
-**Your NES, Game Boy, Master System and GBA games — with modern instruments, HD art and one pack format that ties it all together. Automatically. On by default.**
-
+# MesenCE · Bihaiko's Edition
 [![Build](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
 [![Unit tests](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml?query=branch%3Amain)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.en.html)
@@ -11,22 +8,24 @@
 [![Systems](https://img.shields.io/badge/systems-NES%20%7C%20GB%2FGBC%20%7C%20SMS%2FGG%2FSG--1000%20%7C%20GBA-8a2be2.svg)](#what-it-runs)
 [![Specs: CC0](https://img.shields.io/badge/open%20specs-CC0-lightgrey.svg)](docs/specs/)
 
-**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)
+**[⬇ Download](#download)** · [Hear it](#hear-it) · [See it](#see-it) · [Features](#what-you-get) · [Quick start](#quick-start) · [Packs](#enhancement-packs-mep) · [Why this fork](#why-this-fork) · [FAQ](#faq)<br/>
 
-</div>
+</div><br/>
 
----
+## The 30-second pitch — Your NES, Game Boy, Master System, and GBA games, enhanced
 
-## The 30-second pitch
+**HD art and modern instruments, seamlessly integrated into a single enhancement pack.**  
+Everything works automatically, right out of the box — and the enhancements are **on by default**.  
+Most emulators stop at *faithful*. **This one starts there and keeps going.**
+- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files required. It just works, and it ships **on**.
+- **HD art across three console families, not just one.** Mesen's proven NES HD Pack pipeline now extends to **Game Boy and Master System**. And when no pack exists yet, the emulator can start **building one for you** — automatically upscaling tiles and extracting music from the first time you play.
+- **One pack format ties it all together.** Textures, music, and synth presets live in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it into a folder and the emulator finds it automatically. Every enhancement layer can still be toggled independently.
+- **Found a great HD pack? Just submit the link.** A simple GitHub form is all it takes — the [community pack pipeline](#community-packs) automatically downloads, validates, classifies, and catalogs it. Legacy Mesen `hires.txt` packs and full MEP `pack.json` packs are both supported, bringing years of existing community work into the same ecosystem.
+- **Built to stay reliable.** Unit tests gate every push — not just *"it compiled."*
 
-Most emulators stop at *faithful*. This one starts there and keeps going:
+Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead, and rewind.
 
-- **Every game sounds better the moment you load it.** [Enhanced Audio](#enhanced-audio) reads the sound chip's live registers and re-voices them with modern instruments in real time — same notes, same timing, no per-game files. Ships **on**.
-- **HD art on three families, not one.** Mesen's proven NES HD Pack pipeline now runs on **Game Boy and Master System** too, and the emulator starts **building a starter pack for you** (upscaled tiles, extracted music) the first time you play a game nobody has packed yet.
-- **One pack format for everything.** Textures + music + synth presets in a single hash-matched [MEP](#enhancement-packs-mep) pack. Drop it in a folder; the emulator finds it. Every layer toggles independently.
-- **Kept honest by CI.** Unit tests gate every push — not just "it compiled".
-
-Built on [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2](https://github.com/SourMesen/Mesen2), so you keep Mesen's accuracy, debugger, netplay, shaders, run-ahead and rewind. This fork adds the enhancement layer on top.
+**This fork keeps the emulation faithful — then adds an enhancement layer on top.**
 
 ## Download
 
