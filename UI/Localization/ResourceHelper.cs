@@ -24,11 +24,30 @@ namespace Mesen.Localization
 				using(StreamReader reader = new StreamReader(assembly.GetManifestResourceStream("Mesen.Localization.resources.en.xml")!)) {
 					_resources.LoadXml(reader.ReadToEnd());
 				}
+			} catch {
+				return;
+			}
 
+			//Each section is loaded independently so a failure in one of them
+			//can't leave the others (menu/window labels in particular) empty.
+			LoadMessages();
+			LoadEnums();
+			LoadViewLabels();
+		}
+
+		private static void LoadMessages()
+		{
+			try {
 				foreach(XmlNode node in _resources.SelectNodes("/Resources/Messages/Message")!) {
 					_messageCache[node.Attributes!["ID"]!.Value] = node.InnerText;
 				}
+			} catch {
+			}
+		}
 
+		private static void LoadEnums()
+		{
+			try {
 #pragma warning disable IL2026 // Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code
 				Dictionary<string, Type> enumTypes = Assembly.GetExecutingAssembly().GetTypes().Where(t => t.IsEnum).ToDictionary(t => t.Name);
 #pragma warning restore IL2026 // Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code
@@ -41,11 +60,17 @@ namespace Mesen.Localization
 								_enumLabelCache[(Enum)value!] = enumNode.InnerText;
 							}
 						}
-					} else {
-						throw new Exception("Unknown enum type: " + enumName);
 					}
+					//Enums left over in the resource file for types that no longer exist (e.g. cores
+					//that were removed) are skipped - they must not abort the rest of the load.
 				}
+			} catch {
+			}
+		}
 
+		private static void LoadViewLabels()
+		{
+			try {
 				foreach(XmlNode node in _resources.SelectNodes("/Resources/Forms/Form")!) {
 					string viewName = node.Attributes!["ID"]!.Value;
 					foreach(XmlNode formNode in node.ChildNodes) {
