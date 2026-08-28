@@ -46,8 +46,13 @@ def required_mei_pack_fields(kind):
 
 def mei_entry_conforms(entry, kind):
     """Whether `entry` (a MEI `packs[]` entry under construction) already
-    carries every field `required_mei_pack_fields(kind)` demands, with a
-    non-empty ("truthy") value for each.
+    carries every field `required_mei_pack_fields(kind)` demands, matching
+    `validate_mei`'s own semantics field-by-field: `rom` only needs to be
+    *present* (an empty dict is valid -- MEI v1.1 makes `rom.sha1` MAY-be-
+    absent regardless of `kind`, and `validate_mei` itself only checks
+    `"rom" in p`, never its truthiness), while every other required field
+    (`name`/`game`/`system`/`url`/`sha256`, plus `version`/`mep` for a
+    "mep"-kind entry) must additionally be non-empty ("truthy").
 
     Used by catalog assembly to self-check an entry before it is kept
     (§28) -- a "mep"-kind entry that is missing `version`/`mep` (e.g. its
@@ -56,7 +61,14 @@ def mei_entry_conforms(entry, kind):
     """
     if kind is not None and kind not in MEI_KINDS:
         return False
-    return all(entry.get(field) for field in required_mei_pack_fields(kind))
+    for field in required_mei_pack_fields(kind):
+        if field == "rom":
+            if field not in entry:
+                return False
+            continue
+        if not entry.get(field):
+            return False
+    return True
 
 
 def resolve_kind(mep_meta, status):

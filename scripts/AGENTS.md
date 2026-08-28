@@ -50,8 +50,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `required_mei_pack_fields(kind)` (a "hd-legacy" pack needs no
   `version`/`mep`; any other kind, including `None`, does -
   docs/specs/MEI-v1.md §2.2/§2.3), and `mei_entry_conforms(entry, kind)`
-  (whether an assembled `packs[]` entry already carries a truthy value for
-  every field `required_mei_pack_fields` demands). It also holds the sole
+  (whether an assembled `packs[]` entry already carries every field
+  `required_mei_pack_fields` demands, matching `validate_mei`'s own
+  field-by-field semantics: `rom` only needs to be *present* - an empty
+  dict is valid, since `rom.sha1` MAY be absent regardless of `kind` and
+  `validate_mei` itself only checks `"rom" in p` - while every other
+  required field must additionally be non-empty). It also holds the sole
   Status-literal -> kind pairing in `scripts/` (`STATUS_TO_KIND`, §29) and
   `resolve_kind(mep_meta, status)`, which prefers a valid mep-meta `kind`
   and falls back to `STATUS_TO_KIND.get(status)`, returning `None` (never
@@ -174,47 +178,83 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   its framework-free acceptance check (well-formed block round-trips;
   each malformed-input shape above returns `None`; a second fenced block
   later in the comment is never mistaken for the first).
-  `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27) writes
+  `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27; split per
+  F6.3b/§35 into three files, none over 200 lines) writes
   `docs/community-packs.json` (an MEI v1.1 catalog, `mei: "1.1.0"`) next to
   `docs/community-packs.md` in the same run, and adds an "External assets"
   column to the Markdown table (`yes` when the entry has `deps`) alongside
-  the six pre-existing columns. Per accepted board item it fetches the
-  bot-owned `<!-- mep-meta -->` comment (`gh api .../comments`, same
-  oldest-by-`sbihaiko` selection `community-pack-validate.yml`'s upsert
-  step uses) and parses it with `mep_meta_parser.parse_mep_meta`; on a
-  `source_sha256` mismatch against the Project "Pack Hash" field it omits
-  `deps`/`recipe` for that entry and logs the mismatch (§18, field wins).
-  `mei_entry_preconditions_ok` guards every entry against validate_mei's own
-  constraints before it is built: an item missing an HTTPS Pack URL, a
-  well-formed Pack Hash, or a Console value with an MEI-representable
-  `system` (the Issue Form's first-class "Other" option, and the "?"
-  fallback of a missing/unmapped console, have none) gets no JSON entry at
-  all — a warning is logged and the Markdown row (tolerant of "?"/"other")
-  is still produced. `kind_from_status` derives `kind` (`"mep"`/`"hd-legacy"` from the board
-  Status; no automated verdict currently produces "mep") and
-  `build_pack_entry` assembles one MEI `packs[]` entry per item, reading
-  `deps[]` from mep-meta's embedded `recipe.sources.deps` (never mep-meta's
-  own top-level stripped `deps`, which lacks `license`); `issue_form_fields`
-  holds the Issue Form field parsing shared by the Markdown row and the MEI
-  entry, so `game`/`console`/`license` never drift between the two outputs.
-  `normalized_rom_sha1` upper-cases the Project's human-entered "ROM SHA1"
-  field and checks its 40-hex shape before it is copied into `rom.sha1`,
-  omitting it (not emitting an invalid one) on a mismatch. For a
-  `kind == "mep"` entry, `build_pack_entry` reads `pack.version`/`pack.mep`
-  out of mep-meta's embedded `recipe.pack` (`pack_version_fields`); when
-  the recipe is absent/refused and those fields can't be sourced,
-  `mei_entry_conforms` flags the entry as non-conformant so the caller
-  omits its JSON entry entirely (the Markdown row is unaffected) rather
-  than emit one validate_mei rejects for missing `version`/`mep` — never
-  silently relabeled as `"hd-legacy"`.
+  the six pre-existing columns. The generator itself is now a thin
+  fetch/orchestration facade: `run_gh`/`fetch_accepted_items`/`item_*`/
+  `fetch_issue_details`/`fetch_mep_meta_comment_body`/`parse_form_field`/
+  `issue_form_fields`/`_build_entry_for_accepted_item`/`main` — per
+  accepted board item it fetches the bot-owned `<!-- mep-meta -->` comment
+  (`gh api .../comments`, same oldest-by-`sbihaiko` selection
+  `community-pack-validate.yml`'s upsert step uses), parses it with
+  `mep_meta_parser.parse_mep_meta`, and delegates entry assembly/rendering
+  to the two leaves below. It re-exports `build_pack_entry`/
+  `mei_entry_conforms`/`normalized_rom_sha1`/`STATUS_MEP_COMPLETO`/
+  `STATUS_HD_PARCIAL` as a back-compat facade (ADR-0138 §24, mirroring
+  `mep_recipe.py`/`mep_recipe_common.py`) so
+  `verify_mei_catalog_generator.py` needed no changes.
+  `mei_catalog_entry.py` (F6.3b, new) holds MEI `packs[]` entry assembly,
+  depending only on the `mei_rules` leaf (never on `community_pack_
+  markdown` or the facade — ADR-0138 §24). `mei_entry_preconditions_ok`
+  guards every entry against `validate_mei`'s own constraints before it is
+  built: an item missing an HTTPS Pack URL, a well-formed Pack Hash, or a
+  Console value with an MEI-representable `system` (the Issue Form's
+  first-class "Other" option, and the "?" fallback of a missing/unmapped
+  console, have none) gets no JSON entry at all — a warning is logged and
+  the Markdown row (tolerant of "?"/"other") is still produced.
+  `build_pack_entry` derives `kind` via `mei_rules.resolve_kind` (mep-meta
+  `kind` first, the board Status as fallback, §29 — never Status alone)
+  and assembles one MEI `packs[]` entry per item, reading `deps[]` from
+  mep-meta's embedded `recipe.sources.deps` (never mep-meta's own top-level
+  stripped `deps`, which lacks `license`); `kind_from_status` (a facade-
+  compatible Status->kind lookup built on `mei_rules.STATUS_TO_KIND`, never
+  a second hardcoded pairing) remains for back-compat. `normalized_rom_
+  sha1` upper-cases the Project's human-entered "ROM SHA1" field and
+  checks its 40-hex shape (reusing `mei_rules.SHA1_UPPER`) before it is
+  copied into `rom.sha1`, omitting it on a mismatch. For a `kind == "mep"`
+  entry, `build_pack_entry` reads `pack.version`/`pack.mep` out of
+  mep-meta's embedded `recipe.pack` (`pack_version_fields`); when the
+  recipe is absent/refused and those fields can't be sourced,
+  `build_catalog` self-checks every entry through `mei_rules.
+  mei_entry_conforms` before it is kept (§28) and drops it rather than
+  emit one `validate_mei` rejects for missing `version`/`mep` — never
+  silently relabeled as `"hd-legacy"` — even if the facade's own caller-
+  side check (`entry.get("kind")`) already filtered it.
+  `community_pack_markdown.py` (F6.3b, new) holds the Markdown rendering
+  (`escape_table_cell`/`thumbs_up_count`/`console_from_labels`/
+  `category_from_status`/`build_row`/`render_table`/`render_popular_
+  section`/`build_markdown`), also depending only on `mei_rules` (never on
+  `mei_catalog_entry`); `build_row` takes the caller-derived
+  `issue_number`/`status` directly rather than a raw Project item, so it
+  never needs the facade's `item_*` helpers.
   `scripts/checks/verify_mei_catalog_generator.py` is the offline, no-`gh`
-  checker for this deliverable (AC-2 of the F6.3 task): structural checks
+  checker for the original F6.3 deliverable (AC-2): structural checks
   assert the generator writes `docs/community-packs.json`, uses
   `mep_meta_parser`, derives `kind`, and declares the "External assets"
-  column; it also imports the generator's pure functions directly (no
-  mocks, no live `gh`/`main()` run) to round-trip a `kind == "mep"` entry
-  with and without a mep-meta recipe, and a lowercase `rom.sha1`, through
-  the real `validate_mei` (`scripts/validate-specs.py`).
+  column; it also imports the generator's re-exported functions directly
+  (no mocks, no live `gh`/`main()` run) to round-trip a `kind == "mep"`
+  entry with and without a mep-meta recipe, and a lowercase `rom.sha1`,
+  through the real `validate_mei` (`scripts/validate-specs.py`) — it needs
+  no edits after the F6.3b split, since the facade still exposes the same
+  five names by attribute. `scripts/checks/verify_mei_catalog_split.py`
+  (F6.3b, AC-4) is the offline structural checker for the split itself:
+  each of the four files is <= 200 lines, `mei_catalog_entry.py` imports
+  `mei_rules` and calls `mei_entry_conforms`/`resolve_kind`,
+  `community_pack_markdown.py` defines `build_markdown`/`render_table`/
+  `build_row`, the facade still exposes the five re-exported names, and
+  `build_catalog` really does drop a non-conforming entry rather than keep
+  it (self-check behavior, not just text presence).
+  `scripts/checks/verify_status_kind_parity.sh` (F6.3b, AC-6, in the
+  `verify_mep_fallback_constant_parity.sh` style) asserts the two
+  Status-literal -> kind pairs are textually defined exactly once across
+  `scripts/` — inside `mei_rules.STATUS_TO_KIND` — and that
+  `mei_catalog_entry.py` imports that mapping (`import mei_rules` +
+  references `STATUS_TO_KIND`) rather than hardcoding a second, independent
+  copy of either pair; fails loudly (names the offending file/count) on
+  both a missing pairing and a duplicated one, never vacuously.
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
@@ -397,6 +437,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   offline structural checker for `generate_community_pack_catalog.py`'s
   JSON-catalog/`kind`/External-assets-column additions; see `checks/`
   above.
+- `python3 scripts/checks/verify_mei_catalog_split.py` (AC-4, F6.3b) -
+  offline structural checker for the `mei_catalog_entry.py`/
+  `community_pack_markdown.py`/facade split; see `checks/` above.
+- `./scripts/checks/verify_status_kind_parity.sh` (AC-6, F6.3b) - the
+  Status->kind pairing is defined exactly once, in
+  `mei_rules.STATUS_TO_KIND`; see `checks/` above.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.
