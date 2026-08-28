@@ -7,6 +7,8 @@ Confirms that the file is a GitHub Issue Form (not a free-text issue) with:
 - console dropdown (NES/GB/GBC/SMS/Other — no SNES: not a product console on main)
 - author/credits field
 - optional description field
+- optional external_assets field documenting the ADR-0138 §12 grammar
+- optional external_assets_license field
 - labels: [community-pack]
 - link to docs/hd-pack-authoring.md
 
@@ -21,6 +23,13 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "community-pack.yml"
 
 CONSOLE_OPTIONS = {"nes", "gb", "gbc", "sms", "other"}
+
+# ADR-0138 §12: substrings the `external_assets` field description must
+# carry to actually document the per-line dependency grammar, not just
+# gesture at "external assets" — one keyword per grammar concept (the
+# `<url> [<sha256>] [<size>]` shape, the sha256/hex-length constraint, the
+# per-line/comment-line parsing rule).
+EXTERNAL_ASSETS_GRAMMAR_KEYWORDS = ("<url>", "sha256", "line")
 
 
 def fail(msg):
@@ -127,6 +136,40 @@ def check_optional_description(textareas):
             fail("description field should be optional, but is marked required")
 
 
+def check_optional_external_assets(textareas):
+    matches = [e for e in textareas if str(e.get("id", "")) == "external_assets"]
+    if not matches:
+        fail("no 'external_assets' textarea field found")
+    for textarea in matches:
+        if is_required(textarea):
+            fail("external_assets field should be optional, but is marked required")
+        description = str(textarea.get("attributes", {}).get("description", ""))
+        missing = [
+            kw
+            for kw in EXTERNAL_ASSETS_GRAMMAR_KEYWORDS
+            if kw.lower() not in description.lower()
+        ]
+        if missing:
+            fail(
+                "external_assets description does not document the ADR-0138 "
+                f"§12 grammar (missing: {missing})"
+            )
+
+
+def check_optional_external_assets_license(inputs):
+    matches = [
+        e for e in inputs if str(e.get("id", "")) == "external_assets_license"
+    ]
+    if not matches:
+        fail("no 'external_assets_license' input field found")
+    for field in matches:
+        if is_required(field):
+            fail(
+                "external_assets_license field should be optional, but is "
+                "marked required"
+            )
+
+
 def main():
     data, text = load_template()
     check_top_level(data)
@@ -138,6 +181,8 @@ def main():
     check_console_dropdown(by_type.get("dropdown", []))
     check_author_field(by_type.get("input", []))
     check_optional_description(by_type.get("textarea", []))
+    check_optional_external_assets(by_type.get("textarea", []))
+    check_optional_external_assets_license(by_type.get("input", []))
 
     print("PASS: community-pack.yml is a valid Issue Form with all required fields")
     return 0
