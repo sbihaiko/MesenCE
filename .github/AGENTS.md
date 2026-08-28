@@ -46,9 +46,14 @@ what CI actually runs; this doc records why they're split the way they are.
   `<url> [<sha256>] [<size>]` dependency per non-empty line (`#`-comment
   and blank lines ignored; a line missing `sha256` disables recipe
   assembly for the whole submission), and its description documents that
-  grammar. There is no distribution-rights checkbox (dropped in
-  `b62f0bbc`). Sets `labels: [community-pack]` and links
-  `docs/hd-pack-authoring.md`. Structurally checked by
+  grammar in condensed form — `<url> <sha256> [<size>]`, hash shown as
+  required, comment lines unmentioned: a submitter never needs those
+  details to submit, and the parser still accepts the full grammar. There
+  is no distribution-rights checkbox (dropped in `b62f0bbc`). The form is
+  deliberately short — an intro that promises four fields and a bot
+  comment with the result, one-line field descriptions, and the
+  `docs/hd-pack-authoring.md` link demoted to a closing note explicitly
+  marked as not required reading. Sets `labels: [community-pack]`. Structurally checked by
   `scripts/checks/verify_community_pack_issue_template.py`.
 - `workflows/community-pack-submitted.yml` — trigger-only wrapper that
   extracts the pack URL and mode, then calls the reusable validate
