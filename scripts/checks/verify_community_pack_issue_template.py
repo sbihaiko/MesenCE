@@ -4,9 +4,8 @@
 Confirms that the file is a GitHub Issue Form (not a free-text issue) with:
 - pack link field (URL)
 - target game/ROM + region field
-- console dropdown (NES/SNES/GB/GBC/SMS/Other)
+- console dropdown (NES/GB/GBC/SMS/Other — no SNES: not a product console on main)
 - author/credits field
-- mandatory rights-confirmation checkbox
 - optional description field
 - labels: [community-pack]
 - link to docs/hd-pack-authoring.md
@@ -21,7 +20,7 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "community-pack.yml"
 
-CONSOLE_OPTIONS = {"nes", "snes", "gb", "gbc", "sms", "other"}
+CONSOLE_OPTIONS = {"nes", "gb", "gbc", "sms", "other"}
 
 
 def fail(msg):
@@ -117,16 +116,6 @@ def check_author_field(inputs):
         fail("no author/credits 'input' field found")
 
 
-def check_rights_checkbox(checkboxes):
-    if not checkboxes:
-        fail("no 'checkboxes' field found")
-    for cb in checkboxes:
-        options = cb.get("attributes", {}).get("options") or []
-        for opt in options:
-            if isinstance(opt, dict) and opt.get("required") is True:
-                return
-    fail("no mandatory rights-confirmation checkbox option found")
-
 
 def check_optional_description(textareas):
     matches = [e for e in textareas if "descri" in str(e.get("id", "")).lower()]
@@ -148,7 +137,6 @@ def main():
     check_rom_target(by_type.get("input", []))
     check_console_dropdown(by_type.get("dropdown", []))
     check_author_field(by_type.get("input", []))
-    check_rights_checkbox(by_type.get("checkboxes", []))
     check_optional_description(by_type.get("textarea", []))
 
     print("PASS: community-pack.yml is a valid Issue Form with all required fields")

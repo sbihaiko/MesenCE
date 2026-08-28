@@ -315,6 +315,34 @@ again) are folded and deleted.
     with `user_supplied: true`. The mep-meta comment states that
     `recipe_hash` covers the recipe document, not dep contents; dep digests
     are verified by the client at install time (§4).
+12. **`external_assets` field contract (normative for both slices).** The
+    Issue Form field is a `textarea` (id `external_assets`, optional). One
+    dependency per non-empty line; blank lines and lines whose first
+    non-space character is `#` are ignored; fields are whitespace-separated
+    `<url> [<sha256>] [<size>]` (`sha256` = 64 lowercase hex, `size` =
+    decimal bytes). Any dependency line lacking `sha256` disables recipe
+    assembly for the whole submission (§3). `external_assets_license` is a
+    single-line `input` (optional, free text). The F6.2a Issue-Form verifier
+    and the F6.2b parser both cite this paragraph; neither invents a shape.
+13. **Handoff location and status (amends §9).** The assembly step writes
+    the recipe to `$RUNNER_TEMP/mep_recipe.json` — runner-local, never
+    inside the checkout, so it can never be mistaken for (or committed as) a
+    repo artefact — and exposes one step output `recipe_status` with exactly
+    three values: `absent` (no external assets declared), `present` (recipe
+    assembled and written), `refused` (assets declared but a dep lacks a
+    sha256, §3/§12 — assembly declined). Downstream readers branch on the
+    enum: the gate runs only on `present`; `assets:external` is applied only
+    on `present`; `apply-verdict`'s downgrade expression (§10) reads
+    `recipe_status == 'present' && !recipe_ok`; `refused` takes the pre-ADR
+    verdict path and the verdict comment explains the missing hash. Wherever
+    §9/§10 above say `recipe_present`, read `recipe_status == 'present'`.
+14. **No inverted regression guards.** A verifier must assert the desired
+    steady state, never pin a known failure message. The pre-existing defect
+    that prompted one (`verify_community_pack_issue_template.py` required an
+    `snes` option the Console dropdown must not have — CLAUDE.md, no
+    `console:snes`) is fixed at the root in the same commit as this
+    paragraph; the verifier now passes on `main` and F6.2a extends it for
+    §12 rather than wrapping it.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label

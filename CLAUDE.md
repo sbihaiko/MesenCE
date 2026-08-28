@@ -127,9 +127,10 @@ https://github.com/users/sbihaiko/projects/3
 
 - A contributor opens an issue using the
   `.github/ISSUE_TEMPLATE/community-pack.yml` template (pack link,
-  target game/ROM + region, console, author/credits, mandatory
-  confirmation of the right to distribute the assets). The issue is
-  created with the `community-pack` label already applied.
+  target game/ROM + region, console, author/credits, optional
+  description — the mandatory distribution-rights checkbox was dropped in
+  `b62f0bbc`). The issue is created with the `community-pack` label
+  already applied.
 - `.github/workflows/community-pack-submitted.yml` triggers the reusable
   `.github/workflows/community-pack-validate.yml` workflow, which:
   - downloads the pack, restricted to a host allow-list
