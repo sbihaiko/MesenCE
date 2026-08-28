@@ -6,7 +6,7 @@ Durable documentation for this fork: open specs, execution plans, and the enhanc
 
 ## Ownership
 
-Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/media/`, and top-level ecosystem notes. Does not own `AGENTS.md` files in other trees, Core/UI source, or `.dev-squad/adr/`.
+Owns `docs/specs/` (CC0), `docs/roadmap/` (the two PRDs), `docs/media/`, and top-level ecosystem notes. Does not own `AGENTS.md` files in other trees, Core/UI source, or `.dev-squad/adr/`.
 
 ## Local Contracts
 
@@ -16,10 +16,9 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 
 ## Work Guidance
 
-- Planning: a single document, `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`
-  (vision, standards, shipped record, pending slices incl. the host gamepad
-  tester and the console reduction). No separate `plano-*.md` files — see
-  `docs/roadmap/AGENTS.md` for the contract. Earlier plans live in git history.
+- Planning: `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (pack/core
+  roadmap) and `docs/roadmap/PRD-player-shell.md` (default GUI, pack identity,
+  picker). No `plano-*.md`. See `docs/roadmap/AGENTS.md` for the contract.
 - `hd-pack-authoring.md` - human-facing guide for community HD/MEP pack
   submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
   summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.
@@ -37,4 +36,4 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
 ## Child DOX Index
 
 - specs/ — ESP, MEP, MEI, MEP-recipe, hires-gbsms drafts and `golden/`
-- roadmap/ — the single consolidated PRD (product consoles: NES, GB, SMS-family, GBA)
+- roadmap/ — pack/core PRD + player-shell PRD (product consoles: NES, GB, SMS-family, GBA)

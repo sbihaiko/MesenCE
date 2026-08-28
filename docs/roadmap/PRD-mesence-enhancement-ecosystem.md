@@ -1,6 +1,13 @@
 # PRD — MesenCE Enhancement Ecosystem (consolidated roadmap)
 
-**Status:** active (2026-08-27) — the single planning document of this fork. Earlier plans (`PRD-ecossistema-enhancement-comunitario.md`, `PRD-community-pack-mep-conversion.md`, `plano-execucao-F3.md`, `plano-execucao-F5.md`, `plano-reducao-consoles.md`, `plano-host-input-tester.md`) were consolidated here and deleted on 2026-08-27; their full text lives in git history. ·
+**Status:** active (2026-08-28) — pack/core roadmap of this fork. Player
+chrome, pack identity (`pack_id`/`content_id`/version) and the in-GUI
+picker live in [PRD-player-shell.md](PRD-player-shell.md) (Phase 7).
+Earlier plans (`PRD-ecossistema-enhancement-comunitario.md`,
+`PRD-community-pack-mep-conversion.md`, `plano-execucao-F3.md`,
+`plano-execucao-F5.md`, `plano-reducao-consoles.md`,
+`plano-host-input-tester.md`) were consolidated here and deleted on
+2026-08-27; their full text lives in git history. ·
 **Author:** sbihaiko ·
 **Scope:** MesenCE fork (`main`); nothing goes upstream ·
 **Specs:** [MEP-v1](../specs/MEP-v1.md) · [MEI-v1](../specs/MEI-v1.md) · [ESP-v1](../specs/ESP-v1.md) · [MEP-recipe-v1](../specs/MEP-recipe-v1.md) · [hires-gbsms-v1 (draft)](../specs/hires-gbsms-v1-draft.md) ·
@@ -283,7 +290,25 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
   optional external tools on top of the bootstrap, never in the emulator.
 - Pack browser UI beyond auto-install (search, ranking by GitHub signals,
   user-configurable extra MEI URLs with explicit confirmation, MEI §3.4) —
-  after Phase 6, if the catalog grows past what a list can show.
+  after Phase 6, if the catalog grows past what a list can show. The
+  player-shell picker (one ROM, 2+ `pack_id`s) is **not** that browser;
+  it lives in [PRD-player-shell.md](PRD-player-shell.md) §5.
+
+### Phase 7 — Player shell (minimal GUI) — **see dedicated PRD**
+
+Default chrome is a player shell (recent games, drop a ROM, packs apply
+themselves, thin overlay) with **Advanced GUI** restoring classic Mesen.
+Pack identity is the pair `pack_id` (product, stable across versions) +
+`content_id` (revision, hash of the resolved tree after unzip) — the
+source-zip sha256 is the download, not the pack. The catalog keeps **one
+live slot per `pack_id`**; the player never picks among versions.
+
+Normative text, slices P.0–P.6, and open ADR topics:
+[PRD-player-shell.md](PRD-player-shell.md). Do not copy that prose here.
+
+Depends on: F6.4b for catalog auto-install in the overlay (P.6). P.3–P.5
+can run on local packs before F6.4b. P.0 ADRs must be accepted before
+P.1/P.2.
 
 ## 5. Order of execution
 
@@ -292,6 +317,8 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 3. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
 4. **Input tester I.0–I.2** independent of everything above.
+5. **Phase 7 (player shell)** — P.0 ADRs, then P.1–P.5 independently of
+   F6.4b; P.6 after F6.4b. See [PRD-player-shell.md](PRD-player-shell.md).
 
 ## 6. ADR map
 
@@ -304,6 +331,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 | 0133, 0134, 0135, 0051 | proposed | gate Blocks C/D — user decision |
 | 0123, 0125, 0128 | proposed | H5–H7 — not blocking |
 | 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
+| player-shell identity + chrome | **needed** | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in PRD-player-shell.md §9. Not assigned ids yet |
 
 ## 7. Risks
 
