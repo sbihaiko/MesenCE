@@ -350,6 +350,37 @@ again) are folded and deleted.
     script (the independent expectation is the check's whole value — never
     derive it from the target) and derives its count from that set instead
     of a literal. Recorded as the standing pattern in `scripts/AGENTS.md`.
+16. **`recipe_ok` is not dep integrity (restates §11 for the workflow).**
+    CI never fetches or hashes external deps: the gate's `validate` +
+    `dry-run` cover the recipe document and the CI-hashed primary only.
+    `sources.deps[].sha256`/`size` are submitter-attested and are verified
+    exclusively by the client at install time (§4, MEI trust model
+    ADR-0006). The `<!-- mep-meta -->` block states this in one line
+    ("dep digests: submitter-declared, verified on install") and the
+    verdict comment says the same; MEP-recipe-v1 already carries
+    `user_supplied: true` (§11) — no spec change. Fetch-and-verify in CI is
+    rejected for v1: it re-introduces the size/host problem the split
+    distribution exists to avoid.
+17. **Issue body is fetched, never taken from the event.** The assembly
+    step reads the `external_assets` field with `gh issue view
+    "$ISSUE_NUMBER" --repo "$REPO" --json body -q .body` — the same call the
+    existing title/console step already makes (`inputs.issue_number` is the
+    reusable workflow's only identity input). `github.event.issue.*` is
+    never referenced by any new step, so the `issues`, `/revalidate` and
+    scheduled drift-check callers resolve the same `recipe_status` for the
+    same issue; the verifier asserts the absence of `github.event.issue` in
+    the new steps. No "sticky" mep-meta logic is needed once the input is
+    the issue itself.
+18. **Two stores, one rule.** The Project "Pack Hash" field remains the
+    authoritative, bot-only store for the primary sha256 (unchanged). The
+    `<!-- mep-meta -->` comment is the only store for dep digests,
+    `recipe_hash` and verdict provenance, and is rewritten wholesale by CI
+    (§5). F6.3's catalog generator reads the primary hash from the field and
+    the dep/recipe data from mep-meta; if the mep-meta `source_sha256`
+    disagrees with the field, the generator emits no recipe for that pack
+    and logs the mismatch (the field wins; a human-edited comment can never
+    upgrade a pack). Both writers are bot-owned; human edits to the comment
+    are overwritten on the next validation.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
