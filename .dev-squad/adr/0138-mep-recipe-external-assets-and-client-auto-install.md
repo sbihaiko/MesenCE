@@ -298,3 +298,29 @@ again) are folded and deleted.
    `scripts/checks/verify_community_pack_validate_workflow.py`. New standalone
    verifiers are only for new artefacts (the Issue Form fields, the labels
    script).
+9. **One named handoff.** The assembly step writes the recipe to a single
+   runner-local artefact, `mep_recipe.json` at the workspace root, and exposes
+   one boolean step output `recipe_present`. Every downstream reader (gate,
+   `external` label branch, mep-meta `recipe_hash`, later F6.3 MEI emission)
+   reads that path/output — never re-derives "is there a recipe?". Recorded
+   in `.github/AGENTS.md` Local Contracts; the workflow verifier asserts it.
+10. **`apply-verdict` stays the sole verdict writer.** The gate step emits
+    only `recipe_ok` (boolean) and never touches labels or Status.
+    `apply-verdict` computes the effective verdict in one expression —
+    `accepted` becomes `invalid` when `recipe_present && !recipe_ok` — so
+    downgrade-only follows from the expression's shape, not from step order,
+    and the verifier asserts that single line.
+11. **Provenance is explicit.** `sources.primary.sha256` is CI-computed;
+    every `sources.deps[].sha256`/`size` is submitter-declared and carried
+    with `user_supplied: true`. The mep-meta comment states that
+    `recipe_hash` covers the recipe document, not dep contents; dep digests
+    are verified by the client at install time (§4).
+
+**Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
+two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label
+creation, authoring-doc section, Issue-Form/labels verifiers, and the
+`.github/AGENTS.md` Local Contracts entry for §9; **F6.2b** — the
+`community-pack-validate.yml` steps (classify schema narrowing, assembly
+step + `mep_recipe.py` sources-assembly helper, gate, `apply-verdict`
+expression and `external` branch, mep-meta upsert) plus the extended
+workflow verifier.
