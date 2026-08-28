@@ -1,7 +1,7 @@
 <div align="center">
 
 # MesenCE · Bihaiko's Edition
-**Your NES, Game Boy, Master System and GBA games**<br/>
+Your NES, Game Boy, Master System and GBA games<br/>
 [![Build](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
 [![Unit tests](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml?query=branch%3Amain)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.en.html)
