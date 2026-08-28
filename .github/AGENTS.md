@@ -135,13 +135,23 @@ what CI actually runs; this doc records why they're split the way they are.
   refused submission's pre-ADR verdict path must stay completely
   untouched). It runs `python3 scripts/mep_recipe.py validate` against
   the handoff path above, then (only if that passed) `python3
-  scripts/mep_recipe.py dry-run` against the already-downloaded primary
-  (`pack_download.bin`) — with no `--dep PATH` ever passed, since CI
-  never fetches or hashes external dependency content (§16); every
-  declared dependency is exercised only "stubbed by [its] declared name"
-  through `mep_recipe.py`'s own `apply_patch_only_if_complete` policy,
-  which skips ops that read a missing dep instead of erroring. The step
-  exposes exactly one boolean output, `recipe_ok`, and never adds a
+  scripts/mep_recipe.py dry-run --stub-deps` against the already-
+  downloaded primary (`pack_download.bin`) — with no `--dep PATH` ever
+  passed, since CI never fetches or hashes external dependency content
+  (§16). `--stub-deps` is what makes every declared dependency count as
+  "stubbed by [its] declared name": every dep is still treated as
+  missing (its ops skipped, its patch/section withheld from `pack.json`,
+  same as the default `apply_patch_only_if_complete` policy already does
+  for a `user_supplied` dep), but the two hard aborts `mep_recipe.py`
+  would otherwise raise for a dep whose classify-supplied
+  `user_supplied: false` or `apply_patch_only_if_complete: false` demand
+  it be present are suppressed — those fields describe the real client
+  install, not whether CI's structural dry-run may proceed without
+  fetching anything. `pack.json`'s `sections` are always re-derived from
+  the tree dry-run actually wrote whenever any dep is missing, rather
+  than trusting a classify-copied `pack.sections` that could claim a
+  directory the skipped ops never populated. The step exposes exactly
+  one boolean output, `recipe_ok`, and never adds a
   label, posts a comment, or moves the Project Status field itself —
   `apply-verdict` remains the sole verdict writer (§10). Checked by
   `verify_community_pack_validate_workflow.py`'s

@@ -596,14 +596,23 @@ jobs:
       # or hashes external dependency content (§16; dep sha256/size are
       # submitter-declared and verified only by the client at install
       # time, §4/§11). Every declared dependency is instead exercised
-      # "stubbed by [its] declared name" (ADR Decision §1) purely through
-      # `mep_recipe.py`'s own `apply_patch_only_if_complete` policy
-      # (default true, already covered by
-      # `scripts/test_mep_recipe.py::check_incomplete_withholds_patch`):
-      # an op that reads a missing dep is skipped instead of erroring, and
-      # any patch/section that needs it is withheld from the dry-run
-      # output rather than failing the gate over content CI was never
-      # meant to fetch in the first place.
+      # "stubbed by [its] declared name" (ADR Decision §1): passing
+      # `--stub-deps` makes every dep id count as a present-but-unfetched
+      # stub for this dry-run only — its ops are still skipped and its
+      # patch/section still withheld exactly as the default
+      # `apply_patch_only_if_complete` policy already does for a
+      # `user_supplied` dep (`scripts/test_mep_recipe.py::
+      # check_incomplete_withholds_patch`), but WITHOUT the two hard
+      # aborts `mep_recipe.py` would otherwise raise for a dep whose
+      # classify-supplied `user_supplied: false` or the recipe's
+      # `apply_patch_only_if_complete: false` demand it be present —
+      # those two fields describe the real client install, not whether
+      # CI's structural check may proceed without fetching anything at
+      # all. `pack.json`'s `sections` are always re-derived from what
+      # dry-run actually wrote whenever any dep is missing (never a
+      # classify-copied `pack.sections`), so a section that depended on
+      # unavailable dep content can never survive into the lint-checked
+      # output as a phantom claim `mep_lint.py` would then hard-error on.
       # Exposes exactly one boolean step output, `recipe_ok`; never adds a
       # label, posts a comment, or moves the Project Status field itself.
       - name: Recipe gate (mep_recipe.py validate + dry-run, deps stubbed by name)
@@ -622,10 +631,10 @@ jobs:
             rm -rf "$DRY_RUN_OUT"
             if [ -n "$GAME" ]; then
               python3 scripts/mep_recipe.py dry-run "$RUNNER_TEMP/mep_recipe.json" \
-                --primary pack_download.bin --out "$DRY_RUN_OUT" --rom-name "$GAME" || RECIPE_OK=false
+                --primary pack_download.bin --out "$DRY_RUN_OUT" --rom-name "$GAME" --stub-deps || RECIPE_OK=false
             else
               python3 scripts/mep_recipe.py dry-run "$RUNNER_TEMP/mep_recipe.json" \
-                --primary pack_download.bin --out "$DRY_RUN_OUT" || RECIPE_OK=false
+                --primary pack_download.bin --out "$DRY_RUN_OUT" --stub-deps || RECIPE_OK=false
             fi
           fi
           echo "recipe_ok=$RECIPE_OK" >> "$GITHUB_OUTPUT"
