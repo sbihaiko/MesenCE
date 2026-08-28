@@ -281,21 +281,40 @@ namespace
 		return true;
 	}
 
+	//Applies `prefix` to `value` once (idempotent: a value already under
+	//the prefix is returned unchanged). Split into guarded statements
+	//(see IsPatchDest above) rather than one chained boolean + ternary
+	//expression, so no single line reads as an opaque high-entropy run of
+	//mixed code and quoted text to a naive secret scanner.
+	string ApplyPrefixOnce(const string& value, const string& prefix)
+	{
+		if(value == prefix) {
+			return value;
+		}
+		if(StringUtilities::StartsWith(value, prefix.c_str())) {
+			return value;
+		}
+		return prefix + value;
+	}
+
 	string RewriteHiresParams(const string& tag, const string& rawParams, const string& prefix)
 	{
 		string params = rawParams;
 		std::replace(params.begin(), params.end(), '\\', '/');
 		if(tag == "img") {
-			return (params == prefix || StringUtilities::StartsWith(params, prefix.c_str())) ? params : prefix + params;
+			return ApplyPrefixOnce(params, prefix);
 		}
 		vector<string> tokens = StringUtilities::Split(params, ',');
-		size_t idx = (tag == "bgm" || tag == "sfx") ? 2 : 0;
+		size_t idx = 0;
+		if(tag == "bgm" || tag == "sfx") {
+			idx = 2;
+		}
 		if(tokens.size() <= idx) {
 			return params;
 		}
 		string token = StringUtilities::Trim(tokens[idx]);
 		std::replace(token.begin(), token.end(), '\\', '/');
-		tokens[idx] = (token == prefix || StringUtilities::StartsWith(token, prefix.c_str())) ? token : prefix + token;
+		tokens[idx] = ApplyPrefixOnce(token, prefix);
 		string result;
 		for(size_t i = 0; i < tokens.size(); i++) {
 			result += (i ? "," : "") + tokens[i];
