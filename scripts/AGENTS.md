@@ -141,6 +141,30 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   its framework-free acceptance check (well-formed block round-trips;
   each malformed-input shape above returns `None`; a second fenced block
   later in the comment is never mistaken for the first).
+  `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27) writes
+  `docs/community-packs.json` (an MEI v1.1 catalog, `mei: "1.1.0"`) next to
+  `docs/community-packs.md` in the same run, and adds an "External assets"
+  column to the Markdown table (`yes` when the entry has `deps`) alongside
+  the six pre-existing columns. Per accepted board item it fetches the
+  bot-owned `<!-- mep-meta -->` comment (`gh api .../comments`, same
+  oldest-by-`sbihaiko` selection `community-pack-validate.yml`'s upsert
+  step uses) and parses it with `mep_meta_parser.parse_mep_meta`; on a
+  `source_sha256` mismatch against the Project "Pack Hash" field it omits
+  `deps`/`recipe` for that entry and logs the mismatch (§18, field wins).
+  Two dependency-free leaf modules keep the generator's own file under this
+  project's per-file line budget (scripts/AGENTS.md split convention):
+  `mei_catalog_entry.py` derives `kind` (`"mep"`/`"hd-legacy"` from the
+  board Status; no automated verdict currently produces "mep") and
+  assembles one MEI `packs[]` entry per item, reading `deps[]` from
+  mep-meta's embedded `recipe.sources.deps` (never mep-meta's own
+  top-level stripped `deps`, which lacks `license`); `community_pack_row.py`
+  holds the Issue Form field parsing shared by the Markdown row and the
+  MEI entry, so `game`/`console`/`license` never drift between the two
+  outputs. `scripts/checks/verify_mei_catalog_generator.py` is the
+  offline, no-`gh` structural checker for this deliverable (AC-2 of the
+  F6.3 task): it asserts the generator writes `docs/community-packs.json`,
+  uses `mep_meta_parser`, derives `kind`, and declares the "External
+  assets" column — never a live `main()` run.
 - `docs/specs/golden/mep-nes/` (ADR-0136) - NES-shaped golden MEP pack
   fixture (`pack.json` + `textures/hires.txt` + `textures/tiles.png`):
   `SHAPE_A` is captured under two distinct 8-hex-char palettes and
@@ -309,6 +333,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   payload, and a deeply nested JSON payload (`RecursionError`, not
   `ValueError`) all return `None` without raising; PASS/FAIL per check,
   exit 0 only if all pass.
+- `python3 scripts/checks/verify_mei_catalog_generator.py` (AC-2, F6.3) -
+  offline structural checker for `generate_community_pack_catalog.py`'s
+  JSON-catalog/`kind`/External-assets-column additions; see `checks/`
+  above.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.

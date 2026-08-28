@@ -170,8 +170,11 @@ https://github.com/users/sbihaiko/projects/3
   validation when the link's hash changed since the last pass.
 - `scripts/generate_community_pack_catalog.py` generates
   `docs/community-packs.md` from the board's accepted items
-  (link/game/console/author/category/date + a "Most popular" section by
-  👍 reactions, a popularity proxy, not a real usage metric).
+  (link/game/console/author/category/date/external-assets + a "Most
+  popular" section by 👍 reactions, a popularity proxy, not a real usage
+  metric) and, alongside it, `docs/community-packs.json` as a machine-
+  readable MEI v1.1 catalog (`docs/specs/MEI-v1.md`) combining the same
+  Project fields with each issue's `<!-- mep-meta -->` block.
 - `scripts/ensure_community_pack_labels.sh` ensures (idempotently) the
   `community-pack`, `pack:valid`, `pack:invalid`, `assets:textures`,
   `assets:audio`, `patch:ips`, `patch:bps`, `console:nes`, `console:gb`,
