@@ -180,6 +180,15 @@
       "scoutMs": null,
       "classification": null,
       "diverged": false
+    },
+    {
+      "sid": "4f0d742630e5",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": "chore",
+      "diverged": false
     }
   ]
 }

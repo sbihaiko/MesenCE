@@ -9,12 +9,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$REPO_ROOT/scripts/ensure_community_pack_labels.sh"
 
-EXPECTED_COUNT=12
 EXPECTED_NAMES=(
   community-pack pack:valid pack:invalid assets:textures assets:audio
   patch:ips patch:bps console:nes console:gb console:gbc console:sms
   assets:external
 )
+# Derived from the name set above so the two cannot drift within this file;
+# the set itself stays an independent expectation (never parsed from the target).
+EXPECTED_COUNT=${#EXPECTED_NAMES[@]}
 
 fail() {
   echo "FAIL: $1" >&2

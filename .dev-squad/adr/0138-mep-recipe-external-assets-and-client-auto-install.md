@@ -343,6 +343,13 @@ again) are folded and deleted.
     `console:snes`) is fixed at the root in the same commit as this
     paragraph; the verifier now passes on `main` and F6.2a extends it for
     §12 rather than wrapping it.
+15. **Array-shaped verifiers (after the F6.2a run 4f0d742630e5).** The
+    six review ADRs minted by that run (retired ids 0139–0144 reused again)
+    all concern `verify_community_pack_labels_script.sh` and are folded here:
+    the verifier keeps an explicit expected name set *outside* the labels
+    script (the independent expectation is the check's whole value — never
+    derive it from the target) and derives its count from that set instead
+    of a literal. Recorded as the standing pattern in `scripts/AGENTS.md`.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label

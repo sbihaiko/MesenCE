@@ -168,6 +168,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `ensure_community_pack_labels.sh` literally (not one representative grep)
   and asserts both the exact 12-entry count and the full expected name set,
   including the `assets:external` content-index label.
+  This is the standing shape for verifiers of array-shaped config (ADR-0035
+  made concrete): extract the entries from the source array, assert an
+  explicit expected name set kept *outside* the target (deriving the names
+  from the target would make the check tautological), and derive the count
+  from that set (`${#EXPECTED_NAMES[@]}`) — never a magic integer.
+  `verify_mep_fallback_constant_parity.sh` is the cross-file exemplar.
   `verify_agents_md_recipe_handoff.sh` (AC-4, F6.2a) checks that
   `.github/AGENTS.md` documents the ADR-0138 §13 recipe handoff: the
   `$RUNNER_TEMP/mep_recipe.json` path (and prose stating it is runner-local
