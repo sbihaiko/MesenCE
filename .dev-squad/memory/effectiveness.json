@@ -1,27 +1,26 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-28T14:36:32.560Z",
+  "updatedAt": "2026-08-28T17:54:38.756Z",
   "byId": {
     "L-ff73acd33912-000": {
-      "injected": 2,
-      "exposed": 1,
-      "recurred": 0,
       "class": "new-feature",
       "status": "advisory",
       "scope": [
         "Core/Shared/Audio/MidiExporter.h",
         "Core/Shared/Audio/MidiExporter.cpp"
       ],
-      "category": "code-quality",
-      "firstSeen": "2026-08-24T11:09:56.916Z",
-      "contentHash": "a9d8ef5fd8ea0c13a78c527c3ac0ad1df1b445688ce9af4ea3473b26429d6671",
-      "lastInjectedSid": "282110275400",
-      "lastUpdated": "2026-08-26T16:45:05.308Z",
-      "lastExposedSid": "0570161c4bd2"
+      "category": null,
+      "injected": 1,
+      "exposed": 0,
+      "recurred": 0,
+      "firstSeen": "2026-08-28T17:54:38.756Z",
+      "contentHash": "a83362880df4bb24252ff7210889526a6a9ffcaa9940aa600d79b19477bf4f64",
+      "lastInjectedSid": "99c183d691f7",
+      "lastUpdated": "2026-08-28T17:54:38.756Z"
     },
     "L-b909cad872b0-000": {
-      "injected": 16,
-      "exposed": 2,
+      "injected": 17,
+      "exposed": 3,
       "recurred": 1,
       "class": "refactor",
       "status": "advisory",
@@ -35,13 +34,13 @@
       "category": null,
       "firstSeen": "2026-08-27T22:33:56.824Z",
       "contentHash": "98f44137e95e99c0660a089de844a1b0f8aff9a0f43ed87fbf03175b04d39d5f",
-      "lastInjectedSid": "0613b444cee2",
-      "lastUpdated": "2026-08-28T14:36:32.560Z",
-      "lastExposedSid": "36e5c1fe23ec",
+      "lastInjectedSid": "99c183d691f7",
+      "lastUpdated": "2026-08-28T17:54:38.756Z",
+      "lastExposedSid": "99c183d691f7",
       "lastRecurredSid": "36e5c1fe23ec"
     },
     "L-282110275400-000": {
-      "injected": 16,
+      "injected": 17,
       "exposed": 0,
       "recurred": 0,
       "class": "bug",
@@ -52,11 +51,11 @@
       "category": null,
       "firstSeen": "2026-08-27T22:33:56.824Z",
       "contentHash": "4efd8557139b1dd568b22094f1fa4a06372cf054f86b0b24509a97363b9d3087",
-      "lastInjectedSid": "0613b444cee2",
-      "lastUpdated": "2026-08-28T14:36:32.560Z"
+      "lastInjectedSid": "99c183d691f7",
+      "lastUpdated": "2026-08-28T17:54:38.756Z"
     },
     "L-36e5c1fe23ec-001": {
-      "injected": 3,
+      "injected": 4,
       "exposed": 0,
       "recurred": 0,
       "class": "refactor",
@@ -69,8 +68,8 @@
       "category": null,
       "firstSeen": "2026-08-28T02:57:50.292Z",
       "contentHash": "ec21805ee12bfbb712dfe42effef0ef9dd17268d35a31a16b285efc8d85d12b0",
-      "lastInjectedSid": "0613b444cee2",
-      "lastUpdated": "2026-08-28T14:36:32.560Z"
+      "lastInjectedSid": "99c183d691f7",
+      "lastUpdated": "2026-08-28T17:54:38.756Z"
     },
     "L-5c0cf7449e07-000": {
       "injected": 3,

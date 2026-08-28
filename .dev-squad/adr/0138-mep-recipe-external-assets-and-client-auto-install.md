@@ -541,10 +541,14 @@ again) are folded and deleted.
     folders. MEI §2.2 entry `license` and §2.3 dep `license` are SHOULD too;
     clients show "not declared" in place of a value. MEP-recipe-v1 already had
     it as SHOULD (default `NOASSERTION`), so recipe assembly is unchanged.
-35. **File-size gate vs declared-file scope.** For generator scripts the
-    200-line-per-file threshold wins: a task that will need a module split
+35. **File-size gate vs declared-file scope.** For every task whose
+    deliverable exceeds ~2× the per-file cap (generator scripts, Core
+    modules, anything) the 200-line-per-file threshold wins: a task that will need a module split
     pre-declares the extracted files in its file list so the scope critic
     cannot reject the split (F6.3 lost a cycle folding a correct split back).
+    Decompose owns this: it pre-declares the extracted modules, or a glob
+    such as `Core/Shared/EnhancementPacks/MepRecipe*.{h,cpp}`, in the task's
+    file list (F6.4a lost two cycles to the same ping-pong on Core code).
     Two small checkers covering one script from different angles are fine;
     no convention slice is spent on it.
 
@@ -576,6 +580,33 @@ again) are folded and deleted.
     `user_supplied` deps, then an interop call into the F6.4a installer;
     reinstall when `source.sha256` changed; UI notice when the patch is
     withheld. Auto-install default per §4 applies in F6.4b.
+
+38. **`AutoInstallCommunityPacks` default and consent (F6.4a audit).** The
+    setting ships `true` in F6.4a as storage only — nothing reads it yet. §4's
+    default stands, but F6.4b MUST ship, in the same slice, the settings
+    toggle and a first-run consent prompt before the first automatic
+    download; until F6.4b lands no code path installs anything.
+39. **Two interpreters, one normative reference.** `scripts/mep_recipe.py`
+    is the normative MEP-recipe-v1 interpreter; `MepRecipeInstaller`/
+    `MepRecipeOps` (C++) re-derive it, including `mep_lint.py`'s root
+    discovery. Any recipe-spec change lands on both sides in the same
+    commit. Enforcement is the golden-parity test in
+    `scripts/core_unit_tests.cpp` (Bloco E) over the real-bytes fixture set
+    `docs/specs/golden/mep-recipe/fixture/` generated deterministically by
+    `scripts/gen_mep_recipe_fixture.py` (committed zips are tiny, fixed
+    timestamps, `ZIP_STORED`; `test_gen_mep_recipe_fixture.py` proves
+    regeneration is byte-identical). Growing that set to the discovery edge
+    cases (wrapped subfolder, nested top-level zip, ADR-0120/0121 fallback)
+    is a follow-up (**F6.4c**, after F6.4b). `SHA256::GetHash(path)` returns
+    `""` on an unopenable file so verification can never pass on a missing
+    artifact (fixed 2026-08-28; `sha1` keeps its opportunistic contract).
+40. **Critic false positives on Core code.** F6.4a's T4 stagnated for six
+    cycles on "high-entropy token literal" findings that were a variable
+    named `token`, SHA-256 known-answer vectors and chained ternaries — the
+    work was complete (79/79 tests) and was recovered from the orphaned
+    branch via `git fsck --unreachable`. When a critic finding names no file
+    and the actor has already answered it, the run operator merges the task
+    branch by hand instead of burning cycles.
 
 **Slicing (after three failed F6.2 runs, 2026-08-28).** F6.2 is executed as
 two dev-squad runs: **F6.2a** — Issue Form fields, `assets:external` label

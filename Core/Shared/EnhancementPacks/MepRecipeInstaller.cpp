@@ -79,6 +79,10 @@ namespace
 		}
 		string expectedLower = StringUtilities::ToLower(expectedHex);
 		actualHexOut = StringUtilities::ToLower(SHA256::GetHash(path));
+		if(actualHexOut.empty()) {
+			error = "artifact could not be read: " + path;
+			return false;
+		}
 		if(actualHexOut != expectedLower) {
 			error = "sha256 mismatch for '" + path + "': expected " + expectedLower + ", got " + actualHexOut;
 			return false;

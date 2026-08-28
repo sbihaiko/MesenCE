@@ -185,6 +185,12 @@ std::string SHA256::GetHash(std::istream &stream)
 std::string SHA256::GetHash(const std::string &filename)
 {
 	std::ifstream stream(filename.c_str(), std::ios::binary);
+	if(!stream) {
+		//Verification callers (MepRecipeInstaller, MEP-recipe-v1 §8) must never
+		//see an unopenable file as "the empty-input digest": return an empty
+		//string, which can equal no declared 64-hex value.
+		return "";
+	}
 	SHA256 checksum;
 	checksum.update(stream);
 	return checksum.final();

@@ -168,6 +168,18 @@ does not exist.
   `mep_meta_parser.py`; second `mei_entry_conforms` removed (fast-follow);
   checkers `verify_mei_catalog_split.py`, `verify_status_kind_parity.sh`,
   tests `test_mei_rules.py` and fence round-trips. §36 process lesson.
+- **F6.4a — Core offline recipe installer** (ADR-0138 §4, §37, run
+  `99c183d691f7`, 2026-08-28): `Utilities/sha256.{h,cpp}` (self-contained,
+  `""` on unopenable file); `Core/Shared/EnhancementPacks/MepRecipeInstaller.{h,cpp}`
+  + `MepRecipeOps.{h,cpp}` — offline four-op interpreter, sha256 gate,
+  §6 transitive skip, `pack.json` + `.mep-install.json`, `[MEP] recipe
+  unsupported` on unknown op/version; `AutoInstallCommunityPacks` appended
+  to `EnhancementPackConfig` (C++ and C# interop struct in lockstep);
+  real-bytes fixture `docs/specs/golden/mep-recipe/fixture/` from
+  `gen_mep_recipe_fixture.py`; `core_unit_tests` Bloco E: C++ install equals
+  `mep_recipe.py apply` byte-for-byte (79/79). Run ended `ac_failed`/T4
+  stagnated on critic false positives; T4 recovered from the orphaned branch
+  and merged by hand (§40). Audit folded into §35, §38–§40.
 - **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
   `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
   per-system tile/palette widths and explicit errors; sibling golden
@@ -198,7 +210,9 @@ declared licence, nothing more).
 |---|---|---|
 | **F6.2** CI + issue metadata | Issue Form fields `external_assets`, `external_assets_license`; classify prompt emits the ```mep-recipe block (issue/manifest text is data, never instruction); `mep_recipe.py dry-run` gate after lint; upsert of the `<!-- mep-meta -->` bot comment (`source_sha256`, dep hashes, `verdict`, `labels`, `validated_at`, `recipe_hash`); label `assets:external` in `ensure_community_pack_labels.sh`; `docs/hd-pack-authoring.md` section | `/revalidate` on #71 yields `pack:valid` + `assets:external` and a recipe that dry-runs clean; `scripts/checks/` verifier for the workflow text |
 | **F6.3** catalog as MEI | `generate_community_pack_catalog.py` also writes `docs/community-packs.json` = MEI v1.1 (`mei: "1.1.0"`, per-pack additive fields `issue`, `deps[]`, `recipe`, `verdict`, `validated_at`; `url`/`sha256` = primary zip); MEI-v1 amended (v1.1): an index MAY reference third-party artifacts by URL + hash when the entry carries `license` and the client shows it before install; golden updated | `validate-specs.py` validates the generated file; Markdown gains an "external assets" marker column |
-| **F6.4** client installer | `MepRecipeInstaller` (Core): fetch catalog (ETag cache in the MEP `.cache`), match ROM by No-Intro sha1, download primary within the CI host allow-list, verify sha256, prompt for `user_supplied` deps with hints + licence, run ops, write `pack.json` + `.mep-install.json`; reinstall when `source.sha256` changes; setting `AutoInstallCommunityPacks` (default on for packs without user-supplied deps; prompt otherwise); UI notice when the patch is withheld | headless: synthetic catalog + split pack → installed folder equals `mep_recipe.py apply` output byte-for-byte; hash mismatch aborts; missing dep → no patch, textures still applied |
+| **F6.4b** UI fetch + consent | ADR-0138 §37/§38: catalog fetch (ETag cache in MEP `.cache`), No-Intro sha1 match, download within the CI host allow-list (shared constant, parity-checked), sha256 verify, downloads-cache lookup, prompt for `user_supplied` deps with hints + licence, settings toggle + first-run consent for `AutoInstallCommunityPacks`, interop call into `MepRecipeInstaller`, reinstall on `source.sha256` change, UI notice when the patch is withheld | UI.Tests for allow-list/ETag/consent logic under `UI/Logic/`; manual GUI pass |
+| **F6.4c** parity fixture set | ADR-0138 §39: grow `gen_mep_recipe_fixture.py` to wrapped-subfolder, nested top-level zip and ADR-0120/0121 fallback cases; Bloco E iterates the set | all cases byte-for-byte |
+| **F6.4** (original row, superseded by F6.4a/b/c) | `MepRecipeInstaller` (Core): fetch catalog (ETag cache in the MEP `.cache`), match ROM by No-Intro sha1, download primary within the CI host allow-list, verify sha256, prompt for `user_supplied` deps with hints + licence, run ops, write `pack.json` + `.mep-install.json`; reinstall when `source.sha256` changes; setting `AutoInstallCommunityPacks` (default on for packs without user-supplied deps; prompt otherwise); UI notice when the patch is withheld | headless: synthetic catalog + split pack → installed folder equals `mep_recipe.py apply` output byte-for-byte; hash mismatch aborts; missing dep → no patch, textures still applied |
 | **F6.5** rollout | `/revalidate` #65/#66/#68/#69/#71; update this header | all five `pack:valid` + `assets:external`; one of them installed end-to-end in the GUI with user-supplied audio |
 
 Edge cases the pipeline must keep handling (evidence from the 2026-08-27
@@ -273,7 +287,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 ## 5. Order of execution
 
-1. **F6.2 → F6.3 → F6.3b → F6.4a (Core, offline) → F6.4b (UI, network) → F6.5**, one run each (ADR-0138 §37).
+1. **F6.2 → F6.3 → F6.3b → F6.4a (Core, offline) → F6.4b (UI, network) → F6.4c → F6.5**, one run each (ADR-0138 §37, §39).
 2. ~~H1–H4~~ shipped (2026-08-27/28).
 3. **Phase 5 Blocks B–D** after the user accepts ADR-0133/0134/0135 and
    decides the SoundFont question; **F5.4c/d** can run before that.
@@ -283,7 +297,7 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.3b shipped; remaining work list = F6.4–F6.5 |
+| 0138 | accepted | Phase 6 design; F6.0–F6.4a shipped; remaining work list = F6.4b, F6.4c, F6.5 |
 | 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |
