@@ -156,7 +156,11 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
   the required fields/checkbox/labels/doc-link. `verify_hd_pack_authoring_doc.sh`
   checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
-  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_submitted_workflow.py`,
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_labels_script.sh`
+  (AC-2, ADR-0138 F6.2a) parses the `LABELS` array of
+  `ensure_community_pack_labels.sh` literally (not one representative grep)
+  and asserts both the exact 12-entry count and the full expected name set,
+  including the `assets:external` content-index label. `verify_community_pack_submitted_workflow.py`,
   `verify_community_pack_drift_check_workflow.py`, and
   `verify_gh_project_provenance_drift.py` verify the community-pack GitHub
   Actions workflows and their GH Project field-provenance assumptions.
@@ -221,6 +225,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   only if all pass.
 - `python3 scripts/checks/verify_community_pack_issue_template.py` and
   `./scripts/checks/verify_hd_pack_authoring_doc.sh` - see `checks/` above.
+- `./scripts/checks/verify_community_pack_labels_script.sh` (AC-2) - see
+  `checks/` above.
 - `python3 scripts/checks/verify_community_pack_submitted_workflow.py` and
   `python3 scripts/checks/verify_community_pack_validate_workflow.py` —
   F6.0 concurrency / classify-timeout structural checks plus the original
