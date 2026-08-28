@@ -2,7 +2,9 @@
 
 # MesenCE · Bihaiko's Edition
 
-**Your NES, Game Boy, Master System and GBA games — with modern instruments, HD art and one pack format that ties it all together. Automatically. On by default.**
+**Your NES, Game Boy, Master System and GBA games**
+HD art and modern instruments, seamlessly integrated into a single pack. 
+Everything works together automatically, right out of the box, and it’s on by default.
 
 [![Build](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain)
 [![Unit tests](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/sbihaiko/MesenCE/actions/workflows/unit-tests.yml?query=branch%3Amain)
