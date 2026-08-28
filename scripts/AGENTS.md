@@ -151,7 +151,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   step uses) and parses it with `mep_meta_parser.parse_mep_meta`; on a
   `source_sha256` mismatch against the Project "Pack Hash" field it omits
   `deps`/`recipe` for that entry and logs the mismatch (§18, field wins).
-  `kind_from_status` derives `kind` (`"mep"`/`"hd-legacy"` from the board
+  `mei_entry_preconditions_ok` guards every entry against validate_mei's own
+  constraints before it is built: an item missing an HTTPS Pack URL, a
+  well-formed Pack Hash, or a Console value with an MEI-representable
+  `system` (the Issue Form's first-class "Other" option, and the "?"
+  fallback of a missing/unmapped console, have none) gets no JSON entry at
+  all — a warning is logged and the Markdown row (tolerant of "?"/"other")
+  is still produced. `kind_from_status` derives `kind` (`"mep"`/`"hd-legacy"` from the board
   Status; no automated verdict currently produces "mep") and
   `build_pack_entry` assembles one MEI `packs[]` entry per item, reading
   `deps[]` from mep-meta's embedded `recipe.sources.deps` (never mep-meta's

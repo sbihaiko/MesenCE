@@ -30,6 +30,16 @@ PROJECT_NUMBER = 3
 
 ACCEPTED_STATUSES = {"Aceito parcial (HD Mesen)", "Aceito (MEP completo)"}
 CONSOLE_LABELS = {"nes", "snes", "gb", "gbc", "sms", "other"}
+
+# Mirrors validate-specs.py's SYSTEMS/SHA256_HEX exactly (validate_mei's own
+# constraints on `system`/`sha256`) — kept as separate literals rather than
+# an import so this stdlib-only generator never depends on a CLI-shaped
+# sibling script. `system` is deliberately narrower than CONSOLE_LABELS
+# above: the Issue Form's "Other" option (.github/ISSUE_TEMPLATE/
+# community-pack.yml) has no MEI-representable system, so it belongs in the
+# tolerant Markdown table but not in a validate_mei-conformant JSON entry.
+MEI_SYSTEMS = {"nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes"}
+SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.md"
 JSON_OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.json"
 TABLE_HEADER = "| Link | Game | Console | Author | Category | Date | External assets |"
@@ -218,6 +228,19 @@ def issue_form_fields(details):
     return {"game": game, "console": console, "license": license_}
 
 
+def _dep_entry(dep):
+    """Maps one `recipe.sources.deps[]` item to its MEI `deps[]` shape."""
+    entry = {"id": dep.get("id"), "license": dep.get("license") or "unknown"}
+    if dep.get("sha256"):
+        entry["sha256"] = dep["sha256"]
+    if dep.get("size") is not None:
+        entry["size"] = dep["size"]
+    hints = dep.get("hints") or []
+    if hints:
+        entry["url"] = hints[0]
+    return entry
+
+
 def dep_entries_from_recipe(mep_meta):
     """Extracts MEI `deps[]` from mep-meta's embedded `recipe.sources.deps`.
 
@@ -235,18 +258,7 @@ def dep_entries_from_recipe(mep_meta):
     deps = (recipe.get("sources") or {}).get("deps") or []
     if not deps:
         return None
-    entries = []
-    for dep in deps:
-        entry = {"id": dep.get("id"), "license": dep.get("license") or "unknown"}
-        if dep.get("sha256"):
-            entry["sha256"] = dep["sha256"]
-        if dep.get("size") is not None:
-            entry["size"] = dep["size"]
-        hints = dep.get("hints") or []
-        if hints:
-            entry["url"] = hints[0]
-        entries.append(entry)
-    return entries
+    return [_dep_entry(dep) for dep in deps]
 
 
 def recipe_fields(mep_meta, pack_hash):
@@ -316,6 +328,28 @@ def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, 
         entry["recipe_ok"] = recipe_ok
     _apply_mep_meta_passthrough(entry, mep_meta)
     return entry, mismatch
+
+
+def mei_entry_preconditions_ok(pack_url, pack_hash, system):
+    """Whether this item has everything validate_mei (scripts/validate-specs.py)
+    requires of a `packs[]` entry's `url`/`sha256`/`system` (MEI-v1 §2).
+
+    Returns False when the Project's Pack URL/Pack Hash fields are absent
+    or malformed (the item_pack_url/item_pack_hash coverage gap documented
+    on fetch_accepted_items above), or when the Issue Form's Console value
+    has no MEI-representable system — the Form offers a first-class
+    "Other" option (.github/ISSUE_TEMPLATE/community-pack.yml) that
+    lowercases to "other", and a missing/unmapped console falls back to
+    "?" (console_from_labels) — neither of which is in MEI_SYSTEMS. The
+    caller then omits the JSON entry entirely rather than emit one
+    validate_mei would reject; the Markdown row still renders for that
+    item, tolerant of "?"/"other" (AC-6's six pre-existing columns).
+    """
+    return (
+        bool(pack_url) and pack_url.startswith("https://")
+        and bool(pack_hash) and bool(SHA256_HEX.match(pack_hash))
+        and system in MEI_SYSTEMS
+    )
 
 
 def build_catalog(entries, updated):
@@ -393,34 +427,51 @@ def build_markdown(rows):
     ]) + "\n"
 
 
+def _fetch_mep_meta(issue_number):
+    """Fetches this issue's bot-owned mep-meta comment and parses it, or
+    None when there is no such comment or it fails to parse."""
+    body = fetch_mep_meta_comment_body(issue_number)
+    return parse_mep_meta(body) if body else None
+
+
+def _warn_missing_mei_preconditions(issue_number, system):
+    print(f"WARNING: issue #{issue_number} is missing/invalid Pack URL, Pack Hash, "
+          f"or has no MEI-representable system ({system!r}); omitting its "
+          f"docs/community-packs.json entry (Markdown row still included).",
+          file=sys.stderr)
+
+
+def _warn_source_sha256_mismatch(issue_number):
+    print(f"WARNING: mep-meta source_sha256 disagrees with the Project Pack Hash "
+          f"field for issue #{issue_number}; omitting deps/recipe (field wins).",
+          file=sys.stderr)
+
+
 def _build_entry_for_accepted_item(item):
     """Fetches issue + mep-meta data for one accepted item and returns
-    (markdown_row, mei_entry_or_None). mei_entry is None for an item with
-    no linked issue — there is no data to populate an MEI entry with."""
+    (markdown_row, mei_entry_or_None). mei_entry is None both for an item
+    with no linked issue and for one missing an MEI-conformant Pack URL/
+    Pack Hash/system (mei_entry_preconditions_ok) — the Markdown row is
+    still produced in both cases."""
     issue_number = item_issue_number(item)
     if issue_number is None:
         return build_row(item, {}, {"game": "", "console": "", "license": "unknown"}), None
     details = fetch_issue_details(issue_number)
     form = issue_form_fields(details)
-    mep_meta_body = fetch_mep_meta_comment_body(issue_number)
-    mep_meta = parse_mep_meta(mep_meta_body) if mep_meta_body else None
+    pack_url, pack_hash = item_pack_url(item), item_pack_hash(item)
+    system = (form["console"] or "?").strip().lower()
+    if not mei_entry_preconditions_ok(pack_url, pack_hash, system):
+        _warn_missing_mei_preconditions(issue_number, system)
+        return build_row(item, details, form, has_deps=False), None
     entry, mismatch = build_pack_entry(
-        issue_number=issue_number,
-        game=form["game"].strip(),
-        system=(form["console"] or "?").strip().lower(),
-        license_=form["license"],
-        pack_url=item_pack_url(item),
-        pack_hash=item_pack_hash(item),
-        rom_sha1=item_rom_sha1(item),
-        status=item_status(item),
-        mep_meta=mep_meta,
+        issue_number=issue_number, game=form["game"].strip(), system=system,
+        license_=form["license"], pack_url=pack_url, pack_hash=pack_hash,
+        rom_sha1=item_rom_sha1(item), status=item_status(item),
+        mep_meta=_fetch_mep_meta(issue_number),
     )
     if mismatch:
-        print(f"WARNING: mep-meta source_sha256 disagrees with the Project Pack Hash "
-              f"field for issue #{issue_number}; omitting deps/recipe (field wins).",
-              file=sys.stderr)
-    row = build_row(item, details, form, has_deps=bool(entry.get("deps")))
-    return row, entry
+        _warn_source_sha256_mismatch(issue_number)
+    return build_row(item, details, form, has_deps=bool(entry.get("deps"))), entry
 
 
 def main():
