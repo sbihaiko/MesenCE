@@ -8,18 +8,21 @@ its dispatch, and shares RecipeError/SHA256_HEX/RECIPE_VERSION with this
 module instead of redefining them).
 
 stdlib only. Imports RecipeError/SHA256_HEX/RECIPE_VERSION from the
-sibling `mep_recipe_common` module (not from mep_recipe.py itself, which
-would create an import cycle since mep_recipe.py imports this module)
-rather than redefining them; never re-implements mep_lint discovery
-(this module does no zip/pack I/O at all, only issue-body text parsing
-and dict merging).
+sibling `mep_recipe.py` rather than redefining them; never re-implements
+mep_lint discovery (this module does no zip/pack I/O at all, only
+issue-body text parsing and dict merging).
 
-Not meant to be invoked directly: `mep_recipe.py` imports
-`assemble_sources`/`cmd_assemble_sources` from here and re-exposes them
-as its own `assemble-sources` CLI subcommand and `mep_recipe.assemble_sources`
-attribute. This module is, however, plainly importable standalone
-(`python3 -c "import mep_recipe_assemble"` from scripts/) since it never
-imports mep_recipe.py back.
+Not meant to be invoked directly: `mep_recipe.py` re-exposes
+`assemble_sources`/`cmd_assemble_sources` as its own
+`mep_recipe.assemble_sources`/`mep_recipe.cmd_assemble_sources`
+attributes (thin wrappers that import this module lazily, so
+`python3 scripts/mep_recipe.py ...` never trips over the import cycle
+this module's own `from mep_recipe import ...` would otherwise create —
+see the note at the top of mep_recipe.py) and as its own
+`assemble-sources` CLI subcommand. This module is nonetheless plainly
+importable standalone (`python3 -c "import mep_recipe_assemble"` from
+scripts/), since importing it that way resolves `mep_recipe` by its
+canonical module name with no `__main__` involved.
 """
 from __future__ import annotations
 
@@ -28,7 +31,7 @@ import re
 import sys
 from pathlib import Path
 
-from mep_recipe_common import RECIPE_VERSION, RecipeError, SHA256_HEX
+from mep_recipe import RECIPE_VERSION, RecipeError, SHA256_HEX
 
 EXTERNAL_ASSETS_LABEL = "external assets"
 NO_RESPONSE = "_no response_"

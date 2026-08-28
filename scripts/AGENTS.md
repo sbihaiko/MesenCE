@@ -40,7 +40,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
 - `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
-  `mep_recipe_common.py`, `mep_compare.py`, `mep_render_audio.py`,
+  `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
   validators and test-ROM/test-pack generators; no emulator dependency.
@@ -85,24 +85,31 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `find_fallback_subfolder`, `find_fallback_subfolder_by_name`,
   `find_top_level_nested_zip`, `safe_rel`, `parse_line`) and never walks
   a zip with a parallel implementation.
-  `mep_recipe_common.py` holds `RecipeError`/`SHA256_HEX`/`RECIPE_VERSION`
-  — the symbols shared between `mep_recipe.py` and `mep_recipe_assemble.py`
-  — so neither sibling imports the other for them; it imports neither
-  sibling back, so it (and `mep_recipe_assemble.py`, which imports only
-  this module) is plainly importable standalone with no import cycle.
   `mep_recipe_assemble.py` (F6.2c, ADR-0138 Clarification §23 — a
   mechanical, behaviour-preserving split off `mep_recipe.py` so neither
   file stays several times over the 200-line guardrail) holds the
   CI-only `assemble-sources` implementation (issue-body parsing, dep
   merge, its own CLI arg parsing); it imports `RecipeError`/`SHA256_HEX`/
-  `RECIPE_VERSION` from `mep_recipe_common`, not from `mep_recipe.py`.
-  `mep_recipe.py` imports both `mep_recipe_assemble` and
-  `mep_recipe_common` and re-exposes `assemble_sources`/
-  `cmd_assemble_sources` as its own attributes, so
-  `mep_recipe.assemble_sources(...)` and the `mep_recipe.py
-  assemble-sources` CLI subcommand keep working exactly as before the
-  split; `validate`/`dry-run`/`apply` and the dispatch in `main()` never
-  left `mep_recipe.py`.
+  `RECIPE_VERSION` from `mep_recipe.py` (`from mep_recipe import ...`),
+  not from a third shared module.
+  `mep_recipe.py` re-exposes `assemble_sources`/`cmd_assemble_sources` as
+  its own module-level functions — thin wrappers that `import
+  mep_recipe_assemble` lazily, inside the function body, rather than at
+  module load time. That laziness matters only for the direct-script
+  case: `python3 scripts/mep_recipe.py ...` runs the file as `__main__`,
+  a module identity distinct from `mep_recipe`, so
+  `mep_recipe_assemble.py`'s own `from mep_recipe import ...` forces a
+  second, nested top-level execution of `mep_recipe.py` under the name
+  `mep_recipe`; an eager module-level
+  `mep_recipe_assemble.assemble_sources` attribute grab in that nested
+  execution would race mep_recipe_assemble.py's own still-resolving
+  import and fail with an AttributeError on a partially-initialized
+  module. `import mep_recipe` (as `test_mep_recipe.py` does) never takes
+  that nested path, since the name `mep_recipe` already resolves to the
+  one in-progress module — so `mep_recipe.assemble_sources(...)` and the
+  `mep_recipe.py assemble-sources` CLI subcommand both keep working
+  exactly as before the split; `validate`/`dry-run`/`apply` and the
+  dispatch in `main()` never left `mep_recipe.py`.
   `mep_recipe.py assemble-sources` (F6.2b, ADR-0138 §7/§12/§13) is the
   deterministic step that builds `sources`: it parses the issue body's
   `external_assets` lines (`<url> [<sha256>] [<size>]`, reusing
