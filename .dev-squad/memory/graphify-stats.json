@@ -162,6 +162,15 @@
       "scoutMs": null,
       "classification": null,
       "diverged": false
+    },
+    {
+      "sid": "52a564a0a8bf",
+      "exposed": true,
+      "status": "used",
+      "queries": 2,
+      "scoutMs": null,
+      "classification": null,
+      "diverged": false
     }
   ]
 }

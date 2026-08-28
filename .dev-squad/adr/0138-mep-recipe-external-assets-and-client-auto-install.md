@@ -276,3 +276,25 @@ again) are folded and deleted.
    comments cannot interleave their read-modify-write; only *cancellation* is
    restricted to `issues` events (F6.0). No change needed; recorded so the
    race is not re-litigated.
+6. **`assets:external` is derived, not judged.** The label comes from the
+   assembled recipe having a non-empty `sources.deps` (a deterministic step
+   output), not from the LLM's `assets` enum. `apply-verdict` applies it the
+   same way it applies `assets:textures`/`assets:audio` today (an `external`
+   branch in its label loop, fed by the assembly step's output). Creating the
+   label (`ensure_community_pack_labels.sh`) and applying it are two
+   deliverables, each with its own check — the second is the one the PRD's
+   acceptance line ("`/revalidate` on #71 → `pack:valid` + `assets:external`")
+   actually exercises.
+7. **Where "no recipe" is decided.** §3 said "classify does not emit one";
+   read together with §4 that means: classify may omit `ops/deps/pack` for a
+   non-split pack, *and* the deterministic assembly step refuses to assemble
+   `sources` when any `external_assets` line lacks a sha256. Either outcome is
+   "no usable recipe" and leaves the gate inert (§2). The hash veto never lives
+   in the prompt.
+8. **One workflow, one text verifier.** Checks on
+   `community-pack-validate.yml` text (assembly step present, gate after
+   classify and before apply-verdict, downgrade-only shell logic, `external`
+   label branch, wholesale upsert) extend the `CHECKS` tuple of the existing
+   `scripts/checks/verify_community_pack_validate_workflow.py`. New standalone
+   verifiers are only for new artefacts (the Issue Form fields, the labels
+   script).
