@@ -31,11 +31,23 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 ## Work Guidance
 
 - `core_unit_tests.cpp` - Phase 4 of the now-completed unit-test plan (see
-  git history for `docs/roadmap/plano-testes-unitarios.md`): exercises
-  `ChannelRoleClassifier` (role/SFX decisions) and
-  `MepPack::NormalizeRelativePath` / `MepPack::Parse` (zip-slip fixture +
-  pack.json golden) with no `MesenCore` link at all - the only harness here
-  that doesn't need `make core` first.
+  git history for `docs/roadmap/plano-testes-unitarios.md`), plus Bloco E
+  (ADR-0138 §4/§37, F6.4a): exercises `ChannelRoleClassifier` (role/SFX
+  decisions), `MepPack::NormalizeRelativePath` / `MepPack::Parse` (zip-slip
+  fixture + pack.json golden), `MepPack::FindFallbackSubfolder` /
+  `DetectConventionLayout` (ADR-0120/0121), and (Bloco E)
+  `MepRecipeInstaller`/`MepRecipeOps`/`SHA256` against the real-bytes
+  fixture under `docs/specs/golden/mep-recipe/fixture/` - a known-answer
+  SHA-256 check, a byte-for-byte parity check against
+  `python3 scripts/mep_recipe.py apply` on the same fixture (the one case
+  here that shells out to a second process), the `apply_patch_only_if_
+  complete` transitive-skip withholding a patch while textures still
+  install, a sha256 mismatch aborting and writing nothing, and an unknown
+  op/recipe version logging `[MEP] recipe unsupported` and skipping. Links
+  `Core/Shared/EnhancementPacks/MepPack.cpp` + the `MepRecipe*.cpp` split +
+  `Core/Shared/MessageManager.cpp` + `Utilities/{JsonReader,FolderUtilities,
+  UTF8Util,sha256,SimpleLock,Timer,miniz}.cpp` directly - no `MesenCore`
+  link at all, the only harness here that doesn't need `make core` first.
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
@@ -463,6 +475,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 - `make core-unit-tests` - builds and runs `core_unit_tests` (no `core`
   prerequisite); every case must print `PASS` and the binary must exit 0.
+  Bloco E's parity case shells out to `python3 scripts/mep_recipe.py apply`
+  (a `python3` on `PATH` is required to run this target, unlike every other
+  Bloco here).
 - `make roles-probe` / `make capture-tool` / `make spike-sound-driver` -
   each depends on `make core` first.
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
