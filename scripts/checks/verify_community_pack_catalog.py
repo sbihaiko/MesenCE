@@ -4,7 +4,7 @@
 Scope of this check (deliberate): only looks at the community-pack-catalog.yml
 file ITSELF (must trigger on `workflow_dispatch`, and must not open/reference
 `community-pack-validate.yml`) and at the catalog generator script (required
-columns + a "Most popular" section labeled as a popularity proxy). The other
+columns + 👍-ordered rows labeled as a popularity proxy). The other
 half of AC-6 — "called from community-pack-validate.yml when the final
 Status is one of the two Aceito* states" — is the responsibility of
 community-pack-validate.yml's own checker, not this script.
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 WORKFLOW = ROOT / ".github/workflows/community-pack-catalog.yml"
 SCRIPT = ROOT / "scripts/generate_community_pack_catalog.py"
 
-REQUIRED_COLUMNS = ["Link", "Game", "Console", "Author", "Category", "Date"]
+REQUIRED_COLUMNS = ["Game", "Console", "Author", "Date"]
 
 
 def _workflow_triggers(data):
@@ -51,15 +51,18 @@ def check_columns(failures, text):
 
 
 def check_popularity_labeling(failures, text):
+    """The 👍 ranking now IS the table (rows ordered most-voted-first), which
+    replaced the separate 'Most popular' section that re-listed the same
+    packs. The note framing it was rewritten as an invitation to vote, so the
+    old "popularity proxy"/"usage metric" wording is gone -- what must survive
+    is the ranking being 👍-driven and the explicit "no usage telemetry"."""
     lowered = text.lower()
-    if "most popular" not in lowered:
-        failures.append("script does not generate the 'Most popular' section")
-    if "popularity proxy" not in lowered:
-        failures.append("script does not explicitly label 'Most popular' as a popularity proxy")
-    if "usage metric" not in lowered:
-        failures.append("script does not make explicit that the reaction count is not a real usage metric")
+    if "community 👍 votes" not in lowered:
+        failures.append("script does not state that packs are ranked by community 👍 votes")
+    if "usage telemetry" not in lowered:
+        failures.append("script does not make explicit that no usage telemetry is collected")
     if "sorted(" not in text or "thumbs_up" not in text:
-        failures.append("script does not sort 'Most popular' by reaction count")
+        failures.append("script does not order the catalog rows by reaction count")
 
 
 def check_script(failures):

@@ -124,7 +124,7 @@ Current limits: the `audio` layer is applied on NES only (GB/SMS wait for the hi
 
 Packs stay with their authors — this project only **validates and catalogs** them, so players have one trustworthy list to browse and pack makers get their work found.
 
-**Browse:** [docs/community-packs.md](docs/community-packs.md) — the catalog, regenerated automatically from the [Community Packs board](https://github.com/users/sbihaiko/projects/3), with a "Most popular" ranking by 👍 reactions.
+**Browse:** [docs/community-packs.md](docs/community-packs.md) — the catalog, regenerated automatically from the [Community Packs board](https://github.com/users/sbihaiko/projects/3), ranked by 👍 reactions: click a row's 👍 to open its submission Issue and add your own vote.
 
 **Submit a pack (yours or someone else's you love):**
 

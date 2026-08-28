@@ -233,14 +233,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   MAY-be-absent regardless of `kind`, and `validate_mei` itself checks
   `field in p`, never truthiness, for every field.
   `community_pack_markdown.py` (F6.3b, new) holds the Markdown rendering
-  — its table separates "Author" (the Issue Form's declared
-  `Author/credits`, i.e. who made the pack) from "Submitted by" (the
-  issue login), and shows the 👍 count that `render_popular_section`
-  ranks by; `community-pack-validate.yml` seeds one 👍 per submission
-  (idempotent reactions API), so a listed pack never sits at zero —
+  — its "Author" column is the Issue Form's declared `Author/credits`
+  (who made the pack), never the issue login, and `render_table` orders
+  rows most-👍-first, which replaced the old `render_popular_section`
+  (it re-listed the same packs) along with the Link / Submitted by /
+  Category / External assets columns — Link folded into the 👍 cell,
+  which links to the submission issue where the vote is cast; `community-pack-validate.yml` seeds one 👍 per
+  submission (idempotent reactions API), so a listed pack never sits at
+  zero —
   (`escape_table_cell`/`thumbs_up_count`/`console_from_labels`/
-  `category_from_status`/`build_row`/`render_table`/`render_popular_
-  section`/`build_markdown`), also depending only on `mei_rules` (never on
+  `build_row`/`render_table`/`build_markdown`), stdlib-only since the
+  Category column took `mei_rules` with it (and never depending on
   `mei_catalog_entry`); `build_row` takes the caller-derived
   `issue_number`/`status` directly rather than a raw Project item, so it
   never needs the facade's `item_*` helpers.

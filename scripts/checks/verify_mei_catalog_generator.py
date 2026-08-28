@@ -14,9 +14,10 @@ Checks:
   2. It imports and uses mep_meta_parser.parse_mep_meta (ADR-0138 §27).
   3. It derives an MEI `kind` value (via kind_from_status or an equivalent
      "mep"/"hd-legacy" mapping, ADR-0138 §26).
-  4. Its Markdown table header declares an "External assets" column and the
-     six pre-existing columns (Link/Game/Console/Author/Category/Date)
-     stay intact (AC-6's REQUIRED_COLUMNS, unchanged).
+  4. Its Markdown table header keeps the Game/Console/Author/Date
+     columns (AC-6's REQUIRED_COLUMNS). The "External assets" column this
+     check once required was dropped from the table along with Submitted
+     by/Category — see check_table_columns.
   5. Behavioral (imports the real modules, no mocks): a kind=="mep" entry
      built from mep-meta carrying `recipe.pack.version`/`pack.mep`
      round-trips through the real validate_mei (scripts/validate-specs.py)
@@ -39,7 +40,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS_DIR = ROOT / "scripts"
 SCRIPT = SCRIPTS_DIR / "generate_community_pack_catalog.py"
 
-EXISTING_COLUMNS = ["Link", "Game", "Console", "Author", "Category", "Date"]
+EXISTING_COLUMNS = ["Game", "Console", "Author", "Date"]
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 import generate_community_pack_catalog as gen  # noqa: E402
@@ -100,9 +101,11 @@ def check_derives_kind(failures, script_text):
         failures.append("no 'mep' kind branch found (ADR-0138 §26)")
 
 
-def check_external_assets_column(failures, text):
-    if "External assets" not in text:
-        failures.append("Markdown table header does not declare an 'External assets' column")
+def check_table_columns(failures, text):
+    """The "External assets" column F6.3 added was later dropped from the
+    human-facing table (as were Submitted by/Category); a pack's external
+    dependencies still reach consumers through the JSON catalog's `deps`,
+    which check 5 below exercises. Only the surviving columns are asserted."""
     for col in EXISTING_COLUMNS:
         if col not in text:
             failures.append(f"generator no longer references pre-existing column {col!r}")
@@ -177,7 +180,7 @@ def main():
     check_writes_json_catalog(failures, script_text)
     check_uses_mep_meta_parser(failures, script_text)
     check_derives_kind(failures, script_text)
-    check_external_assets_column(failures, script_text)
+    check_table_columns(failures, script_text)
     check_mep_kind_with_recipe_conforms(failures, script_text)
     check_mep_kind_without_recipe_flagged(failures, script_text)
     check_rom_sha1_normalization(failures, script_text)
@@ -187,7 +190,7 @@ def main():
             print(f" - {item}")
         return 1
     print("PASS: AC-2 (MEI catalog generator writes docs/community-packs.json, "
-          "uses mep_meta_parser, derives kind, and the table gains External assets)")
+          "uses mep_meta_parser, derives kind, and keeps its table columns)")
     return 0
 
 

@@ -7,11 +7,12 @@ owner sbihaiko) via `gh project item-list`, then per issue via `gh issue view`
 plus the bot-owned `<!-- mep-meta -->` comment (`mep_meta_parser.parse_mep_
 meta`, ADR-0138 §27). Delegates MEI entry assembly (kind
 "mep"/"hd-legacy" derivation/validation, §26/§28) to `mei_catalog_entry`
-and Markdown rendering (the Link/Game/Console/Author/Submitted by/Category/Date/
-👍 + External assets table -- Author is the form's declared pack author,
-"Submitted by" the issue login -- plus a "Most popular" section ranked via
-`sorted(rows, key=lambda r: r['thumbs_up'], ...)` on 👍 reactions, a
-popularity proxy, not a real usage metric) to `community_pack_markdown`,
+and Markdown rendering (the Game/Console/Author/Date/👍 table, whose 👍 cell
+links to the submission issue -- Author
+is the form's declared pack author, never the issue login; rows ordered via
+`sorted(rows, key=lambda r: r['thumbs_up'], reverse=True)` on community 👍 votes
+-- no usage telemetry is collected -- which replaced the old "Most popular"
+section that re-listed the same packs) to `community_pack_markdown`,
 then writes docs/community-packs.md and docs/community-packs.json
 (JSON_OUTPUT_PATH) via json.dumps()/.write_text(). Re-exports `build_pack_
 entry`/`mei_entry_conforms`/`normalized_rom_sha1`/`STATUS_MEP_COMPLETO`/
@@ -176,8 +177,7 @@ def _build_entry_for_accepted_item(item):
     if not mei_entry_conforms(entry, entry.get("kind")):
         _warn(f"issue #{issue_number}: kind 'mep' but no mep-meta pack.version/mep; omitting its JSON entry.")
         return markdown.build_row(issue_number, status, details, form), None
-    row = markdown.build_row(issue_number, status, details, form, has_deps=bool(entry.get("deps")))
-    return row, entry
+    return markdown.build_row(issue_number, status, details, form), entry
 
 
 def main():
