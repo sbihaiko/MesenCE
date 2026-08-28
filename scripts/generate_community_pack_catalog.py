@@ -10,19 +10,18 @@ docs/community-packs.md (link/game/console/author/category/date/external-
 assets table + a "Most popular" section ranked by 👍 reactions — a
 popularity proxy, not a real usage metric, no telemetry exists anywhere in
 this project) and writes docs/community-packs.json as an MEI v1.1 catalog
-(ADR-0138 §26-27), via the dependency-free mei_catalog_entry and
-community_pack_row leaf modules (scripts/AGENTS.md split convention).
+(ADR-0138 §26-27), deriving `kind` from the board Status and `deps[]`/
+`recipe` from the issue's `<!-- mep-meta -->` block via `mep_meta_parser`.
 
 stdlib only. Usage: python3 scripts/generate_community_pack_catalog.py
 """
 import json
+import re
 import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
-import mei_catalog_entry
-from community_pack_row import category_from_status, escape_table_cell, issue_form_fields, thumbs_up_count
 from mep_meta_parser import MARKER as MEP_META_MARKER, parse_mep_meta
 
 REPO = "sbihaiko/MesenCE"
@@ -30,15 +29,27 @@ OWNER = "sbihaiko"
 PROJECT_NUMBER = 3
 
 ACCEPTED_STATUSES = {"Aceito parcial (HD Mesen)", "Aceito (MEP completo)"}
+CONSOLE_LABELS = {"nes", "snes", "gb", "gbc", "sms", "other"}
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.md"
 JSON_OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "community-packs.json"
 TABLE_HEADER = "| Link | Game | Console | Author | Category | Date | External assets |"
 TABLE_SEP = "|---|---|---|---|---|---|---|"
 
+MEI_VERSION = "1.1.0"
+CATALOG_NAME = "MesenCE community packs"
+MAINTAINER = "sbihaiko"
+
+# Board Status literals stay exactly as configured on the GitHub Project
+# (Portuguese literals per CLAUDE.md) — never translated here.
+STATUS_MEP_COMPLETO = "Aceito (MEP completo)"
+STATUS_HD_PARCIAL = "Aceito parcial (HD Mesen)"
+
+
 def run_gh(args):
     """Runs `gh` and returns stdout; stderr/error propagate to the job log."""
     result = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
     return result.stdout
+
 
 def fetch_accepted_items():
     """Lists the Project 3 items whose Status is one of the two "Aceito*" states.
@@ -50,12 +61,55 @@ def fetch_accepted_items():
     COVERAGE GAP: that call returned zero items at write time (`{"items":[],"totalCount":0}`)
     — a gap in the live datastore itself, not merely a cached view — so any negative/absent-key
     conclusion here is qualified by it. The new F6.3 Pack URL / ROM SHA1 reads
-    (mei_catalog_entry.item_pack_url/item_pack_hash/item_rom_sha1) share this same gap, so all
-    of them use defensive, non-crashing `dict.get` lookups instead of direct indexing.
+    (item_pack_url/item_pack_hash/item_rom_sha1 below) share this same gap, so all of them use
+    defensive, non-crashing `dict.get` lookups instead of direct indexing.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])
-    return [it for it in items if mei_catalog_entry.item_status(it) in ACCEPTED_STATUSES]
+    return [it for it in items if item_status(it) in ACCEPTED_STATUSES]
+
+
+def item_status(item):
+    """Defensive lookup of the item's Status (same coverage gap as above)."""
+    return item.get("status") or item.get("Status") or ""
+
+
+def item_issue_number(item):
+    """Defensive lookup of the source issue number, trying the plausible formats."""
+    content = item.get("content") or {}
+    return content.get("number") or item.get("number") or item.get("issue_number")
+
+
+def item_pack_url(item):
+    """Defensive lookup of the item's Pack URL field (same coverage gap as above)."""
+    return item.get("packUrl") or item.get("Pack URL") or item.get("pack_url")
+
+
+def item_pack_hash(item):
+    """Defensive lookup of the item's Pack Hash field (same coverage gap as above)."""
+    return item.get("packHash") or item.get("Pack Hash") or item.get("pack_hash")
+
+
+def item_rom_sha1(item):
+    """Defensive lookup of the item's ROM SHA1 field (same coverage gap as above)."""
+    return item.get("romSha1") or item.get("ROM SHA1") or item.get("rom_sha1")
+
+
+def kind_from_status(status):
+    """Derives MEI `kind` from the board Status literal (ADR-0138 §3/§26).
+
+    No automated verdict path currently produces STATUS_MEP_COMPLETO (only
+    a human moving the board item can), so today's catalog is expected to
+    be all "hd-legacy" — this still implements the "mep" branch for when
+    that changes. Returns None for any other Status (defensive default:
+    the caller then omits `kind` entirely rather than guess).
+    """
+    if status == STATUS_MEP_COMPLETO:
+        return "mep"
+    if status == STATUS_HD_PARCIAL:
+        return "hd-legacy"
+    return None
+
 
 def fetch_issue_details(issue_number):
     """Fetches the issue's author/date/labels/reactions via `gh issue view`.
@@ -68,6 +122,7 @@ def fetch_issue_details(issue_number):
     raw = run_gh(["issue", "view", str(issue_number), "--repo", REPO,
                   "--json", "author,createdAt,title,labels,url,reactionGroups,body"])
     return json.loads(raw)
+
 
 def fetch_mep_meta_comment_body(issue_number):
     """Fetches the bot-owned `<!-- mep-meta -->` comment body for an issue.
@@ -93,10 +148,191 @@ def fetch_mep_meta_comment_body(issue_number):
             return body
     return None
 
+
+def parse_form_field(body, heading):
+    """Extracts the answer under a '### <heading>' section of an Issue Form body.
+
+    Issue Forms always render a submitted field as a Markdown '### <label>'
+    heading followed by the answer, up to the next '### ' heading or the end
+    of the body (confirmed live against issues #6/#7/#8's rendered bodies —
+    see .github/ISSUE_TEMPLATE/community-pack.yml for the field labels).
+    Returns None (not "?") when the heading isn't found or the answer is
+    empty, so callers can fall back to another source.
+    """
+    if not body:
+        return None
+    pattern = re.compile(
+        r"^###\s+" + re.escape(heading) + r"\s*\n+(.*?)(?=\n###\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(body)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def escape_table_cell(value):
+    """Collapses whitespace/newlines and escapes '|' for a Markdown table cell."""
+    return re.sub(r"\s+", " ", str(value)).replace("|", "\\|").strip()
+
+
+def thumbs_up_count(details):
+    """Defensive sum of THUMBS_UP reactions from reactionGroups."""
+    for group in details.get("reactionGroups") or []:
+        if group.get("content") == "THUMBS_UP":
+            users = group.get("users") or {}
+            return users.get("totalCount", 0)
+    return 0
+
+
+def console_from_labels(labels):
+    for label in labels or []:
+        name = (label.get("name") or "").strip().lower()
+        if name in CONSOLE_LABELS:
+            return name
+    return "?"
+
+
+def category_from_status(status):
+    if status == STATUS_MEP_COMPLETO:
+        return "Full MEP"
+    if status == STATUS_HD_PARCIAL:
+        return "Partial HD"
+    return status or "?"
+
+
+def issue_form_fields(details):
+    """Parses the Issue Form fields shared by the Markdown row and the MEI
+    entry, so game/console/license never drift between the two outputs.
+
+    Prefers the Issue Form's own structured fields over the issue title/
+    labels — title is free text and no automation attaches a console-name
+    label — falling back to them only covers issues that predate the
+    current form shape (e.g. hand-created ones).
+    """
+    body = details.get("body") or ""
+    game = parse_form_field(body, "Target game/ROM and region") or details.get("title") or "(no title)"
+    console = parse_form_field(body, "Console") or console_from_labels(details.get("labels"))
+    license_ = parse_form_field(body, "External assets license (optional)") or "unknown"
+    return {"game": game, "console": console, "license": license_}
+
+
+def dep_entries_from_recipe(mep_meta):
+    """Extracts MEI `deps[]` from mep-meta's embedded `recipe.sources.deps`.
+
+    Deliberately NOT mep-meta's own top-level stripped `deps` field (just
+    `id`/`sha256`/`size` — see the "Upsert mep-meta comment" step): that
+    field lacks `license`, which MEI-v1 §2.3 and MEP-recipe-v1 §3.3 both
+    require/carry per dep. Returns None (not `[]`) when there is nothing to
+    report, so the caller can omit the key rather than emit an empty list.
+    """
+    if not isinstance(mep_meta, dict):
+        return None
+    recipe = mep_meta.get("recipe")
+    if not isinstance(recipe, dict):
+        return None
+    deps = (recipe.get("sources") or {}).get("deps") or []
+    if not deps:
+        return None
+    entries = []
+    for dep in deps:
+        entry = {"id": dep.get("id"), "license": dep.get("license") or "unknown"}
+        if dep.get("sha256"):
+            entry["sha256"] = dep["sha256"]
+        if dep.get("size") is not None:
+            entry["size"] = dep["size"]
+        hints = dep.get("hints") or []
+        if hints:
+            entry["url"] = hints[0]
+        entries.append(entry)
+    return entries
+
+
+def recipe_fields(mep_meta, pack_hash):
+    """Returns (deps, recipe, recipe_hash, recipe_ok, mismatch).
+
+    ADR-0138 §18 "two stores, one rule": when mep-meta's `source_sha256`
+    disagrees with the Project "Pack Hash" field, the field wins — deps and
+    the recipe document are omitted for this entry and `mismatch` is True
+    so the caller can log it (never a fatal error for the whole run).
+    """
+    if not isinstance(mep_meta, dict):
+        return None, None, None, None, False
+    source_sha256 = mep_meta.get("source_sha256")
+    if pack_hash and source_sha256 and source_sha256 != pack_hash:
+        return None, None, None, None, True
+    deps = dep_entries_from_recipe(mep_meta)
+    recipe = mep_meta.get("recipe")
+    recipe = recipe if isinstance(recipe, dict) else None
+    recipe_hash = mep_meta.get("recipe_hash") if recipe else None
+    recipe_ok = mep_meta.get("recipe_ok") if recipe else None
+    return deps, recipe, recipe_hash, recipe_ok, False
+
+
+def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind):
+    """Builds the fields every entry has regardless of `kind` or mep-meta."""
+    rom = {"sha1": rom_sha1} if rom_sha1 else {}
+    name = f"{game} — community submission" if kind == "hd-legacy" else game
+    entry = {
+        "issue": issue_number,
+        "name": name,
+        "game": game,
+        "system": system,
+        "rom": rom,
+        "license": license_ or "unknown",
+        "url": pack_url or "",
+        "sha256": pack_hash or "",
+    }
+    if kind:
+        entry["kind"] = kind
+    return entry
+
+
+def _apply_mep_meta_passthrough(entry, mep_meta):
+    """Copies verdict/validated_at/labels from mep-meta verbatim (§26)."""
+    if not isinstance(mep_meta, dict):
+        return
+    for key in ("verdict", "validated_at", "labels"):
+        if mep_meta.get(key):
+            entry[key] = mep_meta[key]
+
+
+def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta):
+    """Assembles one MEI v1.1 packs[] entry (ADR-0138 §26/§27).
+
+    Returns (entry, mismatch) — see recipe_fields for `mismatch`.
+    """
+    kind = kind_from_status(status)
+    entry = _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind)
+    deps, recipe, recipe_hash, recipe_ok, mismatch = recipe_fields(mep_meta, pack_hash)
+    if deps:
+        entry["deps"] = deps
+    if recipe:
+        entry["recipe"] = recipe
+    if recipe_hash:
+        entry["recipe_hash"] = recipe_hash
+    if recipe_ok is not None:
+        entry["recipe_ok"] = recipe_ok
+    _apply_mep_meta_passthrough(entry, mep_meta)
+    return entry, mismatch
+
+
+def build_catalog(entries, updated):
+    """Wraps entries into the top-level MEI v1.1 catalog document (§26)."""
+    return {
+        "mei": MEI_VERSION,
+        "name": CATALOG_NAME,
+        "maintainer": MAINTAINER,
+        "updated": updated,
+        "packs": entries,
+    }
+
+
 def build_row(item, details, form, has_deps=False):
     """Builds a Markdown catalog row combining the Project item and the issue."""
-    issue_number = mei_catalog_entry.item_issue_number(item)
-    status = mei_catalog_entry.item_status(item)
+    issue_number = item_issue_number(item)
+    status = item_status(item)
     if issue_number is None:
         return {"jogo": "(no issue)", "console": "?", "autor": "?",
                 "categoria": category_from_status(status), "data": "?", "url": "",
@@ -113,6 +349,7 @@ def build_row(item, details, form, has_deps=False):
         "external_assets": "yes" if has_deps else "",
     }
 
+
 def render_table(rows):
     lines = [TABLE_HEADER, TABLE_SEP]
     if not rows:
@@ -124,6 +361,7 @@ def render_table(rows):
             f"{row['categoria']} | {row['data']} | {row['external_assets']} |"
         )
     return "\n".join(lines)
+
 
 def render_popular_section(rows):
     lines = ["## Most popular", "",
@@ -140,9 +378,11 @@ def render_popular_section(rows):
         lines.append(f"- {link} — 👍 {row['thumbs_up']}")
     return "\n".join(lines)
 
+
 INTRO = ("Catalog generated automatically from the \"MesenCE Community\n"
          "Packs\" board (Project 3). Do not edit this file manually — it is\n"
          "overwritten by `.github/workflows/community-pack-catalog.yml`.")
+
 
 def build_markdown(rows):
     return "\n\n".join([
@@ -152,26 +392,27 @@ def build_markdown(rows):
         render_popular_section(rows),
     ]) + "\n"
 
+
 def _build_entry_for_accepted_item(item):
     """Fetches issue + mep-meta data for one accepted item and returns
     (markdown_row, mei_entry_or_None). mei_entry is None for an item with
     no linked issue — there is no data to populate an MEI entry with."""
-    issue_number = mei_catalog_entry.item_issue_number(item)
+    issue_number = item_issue_number(item)
     if issue_number is None:
         return build_row(item, {}, {"game": "", "console": "", "license": "unknown"}), None
     details = fetch_issue_details(issue_number)
     form = issue_form_fields(details)
     mep_meta_body = fetch_mep_meta_comment_body(issue_number)
     mep_meta = parse_mep_meta(mep_meta_body) if mep_meta_body else None
-    entry, mismatch = mei_catalog_entry.build_pack_entry(
+    entry, mismatch = build_pack_entry(
         issue_number=issue_number,
         game=form["game"].strip(),
         system=(form["console"] or "?").strip().lower(),
         license_=form["license"],
-        pack_url=mei_catalog_entry.item_pack_url(item),
-        pack_hash=mei_catalog_entry.item_pack_hash(item),
-        rom_sha1=mei_catalog_entry.item_rom_sha1(item),
-        status=mei_catalog_entry.item_status(item),
+        pack_url=item_pack_url(item),
+        pack_hash=item_pack_hash(item),
+        rom_sha1=item_rom_sha1(item),
+        status=item_status(item),
         mep_meta=mep_meta,
     )
     if mismatch:
@@ -180,6 +421,7 @@ def _build_entry_for_accepted_item(item):
               file=sys.stderr)
     row = build_row(item, details, form, has_deps=bool(entry.get("deps")))
     return row, entry
+
 
 def main():
     items = fetch_accepted_items()
@@ -190,11 +432,12 @@ def main():
         if entry is not None:
             entries.append(entry)
     OUTPUT_PATH.write_text(build_markdown(rows), encoding="utf-8")
-    catalog = mei_catalog_entry.build_catalog(entries, date.today().isoformat())
+    catalog = build_catalog(entries, date.today().isoformat())
     JSON_OUTPUT_PATH.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"docs/community-packs.md regenerated with {len(rows)} accepted pack(s).")
     print(f"docs/community-packs.json regenerated with {len(entries)} MEI pack entry(ies).")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
