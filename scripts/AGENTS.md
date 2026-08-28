@@ -158,8 +158,12 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `external_assets` textarea and `external_assets_license` input exist, are
   not required, and that `external_assets`'s description documents the
   `<url> [<sha256>] [<size>]` per-line grammar. `verify_hd_pack_authoring_doc.sh`
-  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, and cites
-  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6. `verify_community_pack_labels_script.sh`
+  checks that `docs/hd-pack-authoring.md` exists, is non-trivial, cites
+  `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6, and documents the
+  split-distribution/MEP Recipe flow (ADR-0138 §12): the
+  "Split-distribution packs (MEP Recipe)" section, `external_assets`,
+  `assets:external`, and a citation of `docs/specs/MEP-recipe-v1.md`.
+  `verify_community_pack_labels_script.sh`
   (AC-2, ADR-0138 F6.2a) parses the `LABELS` array of
   `ensure_community_pack_labels.sh` literally (not one representative grep)
   and asserts both the exact 12-entry count and the full expected name set,

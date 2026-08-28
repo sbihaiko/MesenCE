@@ -24,6 +24,9 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (execution plans and the PRD), `docs/m
   submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
   summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.
   "Inválido" triage outcomes and cites `docs/specs/MEP-v1.md` §5.1/§5.2/§5.3/§6.
+  Also documents the split-distribution/MEP Recipe flow (ADR-0138 §12):
+  the `external_assets`/`external_assets_license` form fields and the
+  `assets:external` label, citing `docs/specs/MEP-recipe-v1.md`.
 
 ## Verification
 
