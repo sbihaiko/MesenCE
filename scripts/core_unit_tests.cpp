@@ -547,6 +547,53 @@ namespace
 		std::filesystem::remove_all(opOut, ec);
 		std::filesystem::remove_all(home, ec); //mesen.log/.1 written into it by MessageManager::Log
 	}
+
+	//F6.4c (ADR-0138 §39): the three primary-discovery edge cases must
+	//resolve to the same installed tree on both interpreters. The wrapped
+	//subfolder (ADR-0120 name-anchored) and the bare legacy probe basename
+	//(ADR-0121) both need the identical non-empty romName on each side --
+	//the C++ FindFallbackSubfolder is ROM-name-anchored while the Python
+	//side also resolves structurally; the nested top-level zip resolves
+	//with romName == "" on both.
+	void TestDiscoveryEdgeCaseParity()
+	{
+		struct EdgeCase {
+			const char* zip;
+			const char* recipe;
+			const char* romName;
+		};
+		const EdgeCase cases[] = {
+			{ "wrapped-subfolder.zip", "recipe-wrapped-subfolder.json", "mep-recipe-fixture-rom" },
+			{ "nested-zip.zip",        "recipe-nested-zip.json",        "" },
+			{ "bare-probe.zip",        "recipe-bare-probe.json",        "mep-recipe-fixture-rom" },
+		};
+		for(const EdgeCase& c : cases) {
+			std::string label = std::string("BlocoE[") + c.zip + "]";
+			std::filesystem::path cppOut = MakeTempPackDir(std::string("recipe_edge_cpp_") + c.zip);
+			std::filesystem::path pyOut = MakeTempPackDir(std::string("recipe_edge_py_") + c.zip);
+			std::string recipeJson = ReadFileBytes(kFixtureDir + "/" + c.recipe);
+			std::unordered_map<std::string, std::string> deps = { { "audio", kFixtureDir + "/audio-dep.zip" } };
+
+			MepRecipeInstallResult result;
+			bool ok = MepRecipeInstaller::Install(recipeJson, kFixtureDir + "/" + c.zip, deps, c.romName, cppOut.string(), result);
+			Check(ok && result.Success, label + " Install() succeeds", result.Error);
+
+			std::string cmd = "python3 scripts/mep_recipe.py apply '" + kFixtureDir + "/" + c.recipe + "' --primary '"
+				+ kFixtureDir + "/" + c.zip + "' --dep audio='" + kFixtureDir + "/audio-dep.zip' --out '" + pyOut.string() + "'";
+			if(c.romName[0] != '\0') {
+				cmd += " --rom-name '" + std::string(c.romName) + "'";
+			}
+			cmd += " >/dev/null 2>&1";
+			Check(std::system(cmd.c_str()) == 0, label + " mep_recipe.py apply exits 0");
+
+			std::string detail;
+			Check(DirsMatchByteForByte(cppOut, pyOut, detail), label + " C++ install matches mep_recipe.py apply byte-for-byte", detail);
+
+			std::error_code ec;
+			std::filesystem::remove_all(cppOut, ec);
+			std::filesystem::remove_all(pyOut, ec);
+		}
+	}
 }
 
 int main()
@@ -574,6 +621,7 @@ int main()
 	TestMissingDepWithholdsPatchKeepsTextures();
 	TestHashMismatchAbortsWritesNothing();
 	TestUnknownOpAndVersionLogsAndSkips();
+	TestDiscoveryEdgeCaseParity();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

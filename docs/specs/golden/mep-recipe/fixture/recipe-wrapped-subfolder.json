@@ -1,0 +1,83 @@
+{
+  "recipe": 1,
+  "sources": {
+    "primary": {
+      "url": "https://example.org/packs/mep-recipe-fixture-1.0.0.zip",
+      "sha256": "cba4f811e965e1f5bccb463acc6a6dd947768a8af5d58f949545117104d53652"
+    },
+    "deps": [
+      {
+        "id": "audio",
+        "sha256": "1a625ea3e58bebb469bc53c64a16bf7d3ce87a36f2a7c5fefd215f9a601f1a7c",
+        "size": 297,
+        "hints": [
+          "https://example.org/audio/mep-recipe-fixture-ogg.zip"
+        ],
+        "license": "CC0-1.0",
+        "user_supplied": true
+      }
+    ]
+  },
+  "ops": [
+    {
+      "op": "copy",
+      "from": "primary:hires.txt",
+      "to": "hires.txt"
+    },
+    {
+      "op": "copy",
+      "from": "primary:tiles.png",
+      "to": "tiles.png"
+    },
+    {
+      "op": "copy",
+      "from": "primary:game.ips",
+      "to": "patches/game.ips"
+    },
+    {
+      "op": "glob",
+      "from": "audio:**/*.ogg",
+      "to": "audio/"
+    },
+    {
+      "op": "rename",
+      "from": "audio/Track 01.ogg",
+      "to": "audio/track01.ogg"
+    },
+    {
+      "op": "rewrite-paths",
+      "file": "hires.txt",
+      "tags": [
+        "bgm",
+        "sfx"
+      ],
+      "prefix": "audio/"
+    }
+  ],
+  "pack": {
+    "mep": "1.1.0",
+    "name": "MEP Recipe Fixture Pack",
+    "version": "1.0.0",
+    "license": "CC0-1.0",
+    "targets": [
+      {
+        "system": "nes",
+        "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"
+      }
+    ],
+    "patches": [
+      {
+        "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B",
+        "file": "patches/game.ips"
+      }
+    ],
+    "sections": {
+      "textures": {
+        "path": ""
+      }
+    }
+  },
+  "policy": {
+    "apply_patch_only_if_complete": true
+  }
+}

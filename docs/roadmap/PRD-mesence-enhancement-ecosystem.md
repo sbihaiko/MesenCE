@@ -205,6 +205,19 @@ does not exist.
   enforces the §53 three-layer rule both ways. Both runs ended `ac_failed`
   with T1 stagnated; recovered per §40. GUI flow not yet exercised against
   the live catalog (needs F6.5's re-validated entries).
+- **F6.4c — parity fixture set** (ADR-0138 §39; run `cdcf29816ecd` stalled at
+  Spec on spec-proxy context thrashing — the dev-squad's own spec document,
+  `validation.pass: true`, was implemented by hand following the same slice):
+  `gen_mep_recipe_fixture.py` gains the shared `ROM_NAME` constant and the
+  three discovery edge-case primaries — `wrapped-subfolder.zip` (ADR-0120
+  name-anchored subfolder), `nested-zip.zip` (nested top-level zip, sha256 of
+  the outer container) and `bare-probe.zip` (ADR-0121 bare `preset.cfg`
+  probe) — each with its own `recipe-<case>.json` reusing the shared
+  `audio-dep.zip`; `test_gen_mep_recipe_fixture.py` iterates the full set
+  (`rom_name` threaded into the wrapped cases, non-empty-tree assertion);
+  Bloco E grows the table-driven `TestDiscoveryEdgeCaseParity` passing the
+  identical non-empty `romName` to both interpreters (or `""` for nested-zip)
+  and matching `mep_recipe.py apply` byte-for-byte — 88/88 cases.
 - **H4 — `mep_compare.py` system dispatch + NES golden** (ADR-0136):
   `render_original(..., system=)` and `Pack.system` for nes/gb/gbc/sms with
   per-system tile/palette widths and explicit errors; sibling golden

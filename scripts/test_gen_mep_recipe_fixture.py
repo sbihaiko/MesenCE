@@ -31,6 +31,17 @@ import mep_recipe  # noqa: E402
 FAILURES = []
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
+# Every (recipe document, primary archive) pair the generator emits. The
+# F6.4c edge cases add their own recipe/zip pairs; each is a full-deps
+# recipe reusing the shared audio-dep.zip.
+RECIPE_PRIMARY_PAIRS = [
+    ("recipe.json", "primary.zip"),
+    ("recipe-missing-dep.json", "primary.zip"),
+    ("recipe-wrapped-subfolder.json", "wrapped-subfolder.zip"),
+    ("recipe-nested-zip.json", "nested-zip.zip"),
+    ("recipe-bare-probe.json", "bare-probe.zip"),
+]
+
 
 def fail(msg):
     FAILURES.append(msg)
@@ -55,40 +66,47 @@ def _generated_fixture():
         yield tmp
 
 
-def _apply_in(tmp: Path, recipe_name: str, deps: dict) -> Path:
-    """Runs mep_recipe.run_recipe for `recipe_name`, returns the out dir."""
+def _apply_in(
+    tmp: Path, recipe_name: str, deps: dict, primary_name: str = "primary.zip", rom_name: str | None = None
+) -> Path:
+    """Runs mep_recipe.run_recipe for `recipe_name` against `primary_name`,
+    returns the out dir. `rom_name` is threaded into the interpreter so the
+    F6.4c wrapped fixtures resolve the same way both sides resolve them."""
     recipe = json.loads((tmp / recipe_name).read_text(encoding="utf-8"))
     out = tmp / (recipe_name[: -len(".json")] + "-out")
-    mep_recipe.run_recipe(recipe, tmp / "primary.zip", deps=deps, out=out, rom_name=None)
+    mep_recipe.run_recipe(recipe, tmp / primary_name, deps=deps, out=out, rom_name=rom_name)
     return out
 
 
 def check_generated_recipe_hashes_match_the_real_written_bytes():
     """AC-6: declared sha256/size fields must equal the real written bytes."""
     with _generated_fixture() as tmp:
-        actual_primary = _sha256(tmp / "primary.zip")
         actual_audio = _sha256(tmp / "audio-dep.zip")
-        if actual_primary == EMPTY_SHA256 or actual_audio == EMPTY_SHA256:
+        if actual_audio == EMPTY_SHA256:
             fail("real fixture bytes hash to the empty-string sha256 placeholder")
             return
         actual_audio_size = (tmp / "audio-dep.zip").stat().st_size
-        for name in ("recipe.json", "recipe-missing-dep.json"):
-            recipe = json.loads((tmp / name).read_text(encoding="utf-8"))
+        for recipe_name, primary_name in RECIPE_PRIMARY_PAIRS:
+            actual_primary = _sha256(tmp / primary_name)
+            if actual_primary == EMPTY_SHA256:
+                fail(f"{recipe_name}: real primary bytes hash to the empty-string sha256 placeholder")
+                return
+            recipe = json.loads((tmp / recipe_name).read_text(encoding="utf-8"))
             dep = recipe["sources"]["deps"][0]
             declared_primary = recipe["sources"]["primary"]["sha256"]
             if declared_primary != actual_primary:
-                fail(f"{name}: declared primary sha256 {declared_primary} != real bytes hash {actual_primary}")
+                fail(f"{recipe_name}: declared primary sha256 {declared_primary} != real bytes hash {actual_primary}")
                 return
             if dep["sha256"] != actual_audio:
-                fail(f"{name}: declared audio sha256 {dep['sha256']} != real bytes hash {actual_audio}")
+                fail(f"{recipe_name}: declared audio sha256 {dep['sha256']} != real bytes hash {actual_audio}")
                 return
             if dep["size"] != actual_audio_size:
-                fail(f"{name}: declared dep size {dep['size']} != actual audio-dep.zip size {actual_audio_size}")
+                fail(f"{recipe_name}: declared dep size {dep['size']} != actual audio-dep.zip size {actual_audio_size}")
                 return
             if declared_primary == EMPTY_SHA256 or dep["sha256"] == EMPTY_SHA256:
-                fail(f"{name}: a declared sha256 field is the empty-string placeholder")
+                fail(f"{recipe_name}: a declared sha256 field is the empty-string placeholder")
                 return
-        ok("generated recipe.json / recipe-missing-dep.json sha256/size fields match the real written bytes")
+        ok("generated recipe documents' sha256/size fields match the real written bytes")
 
 
 def check_generated_recipe_documents_validate():
@@ -107,20 +125,23 @@ def check_committed_fixture_matches_real_bytes_on_disk():
     if not FIXTURE_DIR.exists():
         fail(f"committed fixture directory does not exist: {FIXTURE_DIR}")
         return
-    actual_primary = _sha256(FIXTURE_DIR / "primary.zip")
     actual_audio = _sha256(FIXTURE_DIR / "audio-dep.zip")
-    if actual_primary == EMPTY_SHA256 or actual_audio == EMPTY_SHA256:
-        fail("committed fixture zip(s) hash to the empty-string sha256 (zero-byte file?)")
+    if actual_audio == EMPTY_SHA256:
+        fail("committed fixture audio-dep.zip hashes to the empty-string sha256 (zero-byte file?)")
         return
-    for name in ("recipe.json", "recipe-missing-dep.json"):
-        recipe = json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8"))
+    for recipe_name, primary_name in RECIPE_PRIMARY_PAIRS:
+        actual_primary = _sha256(FIXTURE_DIR / primary_name)
+        if actual_primary == EMPTY_SHA256:
+            fail(f"committed {primary_name} hashes to the empty-string sha256 (zero-byte file?)")
+            return
+        recipe = json.loads((FIXTURE_DIR / recipe_name).read_text(encoding="utf-8"))
         declared_primary = recipe["sources"]["primary"]["sha256"]
         declared_audio = recipe["sources"]["deps"][0]["sha256"]
         if declared_primary != actual_primary:
-            fail(f"committed {name}: declared primary sha256 {declared_primary} != on-disk hash {actual_primary}")
+            fail(f"committed {recipe_name}: declared primary sha256 {declared_primary} != on-disk hash {actual_primary}")
             return
         if declared_audio != actual_audio:
-            fail(f"committed {name}: declared audio sha256 {declared_audio} != on-disk hash {actual_audio}")
+            fail(f"committed {recipe_name}: declared audio sha256 {declared_audio} != on-disk hash {actual_audio}")
             return
     ok("committed fixture's declared sha256 fields match its own on-disk zip bytes")
 
@@ -128,12 +149,13 @@ def check_committed_fixture_matches_real_bytes_on_disk():
 def check_regenerating_is_byte_identical():
     """Risk Area: re-running the generator must not perturb committed bytes."""
     with _generated_fixture() as tmp:
-        for name in ("primary.zip", "audio-dep.zip", "recipe.json", "recipe-missing-dep.json"):
-            committed = (FIXTURE_DIR / name).read_bytes()
-            regenerated = (tmp / name).read_bytes()
-            if committed != regenerated:
-                fail(f"{name}: regenerating the fixture produced different bytes than the committed copy")
-                return
+        for recipe_name, primary_name in RECIPE_PRIMARY_PAIRS:
+            for name in (primary_name, "audio-dep.zip", recipe_name):
+                committed = (FIXTURE_DIR / name).read_bytes()
+                regenerated = (tmp / name).read_bytes()
+                if committed != regenerated:
+                    fail(f"{name}: regenerating the fixture produced different bytes than the committed copy")
+                    return
         ok("regenerating the fixture reproduces the committed bytes exactly")
 
 
@@ -179,6 +201,29 @@ def check_full_and_missing_dep_recipes_are_the_same_document():
         ok("recipe.json and recipe-missing-dep.json carry the same recipe document")
 
 
+def check_edge_case_recipes_apply_and_are_nonempty():
+    """AC-1: every F6.4c edge-case recipe applies to a non-empty output tree
+    (the discovered root holds the payload), using the shared rom_name for the
+    two wrapped cases -- guards against a false green from an empty root."""
+    with _generated_fixture() as tmp:
+        for recipe_name, primary_name, rom_name in (
+            ("recipe-wrapped-subfolder.json", "wrapped-subfolder.zip", gen.ROM_NAME),
+            ("recipe-nested-zip.json", "nested-zip.zip", None),
+            ("recipe-bare-probe.json", "bare-probe.zip", gen.ROM_NAME),
+        ):
+            out = _apply_in(
+                tmp, recipe_name, {"audio": tmp / "audio-dep.zip"},
+                primary_name=primary_name, rom_name=rom_name,
+            )
+            if not (out / "hires.txt").exists() or not (out / "tiles.png").exists():
+                fail(f"apply ({recipe_name}): output tree is empty or missing the discovered-root payload")
+                return
+            if not (out / "patches" / "game.ips").exists():
+                fail(f"apply ({recipe_name}): the patch was not applied from the discovered root")
+                return
+        ok("edge-case recipes apply to a non-empty output tree")
+
+
 def main():
     check_generated_recipe_hashes_match_the_real_written_bytes()
     check_generated_recipe_documents_validate()
@@ -187,6 +232,7 @@ def main():
     check_apply_full_deps_renames_track_and_keeps_patch()
     check_apply_missing_dep_skips_rename_transitively()
     check_full_and_missing_dep_recipes_are_the_same_document()
+    check_edge_case_recipes_apply_and_are_nonempty()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1
