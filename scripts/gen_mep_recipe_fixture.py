@@ -53,14 +53,40 @@ HIRES_TEXT = "\n".join([
     "<scale>1",
     "<img>tiles.png",
     f"<tile>0,{TILE_SHAPE},{TILE_PALETTE},0,0,1,N",
-    "<bgm>0,0,theme.ogg",
+    "<bgm>0,0,track01.ogg",
     "<sfx>0,1,jump.ogg",
     f"<patch>game.ips,{SHA1_TARGET}",
     "",
 ])
 IPS_PATCH_BYTES = b"PATCH" + b"EOF-fixture-bytes"
-THEME_OGG_BYTES = b"OggS\x00" + b"mep-recipe-fixture-theme-audio"
+# Named "Track 01.ogg" (space, mixed case) inside the dep zip on purpose:
+# the `rename` op below normalizes it to `track01.ogg`, exercising both
+# op 3 of MEP-recipe-v1 §4.3 and its §6 transitive-skip branch (this file
+# is produced only by the `glob` op that reads the "audio" dep, so a
+# missing dep must skip the rename too, not just the glob).
+TRACK01_OGG_BYTES = b"OggS\x00" + b"mep-recipe-fixture-theme-audio"
 JUMP_OGG_BYTES = b"OggS\x00" + b"mep-recipe-fixture-jump-audio"
+
+# Static (hash-independent) recipe pieces, hoisted to module scope so
+# `_build_recipe` stays a short assembly of the two hashed fields
+# (max_lines_per_function guardrail).
+OPS = [
+    {"op": "copy", "from": "primary:hires.txt", "to": "hires.txt"},
+    {"op": "copy", "from": "primary:tiles.png", "to": "tiles.png"},
+    {"op": "copy", "from": "primary:game.ips", "to": "patches/game.ips"},
+    {"op": "glob", "from": "audio:**/*.ogg", "to": "audio/"},
+    {"op": "rename", "from": "audio/Track 01.ogg", "to": "audio/track01.ogg"},
+    {"op": "rewrite-paths", "file": "hires.txt", "tags": ["bgm", "sfx"], "prefix": "audio/"},
+]
+PACK = {
+    "mep": "1.1.0",
+    "name": "MEP Recipe Fixture Pack",
+    "version": "1.0.0",
+    "license": "CC0-1.0",
+    "targets": [{"system": "nes", "sha1": SHA1_TARGET}],
+    "patches": [{"sha1": SHA1_TARGET, "file": "patches/game.ips"}],
+    "sections": {"textures": {"path": ""}},
+}
 
 
 def _png_rgba(width: int = 8, height: int = 8, rgba: tuple = (200, 40, 40, 255)) -> bytes:
@@ -93,7 +119,7 @@ def _write_deterministic_zip(path: Path, files: dict) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _build_recipe(primary_sha256: str, audio_sha256: str) -> dict:
+def _build_recipe(primary_sha256: str, audio_sha256: str, audio_size: int) -> dict:
     return {
         "recipe": 1,
         "sources": {
@@ -105,29 +131,19 @@ def _build_recipe(primary_sha256: str, audio_sha256: str) -> dict:
                 {
                     "id": "audio",
                     "sha256": audio_sha256,
-                    "size": len(THEME_OGG_BYTES) + len(JUMP_OGG_BYTES),
+                    # Size of the downloadable dep artifact itself (the zip),
+                    # not the sum of its uncompressed entries -- MEP-recipe-v1
+                    # §3.3 / §12 both describe `size` as the same artifact
+                    # whose `sha256` is declared.
+                    "size": audio_size,
                     "hints": ["https://example.org/audio/mep-recipe-fixture-ogg.zip"],
                     "license": "CC0-1.0",
                     "user_supplied": True,
                 }
             ],
         },
-        "ops": [
-            {"op": "copy", "from": "primary:hires.txt", "to": "hires.txt"},
-            {"op": "copy", "from": "primary:tiles.png", "to": "tiles.png"},
-            {"op": "copy", "from": "primary:game.ips", "to": "patches/game.ips"},
-            {"op": "glob", "from": "audio:**/*.ogg", "to": "audio/"},
-            {"op": "rewrite-paths", "file": "hires.txt", "tags": ["bgm", "sfx"], "prefix": "audio/"},
-        ],
-        "pack": {
-            "mep": "1.1.0",
-            "name": "MEP Recipe Fixture Pack",
-            "version": "1.0.0",
-            "license": "CC0-1.0",
-            "targets": [{"system": "nes", "sha1": SHA1_TARGET}],
-            "patches": [{"sha1": SHA1_TARGET, "file": "patches/game.ips"}],
-            "sections": {"textures": {"path": ""}},
-        },
+        "ops": OPS,
+        "pack": PACK,
         "policy": {"apply_patch_only_if_complete": True},
     }
 
@@ -146,11 +162,11 @@ def generate(out_dir: Path = FIXTURE_DIR) -> dict:
         "game.ips": IPS_PATCH_BYTES,
     })
     audio_sha256 = _write_deterministic_zip(audio_zip, {
-        "theme.ogg": THEME_OGG_BYTES,
+        "Track 01.ogg": TRACK01_OGG_BYTES,
         "folder/jump.ogg": JUMP_OGG_BYTES,
     })
 
-    recipe = _build_recipe(primary_sha256, audio_sha256)
+    recipe = _build_recipe(primary_sha256, audio_sha256, audio_zip.stat().st_size)
     recipe_text = json.dumps(recipe, indent=2) + "\n"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "recipe.json").write_text(recipe_text, encoding="utf-8")

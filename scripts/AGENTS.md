@@ -178,13 +178,22 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `recipe.json` and `recipe-missing-dep.json` are the identical recipe
   document under two names — the "missing-dep" scenario is exercised by
   omitting the `audio` dep path at apply time, not by a different
-  document. `test_gen_mep_recipe_fixture.py` is its framework-free
-  acceptance check: the generator's declared `sha256` fields equal the
-  real sha256 of the bytes it writes (never the empty-string placeholder
-  the older golden used), the generated documents pass
-  `mep_recipe.validate_recipe`, the committed fixture on disk matches its
-  own declared hashes, and regenerating it into a temp dir reproduces the
-  committed bytes byte-for-byte.
+  document. The `audio` dep's `size` field is the real on-disk size of
+  `audio-dep.zip` (the artifact `sha256` is hashed over, MEP-recipe-v1
+  §3.3/§12) — not the sum of its uncompressed entries. The ops include a
+  `rename` (`audio/Track 01.ogg` -> `audio/track01.ogg`, the spec's own
+  §4.3 example) whose source only the `audio`-dep `glob` produces, so the
+  missing-dep scenario also exercises the §6 transitive-skip branch (a
+  `rename` reading a withheld path is skipped, not a hard failure).
+  `test_gen_mep_recipe_fixture.py` is its framework-free acceptance
+  check: the generator's declared `sha256`/`size` fields equal the real
+  bytes it writes (never the empty-string placeholder the older golden
+  used), the generated documents pass `mep_recipe.validate_recipe`, the
+  committed fixture on disk matches its own declared hashes, regenerating
+  it into a temp dir reproduces the committed bytes byte-for-byte, and
+  running both fixture recipes through `mep_recipe.run_recipe` confirms
+  the `rename` actually fires with every dep present and is transitively
+  skipped (keeping the patch withheld) when the `audio` dep is missing.
   `mep_meta_parser.py` (F6.3, ADR-0138 §27) is a dependency-free leaf
   exposing a pure `parse_mep_meta(comment_body: str) -> dict | None`: it
   locates the `<!-- mep-meta -->` marker and its fenced ```json block
@@ -462,13 +471,15 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   ADR-0138 §7/§13, CLI round trip); PASS/FAIL per check, exit 0 only if
   all pass.
 - `python3 scripts/test_gen_mep_recipe_fixture.py` (F6.4a) -
-  `gen_mep_recipe_fixture.py`'s hash-correctness check: declared `sha256`
-  fields equal the real sha256 of the bytes written (never the
-  empty-string placeholder), generated documents pass
-  `mep_recipe.validate_recipe`, the committed
-  `docs/specs/golden/mep-recipe/fixture/` matches its own on-disk bytes,
-  and regenerating it is byte-identical; PASS/FAIL per check, exit 0
-  only if all pass.
+  `gen_mep_recipe_fixture.py`'s hash-correctness check: declared
+  `sha256`/`size` fields equal the real bytes written (never the
+  empty-string placeholder, never a size that isn't the artifact's own
+  on-disk size), generated documents pass `mep_recipe.validate_recipe`,
+  the committed `docs/specs/golden/mep-recipe/fixture/` matches its own
+  on-disk bytes, regenerating it is byte-identical, and applying both
+  fixture recipes through `mep_recipe.run_recipe` confirms the `rename`
+  op fires (full deps) and is transitively skipped (missing dep, §6);
+  PASS/FAIL per check, exit 0 only if all pass.
 - `python3 scripts/test_mep_recipe_fence.py` (F6.3b, AC-7/AC-9) - the
   ADR-0138 §33 "shortest safe fence" round trip: `choose_fence` +
   `mep_recipe.py`'s `FENCE`/`load_recipe` recover a backtick-laden
