@@ -135,10 +135,22 @@ primary pack (see "Before submitting" below).
 When a recipe is successfully assembled from your `external_assets` lines,
 the issue receives the `assets:external` label in addition to whatever the
 primary pack contains (`assets:textures`, `assets:audio`). This is an
-additive content-index label, like the others — it never changes the
-binary verdict (still "Aceito parcial (HD Mesen)" / "Inválido"): a recipe
-only ever assembles a pack that would otherwise be accepted, it cannot turn
-a rejected submission into an accepted one.
+additive content-index label, like the others — it never becomes a third
+verdict state; the verdict stays binary with Status "Aceito parcial (HD
+Mesen)" / "Inválido" (ADR-0138 Clarification §2).
+
+That said, a viable recipe **does** change the outcome for a
+split-distribution pack: a submission whose referenced files are hosted
+externally and whose recipe dry-runs clean is judged `accepted` (`pack:valid`
++ `assets:external`), where the exact same pack with no `external_assets`
+declared — or no viable recipe — would stay `invalid` under MEP-v1 §5
+(ADR-0138 Decision §2). What §2's downgrade-only rule actually constrains is
+the deterministic recipe gate itself: when a recipe is present, the gate may
+only **downgrade** an already-`accepted` classify verdict to `invalid` (a
+schema failure or an unclean dry-run) — it never **upgrades** an `invalid`
+classify verdict. So declaring `external_assets` is worth doing whenever your
+pack references files you cannot bundle: it is the mechanism that can turn
+an otherwise-`invalid` split pack into an `accepted` one, not a no-op.
 
 ## Before submitting
 
