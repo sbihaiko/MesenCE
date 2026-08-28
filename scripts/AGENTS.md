@@ -39,7 +39,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
-- `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_compare.py`, `mep_render_audio.py`,
+- `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
+  `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `make_gb_test_rom.py`, `validate_hdpack_dump.py` - Python spec/golden/pack
   validators and test-ROM/test-pack generators; no emulator dependency.
@@ -83,16 +84,42 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   reuses `mep_lint` discovery (`Source`, `discover_sections`,
   `find_fallback_subfolder`, `find_fallback_subfolder_by_name`,
   `find_top_level_nested_zip`, `safe_rel`, `parse_line`) and never walks
-  a zip with a parallel implementation. `mep_recipe.py assemble-sources`
-  (F6.2b, ADR-0138 §7/§12/§13) is the deterministic step that builds
-  `sources`: it parses the issue body's `external_assets` lines
-  (`<url> [<sha256>] [<size>]`, reusing `SHA256_HEX` rather than a new
-  regex) and treats every parsed line as an authoritative dependency
-  (ADR-0138 §12) — each one becomes a `sources.deps` entry regardless of
-  whether classify's `deps[]` has a matching item, merging in classify's
-  id/hints/license/user_supplied when a `hints` URL matches (trailing
-  slash ignored) and synthesizing an id otherwise, so a declared asset is
-  never silently dropped even when classify under- or over-counts `deps`.
+  a zip with a parallel implementation.
+  `mep_recipe_assemble.py` (F6.2c, ADR-0138 Clarification §23 — a
+  mechanical, behaviour-preserving split off `mep_recipe.py` so neither
+  file stays several times over the 200-line guardrail) holds the
+  CI-only `assemble-sources` implementation (issue-body parsing, dep
+  merge, its own CLI arg parsing); it imports `RecipeError`/`SHA256_HEX`/
+  `RECIPE_VERSION` from `mep_recipe.py` (`from mep_recipe import ...`),
+  not from a third shared module.
+  `mep_recipe.py` re-exposes `assemble_sources`/`cmd_assemble_sources` as
+  its own module-level functions — thin wrappers that `import
+  mep_recipe_assemble` lazily, inside the function body, rather than at
+  module load time. That laziness matters only for the direct-script
+  case: `python3 scripts/mep_recipe.py ...` runs the file as `__main__`,
+  a module identity distinct from `mep_recipe`, so
+  `mep_recipe_assemble.py`'s own `from mep_recipe import ...` forces a
+  second, nested top-level execution of `mep_recipe.py` under the name
+  `mep_recipe`; an eager module-level
+  `mep_recipe_assemble.assemble_sources` attribute grab in that nested
+  execution would race mep_recipe_assemble.py's own still-resolving
+  import and fail with an AttributeError on a partially-initialized
+  module. `import mep_recipe` (as `test_mep_recipe.py` does) never takes
+  that nested path, since the name `mep_recipe` already resolves to the
+  one in-progress module — so `mep_recipe.assemble_sources(...)` and the
+  `mep_recipe.py assemble-sources` CLI subcommand both keep working
+  exactly as before the split; `validate`/`dry-run`/`apply` and the
+  dispatch in `main()` never left `mep_recipe.py`.
+  `mep_recipe.py assemble-sources` (F6.2b, ADR-0138 §7/§12/§13) is the
+  deterministic step that builds `sources`: it parses the issue body's
+  `external_assets` lines (`<url> [<sha256>] [<size>]`, reusing
+  `SHA256_HEX` rather than a new regex) and treats every parsed line as
+  an authoritative dependency (ADR-0138 §12) — each one becomes a
+  `sources.deps` entry regardless of whether classify's `deps[]` has a
+  matching item, merging in classify's id/hints/license/user_supplied
+  when a `hints` URL matches (trailing slash ignored) and synthesizing
+  an id otherwise, so a declared asset is never silently dropped even
+  when classify under- or over-counts `deps`.
   `recipe_status` is `absent` when there are no `external_assets` lines,
   or when classify's `ops`/`deps`/`pack` fragment has no actual content
   (schema-required-but-empty containers count as no fragment, ADR-0138
