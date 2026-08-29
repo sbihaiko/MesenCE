@@ -208,7 +208,11 @@ all: ui
 #docs/roadmap/plano-testes-unitarios.md): host-free C# unit tests.
 #Deliberately has no dependency on the `core`/`ui` targets - runs on any OS
 #without SDL2 or the native MesenCore library.
+#ADR-0123 (H5): the UI/Logic host-free firewall script runs first as a fast
+#pre-check (names the offending file/dependency readably); the dual-compile
+#is still the authoritative gate.
 unit-tests:
+	./scripts/verify-ui-logic-firewall.sh
 	$(DOTNET) test UI.Tests/UI.Tests.csproj --nologo
 
 check-manifest:

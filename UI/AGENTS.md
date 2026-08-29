@@ -21,12 +21,20 @@ can be exercised by real xunit tests without Avalonia or the native
 
 ## Local Contracts
 
-- Every file under `UI/Logic/*.cs` must stay free of `Avalonia` and
-  `EmuApi` references — BCL (plus `System.IO.Compression` where needed)
-  only. This is what lets `UI.Tests/UI.Tests.csproj` dual-compile the same
-  files (via `<Compile Include>`, no `ProjectReference` to `UI.csproj`), so
-  any accidental UI/native dependency breaks `dotnet test` immediately
-  rather than only being caught in review (see `UI.Tests/AGENTS.md`).
+- **`UI/Logic/` is the host-free boundary** (ADR-0123): every file under
+  `UI/Logic/*.cs`, and the dual-compiled `UI/Interop/InteropEnums.cs`, must
+  stay free of `Avalonia` and `EmuApi` references — BCL (plus
+  `System.IO.Compression` where needed) only. This is what lets
+  `UI.Tests/UI.Tests.csproj` dual-compile the same files (via
+  `<Compile Include>`, no `ProjectReference` to `UI.csproj`), so any
+  accidental UI/native dependency breaks `dotnet test` immediately rather
+  than only being caught in review (see `UI.Tests/AGENTS.md`). Since
+  ADR-0123 aligned the test csproj with `UI/UI.csproj`'s compile strictness
+  (no `ImplicitUsings`, `TreatWarningsAsErrors`), the dual-compile is the
+  authoritative contract; `scripts/verify-ui-logic-firewall.sh` is the fast
+  pre-check that names the offending file and dependency with a readable
+  diagnostic before `dotnet test` fails opaquely (run by `make unit-tests`
+  and the `ui-tests` CI job, and by `make doc-checks`).
 - `UI/Services/*.cs` (ADR-0138 §37/§41, F6.4b-2) is the host-aware layer
   that drives the host-free `UI/Logic/Community*` decision classes -
   `HttpClient`/`Avalonia`/`EmuApi` are all allowed there, and

@@ -1,6 +1,6 @@
 # ADR-0123: UI/Logic host-free firewall: csproj strictness parity, csproj-derived scan, CI-wired
 
-- Status: accepted (needs code + doc changes; nothing in the checklist is implemented yet)
+- Status: accepted (all five checklist items implemented 2026-08-29; reflected in the csproj, the AGENTS docs, the firewall script and the makefile/CI wiring)
 - Date: 2026-08-27
 - Consolidates: ADR-0055, ADR-0057, ADR-0061 (part a: firewall wiring), ADR-0062, ADR-0063, ADR-0067, ADR-0071, ADR-0073
 
@@ -48,22 +48,22 @@ configured strictly weaker cannot bear that authority.
 ## Decision
 Make the firewall's guarantee real, in this order:
 
-- [ ] `UI.Tests/UI.Tests.csproj`: remove `<ImplicitUsings>enable</ImplicitUsings>`
+- [x] `UI.Tests/UI.Tests.csproj`: remove `<ImplicitUsings>enable</ImplicitUsings>`
       (matching `UI/UI.csproj`, which does not set it) and add
       `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`. Fix any test-side
       `using` fallout in `UI.Tests/**` that the removal exposes.
-- [ ] `UI.Tests/AGENTS.md` Local Contracts: add the rule "properties affecting
+- [x] `UI.Tests/AGENTS.md` Local Contracts: add the rule "properties affecting
       compilation of `../UI/Logic` and `../UI/Interop/InteropEnums.cs` must stay
       at parity with (or stricter than) `UI/UI.csproj`".
-- [ ] `UI/AGENTS.md`: name `UI/Logic/` as the host-free boundary with the
+- [x] `UI/AGENTS.md`: name `UI/Logic/` as the host-free boundary with the
       allowed-dependency list (BCL + `System.IO.Compression`), and state that
       after parity the dual-compile is the contract and the grep script a fast
       pre-check with readable diagnostics.
-- [ ] `scripts/verify-ui-logic-firewall.sh`: derive the scanned file set from
+- [x] `scripts/verify-ui-logic-firewall.sh`: derive the scanned file set from
       the csproj's `<Compile Include="../...">` entries (globs expanded,
       relative to `UI.Tests/`) instead of the hardcoded `UI/Logic`, so
       `InteropEnums.cs` and any future dual-compiled path are scanned.
-- [ ] Wire the script into the automated path: add it to the `unit-tests`
+- [x] Wire the script into the automated path: add it to the `unit-tests`
       makefile target (or a `verify` target that `unit-tests` depends on) and
       as a step in the `ui-tests` job of `.github/workflows/unit-tests.yml`
       before `dotnet test`. Update the Verification blocks in `UI/AGENTS.md`,

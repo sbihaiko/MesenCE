@@ -290,7 +290,7 @@ editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
 | H2 | `.github/AGENTS.md` records the `unit-tests.yml` contract invariants (clang only, …) | **0131** (accepted) |
 | H3 | `path-cases.txt` fixture header format / control characters | **0124** (accepted) |
 | H4 | `mep_compare.py`: per-system dispatch of `render_original` + NES golden texture pack | **0136** (accepted) |
-| H5 | UI-logic host-free firewall parity scan in CI | 0123 (proposed) |
+| H5 | UI-logic host-free firewall parity scan in CI | **0123** (accepted) |
 | H6 | UI-logic public helpers for direct testing — pick between the two options | 0125 (proposed, needs a choice) |
 | H7 | `CheatTypeDetector` ThrowsAny for GB/SMS — product decision deferred | 0128 (proposed) |
 
@@ -373,7 +373,7 @@ community 👍 sort the picker — see the dedicated PRD header.
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |
 | 0133, 0134, 0135, 0051 | accepted 2026-08-29 (0134 = Option A: `loop` field in `fingerprints.json`) | unblocked Blocks C/D; Block C shipped 2026-08-29 (items 8/9/10) |
 | 0142 | proposed (write-before-implement, 2026-08-29) | Block C item 10 crossfade contract — implemented in c36043f5, awaiting acceptance |
-| 0123, 0125, 0128 | proposed | H5–H7 — not blocking |
+| 0125, 0128 | proposed | H6–H7 — not blocking; 0123 accepted 2026-08-29 (H5 firewall parity scan, all five checklist items done) |
 | 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
 | player-shell identity + chrome | ADR-0139/0140/0141 accepted (2026-08-28) | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in PRD-player-shell.md §9; `UiMode` still without an ADR |
 

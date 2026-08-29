@@ -25,13 +25,40 @@ if grep -qE '<ProjectReference' "$csproj"; then
 	fail=1
 fi
 
-logicDir="UI/Logic"
-if [[ ! -d "$logicDir" ]]; then
-	echo "ERROR: $logicDir not found." >&2
+# ADR-0123 (H5): derive the scanned file set from the csproj's
+# <Compile Include="../..."> entries (globs expanded relative to UI.Tests/) so
+# InteropEnums.cs and any future dual-compiled path are scanned automatically,
+# not just the hardcoded UI/Logic folder.
+declare -a scanFiles=()
+while IFS= read -r include; do
+	pattern="${include#../}"
+	if [[ "$pattern" == *'**'* ]]; then
+		# Recursive glob (e.g. UI/Logic/**/*.cs): the directory is everything
+		# before '**', the file name everything after the last '/'.
+		dir="${pattern%%\*\**}"
+		dir="${dir%/}"
+		name="${pattern##*/}"
+		while IFS= read -r -d '' f; do
+			scanFiles+=("$f")
+		done < <(find "$dir" -name "$name" -type f -print0)
+	else
+		scanFiles+=("$pattern")
+	fi
+done < <(grep -oE '<Compile Include="\.\./[^"]+"' "$csproj" | sed -E 's/<Compile Include="([^"]+)"/\1/')
+
+if [[ "${#scanFiles[@]}" -eq 0 ]]; then
+	echo "ERROR: no <Compile Include=\"../...\"> dual-compiled entries found in $csproj." >&2
 	exit 1
 fi
 
-while IFS= read -r -d '' file; do
+for file in "${scanFiles[@]}"; do
+	if [[ ! -f "$file" ]]; then
+		echo "ERROR: dual-compiled file $file (from $csproj) not found on disk." >&2
+		fail=1
+	fi
+done
+
+for file in "${scanFiles[@]}"; do
 	# Strip '//' line-comment content first: these files document what they
 	# mirror (e.g. "counterpart to EmuApi.GetMepPackList()") in prose, which
 	# is not an actual dependency - only code outside comments must stay
@@ -46,7 +73,7 @@ while IFS= read -r -d '' file; do
 		echo "ERROR: $file references Mesen.Services/HttpClient - UI/Logic/*.cs is the host-free decision layer; network orchestration belongs in UI/Services/*.cs." >&2
 		fail=1
 	fi
-done < <(find "$logicDir" -name '*.cs' -print0)
+done
 
 # ADR-0138 §53: HttpClient use in UI/ is confined to UI/Services/*.cs (plus the
 # pre-existing update check) - never Windows code-behind or ViewModels.
@@ -64,4 +91,4 @@ if [[ "$fail" -ne 0 ]]; then
 	exit 1
 fi
 
-echo "OK: UI/Logic firewall holds ($csproj has no RuntimeIdentifier/ProjectReference, UI/Logic/*.cs is free of Avalonia/EmuApi/HttpClient/Mesen.Services, HttpClient confined to UI/Services/)."
+echo "OK: UI/Logic firewall holds ($csproj has no RuntimeIdentifier/ProjectReference, the dual-compiled file set (from <Compile Include=\"../...\">, ${#scanFiles[@]} files) is free of Avalonia/EmuApi/HttpClient/Mesen.Services, HttpClient confined to UI/Services/)."

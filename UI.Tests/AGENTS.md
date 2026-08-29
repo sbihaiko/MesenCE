@@ -33,6 +33,15 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
     `UI/Interop/` (it holds the `ConsoleType`/`CheatType` enums moved out of
     `EmuApi.cs`, Phase 2 of the now-completed unit-test plan) — a
     folder glob there would risk pulling in an Avalonia-tainted file later.
+- **Compile-affecting properties stay at parity with (or stricter than)
+  `UI/UI.csproj`** (ADR-0123, H5). The dual-compile is only the
+  authoritative gate while the test-side compile conditions match the
+  app's: the csproj sets no `ImplicitUsings` (matching `UI/UI.csproj`,
+  which does not set it) and `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`.
+  Any property that changes how `../UI/Logic/**` or
+  `../UI/Interop/InteropEnums.cs` compiles must keep that parity or go
+  stricter, never looser — a looser test compile would let a Logic file
+  pass `dotnet test` and fail the real Windows `msbuild -t:UI`.
 - Every `UI/Logic/*.cs` file must stay free of `Avalonia` and `EmuApi`
   references (BCL + `System.IO.Compression` only) — that constraint lives in
   `UI/AGENTS.md` (nearest owner of `UI/Logic/`) but is enforced here by the

@@ -13,7 +13,11 @@
 		<IsAotCompatible>true</IsAotCompatible>
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
+		<!-- Parity with UI/UI.csproj (which does not set ImplicitUsings): the
+		     host-free dual-compile must match the app's compile conditions, so
+		     test-side code cannot lean on implicit usings. Warnings are errors
+		     here for the same reason (ADR-0123 H5). -->
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<IsPackable>false</IsPackable>
 		<IsTestProject>true</IsTestProject>
 		<RootNamespace>Mesen.Tests</RootNamespace>

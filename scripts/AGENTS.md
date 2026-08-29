@@ -469,9 +469,15 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `checks/verify_core_no_http_client.sh`, and
   `checks/verify_fetcher_no_filesystem_allowlist_load.sh` (see `checks/`
   below) - run directly by `doc-checks`, in order, failing on the first
-  non-zero exit. CI runs `make doc-checks` as its own step on the Linux
-  and macOS build jobs, before "Build Mesen". `check-f5-4b-doc.sh` was
-  deleted on 2026-08-27 together with the plan header it guarded.
+  non-zero exit. `verify-ui-logic-firewall.sh` additionally runs ahead of
+  `dotnet test` in `make unit-tests` and the `ui-tests` CI job (ADR-0123,
+  H5): the dual-compile is the authoritative gate, this is the fast
+  pre-check whose readable diagnostics name the offending file/dependency,
+  and its scanned set derives from the csproj's `<Compile Include="../...">`
+  entries, so a csproj change widens it automatically. CI runs
+  `make doc-checks` as its own step on the Linux and macOS build jobs,
+  before "Build Mesen". `check-f5-4b-doc.sh` was deleted on 2026-08-27
+  together with the plan header it guarded.
 - `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
   runs (one script per AC, invoked directly by its AC's Verification
   command). Same PASS/FAIL-and-exit-code convention as the top-level shell
@@ -555,6 +561,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Verification
 
+- `make unit-tests` (repo root) - runs
+  `./scripts/verify-ui-logic-firewall.sh` then `dotnet test
+  UI.Tests/UI.Tests.csproj`; see the scripts/ entry above for why the
+  firewall step precedes the dual-compile gate (ADR-0123, H5).
 - `make core-unit-tests` - builds and runs `core_unit_tests` (no `core`
   prerequisite); every case must print `PASS` and the binary must exit 0.
   Bloco E's parity case shells out to `python3 scripts/mep_recipe.py apply`

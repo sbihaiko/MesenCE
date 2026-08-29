@@ -33,6 +33,11 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      - name: Verify UI/Logic firewall
+        # ADR-0123 (H5): fast pre-check naming the offending file/dependency;
+        # the dual-compile below is still the authoritative gate.
+        run: ./scripts/verify-ui-logic-firewall.sh
+
       - name: Run unit tests
         run: dotnet test UI.Tests/UI.Tests.csproj --nologo
 
