@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""AC-7 — provenance/coverage-gap disclosure in the catalog script's own
+"""AC-7 — provenance/coverage-gap disclosure in the catalog fetch's own
 `gh project item-list` parsing.
 
 Same requirement as AC-5 (scripts/checks/verify_gh_project_provenance_drift.py,
 owned by the drift-check task), scoped here to
-scripts/generate_community_pack_catalog.py: the code comment must state which
+scripts/mei_catalog_fetch.py: the code comment must state which
 `gh project` field/id facts were confirmed via a live primary-source `gh`
 call (the Status and Pack Hash field ids, via `gh project field-list`) versus
 which per-item JSON key names remain an explicit, unconfirmed coverage gap
@@ -13,7 +13,13 @@ which per-item JSON key names remain an explicit, unconfirmed coverage gap
 merely in a cached view), and the item-parsing code must use defensive,
 non-crashing lookups rather than direct indexing on an assumed key path.
 
-NOTE: scripts/generate_community_pack_catalog.py's own docstring was already
+ADR-0138 §35 (F6.3b) split the catalog generator: the `gh project` reads and
+the item parsing moved from scripts/generate_community_pack_catalog.py into
+scripts/mei_catalog_fetch.py (the generator now orchestrates over fetched
+data), so this checker follows the parsing — it reads the fetch module, not
+the orchestrator.
+
+NOTE: scripts/mei_catalog_fetch.py's own docstring was already
 in English by the time this checker was translated, so the matched string
 literals below are English-only (no pt-BR fallback needed here, unlike the
 sibling check for community-pack-drift-check.yml).
@@ -25,7 +31,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-SCRIPT = ROOT / "scripts/generate_community_pack_catalog.py"
+SCRIPT = ROOT / "scripts/mei_catalog_fetch.py"
 
 CONFIRMED_FIELD_IDS = ["PVTSSF_lAHOB1MsbM4BhjpNzhge86c", "PVTF_lAHOB1MsbM4BhjpNzhge9Is"]
 CONFIRMED_CALL = "gh project field-list"

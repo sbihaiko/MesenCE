@@ -46,7 +46,10 @@ def fetch_accepted_items(accepted_statuses):
     each Project field name, so "Pack URL"/"Pack Hash"/"ROM SHA1" surface as
     "pack URL"/"pack Hash"/"ROM SHA1" item keys. The accessors below check the
     confirmed lowercase key first and keep camelCase/underscore aliases for
-    safety; parsing never crashes on an unexpected key.
+    safety; parsing is defensive and must not crash on an unexpected key.
+    Any negative conclusion (e.g. "no MEI entry") is qualified by this gap:
+    an absent key may mean the datastore never held the value, not that the
+    field is genuinely unset.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])

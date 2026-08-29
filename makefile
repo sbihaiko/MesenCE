@@ -234,6 +234,21 @@ doc-checks: check-manifest
 	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
 	./scripts/checks/verify_no_ptbr_usage_strings.sh
 	./scripts/checks/verify_smoke_pack_headless.sh
+	#F6.0–F6.5 structural guards for the community-pack pipeline: the
+	#workflow/issue-form/catalog verifiers (AC-1..AC-7, F6.x) are stdlib+PyYAML
+	#structural checks over the repo's own files — no network, no PAT, no ROM —
+	#so they run in doc-checks and the CI build job fails on any drift.
+	python3 scripts/checks/verify_community_pack_issue_template.py
+	python3 scripts/checks/verify_community_pack_submitted_workflow.py
+	python3 scripts/checks/verify_community_pack_drift_check_workflow.py
+	python3 scripts/checks/verify_community_pack_catalog.py
+	python3 scripts/checks/verify_community_pack_validate_workflow.py
+	python3 scripts/checks/verify_gh_project_provenance_catalog.py
+	python3 scripts/checks/verify_gh_project_provenance_drift.py
+	python3 scripts/checks/verify_mei_catalog_generator.py
+	python3 scripts/checks/verify_mei_catalog_split.py
+	./scripts/checks/verify_community_pack_labels_script.sh
+	./scripts/checks/verify_agents_md_recipe_handoff.sh
 	python3 scripts/test_mep_build.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
