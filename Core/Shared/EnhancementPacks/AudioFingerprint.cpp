@@ -39,6 +39,13 @@ bool FingerprintStore::Load(const string& path, vector<AudioFingerprint>& out, s
 		fp.Id = entry.GetString("id");
 		fp.Kind = entry.GetString("kind", "bgm");
 		fp.MidiFile = entry.GetString("midi");
+		//F5.4g Block C item 8 (ADR-0134 Option A): optional loop point, PCM
+		//samples at the OGG's own rate; absent or invalid falls back to 0.
+		const JsonValue* loop = entry.Get("loop");
+		if(loop && loop->IsNumber()) {
+			double l = loop->GetNumber();
+			fp.Loop = l > 0 ? (uint32_t)l : 0;
+		}
 		const JsonValue* frames = entry.Get("frames");
 		if(frames && frames->IsNumber()) {
 			fp.Frames = (uint32_t)frames->GetNumber();
@@ -81,6 +88,11 @@ bool FingerprintStore::Save(const string& path, const vector<AudioFingerprint>& 
 	for(size_t i = 0; i < tracks.size(); i++) {
 		const AudioFingerprint& fp = tracks[i];
 		out << (i ? ",\n" : "\n") << "    { \"id\": \"" << fp.Id << "\", \"kind\": \"" << fp.Kind << "\", \"frames\": " << fp.Frames;
+		//F5.4g Block C item 8 (ADR-0134 Option A): emit the loop point only
+		//when non-zero, so a track that loops the whole file stays schema-minimal.
+		if(fp.Loop > 0) {
+			out << ", \"loop\": " << fp.Loop;
+		}
 		if(!fp.MidiFile.empty()) {
 			out << ", \"midi\": \"" << fp.MidiFile << "\"";
 		}

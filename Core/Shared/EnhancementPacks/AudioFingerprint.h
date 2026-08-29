@@ -44,6 +44,10 @@ struct AudioFingerprint
 	uint32_t Frames = 0; //recorded duration
 	vector<FingerprintEvent> Events; //first onsets, at most MaxEvents
 	string MidiFile; //relative to the audio folder, may be empty
+	//F5.4g Block C item 8 (ADR-0134 Option A): optional loop point of the
+	//replacement OGG, in PCM samples at the OGG's own rate. 0 = loop the whole
+	//file (the pre-Block-C behaviour, and the default when the field is absent).
+	uint32_t Loop = 0;
 
 	static constexpr size_t MaxEvents = 32;
 };

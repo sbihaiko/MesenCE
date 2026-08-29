@@ -109,7 +109,10 @@ uint32_t NesAudioReplacer::Load(const vector<string>& audioLayers, HdPackData& h
 		int id = TrackIdBase + (int)i;
 		BgmTrackInfo info;
 		info.Filename = it->second;
-		info.LoopPosition = 0;
+		//F5.4g Block C item 8 (ADR-0134 Option A): the track's optional loop
+		//point (PCM samples at the OGG's rate) from fingerprints.json; 0 loops
+		//the whole file (OggReader clamps an out-of-range value back to 0).
+		info.LoopPosition = merged[i].Loop;
 		hdData.BgmFilesById[id] = info;
 		_trackIds[i] = id;
 		playable++;

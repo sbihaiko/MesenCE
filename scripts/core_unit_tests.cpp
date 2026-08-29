@@ -17,6 +17,7 @@
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
+#include "Shared/EnhancementPacks/AudioFingerprint.h"
 #include "Shared/EnhancementPacks/MepPack.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/EnhancementPacks/MepContentId.h"
@@ -423,6 +424,17 @@ namespace
 		return ss.str();
 	}
 
+	//Writes `content` to <temp>/<name> (unique per name) and returns its path;
+	//used by the Bloco H fingerprint fixtures.
+	std::string WriteTempFile(const std::string& name, const std::string& content)
+	{
+		std::filesystem::path path = std::filesystem::temp_directory_path() / name;
+		std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc);
+		out << content;
+		out.close();
+		return path.string();
+	}
+
 	//Every relative file path (POSIX separators, directories excluded) under
 	//`root`, skipping any entry named `excludeName` - used to diff the C++
 	//installer's output tree against mep_recipe.py apply's without the
@@ -813,6 +825,66 @@ namespace
 	}
 }
 
+//--- Bloco H: FingerprintStore loop field round-trip (ADR-0134 Option A) ------
+//F5.4g Block C item 8: fingerprints.json's optional `loop` point (PCM
+//samples at the OGG's own rate). Absence/zero means loop-the-whole-file;
+//a malformed value falls back to 0 (the host tolerates it, MEP-v1 §5.2);
+//Save emits the field only when non-zero.
+namespace
+{
+	std::string FingerprintJson(const std::string& extra)
+	{
+		return "{\"version\":1,\"tracks\":[{\"id\":\"t1\",\"kind\":\"bgm\",\"frames\":1200"
+			+ (extra.empty() ? "" : "," + extra)
+			+ ",\"events\":[[0,0,0],[1,2,8],[2,-1,16],[3,4,24]]}]}";
+	}
+	void TestFingerprintLoopLoad()
+	{
+		std::string error;
+		std::vector<AudioFingerprint> out;
+		Check(FingerprintStore::Load(WriteTempFile("fp_loop.json", FingerprintJson("\"loop\":441000")), out, error),
+			"BlocoH: fingerprints.json with loop loads");
+		Check(out.size() == 1 && out[0].Loop == 441000, "BlocoH: loop parsed to AudioFingerprint::Loop", std::to_string(out.empty() ? -1 : (int)out[0].Loop));
+	}
+	void TestFingerprintLoopAbsent()
+	{
+		std::string error;
+		std::vector<AudioFingerprint> out;
+		Check(FingerprintStore::Load(WriteTempFile("fp_no_loop.json", FingerprintJson("")), out, error),
+			"BlocoH: fingerprints.json without loop loads");
+		Check(out.size() == 1 && out[0].Loop == 0, "BlocoH: absent loop defaults to 0");
+	}
+	void TestFingerprintLoopMalformed()
+	{
+		std::string error;
+		std::vector<AudioFingerprint> out;
+		//A non-numeric `loop` is ignored (fallback 0), matching MEP-v1 §5.2's
+		//"ignore an unknown/malformed field rather than reject the pack".
+		Check(FingerprintStore::Load(WriteTempFile("fp_bad_loop.json", FingerprintJson("\"loop\":\"oops\"")), out, error),
+			"BlocoH: malformed loop does not reject the pack");
+		Check(out.size() == 1 && out[0].Loop == 0, "BlocoH: malformed loop falls back to 0");
+	}
+	void TestFingerprintLoopSave()
+	{
+		std::vector<AudioFingerprint> tracks;
+		AudioFingerprint fp;
+		fp.Id = "t1"; fp.Kind = "bgm"; fp.Frames = 1200; fp.Loop = 441000;
+		fp.Events.push_back({ 0, 0, 0 });
+		tracks.push_back(fp);
+		std::string path = WriteTempFile("fp_save.json", "");
+		Check(FingerprintStore::Save(path, tracks), "BlocoH: Save writes the file");
+		std::string text = ReadFileBytes(path);
+		Check(text.find("\"loop\": 441000") != std::string::npos, "BlocoH: Save emits the loop point when non-zero", text);
+
+		fp.Loop = 0;
+		tracks[0] = fp;
+		path = WriteTempFile("fp_save0.json", "");
+		Check(FingerprintStore::Save(path, tracks), "BlocoH: Save writes the file (loop 0)");
+		std::string text0 = ReadFileBytes(path);
+		Check(text0.find("loop") == std::string::npos, "BlocoH: Save omits the loop field when zero", text0);
+	}
+}
+
 int main()
 {
 	TestSilentChannelNotSfx();
@@ -848,6 +920,11 @@ int main()
 	TestArpeggioKeysDetection();
 
 	TestContentIdGoldenParity();
+
+	TestFingerprintLoopLoad();
+	TestFingerprintLoopAbsent();
+	TestFingerprintLoopMalformed();
+	TestFingerprintLoopSave();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

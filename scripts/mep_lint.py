@@ -870,6 +870,13 @@ def lint_fingerprints(src: Source, rel: str, rep: Report):
         kind = t.get("kind", "bgm")
         if kind not in ("bgm", "sfx"):
             rep.error(rel, f"{tid}: invalid kind '{kind}'")
+        #F5.4g Block C item 8 (ADR-0134 Option A): optional `loop` point in PCM
+        #samples at the OGG's own rate. Absence is fine (loops the whole file);
+        #a present value must be a non-negative number. Bounds vs the OGG length
+        #are not checked here - OggReader clamps an out-of-range value to 0.
+        loop = t.get("loop")
+        if loop is not None and (not isinstance(loop, (int, float)) or isinstance(loop, bool) or loop < 0):
+            rep.error(rel, f"{tid}: 'loop' must be a non-negative number of PCM samples, not {loop!r}")
         ev = t.get("events")
         if not isinstance(ev, list) or not ev:
             rep.error(rel, f"{tid}: 'events' is empty")

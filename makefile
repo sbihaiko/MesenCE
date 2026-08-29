@@ -252,6 +252,8 @@ core-unit-tests:
 	  Core/Shared/Audio/ChannelRoleClassifier.cpp \
 	  Core/Shared/Audio/EnhancedSynthEngine.cpp \
 	  Core/Shared/Audio/EnhancedSynthPreset.cpp \
+	  Core/Shared/Audio/SmfWriter.cpp \
+	  Core/Shared/EnhancementPacks/AudioFingerprint.cpp \
 	  Core/Shared/EnhancementPacks/MepPack.cpp \
 	  Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp \
 	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \

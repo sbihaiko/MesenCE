@@ -51,13 +51,20 @@ def read_varlen(data, pos):
 
 
 def parse_smf(path: Path):
-    """Returns (tpqn, tempo_us, events [(tick, kind, channel, note)])."""
+    """Returns (tpqn, tempo_us, events [(tick, kind, channel, note)], loop_tick).
+
+    loop_tick is 0 unless the MIDI carries a loop marker: a marker meta-event
+    (0xFF 0x06) whose text is a non-negative integer, the loop point in MIDI
+    ticks (ADR-0134 Option A - mep_render_audio emits fingerprints.json's
+    `loop` from it).
+    """
     data = path.read_bytes()
     assert data[:4] == b"MThd", "not an SMF"
     hdr_len = struct.unpack(">I", data[4:8])[0]
     fmt, ntracks, division = struct.unpack(">HHH", data[8:14])
     pos = 8 + hdr_len
     tempo = 500000
+    loop_tick = 0
     events = []
     for _ in range(ntracks):
         assert data[pos:pos + 4] == b"MTrk"
@@ -75,6 +82,10 @@ def parse_smf(path: Path):
                 mlen, p2 = read_varlen(data, pos + 2)
                 if meta == 0x51:
                     tempo = int.from_bytes(data[p2:p2 + 3], "big")
+                elif meta == 0x06 and loop_tick == 0:
+                    text = data[p2:p2 + mlen].decode("ascii", "replace").strip()
+                    if text.isdigit():
+                        loop_tick = int(text)
                 pos = p2 + mlen
                 continue
             if b in (0xF0, 0xF7):
@@ -97,14 +108,14 @@ def parse_smf(path: Path):
                 pos += 1
         pos = end
     events.sort(key=lambda e: e[0])
-    return division, tempo, events
+    return division, tempo, events, loop_tick
 
 
 # ------------------------------------------------------- internal chip synth
 def render_internal(midi: Path, wav: Path):
     import numpy as np
 
-    tpqn, tempo, events = parse_smf(midi)
+    tpqn, tempo, events, _loop_tick = parse_smf(midi)
     sec_per_tick = tempo / 1_000_000 / tpqn
     total_ticks = events[-1][0] if events else 0
     total = int((total_ticks * sec_per_tick + 0.5) * RATE) + 1
@@ -228,12 +239,32 @@ def main(argv):
                 wav.unlink(missing_ok=True)
                 note = " (the human layer has its own OGG — it takes precedence)" if human_ogg.exists() and layer.name == "audio" and layer.parent.name == "auto" else ""
                 print(f"  {t['id']}: {ogg.relative_to(pack)} ({t.get('frames', 0) / 60:.1f} s){note}")
+                #F5.4g item 8 (ADR-0134 Option A): emit the loop point from the
+                #MIDI's loop marker (a marker meta-event whose text is an
+                #integer = loop point in ticks). A manual `loop` the author
+                #wrote is left alone unless the marker overrides it.
+                tpqn, tempo, _, loop_tick = parse_smf(midi)
+                if loop_tick > 0:
+                    sec_per_tick = tempo / 1_000_000 / tpqn
+                    t["loop"] = int(round(loop_tick * sec_per_tick * RATE))
                 done += 1
             elif ok:
                 print(f"  {t['id']}: {wav.relative_to(pack)} (no ffmpeg — not encoded)")
                 failed += 1
             else:
                 failed += 1
+        #Persist any loop point we emitted from a MIDI marker, preserving the
+        #existing JSON shape (json.dumps reorders nothing here - insertion
+        #order is kept).
+        wrote_loop = [t for t in tracks if isinstance(t.get("loop"), int) and t["loop"] > 0]
+        if wrote_loop:
+            doc = json.loads((layer / "fingerprints.json").read_text())
+            by_id = {t["id"]: t for t in doc.get("tracks", []) if isinstance(t, dict) and isinstance(t.get("id"), str)}
+            for t in wrote_loop:
+                if t["id"] in by_id:
+                    by_id[t["id"]]["loop"] = t["loop"]
+            (layer / "fingerprints.json").write_text(json.dumps(doc, indent=2) + "\n")
+            print(f"  fingerprints.json: loop point(s) written for {', '.join(sorted(t['id'] for t in wrote_loop))}")
     print(f"{done} rendered, {skipped} already existed, {failed} failed")
     return 0 if failed == 0 else 1
 
