@@ -37,4 +37,12 @@ public:
 	optional<int16_t> GetAxisPosition(int axis);
 
 	void SetForceFeedback(uint16_t rightMagnitude, uint16_t leftMagnitude);
+
+	//Host input tester (PRD slice I.0): device identity from libevdev - product
+	//name, USB vendor/product ids (0 when the device does not expose them) and
+	//whether force feedback was enabled during initialisation.
+	std::string GetName();
+	uint32_t GetVendorId();
+	uint32_t GetProductId();
+	bool HasRumble();
 };

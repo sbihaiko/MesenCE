@@ -243,3 +243,47 @@ void MacOSKeyManager::SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitu
 		controller->SetForceFeedback(magnitudeRight, magnitudeLeft);
 	}
 }
+
+uint32_t MacOSKeyManager::GetConnectedGamepadCount()
+{
+	return (uint32_t)_controllers.size();
+}
+
+bool MacOSKeyManager::GetGamepadInfo(uint32_t index, GamepadInfo& info)
+{
+	if(index >= _controllers.size()) {
+		return false;
+	}
+	info.Name = _controllers[index]->GetName();
+	//The GameController framework does not expose VID/PID - leave them as 0
+	info.VendorId = 0;
+	info.ProductId = 0;
+	info.Slot = index;
+	info.HasRumble = _controllers[index]->HasRumble();
+	info.Backend = GamepadBackend::GameController;
+	return true;
+}
+
+bool MacOSKeyManager::GetGamepadState(uint32_t index, GamepadState& state)
+{
+	if(index >= _controllers.size()) {
+		return false;
+	}
+	for(int j = 0; j < 24; j++) {
+		if(_controllers[index]->IsButtonPressed(j)) {
+			state.Buttons |= (1u << j);
+		}
+	}
+	for(int a = 0; a < 4; a++) {
+		std::optional<int16_t> axis = _controllers[index]->GetAxisPosition(a);
+		state.Axes[a] = axis ? *axis : 0;
+	}
+	return true;
+}
+
+void MacOSKeyManager::TestForceFeedback(uint32_t index, uint16_t magnitudeRight, uint16_t magnitudeLeft)
+{
+	if(index < _controllers.size()) {
+		_controllers[index]->SetForceFeedback(magnitudeRight, magnitudeLeft);
+	}
+}

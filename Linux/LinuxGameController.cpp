@@ -290,6 +290,27 @@ int LinuxGameController::GetDeviceID()
 	return _deviceID;
 }
 
+std::string LinuxGameController::GetName()
+{
+	const char* name = libevdev_get_name(_device);
+	return name ? std::string(name) : std::string();
+}
+
+uint32_t LinuxGameController::GetVendorId()
+{
+	return (uint32_t)libevdev_get_id_vendor(_device);
+}
+
+uint32_t LinuxGameController::GetProductId()
+{
+	return (uint32_t)libevdev_get_id_product(_device);
+}
+
+bool LinuxGameController::HasRumble()
+{
+	return _enableForceFeedback;
+}
+
 /*
 static int print_event(struct input_event *ev)
 {

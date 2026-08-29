@@ -57,6 +57,40 @@ namespace Mesen.Interop
 			}
 			return keys;
 		}
+
+		//Host input tester (PRD slice I.0): enumerate connected pads and read
+		//their raw state without touching the emulated PadN mapping.
+		[DllImport(DllPath)] public static extern UInt32 GetConnectedGamepadCount();
+		[DllImport(DllPath)] public static extern bool GetGamepadInfo(UInt32 index, out GamepadInfo info);
+		[DllImport(DllPath)] public static extern bool GetGamepadState(UInt32 index, out GamepadState state);
+		[DllImport(DllPath)] public static extern void TestForceFeedback(UInt32 index, UInt16 magnitudeRight, UInt16 magnitudeLeft);
+	}
+
+	public enum GamepadBackend : byte
+	{
+		None = 0,
+		XInput = 1,
+		DirectInput = 2,
+		Evdev = 3,
+		GameController = 4
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct GamepadInfo
+	{
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Name;
+		public UInt32 VendorId;
+		public UInt32 ProductId;
+		public UInt32 Slot;
+		[MarshalAs(UnmanagedType.U1)] public bool HasRumble;
+		[MarshalAs(UnmanagedType.U1)] public GamepadBackend Backend;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct GamepadState
+	{
+		public UInt32 Buttons;
+		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public Int16[] Axes;
 	}
 
 	public enum CursorImage

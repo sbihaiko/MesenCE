@@ -220,6 +220,130 @@ void WindowsKeyManager::SetForceFeedback(uint16_t magnitudeRight, uint16_t magni
 	_xInput->SetForceFeedback(magnitudeRight, magnitudeLeft);
 }
 
+uint32_t WindowsKeyManager::GetConnectedGamepadCount()
+{
+	if(!_xInput || !_directInput) {
+		return 0;
+	}
+	uint32_t count = 0;
+	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
+		if(_xInput->IsConnected(i)) {
+			count++;
+		}
+	}
+	return count + _directInput->GetJoystickCount();
+}
+
+bool WindowsKeyManager::GetGamepadInfo(uint32_t index, GamepadInfo& info)
+{
+	if(!_xInput || !_directInput) {
+		return false;
+	}
+
+	int xinputCount = 0;
+	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
+		if(_xInput->IsConnected(i)) {
+			if(xinputCount == (int)index) {
+				info.Name = "XInput Pad " + std::to_string(i + 1);
+				info.VendorId = 0; //XInput exposes no VID/PID
+				info.ProductId = 0;
+				info.Slot = (uint32_t)i;
+				info.HasRumble = true;
+				info.Backend = GamepadBackend::XInput;
+				return true;
+			}
+			xinputCount++;
+		}
+	}
+
+	int diIndex = (int)index - xinputCount;
+	if(diIndex >= 0 && diIndex < _directInput->GetJoystickCount()) {
+		info.Name = _directInput->GetName(diIndex);
+		info.VendorId = _directInput->GetVendorId(diIndex);
+		info.ProductId = _directInput->GetProductId(diIndex);
+		info.Slot = (uint32_t)index;
+		info.HasRumble = false; //DirectInput force feedback is not implemented
+		info.Backend = GamepadBackend::DirectInput;
+		return true;
+	}
+	return false;
+}
+
+bool WindowsKeyManager::GetGamepadState(uint32_t index, GamepadState& state)
+{
+	if(!_xInput || !_directInput) {
+		return false;
+	}
+
+	int xinputCount = 0;
+	int xinputPort = -1;
+	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
+		if(_xInput->IsConnected(i)) {
+			if(xinputCount == (int)index) {
+				xinputPort = i;
+				break;
+			}
+			xinputCount++;
+		}
+	}
+
+	if(xinputPort >= 0) {
+		for(int j = 1; j <= 26; j++) {
+			if(_xInput->IsPressed(xinputPort, j)) {
+				state.Buttons |= (1u << (j - 1));
+			}
+		}
+		//XInput reports Y before X per stick; map to left X/Y, right X/Y
+		optional<int16_t> lx = _xInput->GetAxisPosition(xinputPort, 28);
+		optional<int16_t> ly = _xInput->GetAxisPosition(xinputPort, 27);
+		optional<int16_t> rx = _xInput->GetAxisPosition(xinputPort, 30);
+		optional<int16_t> ry = _xInput->GetAxisPosition(xinputPort, 29);
+		state.Axes[0] = lx ? *lx : 0;
+		state.Axes[1] = ly ? *ly : 0;
+		state.Axes[2] = rx ? *rx : 0;
+		state.Axes[3] = ry ? *ry : 0;
+		return true;
+	}
+
+	int diIndex = (int)index - xinputCount;
+	if(diIndex >= 0 && diIndex < _directInput->GetJoystickCount()) {
+		for(int j = 0; j < 32; j++) {
+			if(_directInput->IsPressed(diIndex, j)) {
+				state.Buttons |= (1u << j);
+			}
+		}
+		//DirectInput reports Y before X per stick; map to left X/Y, right X/Y
+		optional<int16_t> lx = _directInput->GetAxisPosition(diIndex, 128 + 16 + 1);
+		optional<int16_t> ly = _directInput->GetAxisPosition(diIndex, 128 + 16 + 0);
+		optional<int16_t> rx = _directInput->GetAxisPosition(diIndex, 128 + 16 + 3);
+		optional<int16_t> ry = _directInput->GetAxisPosition(diIndex, 128 + 16 + 2);
+		state.Axes[0] = lx ? *lx : 0;
+		state.Axes[1] = ly ? *ly : 0;
+		state.Axes[2] = rx ? *rx : 0;
+		state.Axes[3] = ry ? *ry : 0;
+		return true;
+	}
+	return false;
+}
+
+void WindowsKeyManager::TestForceFeedback(uint32_t index, uint16_t magnitudeRight, uint16_t magnitudeLeft)
+{
+	if(!_xInput) {
+		return;
+	}
+	int xinputCount = 0;
+	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
+		if(_xInput->IsConnected(i)) {
+			if(xinputCount == (int)index) {
+				_xInput->SetForceFeedback(i, magnitudeRight, magnitudeLeft);
+				return;
+			}
+			xinputCount++;
+		}
+	}
+	//DirectInput pads have no force feedback implemented - nothing to do
+}
+
 void WindowsKeyManager::ResetKeyState()
 {
 	memset(_keyState, 0, sizeof(_keyState));

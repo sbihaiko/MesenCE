@@ -60,6 +60,72 @@ extern "C"
 		}
 	}
 
+	//Host input tester (PRD slice I.0): C-ABI mirror of GamepadInfo/GamepadState
+	struct GamepadInfoAbi
+	{
+		char Name[128];
+		uint32_t VendorId;
+		uint32_t ProductId;
+		uint32_t Slot;
+		uint8_t HasRumble;
+		uint8_t Backend;
+		uint8_t Reserved[2];
+	};
+
+	struct GamepadStateAbi
+	{
+		uint32_t Buttons;
+		int16_t Axes[4];
+	};
+
+	DllExport uint32_t __stdcall GetConnectedGamepadCount()
+	{
+		if(_keyManager) {
+			return _keyManager->GetConnectedGamepadCount();
+		}
+		return 0;
+	}
+
+	DllExport bool __stdcall GetGamepadInfo(uint32_t index, GamepadInfoAbi* outInfo)
+	{
+		if(!_keyManager || !outInfo) {
+			return false;
+		}
+		GamepadInfo info;
+		if(_keyManager->GetGamepadInfo(index, info)) {
+			memset(outInfo, 0, sizeof(GamepadInfoAbi));
+			StringUtilities::CopyToBuffer(info.Name, outInfo->Name, sizeof(outInfo->Name));
+			outInfo->VendorId = info.VendorId;
+			outInfo->ProductId = info.ProductId;
+			outInfo->Slot = info.Slot;
+			outInfo->HasRumble = info.HasRumble ? 1 : 0;
+			outInfo->Backend = (uint8_t)info.Backend;
+			return true;
+		}
+		return false;
+	}
+
+	DllExport bool __stdcall GetGamepadState(uint32_t index, GamepadStateAbi* outState)
+	{
+		if(!_keyManager || !outState) {
+			return false;
+		}
+		GamepadState state;
+		if(_keyManager->GetGamepadState(index, state)) {
+			outState->Buttons = state.Buttons;
+			memcpy(outState->Axes, state.Axes, sizeof(state.Axes));
+			return true;
+		}
+		return false;
+	}
+
+	DllExport void __stdcall TestForceFeedback(uint32_t index, uint16_t magnitudeRight, uint16_t magnitudeLeft)
+	{
+		if(_keyManager) {
+			_keyManager->TestForceFeedback(index, magnitudeRight, magnitudeLeft);
+		}
+	}
+
 	DllExport void __stdcall GetKeyName(uint16_t keyCode, char* outKeyName, uint32_t maxLength)
 	{
 		StringUtilities::CopyToBuffer(KeyManager::GetKeyName(keyCode), outKeyName, maxLength);

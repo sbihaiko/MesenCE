@@ -24,4 +24,9 @@ public:
 	optional<int16_t> GetAxisPosition(uint8_t gamepadPort, int axis);
 
 	void SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitudeLeft);
+
+	//Host input tester (PRD slice I.0): whether the port currently has a pad,
+	//and force feedback applied to a single pad instead of all of them.
+	bool IsConnected(uint8_t gamepadPort);
+	void SetForceFeedback(uint8_t gamepadPort, uint16_t magnitudeRight, uint16_t magnitudeLeft);
 };

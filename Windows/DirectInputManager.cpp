@@ -403,6 +403,42 @@ optional<int16_t> DirectInputManager::GetAxisPosition(int port, int axis)
 	}
 }
 
+std::string DirectInputManager::GetName(int port)
+{
+	if(port >= (int)_joysticks.size()) {
+		return "";
+	}
+#ifdef UNICODE
+	std::wstring wide = _joysticks[port].instanceInfo.tszProductName;
+	int len = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, nullptr, 0, nullptr, nullptr);
+	if(len <= 1) {
+		return "";
+	}
+	std::string result(len - 1, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, result.data(), len, nullptr, nullptr);
+	return result;
+#else
+	return std::string(_joysticks[port].instanceInfo.tszProductName);
+#endif
+}
+
+uint32_t DirectInputManager::GetVendorId(int port)
+{
+	if(port >= (int)_joysticks.size()) {
+		return 0;
+	}
+	//DirectInput packs the vendor/product ids into the product GUID's Data1
+	return (uint32_t)LOWORD(_joysticks[port].instanceInfo.guidProduct.Data1);
+}
+
+uint32_t DirectInputManager::GetProductId(int port)
+{
+	if(port >= (int)_joysticks.size()) {
+		return 0;
+	}
+	return (uint32_t)HIWORD(_joysticks[port].instanceInfo.guidProduct.Data1);
+}
+
 void DirectInputManager::UpdateInputState(DirectInputData& data)
 {
 	DIJOYSTATE2 newState;

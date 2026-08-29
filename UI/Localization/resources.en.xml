@@ -118,6 +118,12 @@
 			<Control ID="lblForceFeedbackLow">Disabled</Control>
 			<Control ID="lblForceFeedbackHigh">Maximum</Control>
 
+			<Control ID="tpgInputTest">Test</Control>
+			<Control ID="btnTestRumble">Test rumble</Control>
+			<Control ID="lblNoControllersConnected">No controllers connected.</Control>
+			<Control ID="lblControllerAxisLeft">Left stick</Control>
+			<Control ID="lblControllerAxisRight">Right stick</Control>
+
 			<Control ID="tpgDisplay">Display</Control>
 			<Control ID="lblDisplayInputPorts">Display ports: </Control>
 			<Control ID="chkDisplayPort1">Player 1</Control>

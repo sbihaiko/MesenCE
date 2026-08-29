@@ -1,11 +1,19 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Mesen.Config;
+using Mesen.Controls;
+using Mesen.Interop;
 using Mesen.Utilities;
 using Mesen.ViewModels;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 
 namespace Mesen.Windows
 {
@@ -13,6 +21,13 @@ namespace Mesen.Windows
 	{
 		private ControllerConfigViewModel Model => (ControllerConfigViewModel)DataContext!;
 		private bool _promptToSave = true;
+
+		//Host input tester (PRD slice I.2): while the window is open, a
+		//KeyBindingButton whose binding matches a currently-pressed key is
+		//highlighted live, so the user sees which physical input maps to which
+		//console button before/while remapping.
+		private DispatcherTimer? _highlightTimer;
+		private List<KeyBindingButton> _keyBindingButtons = new();
 
 		public ControllerConfigWindow()
 		{
@@ -22,6 +37,63 @@ namespace Mesen.Windows
 		private void InitializeComponent()
 		{
 			AvaloniaXamlLoader.Load(this);
+		}
+
+		protected override void OnOpened(EventArgs e)
+		{
+			base.OnOpened(e);
+			CollectKeyBindingButtons();
+			//The per-console views are created lazily; the tab switch realizes
+			//new buttons, so re-collect whenever the mapping tab changes.
+			TabControl tabMain = this.GetControl<TabControl>("tabMain");
+			tabMain.SelectionChanged += (s, ev) => CollectKeyBindingButtons();
+			_highlightTimer = new DispatcherTimer();
+			_highlightTimer.Interval = TimeSpan.FromMilliseconds(16); //~60 Hz
+			_highlightTimer.Tick += (s, ev) => UpdateHighlights();
+			_highlightTimer.Start();
+		}
+
+		protected override void OnClosed(EventArgs e)
+		{
+			_highlightTimer?.Stop();
+			_highlightTimer = null;
+			_keyBindingButtons.Clear();
+			base.OnClosed(e);
+		}
+
+		private void CollectKeyBindingButtons()
+		{
+			_keyBindingButtons.Clear();
+			CollectKeyBindingButtons(this);
+		}
+
+		private void CollectKeyBindingButtons(AvaloniaObject parent)
+		{
+			if(parent is not Visual visual) {
+				return;
+			}
+			foreach(Visual child in visual.GetVisualChildren()) {
+				if(child is KeyBindingButton btn) {
+					_keyBindingButtons.Add(btn);
+				}
+				CollectKeyBindingButtons(child);
+			}
+		}
+
+		private void UpdateHighlights()
+		{
+			if(_keyBindingButtons.Count == 0) {
+				//The controller view may not be realized yet - retry once
+				CollectKeyBindingButtons();
+				if(_keyBindingButtons.Count == 0) {
+					return;
+				}
+			}
+
+			List<UInt16> pressed = InputApi.GetPressedKeys();
+			foreach(KeyBindingButton btn in _keyBindingButtons) {
+				btn.Highlighted = pressed.Contains(btn.KeyBinding);
+			}
 		}
 
 		protected override void OnKeyDown(KeyEventArgs e)

@@ -25,6 +25,17 @@ namespace Mesen.Controls
 			set { SetValue(KeyBindingProperty, value); }
 		}
 
+		//Host input tester (PRD slice I.2): while the controller config window is
+		//open, the button whose binding matches a currently-pressed key lights up
+		//live, so the user sees which physical input maps to which console button.
+		public static readonly StyledProperty<bool> HighlightedProperty = AvaloniaProperty.Register<KeyBindingButton, bool>(nameof(Highlighted), false);
+
+		public bool Highlighted
+		{
+			get { return GetValue(HighlightedProperty); }
+			set { SetValue(HighlightedProperty, value); }
+		}
+
 		public KeyBindingButton()
 		{
 			InitializeComponent();
@@ -79,6 +90,10 @@ namespace Mesen.Controls
 			if(change.Property == KeyBindingProperty) {
 				UInt16 value = Convert.ToUInt16(change.NewValue);
 				SetKeyName(value);
+			} else if(change.Property == HighlightedProperty) {
+				//Host input tester (PRD slice I.2): drive the highlight style
+				//through a class so the theme can restyle it
+				Classes.Set("highlighted", change.NewValue is true);
 			}
 		}
 

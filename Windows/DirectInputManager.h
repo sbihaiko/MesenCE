@@ -45,4 +45,10 @@ public:
 	int GetJoystickCount();
 	bool IsPressed(int port, int button);
 	optional<int16_t> GetAxisPosition(int port, int axis);
+
+	//Host input tester (PRD slice I.0): device identity (product name + USB
+	//vendor/product ids parsed from the instance GUID; 0 when unavailable).
+	std::string GetName(int port);
+	uint32_t GetVendorId(int port);
+	uint32_t GetProductId(int port);
 };

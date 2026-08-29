@@ -10,5 +10,12 @@
 	VerticalContentAlignment="Center"
 	HorizontalContentAlignment="Center"
 >
-	
+	<Button.Styles>
+		<!-- Host input tester (PRD slice I.2): a pressed physical key matching this
+			 binding lights the button up while the controller config window is open -->
+		<Style Selector="Button.highlighted">
+			<Setter Property="Background" Value="#3388CC" />
+			<Setter Property="BorderBrush" Value="#55AAEE" />
+		</Style>
+	</Button.Styles>
 </Button>

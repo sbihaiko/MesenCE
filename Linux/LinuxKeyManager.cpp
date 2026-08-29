@@ -224,3 +224,46 @@ void LinuxKeyManager::SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitu
 		controller->SetForceFeedback(magnitudeRight, magnitudeLeft);
 	}
 }
+
+uint32_t LinuxKeyManager::GetConnectedGamepadCount()
+{
+	return (uint32_t)_controllers.size();
+}
+
+bool LinuxKeyManager::GetGamepadInfo(uint32_t index, GamepadInfo& info)
+{
+	if(index >= _controllers.size()) {
+		return false;
+	}
+	info.Name = _controllers[index]->GetName();
+	info.VendorId = _controllers[index]->GetVendorId();
+	info.ProductId = _controllers[index]->GetProductId();
+	info.Slot = index;
+	info.HasRumble = _controllers[index]->HasRumble();
+	info.Backend = GamepadBackend::Evdev;
+	return true;
+}
+
+bool LinuxKeyManager::GetGamepadState(uint32_t index, GamepadState& state)
+{
+	if(index >= _controllers.size()) {
+		return false;
+	}
+	for(int j = 0; j < 24; j++) {
+		if(_controllers[index]->IsButtonPressed(j)) {
+			state.Buttons |= (1u << j);
+		}
+	}
+	for(int a = 0; a < 4; a++) {
+		std::optional<int16_t> axis = _controllers[index]->GetAxisPosition(a);
+		state.Axes[a] = axis ? *axis : 0;
+	}
+	return true;
+}
+
+void LinuxKeyManager::TestForceFeedback(uint32_t index, uint16_t magnitudeRight, uint16_t magnitudeLeft)
+{
+	if(index < _controllers.size()) {
+		_controllers[index]->SetForceFeedback(magnitudeRight, magnitudeLeft);
+	}
+}

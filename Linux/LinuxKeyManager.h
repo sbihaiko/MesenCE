@@ -47,4 +47,10 @@ public:
 	void SetDisabled(bool disabled) override;
 
 	void SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitudeLeft) override;
+
+	//Host input tester (PRD slice I.0)
+	uint32_t GetConnectedGamepadCount() override;
+	bool GetGamepadInfo(uint32_t index, GamepadInfo& info) override;
+	bool GetGamepadState(uint32_t index, GamepadState& state) override;
+	void TestForceFeedback(uint32_t index, uint16_t magnitudeRight, uint16_t magnitudeLeft) override;
 };

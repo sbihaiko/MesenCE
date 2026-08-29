@@ -116,5 +116,57 @@
 				</Grid>
 			</ScrollViewer>
 		</TabItem>
+
+		<!-- Host input tester (PRD slice I.1): live buttons/axes for every connected pad,
+			 fed by a timer that only runs while this tab is selected -->
+		<TabItem Header="{l:Translate tpgInputTest}" IsSelected="{Binding GamepadTester.IsTestTabVisible}">
+			<ScrollViewer AllowAutoHide="False" HorizontalScrollBarVisibility="Auto" Padding="0 0 2 0">
+				<StackPanel>
+					<TextBlock Text="{l:Translate lblNoControllersConnected}" Foreground="Gray" IsVisible="{Binding GamepadTester.ShowNoPadsHint}" Margin="0 5 0 0" />
+
+					<ItemsControl ItemsSource="{Binding GamepadTester.Gamepads}">
+						<ItemsControl.ItemTemplate>
+							<DataTemplate DataType="{x:Type vm:GamepadTestItem}">
+								<c:OptionSection Margin="0 5 0 5">
+									<StackPanel>
+										<Grid ColumnDefinitions="*,Auto">
+											<StackPanel>
+												<TextBlock Text="{Binding Name}" FontWeight="Bold" />
+												<TextBlock Text="{Binding InfoText}" Foreground="Gray" />
+											</StackPanel>
+											<Button Grid.Column="1" Content="{l:Translate btnTestRumble}" Command="{Binding TestRumbleCommand}" IsVisible="{Binding HasRumble}" VerticalAlignment="Top" />
+										</Grid>
+
+										<ItemsControl ItemsSource="{Binding Buttons}" Margin="0 8 0 0">
+											<ItemsControl.ItemsPanel>
+												<ItemsPanelTemplate>
+													<WrapPanel />
+												</ItemsPanelTemplate>
+											</ItemsControl.ItemsPanel>
+											<ItemsControl.ItemTemplate>
+												<DataTemplate DataType="{x:Type vm:GamepadButtonState}">
+													<Border CornerRadius="3" Padding="6 2" Margin="2" Background="{Binding IsPressedBrush}">
+														<TextBlock Text="{Binding Label}" FontSize="11" />
+													</Border>
+												</DataTemplate>
+											</ItemsControl.ItemTemplate>
+										</ItemsControl>
+
+										<Grid ColumnDefinitions="Auto,80,Auto,80" RowDefinitions="Auto,Auto" Margin="0 8 0 0">
+											<TextBlock Text="{l:Translate lblControllerAxisLeft}" VerticalAlignment="Center" />
+											<TextBlock Grid.Column="1" Text="{Binding LeftX, StringFormat='X: {0}'}" />
+											<TextBlock Grid.Column="2" Text="{Binding LeftY, StringFormat='Y: {0}'}" />
+											<TextBlock Grid.Row="1" Text="{l:Translate lblControllerAxisRight}" VerticalAlignment="Center" />
+											<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RightX, StringFormat='X: {0}'}" />
+											<TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding RightY, StringFormat='Y: {0}'}" />
+										</Grid>
+									</StackPanel>
+								</c:OptionSection>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+				</StackPanel>
+			</ScrollViewer>
+		</TabItem>
 	</TabControl>
 </UserControl>

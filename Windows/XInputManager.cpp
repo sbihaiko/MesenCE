@@ -99,13 +99,25 @@ optional<int16_t> XInputManager::GetAxisPosition(uint8_t port, int axis)
 
 void XInputManager::SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitudeLeft)
 {
+	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
+		if(_enableForceFeedback[i]) {
+			SetForceFeedback(i, magnitudeRight, magnitudeLeft);
+		}
+	}
+}
+
+bool XInputManager::IsConnected(uint8_t gamepadPort)
+{
+	return gamepadPort < XUSER_MAX_COUNT && _gamePadConnected[gamepadPort];
+}
+
+void XInputManager::SetForceFeedback(uint8_t gamepadPort, uint16_t magnitudeRight, uint16_t magnitudeLeft)
+{
+	if(gamepadPort >= XUSER_MAX_COUNT || !_gamePadConnected[gamepadPort]) {
+		return;
+	}
 	XINPUT_VIBRATION settings = {};
 	settings.wRightMotorSpeed = magnitudeRight;
 	settings.wLeftMotorSpeed = magnitudeLeft;
-
-	for(int i = 0; i < XUSER_MAX_COUNT; i++) {
-		if(_enableForceFeedback[i]) {
-			XInputSetState(i, &settings);
-		}
-	}
+	XInputSetState(gamepadPort, &settings);
 }

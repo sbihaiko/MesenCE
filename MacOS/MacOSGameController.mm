@@ -115,6 +115,17 @@ std::optional<int16_t> MacOSGameController::GetAxisPosition(int axis)
 	return _axisState[axis];
 }
 
+std::string MacOSGameController::GetName()
+{
+	NSString* name = [_controller vendorName];
+	return name != nil ? std::string([name UTF8String]) : std::string();
+}
+
+bool MacOSGameController::HasRumble()
+{
+	return _haptics != nil;
+}
+
 void MacOSGameController::SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitudeLeft)
 {
 	NSError* error = nil;

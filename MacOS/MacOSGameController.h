@@ -35,4 +35,10 @@ public:
 	std::optional<int16_t> GetAxisPosition(int axis);
 
 	void SetForceFeedback(uint16_t magnitudeRight, uint16_t magnitudeLeft);
+
+	//Host input tester (PRD slice I.0): the controller's product name as the
+	//GameController framework reports it, and whether a haptic engine is
+	//available for force feedback.
+	std::string GetName();
+	bool HasRumble();
 };
