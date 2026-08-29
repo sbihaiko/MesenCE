@@ -1,8 +1,12 @@
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Mesen.Config;
 using Mesen.Interop;
+using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.Utilities;
 using System;
 using System.Collections.Generic;
@@ -56,6 +60,7 @@ namespace Mesen.ViewModels
 		public void Refresh()
 		{
 			uint count = InputApi.GetConnectedGamepadCount();
+			uint deadzoneSize = ConfigManager.Config.Input.ControllerDeadzoneSize;
 			while(Gamepads.Count < count) {
 				Gamepads.Add(new GamepadTestItem((uint)Gamepads.Count));
 			}
@@ -63,7 +68,7 @@ namespace Mesen.ViewModels
 				Gamepads.RemoveAt(Gamepads.Count - 1);
 			}
 			foreach(GamepadTestItem item in Gamepads) {
-				item.RefreshState();
+				item.RefreshState(deadzoneSize);
 			}
 			HasPads = Gamepads.Count > 0;
 			ShowNoPadsHint = !HasPads;
@@ -90,6 +95,24 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial int RightX { get; set; }
 		[ObservableProperty] public partial int RightY { get; set; }
 
+		//Stick diagnostics (PRD I.1 follow-up + I.3): the deadzone ring, the live
+		//dot, magnitude, drift and circularity readouts for the left stick. The
+		//ring geometry and the diagnostic math live in UI/Logic (host-free,
+		//unit-tested); this VM only maps the raw axes to ring pixels and labels.
+		public double LeftStickRingSize => RingRadius * 2;
+		public double LeftStickDotSize => DotSize;
+		[ObservableProperty] public partial double LeftStickDeadzoneSize { get; set; }
+		[ObservableProperty] public partial Thickness LeftStickDotMargin { get; set; }
+		[ObservableProperty] public partial string LeftStickReadout { get; set; } = "";
+		[ObservableProperty] public partial bool IsDrifting { get; set; }
+		[ObservableProperty] public partial bool HasCircularityResult { get; set; }
+		[ObservableProperty] public partial string CircularityText { get; set; } = "";
+
+		private const double RingRadius = 36;
+		private const double DotSize = 8;
+		private readonly GamepadCircularity _circularity = new();
+		private readonly GamepadDriftDetector _drift = new();
+
 		private static readonly string[] _buttonNames = {
 			"A", "B", "X", "Y", "LB", "RB", "Menu", "Options",
 			"DUp", "DDown", "DLeft", "DRight", "LT", "RT", "L3", "R3",
@@ -106,7 +129,7 @@ namespace Mesen.ViewModels
 			}
 		}
 
-		public void RefreshState()
+		public void RefreshState(uint deadzoneSize)
 		{
 			if(InputApi.GetGamepadInfo(Index, out GamepadInfo info)) {
 				Name = info.Name;
@@ -127,6 +150,50 @@ namespace Mesen.ViewModels
 				RightX = state.Axes[2];
 				RightY = state.Axes[3];
 			}
+
+			UpdateStickDiagnostics(deadzoneSize);
+		}
+
+		private void UpdateStickDiagnostics(uint deadzoneSize)
+		{
+			int deadzoneUnits = GamepadStickDiagnostics.DeadzoneUnits(deadzoneSize);
+			double nx = Math.Clamp(LeftX / (double)GamepadCircularity.MaxAxisValue, -1, 1);
+			double ny = Math.Clamp(LeftY / (double)GamepadCircularity.MaxAxisValue, -1, 1);
+			double magnitude = Math.Sqrt(nx * nx + ny * ny);
+
+			LeftStickDeadzoneSize = 2 * deadzoneUnits / (double)GamepadCircularity.MaxAxisValue * RingRadius;
+			LeftStickDotMargin = new Thickness(
+				RingRadius + nx * RingRadius - DotSize / 2,
+				RingRadius - ny * RingRadius - DotSize / 2,
+				0, 0);
+			LeftStickReadout = $"X: {LeftX}  Y: {LeftY}  mag {magnitude * 100:0}%";
+
+			_circularity.AddSample((short)LeftX, (short)LeftY, deadzoneUnits);
+			HasCircularityResult = _circularity.HasResult;
+			CircularityText = HasCircularityResult
+				? $"{_circularity.Score * 100:0}% · {CategoryLabel(_circularity.Category)} ({_circularity.SampleCount} samples)"
+				: "";
+
+			_drift.Update((int)Math.Round(magnitude * GamepadCircularity.MaxAxisValue), deadzoneUnits);
+			IsDrifting = _drift.IsDrifting;
+		}
+
+		private static string CategoryLabel(GamepadCircularityCategory category)
+		{
+			switch(category) {
+				case GamepadCircularityCategory.Excellent: return ResourceHelper.GetMessage("lblCircularityExcellent");
+				case GamepadCircularityCategory.Good: return ResourceHelper.GetMessage("lblCircularityGood");
+				case GamepadCircularityCategory.Fair: return ResourceHelper.GetMessage("lblCircularityFair");
+				default: return ResourceHelper.GetMessage("lblCircularityPoor");
+			}
+		}
+
+		[RelayCommand]
+		private void ResetCircularity()
+		{
+			_circularity.Reset();
+			HasCircularityResult = false;
+			CircularityText = "";
 		}
 
 		[RelayCommand]

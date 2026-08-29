@@ -135,6 +135,15 @@
 			<Control ID="lblControllerAxisLeft">Left stick</Control>
 			<Control ID="lblControllerAxisRight">Right stick</Control>
 
+			<Control ID="lblStickDrift">Stick drift - input registers without touching the stick</Control>
+			<Control ID="lblStickCircularity">Left stick circularity</Control>
+			<Control ID="lblStickCircularityHint">Rotate the left stick in a full circle to measure its travel.</Control>
+			<Control ID="btnResetCircularity">Reset</Control>
+			<Control ID="lblCircularityExcellent">Excellent</Control>
+			<Control ID="lblCircularityGood">Good</Control>
+			<Control ID="lblCircularityFair">Fair</Control>
+			<Control ID="lblCircularityPoor">Poor</Control>
+
 			<Control ID="tpgDisplay">Display</Control>
 			<Control ID="lblDisplayInputPorts">Display ports: </Control>
 			<Control ID="chkDisplayPort1">Player 1</Control>

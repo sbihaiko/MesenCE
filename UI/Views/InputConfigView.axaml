@@ -152,14 +152,37 @@
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
 
-										<Grid ColumnDefinitions="Auto,80,Auto,80" RowDefinitions="Auto,Auto" Margin="0 8 0 0">
-											<TextBlock Text="{l:Translate lblControllerAxisLeft}" VerticalAlignment="Center" />
-											<TextBlock Grid.Column="1" Text="{Binding LeftX, StringFormat='X: {0}'}" />
-											<TextBlock Grid.Column="2" Text="{Binding LeftY, StringFormat='Y: {0}'}" />
-											<TextBlock Grid.Row="1" Text="{l:Translate lblControllerAxisRight}" VerticalAlignment="Center" />
-											<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RightX, StringFormat='X: {0}'}" />
-											<TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding RightY, StringFormat='Y: {0}'}" />
+										<Grid ColumnDefinitions="Auto,Auto" Margin="0 8 0 0">
+											<!-- Left stick: deadzone ring (PRD I.1 follow-up) - outer ring is full
+												 travel, inner red ring is the configured deadzone, green dot is the live
+												 position; drift warning shows when the stick rests past the deadzone. -->
+											<StackPanel>
+												<TextBlock Text="{l:Translate lblControllerAxisLeft}" VerticalAlignment="Center" />
+												<Grid Width="{Binding LeftStickRingSize}" Height="{Binding LeftStickRingSize}" Margin="0 4 0 0">
+													<Ellipse Stroke="#808080" StrokeThickness="1" />
+													<Ellipse Width="{Binding LeftStickDeadzoneSize}" Height="{Binding LeftStickDeadzoneSize}" Stroke="#cc6666" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+													<Border Width="{Binding LeftStickDotSize}" Height="{Binding LeftStickDotSize}" CornerRadius="4" Background="#33cc66" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{Binding LeftStickDotMargin}" />
+												</Grid>
+												<TextBlock Text="{Binding LeftStickReadout}" FontSize="11" Foreground="Gray" Margin="0 3 0 0" />
+												<TextBlock Text="{l:Translate lblStickDrift}" Foreground="#cc3333" FontWeight="Bold" FontSize="11" IsVisible="{Binding IsDrifting}" />
+											</StackPanel>
+											<StackPanel Grid.Column="1" Margin="16 0 0 0">
+												<TextBlock Text="{l:Translate lblControllerAxisRight}" VerticalAlignment="Center" />
+												<TextBlock Text="{Binding RightX, StringFormat='X: {0}'}" />
+												<TextBlock Text="{Binding RightY, StringFormat='Y: {0}'}" />
+											</StackPanel>
 										</Grid>
+
+										<!-- Circularity test (PRD I.3): accumulate a full stick rotation and
+											 report coverage x radial consistency. -->
+										<StackPanel Margin="0 10 0 0">
+											<Grid ColumnDefinitions="*,Auto">
+												<TextBlock Text="{l:Translate lblStickCircularity}" FontWeight="Bold" />
+												<Button Grid.Column="1" Content="{l:Translate btnResetCircularity}" Command="{Binding ResetCircularityCommand}" Padding="6 2" FontSize="11" />
+											</Grid>
+											<TextBlock Text="{Binding CircularityText}" FontSize="11" Foreground="Gray" Margin="0 2 0 0" IsVisible="{Binding HasCircularityResult}" />
+											<TextBlock Text="{l:Translate lblStickCircularityHint}" FontSize="11" Foreground="Gray" TextWrapping="Wrap" IsVisible="{Binding !HasCircularityResult}" />
+										</StackPanel>
 									</StackPanel>
 								</c:OptionSection>
 							</DataTemplate>
