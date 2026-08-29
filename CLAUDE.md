@@ -40,10 +40,13 @@ existing localization convention (including pt-BR locale resource
 files), not this rule; this rule is about comments and
 developer/maintainer-facing text only.
 
-As of 2026-08-27, the C#/C++ codebase under `Core/`/`UI/` and every
-script under `scripts/` are consistently in English (the last pt-BR
-remnants — `report-bug.sh`, `ensure_community_pack_labels.sh`, a stray
-comment in `mep_lint.py` — were converted that day).
+As of 2026-08-29, the C#/C++ codebase under `Core/`/`UI/` and every
+script under `scripts/` are consistently in English (the 2026-08-27 sweep
+converted `report-bug.sh`, `ensure_community_pack_labels.sh` and a stray
+`mep_lint.py` comment; on 2026-08-29 two missed usage strings surfaced —
+the developer-facing `usage:` messages in `scripts/headless_record.cpp`
+and `scripts/roles_probe.cpp` — and were fixed; a full accent-based scan
+finds no remaining pt-BR in source).
 
 ## Architecture Decision Records (`.dev-squad/adr/`)
 
