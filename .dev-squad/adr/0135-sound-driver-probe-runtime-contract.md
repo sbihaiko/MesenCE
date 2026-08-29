@@ -94,6 +94,17 @@ Proposed runtime contract for the productised probe:
   run it.
 - Cost: debugger attach/detach and save-state churn inside the emulator
   process; NES-only until GB/SMS drivers are studied.
+- Implemented variant (2026-08-29): the tool runs in its own process — its
+  own `Emulator` instance with a private home — not on the live emulation
+  thread. That is Decision 5's "second `Emulator` instance" alternative (and
+  the headless-script alternative) taken to the limit: the GUI *Extract audio*
+  action launches `scripts/spike_sound_driver` with the loaded ROM and the
+  sibling pack folder, so isolation is total (nothing shares the user's
+  session) and "private copy of the console state" becomes a private process.
+  `spike_sound_driver.cpp` carries the full 7-point contract: per-id frame
+  budget + whole-run wall-clock budget, SIGINT abort at frame boundaries,
+  guaranteed no-op (`enumeration.log` only) when no trigger validates, output
+  relocated into `<sibling>/auto/audio/`.
 - This ADR moves to `accepted` when the feature ships with all seven points
   verifiable; ADR-0051 stays the record of the technique and its measured hit
   rate.

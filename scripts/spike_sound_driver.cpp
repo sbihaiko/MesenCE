@@ -15,10 +15,13 @@
 //Build: `make spike-sound-driver` (or, from repo root after `make core`):
 //  c++ -std=c++17 -O2 -I . -I Core -Wl,-headerpad_max_install_names scripts/spike_sound_driver.cpp InteropDLL/obj.osx-arm64/MesenCore.dylib -o scripts/spike_sound_driver
 //  install_name_tool -change MesenCore.dylib $PWD/InteropDLL/obj.osx-arm64/MesenCore.dylib scripts/spike_sound_driver
-//Usage: scripts/spike_sound_driver <rom.nes> <workdir> [maxIds=40] [secondsPerId=4] [startAt=3.0]
+//Usage: scripts/spike_sound_driver <rom.nes> <workdir> <output-folder> [maxIds=40] [secondsPerId=4] [startAt=3.0] [wallClockBudget=300]
+//  Productised tool (ADR-0135): runs on a private copy of the ROM with the MEP bootstrap on; the
+//  F5.3 recorder writes <workdir>/rom/<Game>/auto/audio/ for every enumerated track, then the run
+//  relocates fingerprints.json + midi/ into <output-folder>/auto/audio/ and writes enumeration.log
+//  beside it. SIGINT aborts at a frame boundary (partial result kept); when no trigger validates,
+//  only the log is written (guaranteed no-op on unsupported ROMs).
 //  startAt = seconds of emulated time (frames/60) before the title save state is taken
-//  SPIKE_BOOTSTRAP=1  run on a private copy of the ROM with the MEP bootstrap on: the F5.3
-//                     recorder writes <workdir>/rom/<Game>/auto/audio/ for every enumerated track
 //  SPIKE_NODEBUG=1 / SPIKE_NOPOWER=1  diagnostics (skip the debugger / the power cycle)
 #include "Core/Shared/SettingTypes.h"
 #include "Core/Shared/CpuType.h"
@@ -31,9 +34,11 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 #include <string>
@@ -134,6 +139,21 @@ namespace
 	std::atomic<uint32_t> g_breaks { 0 };
 	uint32_t g_seen = 0;
 	BreakEvent g_lastBreak = {};
+
+	//ADR-0135 runtime contract: the whole-run wall-clock budget and the SIGINT
+	//abort flag are honoured at frame boundaries; per-id sampling is bounded by
+	//emulated frames (Ppu.FrameCount), not wall-clock.
+	std::atomic<bool> g_abort { false };
+	Clock::time_point g_wallStart = Clock::now();
+	double g_wallBudgetSecs = 300.0;
+
+	//ADR-0135 points 2 and 3: true once the SIGINT abort fires or the whole-run
+	//wall-clock budget is exhausted. Checked at frame boundaries and loop turns so
+	//the run stops with a partial result instead of grinding on.
+	bool OutOfBudget()
+	{
+		return g_abort || Seconds(g_wallStart) > g_wallBudgetSecs;
+	}
 
 	void OnNotification(int type, void* param)
 	{
@@ -243,13 +263,35 @@ namespace
 		}
 	};
 
-	//Sample ~4x per frame so no note change of >= 1 frame is missed (a 60 Hz poll drifts against the emu)
+	uint32_t FrameCount()
+	{
+		NesState st = {};
+		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
+		return st.Ppu.FrameCount;
+	}
+
+	//Sample ~4x per frame so no note change of >= 1 frame is missed (a 60 Hz poll
+	//drifts against the emu). Bounded by EMULATED frames (Ppu.FrameCount), not
+	//wall-clock: the debugger makes wall-clock meaningless (ADR-0135 point 2).
+	//A wall-clock backstop still guards a stalled frame counter (e.g. a JMP-self
+	//stub the driver waits on); the whole-run wall-clock budget and the SIGINT
+	//abort flag are checked at each frame boundary (ADR-0135 points 2 and 3).
 	Sample SampleApu(double seconds, size_t maxOnsets = 64)
 	{
+		uint32_t frames = (uint32_t)std::lround(seconds * 60.0);
+		uint32_t startFrame = FrameCount();
 		Sample s;
 		Note prev;
 		Clock::time_point t0 = Clock::now();
-		while(Seconds(t0) < seconds) {
+		while(!g_abort && FrameCount() - startFrame < frames) {
+			if(Seconds(g_wallStart) > g_wallBudgetSecs) {
+				printf("   wall-clock budget exceeded\n");
+				break;
+			}
+			if(Seconds(t0) > seconds * 1.5 + 3.0) {
+				printf("   no frames advancing - stopping sample\n");
+				break;
+			}
 			Note n = Snapshot();
 			s.Frames++;
 			if(!n.Silent()) {
@@ -297,24 +339,42 @@ namespace
 
 int main(int argc, char** argv)
 {
-	if(argc < 3) {
-		fprintf(stderr, "usage: %s <rom.nes> <workdir> [maxIds=40] [secondsPerId=4] [startAt=3.0]\n", argv[0]);
+	if(argc < 4) {
+		fprintf(stderr, "usage: %s <rom.nes> <workdir> <output-folder> [maxIds=40] [secondsPerId=4] [startAt=3.0] [wallClockBudget=300]\n", argv[0]);
+		fprintf(stderr, "  Extract-audio tool (ADR-0135): drives the game's NES sound driver via the\n");
+		fprintf(stderr, "  debugger to enumerate music/SFX ids without gameplay. Writes\n");
+		fprintf(stderr, "  <output-folder>/auto/audio/ (F5.3 recorder fingerprints.json + midi/) plus\n");
+		fprintf(stderr, "  enumeration.log beside it. SIGINT aborts at a frame boundary, keeping what was\n");
+		fprintf(stderr, "  already written. When no trigger validates, ONLY enumeration.log is written\n");
+		fprintf(stderr, "  (guaranteed no-op on unsupported ROMs, ADR-0135 point 4).\n");
 		return 1;
 	}
+	//Line-buffer stdout so the progress output is visible in real time when a
+	//GUI launcher tails the tool's log (block-buffered stdout would only flush
+	//at exit). The debugger's own "[CPU] Uninitialized memory read" warnings go
+	//to stderr and are expected noise from the hijacked CPU.
+	setvbuf(stdout, nullptr, _IOLBF, 0);
+	signal(SIGINT, [](int) { g_abort = true; });
+	g_wallStart = Clock::now();
 	std::string rom = argv[1];
+	std::string originalRom = rom; //the user-facing path, kept for the enumeration log (rom is later swapped for the private copy)
 	std::filesystem::path work = argv[2];
-	int maxIds = argc > 3 ? atoi(argv[3]) : 40;
-	double secondsPerId = argc > 4 ? atof(argv[4]) : 4.0;
-	double startAt = argc > 5 ? atof(argv[5]) : 3.0;
+	std::filesystem::path outputFolder = argv[3];
+	int maxIds = argc > 4 ? atoi(argv[4]) : 40;
+	double secondsPerId = argc > 5 ? atof(argv[5]) : 4.0;
+	double startAt = argc > 6 ? atof(argv[6]) : 3.0;
+	g_wallBudgetSecs = argc > 7 ? atof(argv[7]) : 300.0;
 	std::filesystem::create_directories(work);
 	std::filesystem::path home = work / "mesen-home";
 	std::filesystem::create_directories(home);
 
-	//SPIKE_BOOTSTRAP=1: run the MEP audio/texture bootstrap on a private copy of the ROM so the
-	//F5.3 recorder captures every track we enumerate (fingerprints.json + midi/). Off by default:
-	//BootstrapEnhancementFolder defaults to true and would write beside the user's ROM.
-	bool bootstrap = getenv("SPIKE_BOOTSTRAP") != nullptr;
-	if(bootstrap) {
+	//ADR-0135 point 6: run the MEP audio/texture bootstrap on a private copy of the ROM so the
+	//F5.3 recorder captures every track we enumerate (fingerprints.json + midi/). Always on for
+	//this tool - the recorder writes into <workdir>/rom/<Game>/auto/audio/ (never beside the user's
+	//ROM; BootstrapEnhancementFolder would otherwise write to the real sibling), and the run
+	//relocates that output into the explicit <output-folder>/auto/audio/ at the end.
+	bool bootstrap = true;
+	{
 		std::filesystem::path copy = work / "rom" / std::filesystem::path(rom).filename();
 		std::filesystem::create_directories(copy.parent_path());
 		std::filesystem::copy_file(rom, copy, std::filesystem::copy_options::overwrite_existing);
@@ -360,6 +420,11 @@ int main(int argc, char** argv)
 		if(st.Ppu.FrameCount >= startFrame) {
 			break;
 		}
+		if(OutOfBudget()) {
+			fprintf(stderr, "wall-clock budget exceeded before the title state\n");
+			Stop();
+			return 5;
+		}
 		SleepMs(20);
 	}
 	{
@@ -378,6 +443,11 @@ int main(int argc, char** argv)
 		GetConsoleState(*(BaseState*)&st, ConsoleType::Nes);
 		if(st.Ppu.FrameCount >= startFrame + 45 + 60) {
 			break;
+		}
+		if(OutOfBudget()) {
+			fprintf(stderr, "wall-clock budget exceeded before the second title state\n");
+			Stop();
+			return 5;
 		}
 		SleepMs(20);
 	}
@@ -459,7 +529,7 @@ int main(int argc, char** argv)
 	int hits = 0;
 	std::thread presserA;
 	bool pressedA = false;
-	while(hits < 600 && Seconds(tA) < 12.0) {
+	while(hits < 600 && Seconds(tA) < 12.0 && !OutOfBudget()) {
 		if(!WaitForBreak(1.5)) {
 			if(!pressedA) {
 				//silent title with no SFX (Castlevania): provoke sound by leaving the title
@@ -675,7 +745,7 @@ int main(int argc, char** argv)
 	std::thread presser;
 	bool pressed = false;
 	int stops = 0;
-	while(Seconds(tB) < 6.0) {
+	while(Seconds(tB) < 6.0 && !OutOfBudget()) {
 		if(!pressed && Seconds(tB) > 1.0) {
 			pressed = true;
 			presser = std::thread([]() { PulseStart(3.0); });
@@ -784,7 +854,7 @@ int main(int argc, char** argv)
 		}
 		return ids;
 	};
-	for(size_t i = 0; i < ranked.size() && i < 10 && bestScore < 3; i++) {
+	for(size_t i = 0; i < ranked.size() && i < 10 && bestScore < 3 && !OutOfBudget(); i++) {
 		Candidate& c = *ranked[i];
 		//register order: the one that varies most first, ties A, X, Y
 		std::vector<std::pair<char, const std::set<uint8_t>*>> regs = { { 'A', &c.As }, { 'X', &c.Xs }, { 'Y', &c.Ys } };
@@ -1051,7 +1121,7 @@ int main(int argc, char** argv)
 			}
 			printf("\n");
 		}
-		for(size_t i = 0; i < mailboxes.size() && i < 40 && triggers.size() < 3; i++) {
+		for(size_t i = 0; i < mailboxes.size() && i < 40 && triggers.size() < 3 && !OutOfBudget(); i++) {
 			Trigger t;
 			t.Mailbox = true;
 			t.Addr = mailboxes[i].Addr;
@@ -1077,6 +1147,16 @@ int main(int argc, char** argv)
 	}
 	if(bestScore < 3) {
 		fprintf(stderr, "no validated trigger (best score %d)\n", bestScore);
+		//ADR-0135 points 4 and 6: guaranteed no-op - nothing reaches
+		//<output-folder>/auto/audio/ (no fingerprints), only the enumeration log,
+		//and the game state is untouched (private instance).
+		std::filesystem::path logPath = outputFolder / "auto" / "audio" / "enumeration.log";
+		std::error_code ec;
+		std::filesystem::create_directories(logPath.parent_path(), ec);
+		std::ofstream log(logPath);
+		log << "# Extract-audio probe (ADR-0135). ROM: " << originalRom << "\n";
+		log << "status: no validated trigger (best score " << bestScore << ") - no audio written\n";
+		log.close();
 		Stop();
 		return 4;
 	}
@@ -1096,6 +1176,7 @@ int main(int argc, char** argv)
 		uint32_t Audible, LastAudible, Frames;
 		uint32_t Hash;
 		std::string FirstNotes;
+		bool Repeat = false;
 	};
 	std::vector<Result> results;
 	std::set<uint32_t> seenHashes;
@@ -1106,6 +1187,10 @@ int main(int argc, char** argv)
 			printf("== C) enumerating id 0..%d via JSR $%04X %c=id (%.0fs each)\n", maxIds - 1, trig.Addr, trig.Reg, secondsPerId);
 		}
 		for(int id = 0; id < maxIds; id++) {
+			if(OutOfBudget()) {
+				printf("   wall-clock budget exceeded - stopping enumeration (partial result)\n");
+				break;
+			}
 			bool ok = false;
 			Sample s = playId(trig, id, secondsPerId, &ok);
 			if(!ok) {
@@ -1136,6 +1221,7 @@ int main(int argc, char** argv)
 			r.FirstNotes = buf;
 			bool dup = (r.Kind == "bgm" || r.Kind == "sfx") && seenHashes.count(r.Hash) > 0;
 			seenHashes.insert(r.Hash);
+			r.Repeat = dup;
 			printf("   id %2d: %-5s audible=%3u/%3u last=%3u hash=%08X %s%s\n", id, r.Kind.c_str(), r.Audible, r.Frames, r.LastAudible, r.Hash, r.FirstNotes.c_str(), dup ? " (repeat)" : "");
 			results.push_back(r);
 		}
@@ -1157,6 +1243,67 @@ int main(int argc, char** argv)
 		}
 	}
 	printf("== summary: %d bgm, %d sfx, %d short, %d = title, %zu distinct signatures across %d ids x %zu trigger(s)\n", bgm, sfx, shortN, title, uniq.size(), maxIds, triggers.size());
-	Stop();
+	//The F5.3 recorder flushes fingerprints.json + midi/ only in its destructor
+	//(NesAudioBootstrap::~NesAudioBootstrap -> TrackSegmenter::Save), which runs
+	//when the Emulator is destroyed. The interop Release() performs that teardown
+	//(_emu.reset() in EmuApiWrapper), so it must run BEFORE the output is
+	//relocated - a plain Stop() leaves the fingerprints unflushed.
+	Release();
+	//ADR-0135 point 6: relocate the recorder's output (written under the private
+	//<workdir>/rom/<Game>/auto/audio/) into the explicit output folder and keep
+	//the enumeration log beside the fingerprints. On abort this keeps the partial
+	//audio already recorded (point 3).
+	{
+		std::filesystem::path recRoot = work / "rom";
+		std::error_code ec;
+		std::filesystem::path found;
+		for(auto& entry : std::filesystem::directory_iterator(recRoot, ec)) {
+			if(entry.is_directory(ec)) {
+				std::filesystem::path candidate = entry.path() / "auto" / "audio";
+				if(std::filesystem::exists(candidate / "fingerprints.json", ec)) {
+					found = candidate;
+					break;
+				}
+			}
+		}
+		if(found.empty()) {
+			fprintf(stderr, "WARNING: recorder output not found under %s - pack audio not written\n", recRoot.c_str());
+		} else {
+			std::filesystem::path dest = outputFolder / "auto" / "audio";
+			std::filesystem::create_directories(dest, ec);
+			ec.clear();
+			for(auto& entry : std::filesystem::directory_iterator(found, ec)) {
+				std::filesystem::copy(entry.path(), dest / entry.path().filename(), std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+				if(ec) {
+					fprintf(stderr, "WARNING: copying recorder output failed: %s\n", ec.message().c_str());
+					ec.clear();
+				}
+			}
+			printf("   audio written to %s\n", dest.c_str());
+		}
+		std::filesystem::path logPath = outputFolder / "auto" / "audio" / "enumeration.log";
+		std::filesystem::create_directories(logPath.parent_path(), ec);
+		std::ofstream log(logPath);
+		log << "# Extract-audio probe (ADR-0135). ROM: " << originalRom << "\n";
+		log << "status: " << (g_abort ? "aborted (SIGINT) - partial result" : "ok") << "\n";
+		log << "tick: $" << std::hex << std::uppercase << P << std::dec << "\n";
+		for(Trigger& t : triggers) {
+			if(t.Mailbox) {
+				log << "trigger: mailbox $" << std::hex << std::uppercase << t.Addr << std::dec << "\n";
+			} else {
+				log << "trigger: JSR $" << std::hex << std::uppercase << t.Addr << std::dec << " with " << t.Reg << "=id\n";
+			}
+		}
+		log << "budget: " << maxIds << " ids x " << (int)secondsPerId << "s emulated each, wall-clock cap " << (int)g_wallBudgetSecs << "s\n";
+		log << "id,kind,audible,frames,last,hash,first-notes,repeat\n";
+		for(Result& r : results) {
+			log << r.Id << "," << r.Kind << "," << r.Audible << "," << r.Frames << "," << r.LastAudible << ","
+			    << std::hex << std::uppercase << r.Hash << std::dec << ",\"" << r.FirstNotes << "\"," << (r.Repeat ? "yes" : "no") << "\n";
+		}
+		log << "summary: " << bgm << " bgm, " << sfx << " sfx, " << shortN << " short, " << title << " title, " << uniq.size() << " distinct signatures\n";
+		log << "rejected candidates: any candidate below the >= 3 validation bar (see best score above)\n";
+		log.close();
+		printf("   wrote %s\n", logPath.c_str());
+	}
 	return 0;
 }

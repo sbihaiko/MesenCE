@@ -276,7 +276,10 @@ capture-tool: core
 	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/headless_record 2>/dev/null || true
 	codesign -f -s - scripts/headless_record 2>/dev/null || true
 
-#F5.4f spike (ADR-0051): discover the NES sound driver and enumerate music/SFX without playing
+#F5.4g Block D item 11 (ADR-0135/0051): productised extract-audio tool - discover the NES sound
+#driver and enumerate music/SFX without playing. Full runtime contract: per-id frame budget +
+#whole-run wall-clock budget, SIGINT abort, no-op on unsupported ROMs, enumeration.log.
+#Run: scripts/spike_sound_driver <rom.nes> <workdir> <output-folder> [maxIds=40] [secondsPerId=4] [startAt=3.0] [wallClockBudget=300]
 spike-sound-driver: core
 	$(CXX) -std=c++17 -O2 -w -I . -I Core -Wl,-headerpad_max_install_names scripts/spike_sound_driver.cpp InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) -o scripts/spike_sound_driver
 	install_name_tool -change $(SHAREDLIB) $(CURDIR)/InteropDLL/$(OBJFOLDER)/$(SHAREDLIB) scripts/spike_sound_driver 2>/dev/null || true
