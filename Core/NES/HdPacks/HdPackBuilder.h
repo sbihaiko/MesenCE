@@ -92,6 +92,33 @@ private:
 	static constexpr uint32_t MaxScreensPerSession = 300;
 	void CaptureScreen();
 
+	//F5.4e: spatial co-occurrence → object grouping. During screen capture the
+	//per-frame background tile grid (_frameTileGrid/_frameTileSet) accumulates,
+	//in _coOccurrence, how often two tile shapes appear exactly 8 px apart (E/S
+	//neighbors; B at A + (8,0) or A + (0,8)). Keys are shape hashes (GetKey(true):
+	//palette wildcarded), so every palette variant of a tile collapses into one
+	//shape; a rare 32-bit CHR-RAM hash collision only merges two shapes into one
+	//object, acceptable for an "# inferred" heuristic. BuildObjectSheets clusters
+	//those edges (union-find over edges seen ≥2×), writes one editable per-object
+	//sheet textures/sheets/object<NNN>.png (the object's tiles arranged as they
+	//appear in-game), documents the cell order as a hires.txt comment, and emits
+	//"# inferred" tileNearby condition candidates (inert definitions the artist
+	//can wire to a <tile> - never auto-attached, to avoid making a tile fail to
+	//render when its inferred neighbor is absent).
+	struct HdPackCoOccurrenceEdge
+	{
+		uint32_t ECount = 0; //times the second shape was seen 8 px east of the first
+		uint32_t SCount = 0; //times it was seen 8 px south
+		uint32_t Count() const { return ECount + SCount; }
+	};
+	HdTileKey _frameTileGrid[30][32];
+	uint8_t _frameTileSet[30][32] = {}; //source of truth for which grid cells were drawn
+	std::map<std::pair<uint32_t, uint32_t>, HdPackCoOccurrenceEdge> _coOccurrence;
+	bool _objectsBuilt = false; //guard: build the object sheets once per session
+	void AccumulateCoOccurrence();
+	void BuildObjectSheets(stringstream& tileRows);
+	HdPackTileInfo* FindObjectArt(uint32_t shapeHash, std::map<uint32_t, HdPackTileInfo*>& bestByShape);
+
 	void AddTile(HdPackTileInfo* tile, uint32_t usageCount);
 	void GenerateHdTile(HdPackTileInfo* tile);
 	void DrawTile(HdPackTileInfo* tile, int tileIndex, uint32_t* pngBuffer, int pageNumber, bool containsSpritesOnly);
@@ -117,6 +144,12 @@ public:
 	{
 		if(!_captureScreens || x >= 256 || y >= 240) {
 			return;
+		}
+		//F5.4e: record the background tile shape at each 8x8 cell origin, for the
+		//per-frame co-occurrence grid (AccumulateCoOccurrence, called in OnFrameEnd).
+		if((x & 7) == 0 && (y & 7) == 0) {
+			_frameTileGrid[y >> 3][x >> 3] = tile.GetKey(true);
+			_frameTileSet[y >> 3][x >> 3] = 1;
 		}
 		_frameBg[y * 256 + x] = _palette[(tile.PaletteColors >> ((3 - colorIndex) * 8)) & 0x3F] | 0xFF000000;
 		_bgPixels++;

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <algorithm>
+#include <queue>
 #include "NES/HdPacks/HdPackBuilder.h"
 #include "NES/HdPacks/HdNesPack.h"
 #include "NES/BaseMapper.h"
@@ -96,6 +97,287 @@ HdPackCoverageReport HdPackBuilder::GetCoverageReport() const
 		}
 	}
 	return report;
+}
+
+void HdPackBuilder::AccumulateCoOccurrence()
+{
+	//The grid holds the background tile shape (palette-wildcarded key) per 8x8
+	//cell of the last drawn frame; only E and S neighbors are examined so every
+	//adjacent pair is counted once (B at A + (8,0) => ECount, A + (0,8) => SCount).
+	//Runs only while capture is enabled (the grid is only filled then), so object
+	//inference reflects what the captured screens actually showed.
+	for(int row = 0; row < 30; row++) {
+		for(int col = 0; col < 32; col++) {
+			if(!_frameTileSet[row][col]) {
+				continue;
+			}
+			uint32_t a = _frameTileGrid[row][col].GetKey(true).GetHashCode();
+			if(col + 1 < 32 && _frameTileSet[row][col + 1]) {
+				uint32_t b = _frameTileGrid[row][col + 1].GetKey(true).GetHashCode();
+				_coOccurrence[{std::min(a, b), std::max(a, b)}].ECount++;
+			}
+			if(row + 1 < 30 && _frameTileSet[row + 1][col]) {
+				uint32_t b = _frameTileGrid[row + 1][col].GetKey(true).GetHashCode();
+				_coOccurrence[{std::min(a, b), std::max(a, b)}].SCount++;
+			}
+		}
+	}
+	std::memset(_frameTileSet, 0, sizeof(_frameTileSet));
+}
+
+HdPackTileInfo* HdPackBuilder::FindObjectArt(uint32_t shapeHash, std::map<uint32_t, HdPackTileInfo*>& bestByShape)
+{
+	auto it = bestByShape.find(shapeHash);
+	return it != bestByShape.end() ? it->second : nullptr;
+}
+
+//F5.4e: cluster the co-occurrence graph into objects and write one editable
+//per-object sheet + "# inferred" tileNearby candidates. See the header comment.
+void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
+{
+	if(_objectsBuilt || _coOccurrence.empty()) {
+		return;
+	}
+	_objectsBuilt = true;
+
+	//Most-used non-default art per shape, used to draw the object sheets and as
+	//the tileNearby target data.
+	std::map<uint32_t, HdPackTileInfo*> bestByShape;
+	for(unique_ptr<HdPackTileInfo>& tile : _hdData.Tiles) {
+		if(!tile || tile->DefaultTile) {
+			continue;
+		}
+		uint32_t shape = tile->GetKey(true).GetHashCode();
+		auto it = bestByShape.find(shape);
+		if(it == bestByShape.end() || _tileUsageCount[tile->GetKey(false)] > _tileUsageCount[it->second->GetKey(false)]) {
+			bestByShape[shape] = tile.get();
+		}
+	}
+
+	//Union-find over shapes whose edges were seen at least twice. Groups bigger
+	//than 32 shapes are skipped - a huge connected component is a contiguous
+	//background region, not a discrete object an artist would edit as one sheet.
+	struct DisjointSet
+	{
+		vector<int32_t> parent;
+		explicit DisjointSet(size_t n) : parent(n, -1) {}
+		int32_t Find(int32_t x)
+		{
+			while(parent[x] >= 0) {
+				if(parent[parent[x]] >= 0) {
+					parent[x] = parent[parent[x]];
+				}
+				x = parent[x];
+			}
+			return x;
+		}
+		void Union(int32_t a, int32_t b)
+		{
+			a = Find(a);
+			b = Find(b);
+			if(a == b) {
+				return;
+			}
+			if(parent[a] > parent[b]) {
+				std::swap(a, b);
+			}
+			parent[a] += parent[b];
+			parent[b] = a;
+		}
+	};
+
+	std::vector<uint32_t> shapes;
+	std::map<uint32_t, int32_t> shapeIndex;
+	for(const auto& edge : _coOccurrence) {
+		if(edge.second.Count() < 2) {
+			continue;
+		}
+		for(uint32_t s : { edge.first.first, edge.first.second }) {
+			if(shapeIndex.find(s) == shapeIndex.end()) {
+				shapeIndex[s] = (int32_t)shapes.size();
+				shapes.push_back(s);
+			}
+		}
+	}
+	if(shapes.empty()) {
+		return;
+	}
+
+	DisjointSet ds(shapes.size());
+	for(const auto& edge : _coOccurrence) {
+		if(edge.second.Count() >= 2) {
+			ds.Union(shapeIndex[edge.first.first], shapeIndex[edge.first.second]);
+		}
+	}
+
+	std::map<int32_t, vector<uint32_t>> groups;
+	for(uint32_t s : shapes) {
+		groups[ds.Find(shapeIndex[s])].push_back(s);
+	}
+
+	int objectIndex = 0;
+	for(const auto& group : groups) {
+		if(group.second.size() < 2 || group.second.size() > 32) {
+			continue;
+		}
+
+		//BFS layout from the most-co-occurring shape; each placed neighbor goes at
+		//the dominant 8px offset of the edge that connects it (E or S relative to
+		//the lower-hash endpoint, per AccumulateCoOccurrence).
+		std::map<uint32_t, std::pair<int32_t, int32_t>> placed;
+		std::vector<uint32_t> queue;
+		int32_t minX = 0, minY = 0, maxX = 0, maxY = 0;
+
+		uint32_t seed = group.second[0];
+		uint32_t seedDegree = 0;
+		for(uint32_t s : group.second) {
+			uint32_t degree = 0;
+			for(const auto& edge : _coOccurrence) {
+				uint32_t lo = edge.first.first, hi = edge.first.second;
+				if(s == lo || s == hi) {
+					degree += edge.second.Count();
+				}
+			}
+			if(degree > seedDegree) {
+				seedDegree = degree;
+				seed = s;
+			}
+		}
+
+		std::map<uint32_t, bool> inObject;
+		for(uint32_t s : group.second) {
+			inObject[s] = true;
+		}
+		std::map<uint32_t, bool> visited;
+		visited[seed] = true;
+		placed[seed] = { 0, 0 };
+		queue.push_back(seed);
+		for(size_t qi = 0; qi < queue.size(); qi++) {
+			uint32_t a = queue[qi];
+			std::pair<int32_t, int32_t> aPos = placed[a];
+			for(const auto& edge : _coOccurrence) {
+				uint32_t lo = edge.first.first, hi = edge.first.second;
+				if(a != lo && a != hi) {
+					continue;
+				}
+				if(!inObject[lo] || !inObject[hi]) {
+					continue;
+				}
+				bool east = edge.second.ECount >= edge.second.SCount;
+				uint32_t b = (a == lo) ? hi : lo;
+				if(visited[b]) {
+					continue;
+				}
+				visited[b] = true;
+				std::pair<int32_t, int32_t> offset = east ? std::pair<int32_t, int32_t>(1, 0) : std::pair<int32_t, int32_t>(0, 1);
+				std::pair<int32_t, int32_t> bPos = (a == lo) ? std::make_pair(aPos.first + offset.first, aPos.second + offset.second)
+				                                             : std::make_pair(aPos.first - offset.first, aPos.second - offset.second);
+				placed[b] = bPos;
+				minX = std::min(minX, bPos.first);
+				minY = std::min(minY, bPos.second);
+				maxX = std::max(maxX, bPos.first);
+				maxY = std::max(maxY, bPos.second);
+				queue.push_back(b);
+			}
+		}
+
+		//Unreachable members (should not happen inside one connected component)
+		//are appended in a fresh row so nothing silently drops.
+		int nextCell = maxX + 1;
+		for(uint32_t s : group.second) {
+			if(!visited[s]) {
+				placed[s] = { nextCell++, 0 };
+				maxX = std::max(maxX, nextCell - 1);
+			}
+		}
+
+		int width = maxX - minX + 1;
+		int height = maxY - minY + 1;
+		int tileDimension = 8 * _hdData.Scale;
+		int sheetWidth = width * tileDimension;
+		int sheetHeight = height * tileDimension;
+		std::vector<uint32_t> sheetBuffer((size_t)sheetWidth * sheetHeight, 0xFFFF00FF);
+
+		stringstream cellOrder;
+		for(const auto& kv : placed) {
+			HdPackTileInfo* art = FindObjectArt(kv.first, bestByShape);
+			if(!art) {
+				continue;
+			}
+			if(art->HdTileData.empty()) {
+				GenerateHdTile(art);
+				art->UpdateFlags();
+			}
+			int cx = kv.second.first - minX;
+			int cy = kv.second.second - minY;
+			for(int i = 0; i < tileDimension; i++) {
+				for(int j = 0; j < tileDimension; j++) {
+					sheetBuffer[(size_t)(cy * tileDimension + i) * sheetWidth + (cx * tileDimension + j)] = art->HdTileData[(size_t)i * tileDimension + j];
+				}
+			}
+			cellOrder << "# inferred   cell " << (cy * width + cx) << " = tile " << HexUtilities::ToHex(art->TileIndex) << " palette " << HexUtilities::ToHex(art->PaletteColors, true) << std::endl;
+		}
+
+		namespace fs = std::filesystem;
+		std::error_code ec;
+		fs::create_directories(fs::u8path(FolderUtilities::CombinePath(_saveFolder, "textures/sheets")), ec);
+		string sheetName = "object" + std::to_string(objectIndex) + ".png";
+		PNGHelper::WritePNG(FolderUtilities::CombinePath(FolderUtilities::CombinePath(_saveFolder, "textures/sheets"), sheetName), sheetBuffer.data(), sheetWidth, sheetHeight, 32);
+
+		tileRows << std::endl << "# inferred object " << objectIndex << " -> textures/sheets/" << sheetName << std::endl;
+		tileRows << cellOrder.str();
+
+		//"# inferred" tileNearby condition candidates: for every object edge seen
+		//at least 3 times, define a condition that fires when the higher-hash shape
+		//is at the dominant 8px offset of the lower-hash one. Inert by design - the
+		//artist wires it to a <tile> ([name]<tile>) only after verifying the pair
+		//really co-occurs, so a wrong inference can never make a tile fail to render.
+		int edgeIndex = 0;
+		for(const auto& edge : _coOccurrence) {
+			uint32_t lo = edge.first.first, hi = edge.first.second;
+			if(!inObject[lo] || !inObject[hi] || edge.second.Count() < 3) {
+				continue;
+			}
+			bool east = edge.second.ECount >= edge.second.SCount;
+			HdPackTileInfo* target = FindObjectArt(hi, bestByShape);
+			if(!target) {
+				continue;
+			}
+			string condName = "obj" + std::to_string(objectIndex) + "_nearby" + std::to_string(edgeIndex++);
+			bool alreadyDefined = false;
+			for(unique_ptr<HdPackCondition>& existing : _hdData.Conditions) {
+				if(existing->Name == condName) {
+					alreadyDefined = true;
+					break;
+				}
+			}
+			if(alreadyDefined) {
+				continue;
+			}
+
+			HdPackTileNearbyCondition* cond = new HdPackTileNearbyCondition();
+			cond->Name = condName;
+			uint32_t palette = target->PaletteColors;
+			string tileData;
+			int32_t tileIndex = -1;
+			bool ignorePalette = false;
+			if(target->IsChrRamTile) {
+				for(int i = 0; i < 16; i++) {
+					tileData += HexUtilities::ToHex(target->TileData[i]);
+				}
+				ignorePalette = true;
+			} else {
+				tileIndex = target->TileIndex;
+			}
+			cond->Initialize(east ? 8 : 0, east ? 0 : 8, palette, tileIndex, tileData, ignorePalette);
+			_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
+
+			tileRows << "# inferred   tileNearby: attach [" << condName << "] to tile " << HexUtilities::ToHex(FindObjectArt(lo, bestByShape)->TileIndex)
+			         << " to require tile " << HexUtilities::ToHex(target->TileIndex) << " " << (east ? "8px east" : "8px south") << std::endl;
+		}
+
+		objectIndex++;
+	}
 }
 
 void HdPackBuilder::AddTile(HdPackTileInfo* tile, uint32_t usageCount)
@@ -488,6 +770,11 @@ void HdPackBuilder::OnFrameEnd()
 	if(!_captureScreens) {
 		return;
 	}
+
+	//F5.4e: accumulate this frame's background-tile adjacency pairs into the
+	//co-occurrence graph (grid filled in ProcessBgPixel), then reset the grid.
+	AccumulateCoOccurrence();
+
 	//A screen worth keeping is mostly drawn and holds still for a while
 	bool candidate = _bgPixels >= 256 * 240 / 2 && _frameRuns.size() >= 60;
 	if(candidate && _frameHash == _prevFrameHash) {
@@ -737,6 +1024,11 @@ void HdPackBuilder::SaveHdPack()
 		}
 	}
 	savePng(-1);
+
+	//F5.4e: cluster the co-occurrence graph into per-object editable sheets and
+	//emit "# inferred" tileNearby candidates. Runs before the conditions loop so
+	//the inferred condition definitions serialize ahead of every <tile> line.
+	BuildObjectSheets(tileRows);
 
 	for(unique_ptr<HdPackCondition>& condition : _hdData.Conditions) {
 		if(!condition->IsExcludedFromFile()) {
