@@ -419,19 +419,21 @@ def find_nested_game_zips(src: Source):
     subfolder candidate exists (LiQuiDzGit/HDnes stores its games this way).
     Scans every `.zip` under a subfolder (depth-capped by FALLBACK_MAX_DEPTH,
     entry-capped by FALLBACK_MAX_ENTRIES), opens it in memory, and returns
-    (outer_prefix, game) for each zip that IS a pack root when opened —
+    (zip_path, game) for each zip that IS a pack root when opened —
     `_root_is_pack` on the inner Source plus `_root_game_name` (pack.json
     targets[0].name, else the zip's own subfolder name). A zip that is not a
     pack (a docs/bonus zip with no hires.txt/pack.json at its root) is not a
     candidate — same fail-closed discipline as every other discovery path.
 
-    Each zip keyed by its parent subfolder, so a repo wrapper that prefixes
-    every entry (`HDnes-main/`) is naturally ignored: the game root is the
-    subfolder *after* the wrapper, not the wrapper itself. One root per
-    subfolder: when a subfolder holds several valid zips (Duck_Hunt's
-    Audio/NEA/HDV1.1 variants, say), the first by sorted name wins — a
-    subfolder is one game, one slot, one issue (ADR-0143), never N issues
-    for the same game."""
+    The returned prefix is the exact `.zip` path, not its parent subfolder:
+    the per-game zip the pipeline builds by filtering on that prefix then
+    contains ONLY that zip, so a subfolder holding several valid variants
+    (Duck_Hunt's Audio/NEA/HDV1.1) yields one game with one concrete zip —
+    never a per-game zip leaking all variants (which would trip the
+    exactly-one-top-level-zip fallback and lint as "no section found").
+    One root per subfolder: the first by sorted name wins — a subfolder is
+    one game, one slot, one issue (ADR-0143), never N issues for the same
+    game."""
     if len(src.names) > FALLBACK_MAX_ENTRIES:
         return []
     by_subfolder = {}
@@ -452,7 +454,7 @@ def find_nested_game_zips(src: Source):
         if not _root_is_pack(inner):
             continue
         game = _root_game_name(inner, "") or segments[-2] or None
-        by_subfolder[outer] = (outer, game)
+        by_subfolder[outer] = (normalized, game)
     return list(by_subfolder.values())
 
 
@@ -881,7 +883,16 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 continue
             path = folder + tokens[2].strip()
             if not src.exists(path):
-                rep.warning(where, f"<{tag}> file does not exist: {tokens[2]} — track/effect never registered, unavailable at playback, load continues (HdPackLoader::ProcessSoundTrack)")
+                real = src.exists_icase(path)
+                if real:
+                    # Case-mismatched but present (Windows-authored pack; a
+                    # ref like `ogg/STAGE1.ogg` stored as `ogg/stage1.ogg`).
+                    # The loader resolves it, so the track IS available on
+                    # macOS/Windows — mirroring the <img> rule, only Linux
+                    # would fail to load it.
+                    rep.warning(where, f"<{tag}> {tokens[2]} only exists as '{real.split('/')[-1]}' — loads on macOS/Windows, fails on Linux (HdPackLoader::ProcessSoundTrack)")
+                else:
+                    rep.warning(where, f"<{tag}> file does not exist: {tokens[2]} — track/effect never registered, unavailable at playback, load continues (HdPackLoader::ProcessSoundTrack)")
             try:
                 album, track = int(tokens[0]), int(tokens[1])
                 if not (0 <= album <= 255 and 0 <= track <= 255):
@@ -889,13 +900,27 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             except ValueError:
                 rep.error(where, f"<{tag}> invalid album/track")
         elif tag == "patch":
-            if len(tokens) != 2:
+            # A patch filename may itself contain a comma (real packs do:
+            # `Ice Climber (USA, Europe).bps`) — naive comma-splitting would
+            # mis-parse it as three tokens and wrongly flag `<patch> needs
+            # file,sha1`. The sha1 is the LAST comma-separated token; the
+            # filename is everything before it, commas included.
+            m = re.match(r"^(.*),\s*([0-9A-Fa-f]{40})\s*$", params)
+            if not m:
                 rep.error(where, "<patch> needs file,sha1")
                 continue
-            if not src.exists(folder + tokens[0]):
-                rep.warning(where, f"<patch> file does not exist: {tokens[0]} — patch not applied, load continues (HdPackLoader::ProcessPatchTag)")
-            if not HEX40.match(tokens[1].strip()):
-                rep.error(where, f"<patch> invalid sha1: {tokens[1]}")
+            patch_file, patch_sha1 = m.group(1).strip(), m.group(2)
+            if not src.exists(folder + patch_file):
+                real = src.exists_icase(folder + patch_file)
+                if real:
+                    # Case-mismatched but present (Windows-authored pack; a
+                    # ref like `MUSICPATCH.ips` stored as `MusicPatch.ips`).
+                    # The patch IS applied on macOS/Windows — count it as
+                    # present so the ADR-0144 audio exception can redeem the
+                    # section; only Linux would fail to load it.
+                    rep.warning(where, f"<patch> {patch_file} only exists as '{real.split('/')[-1]}' — loads on macOS/Windows, fails on Linux (HdPackLoader::ProcessPatchTag)")
+                else:
+                    rep.warning(where, f"<patch> file does not exist: {patch_file} — patch not applied, load continues (HdPackLoader::ProcessPatchTag)")
             rep.info(where, "<patch> matches by the whole ROM file's sha1; other revisions load the pack without the patch (ADR-0044)")
     if version == 0:
         rep.error(rel, "<ver> missing")
@@ -1051,6 +1076,27 @@ def lint_esp(src: Source, rel: str, rep: Report):
             rep.error(f"{rel}:{n}", "ESP key outside a [Preset] section")
 
 
+def scan_bundled_patches(src: Source, rep: Report):
+    """ADR-0144: report the .ips/.bps ROM patches actually present in the
+    archive (including inside a nested zip the caller already unwrapped into
+    src). The classifier's ADR-0144 audio exception hinges on "the zip
+    bundles a .ips/.bps ROM patch that IS present" — and it cannot see
+    inside a nested zip from a byte-read of the outer archive, so the
+    linter, which DOES recurse into nested zips, is the authority. An
+    unreferenced patch (no <patch> tag) is exactly the LiQuiDz repo shape:
+    hires.txt declares .ogg tracks that the patch's install-time
+    extract-audio flow (ADR-0135) generates, and the patch simply rides
+    along in the zip. Reported at `info` level but printed even under
+    --quiet (see main), so the classifier always sees it."""
+    seen = set()
+    for name in sorted(src.names):
+        lower = name.lower()
+        if not lower.endswith((".ips", ".bps")) or lower in seen:
+            continue
+        seen.add(lower)
+        rep.info("pack", f"bundled patch: {name} (present)")
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__)
@@ -1148,8 +1194,12 @@ def main(argv):
                 seen.add(hires)
                 lint_hires(src, hires, rep)
 
+    scan_bundled_patches(src, rep)
+
     for level, where, msg in rep.items:
-        if quiet and level == "info":
+        # The bundled-patch lines are the ADR-0144 signal the classifier
+        # needs, so they survive --quiet (which otherwise strips `info`).
+        if quiet and level == "info" and not (where == "pack" and msg.startswith("bundled patch:")):
             continue
         print(f"{level:7s} {where}  {msg}")
     print(f"\n{rep.errors} error(s), {rep.warnings} warning(s) in {target}")

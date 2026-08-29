@@ -276,13 +276,25 @@ src = Source(Path(sys.argv[1]))
 prefix = sys.argv[2]
 out = sys.argv[3]
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    # A game root may be a whole subfolder (prefix '<dir>/' semantics: copy
+    # every file under it, stripping the prefix) OR a single nested .zip
+    # (ADR-0143 repo-archive shape: find_nested_game_zips returns the exact
+    # zip path, so copy just that one file — a subfolder holding several
+    # valid variant zips must not leak all of them into the per-game zip,
+    # which would trip the exactly-one-top-level-zip fallback).
+    is_zip_root = prefix.lower().endswith('.zip')
     for name in sorted(src.names):
         rel = safe_rel(name)
         if rel is None:
             continue
-        if prefix and not rel.startswith(prefix + '/'):
-            continue
-        inner = rel[len(prefix) + 1:] if prefix else rel
+        if is_zip_root:
+            if rel != prefix:
+                continue
+            inner = rel.rsplit('/', 1)[-1]
+        else:
+            if prefix and not rel.startswith(prefix + '/'):
+                continue
+            inner = rel[len(prefix) + 1:] if prefix else rel
         if not inner or inner.endswith('/'):
             continue
         z.writestr(inner, src.read(name))

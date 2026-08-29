@@ -69,14 +69,19 @@ def check_repo_like():
     src = mep_lint.Source.from_zip_bytes(make_zip(entries), label="repo.zip")
     roots = mep_lint.discover_game_roots(src, "UNKNOWN")
     expected = [
-        ("HDnes-main/1942", "1942"),
-        ("HDnes-main/Dr_Mario", "Dr_Mario"),
-        ("HDnes-main/Duck_Hunt", "Duck_Hunt"),
-        ("HDnes-main/Ice_Climber", "Ice_Climber"),
-        ("HDnes-main/Super_Mario_Bros-2", "Super_Mario_Bros-2"),
-        ("HDnes-main/Yie_Ar_Kung_Fu", "Yie_Ar_Kung_Fu"),
+        # The prefix of a nested-zip root is the exact zip path (the first by
+        # sorted name when the subfolder holds several), so the per-game zip
+        # the pipeline builds contains ONLY that zip — a subfolder with
+        # DuckHunt-Audio/NEA/HDV1.1 must not leak all three into one game.
+        ("HDnes-main/1942/1942audio.zip", "1942"),
+        ("HDnes-main/Dr_Mario/NEA-DrMario_v2.zip", "Dr_Mario"),
+        ("HDnes-main/Duck_Hunt/DuckHunt-Audio.zip", "Duck_Hunt"),
+        ("HDnes-main/Ice_Climber/HDpack-IceClimber(USA,Europe).zip", "Ice_Climber"),
+        ("HDnes-main/Super_Mario_Bros-2/NEA-smb2.zip", "Super_Mario_Bros-2"),
+        ("HDnes-main/Yie_Ar_Kung_Fu/NEA-Yie.Ar.Kung-Fu.zip", "Yie_Ar_Kung_Fu"),
     ]
-    # Exact list: six roots, no duplicates (Duck_Hunt's 3 zips collapse to 1).
+    # Exact list: six roots, no duplicates (Duck_Hunt's 3 zips collapse to 1,
+    # and that one is the sorted-first zip path, not the bare subfolder).
     if len(roots) != len(expected):
         fail(f"repo-like roots: got {len(roots)} entries {sorted(roots)!r}, expected {len(expected)}")
         return
@@ -101,7 +106,7 @@ def check_unrelated_zips_excluded():
     }
     src = mep_lint.Source.from_zip_bytes(make_zip(entries), label="mix.zip")
     roots = mep_lint.discover_game_roots(src, "UNKNOWN")
-    if dict(roots) != {"HDnes-main/1942": "1942"}:
+    if dict(roots) != {"HDnes-main/1942/1942audio.zip": "1942"}:
         fail(f"unrelated nested zip should not count: {roots!r}")
         return
     ok("a nested zip without an internal pack root is not a game candidate")
@@ -116,7 +121,7 @@ def check_pack_json_nested():
     }
     src = mep_lint.Source.from_zip_bytes(make_zip(entries), label="pm.zip")
     roots = mep_lint.discover_game_roots(src, "UNKNOWN")
-    if dict(roots) != {"HDnes-main/Dr_Mario": "Dr. Mario"}:
+    if dict(roots) != {"HDnes-main/Dr_Mario/NEA-DrMario_v2.zip": "Dr. Mario"}:
         fail(f"pack.json nested root: got {roots!r}")
         return
     ok("a nested zip with pack.json is detected, named from targets[0].name")
@@ -130,7 +135,7 @@ def check_single_nested_zip_not_split():
     }
     src = mep_lint.Source.from_zip_bytes(make_zip(entries), label="single.zip")
     roots = mep_lint.discover_game_roots(src, "UNKNOWN")
-    if len(roots) != 1 or dict(roots) != {"HDnes-main/1942": "1942"}:
+    if len(roots) != 1 or dict(roots) != {"HDnes-main/1942/1942audio.zip": "1942"}:
         fail(f"single nested zip should be one root, got {roots!r}")
         return
     ok("a single nested game zip stays a single root (no split)")
