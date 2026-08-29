@@ -105,7 +105,7 @@ namespace
 int main(int argc, char** argv)
 {
 	if(argc < 4) {
-		fprintf(stderr, "uso: %s <rom> <segundos> <prefixo-saida> [pal] [hdpack]\n", argv[0]);
+		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
