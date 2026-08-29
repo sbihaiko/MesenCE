@@ -404,7 +404,12 @@ else
     --field-id "$PACK_HASH_FIELD_ID" --text "$PACK_SHA256" >/dev/null
   gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
     --field-id "$PACK_MD5_FIELD_ID" --text "$PACK_MD5" >/dev/null
-  echo ":: issue #$ISSUE updated (comment, labels [$APPLIED_LABELS], Project Status/Category/Hash)"
+  # Seed the 👍 reaction docs/community-packs.md ranks on ("Most popular"):
+  # the catalog's 👍 cell links to the submission issue, so the count starts
+  # at one reaction instead of zero. The reactions API is idempotent (an
+  # already-present reaction returns 200), so re-runs never double-count.
+  gh api -X POST "repos/$REPO/issues/$ISSUE/reactions" -f content='+1' --silent
+  echo ":: issue #$ISSUE updated (comment, labels [$APPLIED_LABELS], Project Status/Category/Hash, 👍)"
 fi
 
 # ---- 9. upsert mep-meta comment ----
