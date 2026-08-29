@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Mesen.Config;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using System;
@@ -22,11 +23,11 @@ namespace Mesen.Windows
 		[Obsolete("For designer only")]
 		public ConfigWindow() : this(ConfigWindowTab.Audio) { }
 
-		public ConfigWindow(ConfigWindowTab tab)
+		public ConfigWindow(ConfigWindowTab tab, bool playerMode = false)
 		{
 			InitializeComponent();
 
-			_model = new ConfigViewModel(tab);
+			_model = new ConfigViewModel(tab, playerMode);
 			DataContext = _model;
 		}
 

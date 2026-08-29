@@ -52,8 +52,8 @@
 	<DockPanel>
 		<Panel DockPanel.Dock="Bottom" HorizontalAlignment="Stretch" Background="#2888">
 			<Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" RowDefinitions="Auto" Margin="5 3">
-				<c:ButtonWithIcon Grid.Column="0" Click="OpenMesenFolder" Icon="Assets/Folder.png" Text="{l:Translate btnOpenMesenFolder}" />
-				<c:ButtonWithIcon Grid.Column="1" Click="ResetAllSettings" Icon="Assets/ResetSettings.png" Text="{l:Translate btnResetSettings}" />
+				<c:ButtonWithIcon Grid.Column="0" Click="OpenMesenFolder" Icon="Assets/Folder.png" Text="{l:Translate btnOpenMesenFolder}" IsVisible="{Binding !PlayerMode}" />
+				<c:ButtonWithIcon Grid.Column="1" Click="ResetAllSettings" Icon="Assets/ResetSettings.png" Text="{l:Translate btnResetSettings}" IsVisible="{Binding !PlayerMode}" />
 
 				<Button Grid.Column="3" MinWidth="70" HorizontalContentAlignment="Center" Click="Ok_OnClick" Content="{l:Translate btnOK}" />
 				<Button Grid.Column="4" MinWidth="70" HorizontalContentAlignment="Center" Click="Cancel_OnClick" Content="{l:Translate btnCancel}" />
@@ -69,7 +69,7 @@
 					</StackPanel>
 				</TabItem.Header>
 			</TabItem>
-			<TabItem Content="{Binding Emulation}">
+			<TabItem Content="{Binding Emulation}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/HammerScrewdriver.png" Margin="0 0 10 0" />
@@ -94,13 +94,13 @@
 				</TabItem.Header>
 			</TabItem>
 			
-			<TabItem IsEnabled="False" MinHeight="10">
+			<TabItem IsEnabled="False" MinHeight="10" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<Rectangle Fill="{StaticResource MesenGrayBorderColor}" Height="1" />
 				</TabItem.Header>
 			</TabItem>
-			
-			<TabItem Content="{Binding Nes}"> 
+
+			<TabItem Content="{Binding Nes}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/NesIcon.png" Margin="0 0 10 0" />
@@ -109,7 +109,7 @@
 				</TabItem.Header>
 			</TabItem>
 
-			<TabItem Content="{Binding Gameboy}">
+			<TabItem Content="{Binding Gameboy}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/GameboyIcon.png" Margin="0 0 10 0" />
@@ -118,7 +118,7 @@
 				</TabItem.Header>
 			</TabItem>
 
-			<TabItem Content="{Binding Gba}">
+			<TabItem Content="{Binding Gba}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/GbaIcon.png" Margin="0 0 10 0" />
@@ -127,7 +127,7 @@
 				</TabItem.Header>
 			</TabItem>
 
-			<TabItem Content="{Binding Sms}">
+			<TabItem Content="{Binding Sms}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/SmsIcon.png" Margin="0 0 10 0" />
@@ -137,13 +137,13 @@
 			</TabItem>
 
 
-			<TabItem IsEnabled="False" MinHeight="10">
+			<TabItem IsEnabled="False" MinHeight="10" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<Rectangle Fill="{StaticResource MesenGrayBorderColor}" Height="1" />
 				</TabItem.Header>
 			</TabItem>
-			
-			<TabItem Content="{Binding Preferences}">
+
+			<TabItem Content="{Binding Preferences}" IsVisible="{Binding !PlayerMode}">
 				<TabItem.Header>
 					<StackPanel Orientation="Horizontal">
 						<Image Source="/Assets/Settings.png" Margin="0 0 10 0" />

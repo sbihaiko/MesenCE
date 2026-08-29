@@ -298,7 +298,9 @@ namespace Mesen.Windows
 		private void OnOverlaySettings(object? sender, RoutedEventArgs e)
 		{
 			_model.IsPlayerOverlayVisible = false;
-			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new ConfigWindow(ConfigWindowTab.Preferences));
+			//PRD-player-shell §6: Player mode's Settings is the reduced essentials
+			//page (video / audio / input), not the full Preferences tab.
+			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new ConfigWindow(ConfigWindowTab.Audio, playerMode: true));
 		}
 
 		private void OnOverlayAdvanced(object? sender, RoutedEventArgs e)

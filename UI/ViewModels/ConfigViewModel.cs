@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using HarfBuzzSharp;
 using Mesen.Config;
+using Mesen.Logic;
 using Mesen.Utilities;
 using System;
 
@@ -20,15 +21,23 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial SmsConfigViewModel? Sms { get; set; }
 
 		[ObservableProperty] public partial ConfigWindowTab SelectedIndex { get; set; }
+		//PRD-player-shell §6: Player mode's Settings page shows only the
+		//essentials tabs (video / audio / input); the window hides the rest.
+		[ObservableProperty] public partial bool PlayerMode { get; set; }
 		public bool AlwaysOnTop { get; }
 
 		[Obsolete("For designer only")]
 		public ConfigViewModel() : this(ConfigWindowTab.Audio) { }
 
-		public ConfigViewModel(ConfigWindowTab selectedTab)
+		public ConfigViewModel(ConfigWindowTab selectedTab) : this(selectedTab, playerMode: false) { }
+
+		public ConfigViewModel(ConfigWindowTab selectedTab, bool playerMode = false)
 		{
 			AlwaysOnTop = ConfigManager.Config.Preferences.AlwaysOnTop;
-			SelectTab(selectedTab);
+			PlayerMode = playerMode;
+			//§6: Player starts on one of the essentials tabs; a non-essentials
+			//selection (e.g. Preferences from the Advanced GUI) clamps to Audio.
+			SelectTab(playerMode ? PlayerSettingsEssentials.ClampToEssentials(selectedTab) : selectedTab);
 		}
 
 		partial void OnSelectedIndexChanged(ConfigWindowTab value)
@@ -97,24 +106,5 @@ namespace Mesen.ViewModels
 				Sms?.OriginalConfig.IsIdentical(ConfigManager.Config.Sms) == false
 			);
 		}
-	}
-
-	public enum ConfigWindowTab
-	{
-		Audio = 0,
-		Emulation = 1,
-		Input = 2,
-		Video = 3,
-		//separator
-		Nes = 5,
-		// 6 was Snes — do not reuse
-		Gameboy = 7,
-		Gba = 8,
-		// 9 was PcEngine — do not reuse
-		Sms = 10,
-		Ws = 11,
-		// 12 was OtherConsoles (ColecoVision) — do not reuse
-		//separator
-		Preferences = 14
 	}
 }
