@@ -481,7 +481,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
   runs (one script per AC, invoked directly by its AC's Verification
   command). Same PASS/FAIL-and-exit-code convention as the top-level shell
-  checks above; no shared test framework. `checks/verify_claude_md_section.sh`
+  checks above; no shared test framework. As of 2026-08-29 the structural
+  verifiers (community-pack pipeline AC-1..AC-7, MEP zip-fallback, MEI
+  generator/split, status/kind parity, synthetic-NROM, pack-authoring,
+  catalog-doc, AGENTS recipe-handoff, CLAUDE.md section) are also wired
+  into `make doc-checks`, so CI (Linux/macOS build jobs) fails on any
+  drift; the ROM-dependent validators (`validate_palette_variants.py`,
+  `validate_hdpack_dump.py`) stay manual because they need a real ROM and
+  a `make core` build. `checks/verify_claude_md_section.sh`
   guards `CLAUDE.md` (AC-10): the "Bug tracking (GitHub Project)" section
   must stay intact (un-duplicated, key markers present) while the
   "Community HD/MEP Pack triage (GitHub Project)" section sits strictly
