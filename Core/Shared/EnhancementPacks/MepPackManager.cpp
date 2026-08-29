@@ -8,6 +8,7 @@
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/StringUtilities.h"
 #include "Utilities/ZipReader.h"
+#include "Utilities/JsonReader.h"
 #include "Utilities/sha1.h"
 #include "Shared/Interfaces/IConsole.h"
 #include "Shared/Interfaces/INotificationListener.h"
@@ -325,6 +326,7 @@ void MepPackManager::Clear()
 	_romFolder.clear();
 	_packs.clear();
 	_rejected.clear();
+	_packIdentityByContainer.clear();
 }
 
 string MepPackManager::GetSiblingFolder(VirtualFile& romFile)
@@ -443,6 +445,13 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 	ScanSiblingFolder();
 	ScanAndMatch();
 
+	//P.3: fill each pack's identity (pack_id/content_id) from its
+	//.mep-install.json stamp, for the preferred-pack lookup below and the
+	//pack-list columns the UI resolver reads
+	for(MepPack& pack : _packs) {
+		ReadInstallIdentity(pack);
+	}
+
 	if(!_packs.empty()) {
 		for(const MepPack& pack : _packs) {
 			string sections;
@@ -468,6 +477,37 @@ bool MepPackManager::ReadTextFile(const string& path, string& out)
 	ss << file.rdbuf();
 	out = ss.str();
 	return true;
+}
+
+void MepPackManager::ReadInstallIdentity(MepPack& pack)
+{
+	//P.3: the .mep-install.json a MEP Recipe install writes at the container
+	//root (MepRecipeInstaller::WriteInstallStamp) carries the ADR-0140 pack_id
+	//and ADR-0139 content_id. Missing/malformed stamp -> an empty identity
+	//(the UI derives `local:<container>` and never content-merges it, PRD §5).
+	MepPackIdentity identity;
+	string text;
+	if(ReadTextFile(FolderUtilities::CombinePath(pack.RootFolder, ".mep-install.json"), text)) {
+		JsonValue root;
+		JsonReader reader;
+		if(reader.Parse(text, root) && root.IsObject()) {
+			identity.PackId = root.GetString("pack_id");
+			identity.ContentId = root.GetString("content_id");
+		}
+	}
+	_packIdentityByContainer[StringUtilities::ToLower(pack.ContainerName)] = std::move(identity);
+}
+
+string MepPackManager::EffectivePackId(const MepPack& pack) const
+{
+	//P.3: a stamped pack_id wins; a stamp-less container is the ADR-0140 rule-4
+	//`local:<container>` fallback. Lower-cased so the preference comparison is
+	//case-insensitive on both sides.
+	auto it = _packIdentityByContainer.find(StringUtilities::ToLower(pack.ContainerName));
+	if(it != _packIdentityByContainer.end() && !it->second.PackId.empty()) {
+		return StringUtilities::ToLower(it->second.PackId);
+	}
+	return "local:" + StringUtilities::ToLower(pack.ContainerName);
 }
 
 bool MepPackManager::IsCacheCurrent(const string& outFolder, const string& stampPath, const string& stamp)
@@ -634,6 +674,43 @@ bool MepPackManager::IsPackEnabled(const string& containerName) const
 	return _disabledContainers.find(StringUtilities::ToLower(containerName)) == _disabledContainers.end();
 }
 
+void MepPackManager::SetPreferredMepPack(const string& romSha1, const string& packId)
+{
+	//P.3: per-ROM preferred pack_id pushed by the UI at config-apply time.
+	//An empty packId removes the entry; the key stays the ROM's No-Intro sha1
+	//so GetPackForSection can look it up per loaded ROM. Stale keys (a pack
+	//removed) are harmless: FindPreferredPack just finds no match.
+	string sha1 = StringUtilities::Trim(romSha1);
+	string id = StringUtilities::Trim(packId);
+	if(sha1.empty()) {
+		return;
+	}
+	if(id.empty()) {
+		_preferredPackIdByRomSha1.erase(sha1);
+	} else {
+		_preferredPackIdByRomSha1[sha1] = StringUtilities::ToLower(id);
+	}
+}
+
+void MepPackManager::ClearPreferredMepPacks()
+{
+	_preferredPackIdByRomSha1.clear();
+}
+
+const MepPack* MepPackManager::FindPreferredPack(MepSectionType type) const
+{
+	auto it = _preferredPackIdByRomSha1.find(_romSha1);
+	if(it == _preferredPackIdByRomSha1.end() || it->second.empty()) {
+		return nullptr;
+	}
+	for(const MepPack& pack : _packs) {
+		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName) && EffectivePackId(pack) == it->second) {
+			return &pack;
+		}
+	}
+	return nullptr;
+}
+
 const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 {
 	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
@@ -641,6 +718,12 @@ const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 																																													 cfg.EnableSynth);
 	if(!sectionEnabled) {
 		return nullptr;
+	}
+	//P.3: the per-ROM preference overrides the ADR-0040 lexicographic order;
+	//the default stays "first enabled pack in precedence order" when there is
+	//no stored preference or the preferred pack_id does not match a candidate.
+	if(const MepPack* preferred = FindPreferredPack(type)) {
+		return preferred;
 	}
 	for(const MepPack& pack : _packs) {
 		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName)) {
@@ -660,7 +743,12 @@ string MepPackManager::GetPackListText() const
 				sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 			}
 		}
-		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + std::to_string((int)pack.Origin) + "\n";
+		MepPackIdentity identity;
+		auto identityIt = _packIdentityByContainer.find(StringUtilities::ToLower(pack.ContainerName));
+		if(identityIt != _packIdentityByContainer.end()) {
+			identity = identityIt->second;
+		}
+		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + std::to_string((int)pack.Origin) + "\t" + identity.PackId + "\t" + identity.ContentId + "\n";
 	}
 	for(const string& rejected : _rejected) {
 		out += "!" + rejected + "\n";

@@ -43,11 +43,25 @@ can be exercised by real xunit tests without Avalonia or the native
 - `MepPackListParser.Parse(string)` mirrors `EmuApi.GetMepPackList()`'s TSV
   contract exactly: newline-separated rows; a `!`-prefixed row is a
   rejection message (leading `!` stripped, accumulated into
-  `MepPackListResult.RejectedInfo`); an 8-column tab-separated row maps to
-  a `MepPackListEntry` (origin `2`/`1`/other → `sibling`/`zip`/`folder`);
-  any row with fewer than 8 columns is silently ignored. The `Sections`
-  field is passed through raw — the `","` → `", "` display formatting
-  stays in the ViewModel, not in this parser.
+  `MepPackListResult.RejectedInfo`); a tab-separated row maps to a
+  `MepPackListEntry` (origin `2`/`1`/other → `sibling`/`zip`/`folder`);
+  any row with fewer than 8 columns is silently ignored. Columns 9–10
+  (P.3: `pack_id`/`content_id` from the container's `.mep-install.json`,
+  empty for a stamp-less container) are optional — an 8-column row from an
+  older core still parses. The `Sections` field is passed through raw — the
+  `","` → `", "` display formatting stays in the ViewModel, not in this parser.
+- `PackPreferenceResolver` (P.3, PRD-player-shell §5, ADR-0140/0141) is the
+  host-free per-ROM choice resolver: `DerivePackId` (a candidate's
+  `.mep-install.json` pack_id, else the `local:<container>` rule-4 fallback)
+  and `Resolve` (the §5 content_id merge — a container duplicating another's
+  content_id is the same pack, not a second entry — plus preference →
+  winning container; lexicographic default when no preference or a stale
+  one). It never touches `Avalonia`/`EmuApi`/config; the owning ViewModel
+  reads the stored preference from `EnhancementPackConfig.RomPackPreference`
+  (romSha1 → pack_id) and maps the result to its UI type. The core enforces
+  the same decision per ROM via `MepPackManager::FindPreferredPack` (the
+  preference is pushed at config-apply through `SetPreferredMepPack`/
+  `ClearPreferredMepPacks`).
 
 - **New ViewModels** (Phase 3 of the plan — applied opportunistically, "in
   the code we touch", not as a retrofit of existing VMs): a *new*

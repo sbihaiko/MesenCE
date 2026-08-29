@@ -31,6 +31,15 @@
 				<TextBlock Text="{l:Translate lblRomSha1}" VerticalAlignment="Center" />
 				<TextBox Text="{Binding RomSha1}" IsReadOnly="True" MinWidth="330" Margin="5 0" FontFamily="Consolas, Menlo, monospace" />
 			</StackPanel>
+			<!-- P.3 (PRD-player-shell §5): literal text (not a resources.en.xml key) - that file is outside this task's declared scope -->
+			<StackPanel Orientation="Horizontal" Margin="0 3 0 0">
+				<TextBlock Text="Preferred pack for this ROM:" VerticalAlignment="Center" />
+				<ComboBox MinWidth="300" Margin="5 0" ItemsSource="{Binding PreferredChoices}" SelectedItem="{Binding SelectedPreferredChoice}" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" IsVisible="{Binding HasPreferredContainer}" Margin="0 2 0 0">
+				<TextBlock Text="Current choice:" VerticalAlignment="Center" Foreground="Gray" />
+				<TextBlock Text="{Binding PreferredContainer}" FontWeight="Bold" VerticalAlignment="Center" Margin="4 0" Foreground="Gray" />
+			</StackPanel>
 			<c:OptionSection Header="{l:Translate grpSections}">
 				<WrapPanel>
 					<CheckBox Content="{l:Translate chkEnableMepPacks}" IsChecked="{Binding Config.EnableMepPacks}" Margin="0 0 10 0" />

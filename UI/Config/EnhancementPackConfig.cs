@@ -36,6 +36,13 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	//Container names (folder / zip base name) of packs the user turned off
 	public List<string> DisabledPacks { get; set; } = new();
 
+	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id (ADR-0140 id or
+	//"local:<container>"), keyed by the No-Intro sha1 of the ROM as loaded.
+	//An entry maps to the container the UI resolver picks for that ROM; the
+	//core consults it per load (MepPackManager::FindPreferredPack). An empty
+	//value is never stored - removing the choice deletes the key.
+	public Dictionary<string, string> RomPackPreference { get; set; } = new();
+
 	public void ApplyConfig()
 	{
 		ConfigApi.SetEnhancementPackConfig(new InteropEnhancementPackConfig() {
@@ -52,12 +59,33 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 		foreach(string container in DisabledPacks) {
 			EmuApi.SetMepPackEnabled(container, false);
 		}
+
+		//P.3: authoritative reset-then-push - a choice removed from the config
+		//(key absent) must also be dropped from the core's per-ROM map.
+		EmuApi.ClearPreferredMepPacks();
+		foreach(KeyValuePair<string, string> entry in RomPackPreference) {
+			EmuApi.SetPreferredMepPack(entry.Key, entry.Value);
+		}
 	}
 
 	public void SetPackEnabled(string container, bool enabled)
 	{
 		DisabledPackList.Set(DisabledPacks, container, enabled);
 		EmuApi.SetMepPackEnabled(container, enabled);
+	}
+
+	public string? GetRomPackPreference(string romSha1)
+	{
+		return RomPackPreference.TryGetValue(romSha1, out string? packId) ? packId : null;
+	}
+
+	public void SetRomPackPreference(string romSha1, string packId)
+	{
+		if(string.IsNullOrEmpty(packId)) {
+			RomPackPreference.Remove(romSha1);
+		} else {
+			RomPackPreference[romSha1] = packId;
+		}
 	}
 }
 

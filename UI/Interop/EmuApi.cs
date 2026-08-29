@@ -109,6 +109,14 @@ namespace Mesen.Interop
 		public static string GetMepRomSha1() { return Utf8Utilities.CallStringApi(GetMepRomSha1Wrapper, 100); }
 		[DllImport(DllPath)] public static extern void SetMepPackEnabled([MarshalAs(UnmanagedType.LPUTF8Str)] string containerName, [MarshalAs(UnmanagedType.I1)] bool enabled);
 
+		//P.3 (PRD-player-shell §5): records the per-ROM-sha1 preferred pack_id
+		//(ADR-0140 id or "local:<container>"); the core prefers it per loaded ROM.
+		[DllImport(DllPath)] public static extern void SetPreferredMepPack([MarshalAs(UnmanagedType.LPUTF8Str)] string romSha1, [MarshalAs(UnmanagedType.LPUTF8Str)] string packId);
+
+		//P.3: drops every per-ROM preference (config-apply resets then re-pushes,
+		//so a removed choice is never left stale in the core).
+		[DllImport(DllPath)] public static extern void ClearPreferredMepPacks();
+
 		//F6.4b - client-side MEP-recipe-v1 auto-install (ADR-0138 clarifications 4/37/38);
 		//wraps the F6.4a offline installer (Core/Shared/EnhancementPacks/MepRecipeInstaller::Install).
 		//depPathsBlob is a "depId\tlocalPath" row per line (empty string when there are no deps),

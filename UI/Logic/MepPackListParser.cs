@@ -13,6 +13,7 @@ namespace Mesen.Logic
 	public static class MepPackListParser
 	{
 		//Container, Name, Version, Author, License, Sections, Enabled, Origin
+		//(columns 9/10 - packId/contentId - are optional, P.3)
 		public const int ExpectedColumnCount = 8;
 
 		public static MepPackListResult Parse(string packListOutput)
@@ -52,7 +53,11 @@ namespace Mesen.Logic
 				//formatting stays the caller's (VM) responsibility.
 				Sections = parts[5],
 				Enabled = parts[6] == "1",
-				Source = ResolveSource(parts[7])
+				Source = ResolveSource(parts[7]),
+				//P.3: columns 9/10 (pack_id/content_id from .mep-install.json)
+				//are optional - an 8-column row from an older core is still valid.
+				PackId = parts.Length >= 9 ? parts[8] : "",
+				ContentId = parts.Length >= 10 ? parts[9] : ""
 			};
 		}
 
@@ -84,5 +89,9 @@ namespace Mesen.Logic
 		public string Sections { get; init; } = "";
 		public bool Enabled { get; init; }
 		public string Source { get; init; } = "";
+		//P.3: pack_id/content_id from the container's .mep-install.json stamp
+		//("" for a stamp-less container - the resolver derives `local:<container>`)
+		public string PackId { get; init; } = "";
+		public string ContentId { get; init; } = "";
 	}
 }

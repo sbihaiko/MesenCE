@@ -329,6 +329,21 @@ extern "C"
 		_emu->GetEnhancementPackManager()->SetPackEnabled(containerName ? containerName : "", enabled);
 	}
 
+	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id pushed by the UI
+	//at config-apply time; the core consults it per loaded ROM so the choice
+	//overrides the ADR-0040 lexicographic order without touching DisabledPacks.
+	DllExport void __stdcall SetPreferredMepPack(const char* romSha1, const char* packId)
+	{
+		_emu->GetEnhancementPackManager()->SetPreferredMepPack(romSha1 ? romSha1 : "", packId ? packId : "");
+	}
+
+	//P.3: the UI resets the per-ROM preferences before re-pushing the current
+	//map, so a choice removed from the config is never left stale in the core.
+	DllExport void __stdcall ClearPreferredMepPacks()
+	{
+		_emu->GetEnhancementPackManager()->ClearPreferredMepPacks();
+	}
+
 	DllExport void __stdcall SetRendererSize(uint32_t width, uint32_t height)
 	{
 		if(_emu->GetVideoRenderer()) {

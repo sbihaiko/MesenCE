@@ -11,6 +11,16 @@ class Emulator;
 //(ADR-0039 hash, ADR-0040 storage/precedence, ADR-0041 audio scope,
 //ADR-0042 synth layering). Owned by Emulator; LoadForRom runs inside
 //Emulator::InternalLoadRom before the console's own LoadRom.
+
+//P.3: identity a container's .mep-install.json stamp carries (ADR-0140
+//pack_id, ADR-0139 content_id); both empty for a stamp-less container (the
+//UI derives `local:<container>` and never content-merges it, PRD §5).
+struct MepPackIdentity
+{
+	string PackId;
+	string ContentId;
+};
+
 class MepPackManager
 {
 private:
@@ -19,6 +29,17 @@ private:
 	//Containers disabled by the user (UI/config), lower-cased; independent of
 	//the current scan so it can be pushed at any time
 	unordered_set<string> _disabledContainers;
+	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id pushed by the
+	//UI from EnhancementPackConfig. Keyed by the No-Intro sha1 of the ROM as
+	//loaded, so the right choice applies per ROM; "" or a missing key means no
+	//preference (lexicographic default, ADR-0040).
+	unordered_map<string, string> _preferredPackIdByRomSha1;
+	//P.3: pack_id/content_id read from each container's .mep-install.json
+	//stamp, keyed by the lower-cased container name. Kept OUT of MepPack on
+	//purpose: this Makefile does not track header dependencies, so changing
+	//MepPack's layout would leave stale objects ABI-mismatched (a silent
+	//memory-corruption crash). The manager owns identity; MepPack stays pure.
+	unordered_map<string, MepPackIdentity> _packIdentityByContainer;
 	string _romExtension;
 	string _romName; //file name without extension (convention key, ADR-0049)
 	string _romFolder; //folder holding the ROM (or its archive)
@@ -34,6 +55,17 @@ private:
 	//layout, target = the current ROM. False when the folder has no layer.
 	bool LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack);
 	static string SystemFromExtension(const string& lowerExt);
+	//Reads .mep-install.json at the pack root into _packIdentityByContainer
+	//(P.3; a missing/malformed stamp leaves the entry with empty fields)
+	void ReadInstallIdentity(MepPack& pack);
+	//A pack's effective pack_id for preference matching (P.3): its
+	//.mep-install.json pack_id when present, else the ADR-0140 rule-4
+	//`local:<container>` fallback (lower-cased)
+	string EffectivePackId(const MepPack& pack) const;
+	//The enabled, section-having pack whose effective pack_id equals the
+	//preferred one for the loaded ROM, or nullptr when there is no preference
+	//or no matching pack
+	const MepPack* FindPreferredPack(MepSectionType type) const;
 	//Extracts a zip to the cache; rejects zips with neither a root pack.json
 	//nor a name matching the ROM, unless MepPack::FindFallbackSubfolder
 	//(ADR-0120, last-priority) locates an unambiguous ROM-named subfolder
@@ -93,13 +125,26 @@ public:
 	void SetPackEnabled(const string& containerName, bool enabled);
 	bool IsPackEnabled(const string& containerName) const;
 
+	//P.3: records the per-ROM preferred pack_id (ADR-0140 id or `local:<
+	//container>`); "" or an empty container removes it. Pushed at config-apply
+	//time; consulted per ROM in GetPackForSection (see _preferredPackIdByRomSha1).
+	void SetPreferredMepPack(const string& romSha1, const string& packId);
+	//P.3: drops every per-ROM preference, so a config-apply is authoritative
+	//(the UI resets then re-pushes the full current map - a removed choice is
+	//never left stale in the core).
+	void ClearPreferredMepPacks();
+
 	//Winning pack for a section: first *enabled* pack in precedence order
 	//that has it, honouring EnhancementPackConfig section toggles; nullptr
-	//when nothing applies
+	//when nothing applies. P.3: a pack whose effective pack_id equals the
+	//preferred one for the loaded ROM's sha1 wins even when lexicographically
+	//later (PRD §5 - the preference overrides the ADR-0040 default order).
 	const MepPack* GetPackForSection(MepSectionType type) const;
 
 	//One line per matching pack, tab-separated:
-	//container\tname\tversion\tauthor\tlicense\tsections(comma)\tenabled(0/1)\tfromZip(0/1)
+	//container\tname\tversion\tauthor\tlicense\tsections(comma)\tenabled(0/1)\tfromZip(0/1)\tpackId\tcontentId
+	//(packId/contentId from .mep-install.json, empty for a stamp-less container;
+	//P.3 feeds the UI resolver's pack_id/`local:` derivation and content_id merge)
 	//followed by "!<container>: <reason>" lines for rejected containers
 	string GetPackListText() const;
 
