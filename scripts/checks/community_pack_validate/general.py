@@ -11,7 +11,7 @@ dispatch (AC-2, AC-6 validate-side).
 import json
 import re
 
-from ._shared import REPO_ROOT, fail
+from ._shared import REPO_ROOT, fail, prompt_block
 
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "pack_host_allowlist.json"
 FETCH_PACK_PATH = REPO_ROOT / "scripts" / "fetch_pack.py"
@@ -106,16 +106,33 @@ def check_mep_lint_call(text):
         fail("exact 'python3 scripts/mep_lint.py' invocation not found")
 
 
+def _has_data_not_instruction_clause(text):
+    lowered = text.lower()
+    return "data" in lowered and "never" in lowered
+
+
 def check_claude_action(text):
     if "anthropics/claude-code-action" not in text:
         fail("anthropics/claude-code-action not used")
     if "disallowed_tools" not in text or "Bash" not in text:
         fail("Claude Code Action step does not explicitly disallow Bash")
-    lowered = text.lower()
-    has_data_word = "data" in lowered
-    has_not_instruction = "never" in lowered
-    if not (has_data_word and has_not_instruction):
+    if not _has_data_not_instruction_clause(text):
         fail("prompt lacks an explicit data-not-instruction clause")
+
+
+def check_prompt_file_data_not_instruction(text):
+    # F6.5: since the classify prompt now lives in .github/ai/validate-classify.md
+    # (single source), the data-not-instruction clause must live in that
+    # PROMPT block too — that is the text actually sent to the classify LLM.
+    prompt = prompt_block()
+    if not prompt:
+        fail("Cannot validate data-not-instruction clause: PROMPT block missing")
+        return
+    if not _has_data_not_instruction_clause(prompt):
+        fail(
+            ".github/ai/validate-classify.md PROMPT block lacks an explicit "
+            "data-not-instruction clause"
+        )
 
 
 def check_secret_name_comment(text):
