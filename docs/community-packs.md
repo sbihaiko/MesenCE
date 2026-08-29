@@ -12,15 +12,15 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Contra (USA) | NES | TasticHacks (Contra80s HD Pack) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/85) |
 | The Legend of Zelda (USA) | NES | Not explicitly named in the pack's own readme. The readme credits KYA (development support), ShadowOne333 (incorporating aspects of Zelda 1 Redux), and Sour (the Mesen emulator itself). | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/87) |
 | Mega Man (USA) | NES | AxlRocks (Megaman-Super HD Pack) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/86) |
-| Bio_Miracle_Bokutte_Upa | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/120) |
-| Ice_Climber | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/123) |
-| Super_Mario_Bros | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/126) |
-| Super_Mario_Bros-2 | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/125) |
-| Urban_Champion | NES | LiQuiDz | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/127) |
-| Dr_Mario | NES | NEA | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/121) |
-| 1942 | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/103) |
-| Duck_Hunt | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/122) |
-| Ice_Climber_(VS) | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/124) |
+| Urban_Champion | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/136) |
+| Dr_Mario | NES | LiQuiDz | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/130) |
+| Bio_Miracle_Bokutte_Upa | NES | Cubear | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/129) |
+| Super_Mario_Bros-2 | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/134) |
+| Duck_Hunt | NES | LiQuiDz | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/131) |
+| Ice_Climber_(VS) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/133) |
+| 1942 | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/128) |
+| Super_Mario_Bros | NES | Cubear | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/135) |
+| Ice_Climber | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/132) |
 
 Packs are ranked by community 👍 votes. Try a pack, and if you like it, give
 it a 👍 — your vote helps others discover the community’s favorites. Every
