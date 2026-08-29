@@ -10,9 +10,14 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Pac-Man (Namco, US, 1993) | NES | PepCodes (HDNes Graphics Pac) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/94) |
 | Zelda II: The Adventure of Link (USA) | NES | ModernRetroDesign — Coding: Giric; Main Art: HaddianKey; Music Patch: Kurrono; Music: Niskala; Tiled Tools: Lilo-san; Additional Art: Aclectico, Cristata, Jojamart, Hexi_Eibhin04, Evan.F, Szadi art., Max Deacon VR, Pepeztyle, ChaosMiles07, Jmanvelez, FierceTheBandit, Alexander Landgren; Retranslation: GlitterBerri. | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/95) |
 | Contra (USA) | NES | TasticHacks (Contra80s HD Pack) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/85) |
-| Duck Hunt (World) | NES | LiQuiDzGit (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/93) |
 | The Legend of Zelda (USA) | NES | Not explicitly named in the pack's own readme. The readme credits KYA (development support), ShadowOne333 (incorporating aspects of Zelda 1 Redux), and Sour (the Mesen emulator itself). | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/87) |
 | Mega Man (USA) | NES | AxlRocks (Megaman-Super HD Pack) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/86) |
+| Duck_Hunt | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/98) |
+| 1942 | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/96) |
+| Dr_Mario | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/97) |
+| Super_Mario_Bros-2 | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/101) |
+| Yie_Ar_Kung_Fu | NES | LiQuiDz | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/102) |
+| Ice_Climber | NES | LiQuiDz (HDnes) | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/99) |
 
 Packs are ranked by community 👍 votes. Try a pack, and if you like it, give
 it a 👍 — your vote helps others discover the community’s favorites. Every

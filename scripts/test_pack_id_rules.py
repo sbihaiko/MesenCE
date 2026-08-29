@@ -65,6 +65,24 @@ def check_slug():
     ok("SLUG matches the ADR-0140 lowercase [a-z0-9][a-z0-9-]{2,63} constraint")
 
 
+def check_game_slug():
+    cases = [
+        ("Dr_Mario", "dr-mario"),
+        ("Super Mario Bros.", "super-mario-bros"),
+        ("1942", "1942"),
+        ("  Duck  Hunt  ", "duck-hunt"),
+        ("Yie_Ar_Kung_Fu", "yie-ar-kung-fu"),
+        ("", None),
+        ("   ", None),
+    ]
+    for name, expected in cases:
+        got = pack_id_rules.game_slug(name)
+        if got != expected:
+            fail(f"game_slug({name!r}) = {got!r}, expected {expected!r}")
+            return
+    ok("game_slug folds a game identity into a lowercase slug, None when blank")
+
+
 def check_resolve_pack_id():
     # (1) declared id wins over an owner/repo URL.
     meta = {"recipe": {"pack": {"id": "Contra80s"}}}
@@ -79,13 +97,33 @@ def check_resolve_pack_id():
     if (pack_id, source) != ("sbihaiko/contra80s", "owner-repo"):
         fail(f"owner/repo resolution: got {(pack_id, source)!r}")
         return
+    # (2b) ADR-0143: a game identity (caller-supplied or on mep-meta) makes
+    # the pack_id origin x game, so N games from one repo get N pack_ids.
+    pack_id, source = pack_id_rules.resolve_pack_id(
+        "https://github.com/LiQuiDzGit/HDnes/releases/download/x/1942.zip", {}, 88, game="Dr_Mario")
+    if (pack_id, source) != ("liquidzgit/hdnes:dr-mario", "owner-repo"):
+        fail(f"origin x game resolution: got {(pack_id, source)!r}")
+        return
+    pack_id, source = pack_id_rules.resolve_pack_id(
+        "https://github.com/LiQuiDzGit/HDnes/releases/download/x/1942.zip",
+        {"game": "Duck Hunt"}, 88)
+    if (pack_id, source) != ("liquidzgit/hdnes:duck-hunt", "owner-repo"):
+        fail(f"origin x game from mep-meta: got {(pack_id, source)!r}")
+        return
+    # A declared id still wins even when a game is known.
+    pack_id, source = pack_id_rules.resolve_pack_id(
+        "https://github.com/LiQuiDzGit/HDnes/releases/download/x/1942.zip",
+        {"game": "Duck Hunt", "pack_id": "My-Pack"}, 88)
+    if (pack_id, source) != ("my-pack", "id"):
+        fail(f"declared id over game: got {(pack_id, source)!r}")
+        return
     # (3) no id, non-GitHub host -> issue-n.
     pack_id, source = pack_id_rules.resolve_pack_id(
         "https://drive.google.com/file/d/xyz/view", {}, 42)
     if (pack_id, source) != ("issue-42", "issue"):
         fail(f"issue-n resolution: got {(pack_id, source)!r}")
         return
-    ok("resolve_pack_id follows id -> owner/repo -> issue-n order")
+    ok("resolve_pack_id follows id -> owner/repo x game -> owner/repo -> issue-n order")
 
 
 def check_pack_origin():
@@ -193,6 +231,17 @@ def check_select_catalog_rows():
     if sorted(x["issue_number"] for x in kept) != [10, 15]:
         fail(f"competing packs: kept {sorted(x['issue_number'] for x in kept)!r}")
         return
+    # ADR-0143 split: N games from ONE origin, each its own pack_id
+    # (origin:game) and content_id -> N slots. This is the fix for the old
+    # collapse where owner/repo gave every LiQuiDz game the same pack_id and
+    # §3.6 kept only Duck Hunt.
+    g1 = cand(88, "liquidzgit/hdnes:1942", content_id="ga", version=None, validated_at="2026-08-07T00:00:00Z")
+    g2 = cand(89, "liquidzgit/hdnes:dr-mario", content_id="gb", version=None, validated_at="2026-08-07T00:00:00Z")
+    g3 = cand(90, "liquidzgit/hdnes:duck-hunt", content_id="gc", version=None, validated_at="2026-08-07T00:00:00Z")
+    kept, reasons = pack_id_rules.select_catalog_rows([g1, g2, g3])
+    if sorted(x["issue_number"] for x in kept) != [88, 89, 90]:
+        fail(f"multi-game split: kept {sorted(x['issue_number'] for x in kept)!r} reasons {reasons!r}")
+        return
     # Determinism: input order never changes the outcome (same drops/slots as
     # the ordered runs above: d byte-duplicate of a, c loses the slot to b).
     shuffled = [f, d, a, c, b]
@@ -262,6 +311,7 @@ def check_mei_identity_fields():
 def main():
     check_github_origin()
     check_slug()
+    check_game_slug()
     check_resolve_pack_id()
     check_pack_origin()
     check_compare_semver()

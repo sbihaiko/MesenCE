@@ -66,6 +66,14 @@ def _candidate(item):
     form = issue_form_fields(details)
     mep_meta = fetch_mep_meta(issue_number)
     form["credits"] = (mep_meta or {}).get("author") or form["credits"]
+    # For a split submission the primary issue's body still carries the
+    # original multi-game "Target game/ROM and region" line, but mep-meta
+    # records the per-game identity the split assigned it (ADR-0143). Prefer
+    # that so the catalog's Game column shows the individual game, not the
+    # whole submission's line.
+    meta_game = (mep_meta or {}).get("game")
+    if isinstance(meta_game, str) and meta_game.strip():
+        form["game"] = meta_game.strip()
     pack_url, pack_hash = item_pack_url(item), item_pack_hash(item)
     version, _ = entry_mod.pack_version_fields((mep_meta or {}).get("recipe"))
     author = ((details.get("author") or {}).get("login") or "")

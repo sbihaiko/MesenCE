@@ -66,26 +66,6 @@
       "votes": 1
     },
     {
-      "game": "Duck Hunt (World)",
-      "issue": 93,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Duck Hunt (World) \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes",
-      "rom": {},
-      "sha256": "a6ea61b89bce6518f7793f5c807d43988ef481b7690571316988817b91cad33d",
-      "system": "nes",
-      "url": "https://raw.githubusercontent.com/LiQuiDzGit/HDnes/main/Duck_Hunt/DuckHuntHDV1.1.zip",
-      "validated_at": "2026-08-29T04:13:04Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
       "game": "The Legend of Zelda (USA)",
       "issue": 87,
       "kind": "hd-legacy",
@@ -124,6 +104,136 @@
       "system": "nes",
       "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
       "validated_at": "2026-08-29T04:30:47Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "d1f846746e710fabe04bce903c81f0da9db573f3b69e8ef5e61e5eea914936ed",
+      "game": "Duck_Hunt",
+      "issue": 98,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Duck_Hunt \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:duck-hunt",
+      "rom": {},
+      "sha256": "be1f1f473816b51392760bc2a9cb2688c6a4f1228272ece8b412b863126a39af",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/multitest-1788029956/multitest.zip",
+      "validated_at": "2026-08-29T19:45:40Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "5381f048e3990f4fff642eb35d61ca9ba064b457fe3855f5771821b2115c51ef",
+      "game": "1942",
+      "issue": 96,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "1942 \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:1942",
+      "rom": {},
+      "sha256": "be1f1f473816b51392760bc2a9cb2688c6a4f1228272ece8b412b863126a39af",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/multitest-1788029956/multitest.zip",
+      "validated_at": "2026-08-29T19:45:47Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "cb1688c4d124b66a4dcec5701c183cf62c11606087f0463aa0ef8b95f3d2cbdd",
+      "game": "Dr_Mario",
+      "issue": 97,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:audio",
+        "patch:bps"
+      ],
+      "license": "unknown",
+      "name": "Dr_Mario \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:dr-mario",
+      "rom": {},
+      "sha256": "be1f1f473816b51392760bc2a9cb2688c6a4f1228272ece8b412b863126a39af",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/multitest-1788029956/multitest.zip",
+      "validated_at": "2026-08-29T19:47:57Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "a91abcda4e65dd498413cd8084e939d50c909404654a27de4c98aba49b8df5a9",
+      "game": "Super_Mario_Bros-2",
+      "issue": 101,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:audio",
+        "patch:bps"
+      ],
+      "license": "unknown",
+      "name": "Super_Mario_Bros-2 \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:super-mario-bros-2",
+      "rom": {},
+      "sha256": "082e3489065841a3d12fd22382ce4283b1c00a03864454a6154f37134e824ad7",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/restore3-1788032924/restore3.zip",
+      "validated_at": "2026-08-29T20:01:40Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "4c9f5b4fad89dd6f87c5c9bed912133ce4988f635ff71e7b53b5f8cbde7c2b5b",
+      "game": "Yie_Ar_Kung_Fu",
+      "issue": 102,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:audio",
+        "patch:bps"
+      ],
+      "license": "unknown",
+      "name": "Yie_Ar_Kung_Fu \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:yie-ar-kung-fu",
+      "rom": {},
+      "sha256": "082e3489065841a3d12fd22382ce4283b1c00a03864454a6154f37134e824ad7",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/restore3-1788032924/restore3.zip",
+      "validated_at": "2026-08-29T20:03:22Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "1d4184aaaea725c3aa9a5101b76c8e433508b48cbad561f39003dabb1db84d3e",
+      "game": "Ice_Climber",
+      "issue": 99,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Ice_Climber \u2014 community submission",
+      "pack_id": "sbihaiko/mesence:ice-climber",
+      "rom": {},
+      "sha256": "082e3489065841a3d12fd22382ce4283b1c00a03864454a6154f37134e824ad7",
+      "system": "nes",
+      "url": "https://github.com/sbihaiko/MesenCE/releases/download/restore3-1788032924/restore3.zip",
+      "validated_at": "2026-08-29T20:04:15Z",
       "verdict": "accepted",
       "votes": 1
     }

@@ -68,10 +68,34 @@ def mep_id_from_meta(mep_meta):
     return slug if SLUG.match(slug) else None
 
 
-def resolve_pack_id(pack_url, mep_meta, issue_number):
-    """ADR-0140 pack_id resolution, first match wins:
+def game_slug(game_name):
+    """The ADR-0143 game component of a `{origin}:{game}` pack_id: the
+    game identity lowercased with runs of non-`[a-z0-9]` folded to a single
+    hyphen (e.g. "Dr_Mario" -> "dr-mario", "Super Mario Bros." ->
+    "super-mario-bros", "1942" -> "1942"). None for an empty/whitespace-only
+    name — a nameless game can only fall back to the bare origin."""
+    if not game_name:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "-", str(game_name).strip().lower()).strip("-")
+    return slug or None
+
+
+def _meta_game(mep_meta):
+    """The ADR-0143 game identity recorded on mep-meta by the validate
+    pipeline (`game`), when present; None otherwise."""
+    if isinstance(mep_meta, dict):
+        game = mep_meta.get("game")
+        return game if isinstance(game, str) and game.strip() else None
+    return None
+
+
+def resolve_pack_id(pack_url, mep_meta, issue_number, game=None):
+    """ADR-0140/0143 pack_id resolution, first match wins:
     (1) the pack's declared `id` (from mep-meta), else
-    (2) `owner/repo` for github.com / codeload.github.com pack URLs, else
+    (2) `{owner}/{repo}:{game-slug}` for github.com / codeload.github.com
+        pack URLs when a game identity is known (ADR-0143: one catalog slot
+        per game — `game` from the caller, else the `game` mep-meta records;
+        the bare `owner/repo` stays the fallback when neither names one), else
     (3) `issue-{n}` of the accepted submission.
     Returns (pack_id, source) with source one of "id"/"owner-repo"/"issue"."""
     declared = mep_id_from_meta(mep_meta)
@@ -79,6 +103,11 @@ def resolve_pack_id(pack_url, mep_meta, issue_number):
         return declared, "id"
     origin = github_origin(pack_url)
     if origin:
+        game = game or _meta_game(mep_meta)
+        if game:
+            slug = game_slug(game)
+            if slug:
+                return f"{origin}:{slug}", "owner-repo"
         return origin, "owner-repo"
     return f"issue-{issue_number}", "issue"
 

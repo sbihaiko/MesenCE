@@ -27,6 +27,7 @@ LABELS=(
   "console:sms|5319E7|Pack targets the SMS/GG/SG-1000 console"
   "assets:external|FBCA04|Pack declares external_assets (split-distribution content-index) dependencies"
   "pack:needs-review|C5DEF5|Pack claims an existing pack_id from a different origin — human triage (PRD §3.3)"
+  "pack:split|C5DEF5|Multi-game submission split into one issue per game (ADR-0143)"
 )
 
 for entry in "${LABELS[@]}"; do

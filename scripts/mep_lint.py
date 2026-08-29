@@ -21,10 +21,21 @@ is always in en-US (GitHub Issues/comments are en-US per CLAUDE.md).
 
 Usage: python3 scripts/mep_lint.py <folder-or-zip> [rom_name] [--quiet]
        python3 scripts/mep_lint.py --content-id <folder-or-zip> [rom_name]
+       python3 scripts/mep_lint.py --list-games <folder-or-zip> [rom_name]
+       python3 scripts/mep_lint.py [--content-id] --root <prefix> <folder-or-zip> [rom_name]
   rom_name (optional): target ROM name declared by the submitter (e.g.
   "Contra (U) [!]"). When present, enables the ROM-name fallback (ADR-0120
   §3's named follow-up) in addition to the structural fallback — see
   find_fallback_subfolder_by_name.
+
+  --list-games (ADR-0143): print the distinct game pack roots the container
+  holds as one "root<tab>game" line per root (root "" == the container
+  root), so the pipeline can split a multi-game container into one pack and
+  one issue per game. game is the pack.json targets[0].name when present,
+  else the candidate subfolder name.
+  --root <prefix> (ADR-0143): lint exactly the pack at <prefix> (a split
+  pass's own root), skipping the structural fallback — the caller already
+  resolved the root via --list-games.
 
   --content-id (ADR-0139/P.1): run the same pack-root discovery, then print
   only the tree content_id (hex SHA-256 over the canonical manifest of the
@@ -216,24 +227,19 @@ def _longest_matching_suffix(normalized: str):
     return best
 
 
-def find_fallback_subfolder(names):
-    """Pure, structural (name-agnostic) last-priority fallback (ADR-0120,
-    extended by ADR-0121): the Python mirror of
-    MepZipValidator.FindStructuralFallbackPrefix (C#, matches structurally
-    like here — mep_lint has no ROM context either). Searches `names` (the
-    source's full entry-path set) for a single subfolder that directly holds
-    pack.json, one of PROBES/AUDIO_ALT_PROBE (human or auto/ layer), or
-    (ADR-0121) a bare FALLBACK_PROBE_BASENAMES leaf with no textures/audio/
-    synth wrapper — depth/entry-capped by FALLBACK_MAX_DEPTH/
-    FALLBACK_MAX_ENTRIES. Returns (prefix, depth) for the one unambiguous
-    candidate found, or None when nothing matches or more than one distinct
-    candidate matches (ambiguous — fails closed rather than guessing, same
-    philosophy as the C#/C++ mirrors — see ADR-0121 for why the C++ runtime
-    loader's own MepPack::FindFallbackSubfolder deliberately stays
-    ROM-name-anchored instead of gaining this same structural widening)."""
+def find_fallback_subfolder_candidates(names):
+    """Every distinct subfolder prefix in `names` that directly holds a
+    fallback probe (pack.json, a textures/audio/synth probe — human or auto/
+    layer — or a bare legacy probe basename with no wrapper, ADR-0121),
+    bounded by the ADR-0120 depth/entry caps. Sorted; the single-candidate
+    case is exactly what `find_fallback_subfolder` returns, and N>1 distinct
+    candidates is the ADR-0143 multi-game trigger — each distinct pack root
+    is a distinct game pack, which the single-root fallback fails closed on
+    rather than guessing. The `safe_rel` guard keeps the same zip-slip
+    protection the single-root fallback applies to every entry."""
     if len(names) > FALLBACK_MAX_ENTRIES:
-        return None
-    candidate, candidate_depth = None, 0
+        return []
+    depths = {}
     for name in sorted(names):
         # safe_rel rejects '..' segments, a leading '/', and drive letters —
         # without this guard a zip-slip-shaped entry (e.g. "../evil/textures/
@@ -254,10 +260,29 @@ def find_fallback_subfolder(names):
         prefix = normalized[: -(len(suffix) + 1)]
         if not prefix:
             continue  # root-level match: already covered by the existing conventions
-        if candidate is not None and candidate != prefix:
-            return None
-        candidate, candidate_depth = prefix, len(segments)
-    return (candidate, candidate_depth) if candidate else None
+        depths[prefix] = len(segments)
+    return [(prefix, depths[prefix]) for prefix in sorted(depths)]
+
+
+def find_fallback_subfolder(names):
+    """Pure, structural (name-agnostic) last-priority fallback (ADR-0120,
+    extended by ADR-0121): the Python mirror of
+    MepZipValidator.FindStructuralFallbackPrefix (C#, matches structurally
+    like here — mep_lint has no ROM context either). Searches `names` (the
+    source's full entry-path set) for a single subfolder that directly holds
+    pack.json, one of PROBES/AUDIO_ALT_PROBE (human or auto/ layer), or
+    (ADR-0121) a bare FALLBACK_PROBE_BASENAMES leaf with no textures/audio/
+    synth wrapper — depth/entry-capped by FALLBACK_MAX_DEPTH/
+    FALLBACK_MAX_ENTRIES. Returns (prefix, depth) for the one unambiguous
+    candidate found, or None when nothing matches or more than one distinct
+    candidate matches (ambiguous — fails closed rather than guessing, same
+    philosophy as the C#/C++ mirrors — see ADR-0121 for why the C++ runtime
+    loader's own MepPack::FindFallbackSubfolder deliberately stays
+    ROM-name-anchored instead of gaining this same structural widening;
+    ADR-0143: a caller that needs the N>1 multi-game case reads it from
+    find_fallback_subfolder_candidates instead)."""
+    candidates = find_fallback_subfolder_candidates(names)
+    return candidates[0] if len(candidates) == 1 else None
 
 
 _TRAILING_TAG_RE = re.compile(r"\s*[\(\[][^()\[\]]*[\)\]]\s*$")
@@ -350,6 +375,75 @@ def find_top_level_nested_zip(names):
         if normalized.lower().endswith(".zip"):
             candidates.append(normalized)
     return candidates[0] if len(candidates) == 1 else None
+
+
+def _root_is_pack(src: Source) -> bool:
+    """Whether the container root itself is a pack root (MEP pack.json, a
+    textures/audio/synth convention probe — human or auto/ layer — or a
+    legacy hires.txt at the root). Mirrors discover_sections' root-level
+    checks, so discover_game_roots and discover_sections never disagree
+    about which roots a container owns."""
+    return (
+        src.exists("pack.json")
+        or src.exists("hires.txt")
+        or src.exists(AUDIO_ALT_PROBE)
+        or any(src.exists(p) or src.exists(f"auto/{p}") for p in PROBES.values())
+    )
+
+
+def _root_game_name(src: Source, root_prefix: str):
+    """The ADR-0143 game identity for a pack root at `root_prefix`: the first
+    MEP target's `name` when the root has a pack.json (MEP-v1 §3.1, targets[]
+    is the pack's declared game identity), else the subfolder's last segment
+    (a legacy HD pack's own folder name). None when neither names one."""
+    if src.exists(f"{root_prefix}pack.json"):
+        try:
+            root = json.loads(src.text(f"{root_prefix}pack.json"))
+        except Exception:  # noqa: BLE001 -- a malformed manifest names no game
+            root = None
+        if isinstance(root, dict):
+            targets = root.get("targets")
+            if isinstance(targets, list) and targets and isinstance(targets[0], dict):
+                name = targets[0].get("name")
+                if isinstance(name, str) and name.strip():
+                    return name.strip()
+    if root_prefix:
+        return root_prefix.rstrip("/").rsplit("/", 1)[-1]
+    return None
+
+
+def discover_game_roots(src: Source, rom_name):
+    """The distinct game pack roots the container holds (ADR-0143): one
+    ("", game) entry when the container root is itself a pack, else one
+    (prefix, game) entry per fallback subfolder candidate. `game` is
+    _root_game_name (pack.json targets[0].name, else the subfolder name),
+    falling back to the submitter-declared rom_name when structurally
+    unnamed. The pipeline splits a result with N>1 roots into N packs and
+    N sibling issues; a single root keeps the existing one-issue flow."""
+    if _root_is_pack(src):
+        return [("", _root_game_name(src, "") or rom_name)]
+    return [(prefix, _root_game_name(src, f"{prefix}/") or prefix.rsplit("/", 1)[-1])
+            for prefix, _ in find_fallback_subfolder_candidates(src.names)]
+
+
+def discover_scoped(src: Source, rep: Report, root_prefix):
+    """Discovery scoped to one known pack root (ADR-0143 split pass — the
+    mirror of discover_sections' fallback branch): lint pack.json at
+    `<root_prefix>/` when present, then the convention layers and the legacy
+    hires.txt-at-root mirror, with NO structural fallback because the caller
+    already resolved which root this pass owns."""
+    sections = {}
+    src.root_prefix = root_prefix
+    rp = f"{root_prefix}/"
+    if src.exists(f"{rp}pack.json"):
+        sections = lint_pack_json(src, rep, root_prefix=rp)
+    else:
+        rep.info("pack.json", "absent — pack via folder convention (ADR-0049): identity = name/location")
+    scan_convention_sections(src, rep, sections, root_prefix=rp)
+    if src.exists(f"{rp}hires.txt"):
+        rep.info(f"{rp}hires.txt", "Legacy HD pack (hires.txt at the pack root) — loadable as HdPacks/<rom>/ or as a textures section with path \"\"")
+        sections.setdefault("textures", root_prefix)
+    return sections
 
 
 def discover_sections(src: Source, rep: Report, rom_name):
@@ -913,7 +1007,19 @@ def main(argv):
         return 2
     quiet = "--quiet" in argv
     content_id_only = "--content-id" in argv
-    positional = [a for a in argv[1:] if not a.startswith("--")]
+    list_games = "--list-games" in argv
+    root_prefix = None
+    positional = []
+    i = 1
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--root" and i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+            root_prefix = argv[i + 1].rstrip("/")
+            i += 2
+            continue
+        if not arg.startswith("--"):
+            positional.append(arg)
+        i += 1
     target = Path(positional[0])
     rom_name = positional[1] if len(positional) > 1 else None
     if not target.exists():
@@ -922,25 +1028,49 @@ def main(argv):
     src = Source(target)
     rep = Report()
 
-    sections = discover_sections(src, rep, rom_name)
+    if list_games:
+        # ADR-0143: enumerate the distinct game pack roots so the pipeline
+        # can split a multi-game container into one pack and one issue per
+        # game. A single top-level .zip wraps one pack one level deeper —
+        # mirror the issue #19 last resort before concluding no game exists.
+        roots = discover_game_roots(src, rom_name)
+        if not roots:
+            nested_name = find_top_level_nested_zip(src.names)
+            if nested_name:
+                try:
+                    nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
+                except zipfile.BadZipFile as exc:
+                    rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
+                else:
+                    roots = discover_game_roots(nested_src, rom_name)
+        for prefix, game in roots:
+            print(f"{prefix}\t{game or ''}")
+        return 0
 
-    if not sections:
-        # Issue #19: absolute last resort, tried only once every convention
-        # and both ADR-0120 fallbacks above already found nothing — the pack
-        # may be wrapped one level deeper inside a single top-level .zip
-        # (e.g. a Google Drive export bundling the real pack.zip alongside
-        # unrelated bonus folders). Unwraps in memory and re-runs the exact
-        # same discovery against the nested zip's own content.
-        nested_name = find_top_level_nested_zip(src.names)
-        if nested_name:
-            try:
-                nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
-            except zipfile.BadZipFile as exc:
-                rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
-            else:
-                rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
-                src = nested_src
-                sections = discover_sections(src, rep, rom_name)
+    if root_prefix is not None:
+        # ADR-0143 split pass: lint exactly the pack at <root_prefix> (no
+        # structural fallback — the pipeline already resolved the root).
+        sections = discover_scoped(src, rep, root_prefix)
+    else:
+        sections = discover_sections(src, rep, rom_name)
+
+        if not sections:
+            # Issue #19: absolute last resort, tried only once every convention
+            # and both ADR-0120 fallbacks above already found nothing — the pack
+            # may be wrapped one level deeper inside a single top-level .zip
+            # (e.g. a Google Drive export bundling the real pack.zip alongside
+            # unrelated bonus folders). Unwraps in memory and re-runs the exact
+            # same discovery against the nested zip's own content.
+            nested_name = find_top_level_nested_zip(src.names)
+            if nested_name:
+                try:
+                    nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
+                except zipfile.BadZipFile as exc:
+                    rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
+                else:
+                    rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
+                    src = nested_src
+                    sections = discover_sections(src, rep, rom_name)
 
     if content_id_only:
         if not sections:
