@@ -1,6 +1,6 @@
 # ADR-0128: CheatTypeDetector parity tests use Assert.ThrowsAny; Gb/Sms support deferred
 
-- Status: accepted (ThrowsAny change implemented 2026-08-29; product decision on Gb/Sms remains explicitly deferred)
+- Status: accepted (ThrowsAny + `NotSupportedException` implemented 2026-08-29; only the Gb/Sms *detection* product decision remains explicitly deferred)
 - Date: 2026-08-27
 - Consolidates: ADR-0069, ADR-0070
 
@@ -33,12 +33,12 @@ test-touching change later, so it belongs in the parity phase itself.
 - [x] Keep `FromCode` unchanged in this step: no Gb/Sms branches, no
       exception-type change.
 - Deferred product decision (not part of this ADR's checklist; needs its own
-  follow-up when someone owns cheat support for GB/SMS): (a) whether
+  follow-up when someone owns cheat support for GB/SMS): whether
   `FromCode` should implement the `GbGameGenie`/`GbGameShark`/`SmsGameGenie`
-  detection its enum already declares, and (b) whether unsupported consoles
-  should throw `NotSupportedException` (with the offending `ConsoleType`) so
-  the UI can show a specific message. Once the tests use `ThrowsAny`, (b) can
-  land without touching the parity tests.
+  detection its enum already declares. Part (b) — throwing
+  `NotSupportedException` (with the offending `ConsoleType`) so the UI can
+  show a specific message — was implemented 2026-08-29 (user decision), and
+  landed without touching the parity tests because they use `ThrowsAny`.
 
 ## Consequences
 - The parity suite asserts the weakest statement that still captures current

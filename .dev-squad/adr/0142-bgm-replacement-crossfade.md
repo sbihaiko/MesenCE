@@ -1,6 +1,6 @@
 # ADR-0142: Crossfade for replaced BGM transitions (F5.4g Block C item 10)
 
-- Status: proposed (write-before-implement: Block C item 10 has no recorded contract; nothing in the tree implements a fade today)
+- Status: accepted 2026-08-29 (contract reflected in the code since `c36043f5`; accepted by user decision with the click-free listening verification recorded as manual-pending — see Consequences)
 - Date: 2026-08-29
 - Related: ADR-0133 (per-channel mute mask — the other Block C audio item), ADR-0134 (loop point), ADR-0052 (level-2 classifier; it already crossfades on role changes — the same philosophy applies here)
 
@@ -64,8 +64,10 @@ path (never by run-ahead frames):
   (fades not consumed by discarded frames). Listening/regression on real
   games is recorded as manual-pending per the standing "podemos seguir sem
   testar?" precedent.
-- This ADR moves to `accepted` when the crossfade ships and the switch/stop
-  boundary is verified click-free on a real pack.
+- Accepted 2026-08-29 by user decision: the crossfade shipped (`c36043f5`);
+  the click-free switch/stop verification on a real pack is recorded as
+  manual-pending (listening validation — loop-intro, SFX audibility, no click
+  on switch), not a blocker for the acceptance.
 
 ## Alternatives
 
