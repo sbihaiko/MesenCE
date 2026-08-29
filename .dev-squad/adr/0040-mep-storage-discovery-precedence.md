@@ -4,7 +4,8 @@
 - Date: 2026-08-24
 - Phase: F3.0 (MEP v1 host)
 - Refines ADR-0005 (loose HD pack wins) and the storage note in
-  `docs/roadmap/PRD` (memory: "central folder per ROM, accept zip and directory").
+  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (memory: "central
+  folder per ROM, accept zip and directory").
 
 ## Context
 MEP-v1 §2 requires hosts to accept a `.zip` and a directory with identical
