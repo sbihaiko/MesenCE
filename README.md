@@ -130,7 +130,7 @@ Packs stay with their authors — this project only **validates and catalogs** t
 
 **Submit a pack (yours or someone else's you love):**
 
-1. **[Open a pack submission](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml)** — it's a GitHub Issue with a short pre-filled template: pack link, game + region, console, author/credits. No account beyond GitHub, nothing to upload.
+1. **[Open a pack submission](https://github.com/sbihaiko/MesenCE/issues/new?template=community-pack.yml)** — it's a GitHub Issue with a short pre-filled template: just pack link, target game + region, and console. No account beyond GitHub, nothing to upload. (Authorship is discovered from the pack itself during validation and shown in the catalog — you don't fill it in.)
 2. A workflow **downloads the pack** (GitHub releases, gists and raw links are accepted, up to 300 MB), runs the same `scripts/mep_lint.py` you can run offline, and computes its hash.
 3. The Issue gets **labeled** — `pack:valid` or `pack:invalid`, plus what's inside (`assets:textures`, `assets:audio`, `patch:ips`/`patch:bps`, `console:*`) — with a comment citing the exact section of [MEP v1](docs/specs/MEP-v1.md) behind the verdict.
 4. Valid packs land in the **catalog** on the next refresh. Updated the pack? Comment `/revalidate` on the Issue; a daily check also re-runs when the link's content changes.
