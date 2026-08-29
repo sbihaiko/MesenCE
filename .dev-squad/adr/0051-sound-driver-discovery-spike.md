@@ -1,6 +1,6 @@
 # ADR-0051: Enumerating a game's music and SFX without playing it (sound-driver discovery)
 
-- Status: proposed (spike implemented and calibrated on 12 ROMs 2026-08-25; the shipping shape is what remains proposed — runtime contract in ADR-0135)
+- Status: accepted (spike implemented and calibrated on 12 ROMs 2026-08-25; the shipping shape was decided 2026-08-29 via the runtime contract in ADR-0135 — opt-in tool per the Decision below)
 - Date: 2026-08-25
 - Phase 5, F5.4f. Complements ADR-0047 (fingerprint trigger) and F5.3 (bootstrap recorder).
 

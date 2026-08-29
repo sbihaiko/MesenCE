@@ -1,6 +1,6 @@
 # ADR-0134: Loop point placement for replaced audio tracks (fingerprint field vs OGG tags)
 
-- Status: proposed (open — no option chosen yet; decide before F5 closeout item 8 is scheduled)
+- Status: accepted (decided 2026-08-29 — **Option A**: the loop point lives in `fingerprints.json` as an optional `tracks[i].loop` field; Block C item 8 implements it)
 - Date: 2026-08-29 (restored from b0b334b0^; originally dated 2026-08-27)
 - Consolidates: ADR-0095, ADR-0098
 - Related: ADR-0052 (orthogonal — level 2 audio; the loop point is F5.3/3b territory), ADR-0047 (fingerprint trigger)
@@ -29,11 +29,10 @@ rather than in the OGG file the `OggReader` already parses?
 
 ## Decision
 
-Open question, stated crisply: **for a replacement track, is the loop point a
-property of the identification record (`fingerprints.json`) or of the audio
-asset (the OGG)?**
+**Option A was chosen (2026-08-29)** — for a replacement track, the loop point
+is a property of the identification record: an optional `tracks[i].loop` field
+in `fingerprints.json`.
 
-Option A — `loop` field in `fingerprints.json`:
 - `tracks[i].loop` (optional, integer, unit fixed once in MEP-v1: PCM sample
   offset at the OGG's own rate, or milliseconds — not APU frames, since
   `frames` on the same object counts emulated frames of the *original* track,
@@ -42,7 +41,8 @@ Option A — `loop` field in `fingerprints.json`:
   as optional; MEP-v1 §5.2 gets a minor revision.
 - Written by the human who renders/edits the OGG (the bootstrap cannot know the
   loop point of a file it did not produce), read by `NesAudioReplacer` into
-  `BgmTrackInfo::LoopPosition`.
+  `BgmTrackInfo::LoopPosition`. `mep_render_audio.py` emits it for
+  machine-rendered tracks from the MIDI's loop marker, if any.
 
 Option B — loop point in the OGG's own metadata:
 - Vorbis comment tags `LOOPSTART`/`LOOPLENGTH` (the RPG Maker / game-audio

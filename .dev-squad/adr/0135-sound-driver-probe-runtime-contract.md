@@ -1,6 +1,6 @@
 # ADR-0135: Sound-driver probe runtime contract: opt-in, time budget, abort, no-op
 
-- Status: proposed (productisation contract for F5.4f / F5 closeout item 11; nothing beyond the spike exists in the tree)
+- Status: accepted (decided 2026-08-29 — the 7-point runtime contract below is adopted; Block D item 11 implements it)
 - Date: 2026-08-29 (restored from b0b334b0^; originally dated 2026-08-27)
 - Consolidates: ADR-0093, ADR-0096, ADR-0099
 - Related: ADR-0051 (sound-driver discovery spike — this ADR supplies the runtime contract 0051 lacks), ADR-0043 (shortcut wiring precedent), ADR-0047, ADR-0052

@@ -1,6 +1,6 @@
 # ADR-0133: Per-channel replacement mute mask in NesSoundMixer (Block C item 9)
 
-- Status: proposed (write-before-implement: Block C of the F5 closeout never executed; nothing in the tree implements this yet)
+- Status: accepted (decided 2026-08-29 — the per-channel mask contract below is adopted; Block C item 9 implements it)
 - Date: 2026-08-29 (restored from b0b334b0^; originally dated 2026-08-27)
 - Consolidates: ADR-0094, ADR-0097
 - Related: ADR-0052 item 2 (SFX vs music classifier — parent decision), ADR-0047 (fingerprint trigger), ADR-0051
