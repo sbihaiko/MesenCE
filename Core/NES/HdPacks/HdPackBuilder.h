@@ -51,10 +51,13 @@ private:
 	//per-shape diversity survives intact and only the degenerate/near-blank
 	//outliers get bounded. Beyond the cap, further sightings just bump usage
 	//on the shape's last captured variant instead of growing the pack further.
-	//Not seeded from an existing on-disk pack at construction (same gap noted
-	//below for _screensSeen) - a re-record session can add up to
-	//MaxPaletteVariantsPerTile more variants on top of what is already on disk.
+	//F5.4b follow-up (b) (ADR-0132): seeded from the on-disk pack at construction
+	//(non-defaultTile entries only - neutral-ramp placeholders are not real
+	//palette variants), so the cap is a per-shape total across re-record sessions,
+	//not a per-session ceiling. Follow-up (a): reaching the cap logs a one-time
+	//saturation message per shape (_variantCapLogged) instead of failing silently.
 	unordered_map<HdTileKey, vector<HdPackTileInfo*>> _paletteVariantsByShape;
+	unordered_set<uint32_t> _variantCapLogged; //shape hashes already saturation-logged
 	static constexpr uint32_t MaxPaletteVariantsPerTile = 32;
 	bool _isChrRam = false;
 	string _saveFolder;

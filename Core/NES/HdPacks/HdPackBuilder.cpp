@@ -46,6 +46,17 @@ HdPackBuilder::HdPackBuilder(Emulator* emu, PpuModel ppuModel, bool isChrRam, Hd
 			AddTile(tile.get(), 0xFFFFFFFF - tile->BitmapIndex);
 		}
 
+		for(unique_ptr<HdPackTileInfo>& tile : _hdData.Tiles) {
+			//F5.4b follow-up (b) (ADR-0132): seed the per-shape palette-variant map
+			//from the on-disk pack, so the cap is a per-shape total across sessions.
+			//DefaultTile neutral-ramp placeholders are excluded - they are waiting
+			//for art, not real PaletteColors variants (the loader ignores their
+			//PaletteColors).
+			if(tile && !tile->DefaultTile) {
+				_paletteVariantsByShape[tile->GetKey(true)].push_back(tile.get());
+			}
+		}
+
 		if(_hdData.Scale != _options.Scale) {
 			_options.FilterType = ScaleFilterType::Prescale;
 		}
@@ -450,6 +461,13 @@ void HdPackBuilder::CaptureOrCapPaletteVariant(uint32_t x, uint32_t y, uint16_t 
 	if(variants.size() >= MaxPaletteVariantsPerTile) {
 		//Cap reached: don't grow the pack further, just bump usage on the shape's most
 		//recently captured variant instead of creating a new entry.
+		//F5.4b follow-up (a) (ADR-0132): log once per shape so a shape that saturates
+		//the cap is visible to the artist (it needs art, not ever more palette shots)
+		//without spamming the log every frame the flat tile is on screen.
+		uint32_t shapeHash = tile.GetKey(true).GetHashCode();
+		if(_variantCapLogged.insert(shapeHash).second) {
+			MessageManager::Log("[HDPack] tile shape hit the palette-variant cap (" + std::to_string(MaxPaletteVariantsPerTile) + "); keeping the last captured variant");
+		}
 		HdPackTileInfo* fallbackTile = variants.back();
 		fallbackTile->TransparencyRequired |= transparencyRequired;
 		auto fallbackUsage = _tileUsageCount.find(fallbackTile->GetKey(false));

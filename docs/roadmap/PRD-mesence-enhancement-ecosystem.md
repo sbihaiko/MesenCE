@@ -85,7 +85,8 @@ does not exist.
   `fingerprints.json` + seed MIDI; `mep_render_audio.py`; `NesAudioReplacer`
   swaps OGG in by fingerprint (ADR-0047).
 - **F5.4a/a′ — `<background>` screens** (ADR-0050) and assets-without-playing.
-- **F5.4b — per-shape palette-variant cap** (ADR-0132; two follow-ups open).
+- **F5.4b — per-shape palette-variant cap** (ADR-0132; follow-ups (a) saturation
+  log and (b) seed-from-disk shipped 2026-08-29).
 - **F5.4f spike — sound-driver discovery** (`scripts/spike_sound_driver`,
   ADR-0051 → runtime contract ADR-0135).
 - **F5.4g Block A — level-2 audio**: `ChannelRoleClassifier`, SFX separation,
@@ -277,7 +278,7 @@ editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
 | F5.4g **Block B** | items 3 arpeggio→chord (verify), 4 expression, 6 human override incl. fixed per-channel role in ESP, "channel stolen and returned" | ADR-0052 |
 | F5.4g **Block C** | 8 loop point in the fingerprint (`LoopPosition` is 0 today), 9 SFX audible during OGG (mute mask), 10 music→music transition/fade | **ADR-0133** (mute mask, proposed — write-before-implement) and **ADR-0134** (loop-point placement, proposed — option not chosen) must be accepted first |
 | F5.4g **Block D** | 11 *Extract audio* opt-in tool driving the sound driver, longer title→Start window for Contra/SMB1; 12 id naming/cleanup; 13 `mep_build.py` with `audio/`, audio lint, seed-MIDI→OGG tutorial | **ADR-0135** (probe runtime contract, proposed) and ADR-0051 |
-| F5.4b follow-ups | (a) saturation log when a shape hits `MaxPaletteVariantsPerTile`; (b) seed `_paletteVariantsByShape` from `_hdData` or document per-session scope | ADR-0132 |
+| F5.4b follow-ups | (a) saturation log when a shape hits `MaxPaletteVariantsPerTile`; (b) seed `_paletteVariantsByShape` from `_hdData` or document per-session scope | ADR-0132 — shipped 2026-08-29: (a) logs once per shape (`_variantCapLogged`); (b) seeds from non-defaultTile on-disk entries in the ctor, making the cap a per-shape total across sessions |
 | SoundFont | bundle GeneralUser GS (31 MB, permissive) or MuseScore General (206 MB, MIT) in the installer, or stay "user supplies `.sf2`" | **user decision pending** |
 | F5.5 | wrap-up: bootstrap setting UI polish, MEP-v1/MEI golden refresh, README, F1–F3 regressions, dotnet 0 warnings | after the above |
 
