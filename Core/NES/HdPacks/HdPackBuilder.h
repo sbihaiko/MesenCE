@@ -9,6 +9,20 @@
 class Emulator;
 class BaseMapper;
 
+//F5.4d: "what you played" coverage. TilesSeen = distinct tile shapes the game
+//actually drew during recording (static export seeds - AddRomTiles/AddPrgScanTiles
+//- sit in _tileUsageCount with usage 0 and are excluded); TilesWithArt = of those,
+//how many already have a real (non-defaultTile) art entry. ScreensSeen = distinct
+//stable screens captured. IsChrRam drives the builder window's CHR RAM warning
+//(static export is heuristic there - ADR-0043 "the UI says so").
+struct HdPackCoverageReport
+{
+	uint32_t TilesSeen = 0;
+	uint32_t TilesWithArt = 0;
+	uint32_t ScreensSeen = 0;
+	bool IsChrRam = false;
+};
+
 class HdPackBuilder
 {
 private:
@@ -93,6 +107,9 @@ public:
 
 	void ProcessTile(uint32_t x, uint32_t y, uint16_t tileAddr, HdPpuTileInfo& tile, BaseMapper* mapper, bool isSprite, uint32_t chrBankHash, bool transparencyRequired);
 	void SaveHdPack();
+
+	//F5.4d: coverage report for the builder window (see HdPackCoverageReport above)
+	HdPackCoverageReport GetCoverageReport() const;
 
 	//Screen capture (see above); colorIndex = the 2-bit background pixel value
 	void EnableScreenCapture();

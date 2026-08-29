@@ -5,6 +5,7 @@ using Mesen.Config.Shortcuts;
 using Mesen.Interop;
 using Mesen.Localization;
 using Mesen.Utilities;
+using Mesen.Windows;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,6 +26,15 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial FilterInfo? SelectedFilter { get; set; }
 		[ObservableProperty] public partial BankSizeInfo SelectedBankSize { get; set; }
 
+		//F5.4d: "what you played" coverage, live while recording (see
+		//HdPackCoverageReport in HdPackBuilder.h). Text like "Tiles seen: 142 · with
+		//art: 87 (61%) · screens: 6"; ShowChrRamWarning surfaces ADR-0043's "the UI
+		//says so" for CHR RAM games (static ROM export is heuristic there).
+		[ObservableProperty] public partial string Coverage { get; set; } = "";
+		[ObservableProperty] public partial bool ShowChrRamWarning { get; set; }
+
+		private DispatcherTimer? _coverageTimer;
+
 		[ObservableProperty] public partial FilterInfo[] Filters { get; private set; } = Array.Empty<FilterInfo>();
 
 		public BankSizeInfo[] BankSizes { get; } = {
@@ -43,6 +53,15 @@ namespace Mesen.ViewModels
 			SelectedFilter = Filters.Where(x => x.FilterType == Config.FilterType && x.Scale == Config.Scale).FirstOrDefault() ?? Filters[0];
 			SelectedBankSize = BankSizes.Where(x => x.BankSize == Config.ChrRamBankSize).FirstOrDefault() ?? BankSizes[0];
 			IsBankSizeVisible = EmuApi.GetGameMemorySize(MemoryType.NesChrRam) > 0;
+			ShowChrRamWarning = IsBankSizeVisible;
+
+			//F5.4d: poll the live builder's coverage while recording. Reading the
+			//report acquires the emulation lock internally, so the read runs on a
+			//background task and only the string lands on the UI thread.
+			_coverageTimer = new DispatcherTimer();
+			_coverageTimer.Interval = TimeSpan.FromMilliseconds(500);
+			_coverageTimer.Tick += (s, e) => RefreshCoverage();
+			RefreshCoverage();
 
 			AddDisposable(this.ObserveProp(nameof(SelectedFilter), () => {
 				if(SelectedFilter != null) {
@@ -59,6 +78,11 @@ namespace Mesen.ViewModels
 				IsOpenFolderEnabled = File.Exists(SaveFolder);
 				UpdateFilterDropdown();
 			}));
+		}
+
+		protected override void DisposeView()
+		{
+			_coverageTimer?.Stop();
 		}
 
 		private void UpdateFilterDropdown()
@@ -89,6 +113,8 @@ namespace Mesen.ViewModels
 			}
 
 			IsRecording = true;
+			_coverageTimer?.Start();
+			RefreshCoverage();
 
 			Task.Run(() => {
 				HdPackBuilderOptions options = Config.ToInterop(SaveFolder);
@@ -153,8 +179,37 @@ namespace Mesen.ViewModels
 				Dispatcher.UIThread.Post(() => {
 					IsOpenFolderEnabled = true;
 					UpdateFilterDropdown();
+					_coverageTimer?.Stop();
+					RefreshCoverage();
 				});
 			});
+		}
+
+		//F5.4d: "what you played" — reads the live builder's coverage report and
+		//formats it for the window. Zero when not recording (the builder is reset
+		//on stop); the CHR RAM warning stays set from IsBankSizeVisible.
+		public void RefreshCoverage()
+		{
+			Task.Run(() => {
+				InteropHdPackCoverageReport report = EmuApi.GetHdPackCoverageReport();
+				Dispatcher.UIThread.Post(() => {
+					if(report.IsChrRam != 0 || IsBankSizeVisible) {
+						ShowChrRamWarning = true;
+					}
+					uint percent = report.TilesSeen > 0 ? (uint)(report.TilesWithArt * 100 / report.TilesSeen) : 0;
+					Coverage = $"Tiles seen: {report.TilesSeen} · with art: {report.TilesWithArt} ({percent}%) · screens: {report.ScreensSeen}";
+				});
+			});
+		}
+
+		//F5.4d: before/after preview — each sheet/screen PNG beside its *.orig.png
+		//reference twin (the pixel-exact, unfiltered capture F5.4a′ writes).
+		public void PreviewBeforeAfter()
+		{
+			if(!Directory.Exists(SaveFolder)) {
+				return;
+			}
+			ApplicationHelper.GetOrCreateUniqueWindow(null, () => new HdPackPreviewWindow(SaveFolder));
 		}
 
 		public void OpenFolder()

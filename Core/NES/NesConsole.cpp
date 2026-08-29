@@ -944,6 +944,18 @@ void NesConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
 	MessageManager::DisplayMessage("HdPack", "HdPackExportDone", std::to_string(added));
 }
 
+//F5.4d: coverage report for the builder window. Reads the live builder under the
+//emulation lock (ProcessTile/AddTile mutate the maps on the emulation thread);
+//zero-fills when not recording. Called from the UI thread via the interop layer.
+void NesConsole::GetHdPackCoverageReport(HdPackCoverageReport& report) const
+{
+	report = {};
+	auto lock = _emu->AcquireLock();
+	if(_hdPackBuilder) {
+		report = _hdPackBuilder->GetCoverageReport();
+	}
+}
+
 void NesConsole::StartRecordingHdPack(HdPackBuilderOptions options)
 {
 	auto lock = _emu->AcquireLock();

@@ -26,6 +26,7 @@ class HdPackBuilder;
 class Epsm;
 struct HdPackData;
 struct HdPackBuilderOptions;
+struct HdPackCoverageReport;
 
 enum class DebugEventType;
 enum class EventType;
@@ -99,6 +100,11 @@ public:
 	//MIDI, written when the console is destroyed or the bootstrap stops)
 	void StartAudioBootstrap(const string& audioFolder);
 	void EnableBootstrapScreenCapture();
+
+	//F5.4d: coverage report for the HD Pack Builder window (read from any thread;
+	//acquires the emulation lock internally - the builder's maps are only mutated
+	//on the emulation thread). Zero-fills the report when not recording.
+	void GetHdPackCoverageReport(HdPackCoverageReport& report) const;
 
 	//Emulator-level (shared) SoundMixer, cached at construction: the APU
 	//channels' VGM tap reads it on every register write, so this stays an

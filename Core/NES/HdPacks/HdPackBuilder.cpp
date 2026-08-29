@@ -60,6 +60,44 @@ HdPackBuilder::~HdPackBuilder()
 	SaveHdPack();
 }
 
+HdPackCoverageReport HdPackBuilder::GetCoverageReport() const
+{
+	HdPackCoverageReport report;
+	report.IsChrRam = _isChrRam;
+	report.ScreensSeen = (uint32_t)_screensSeen.size();
+
+	//"What you played" = distinct tile shapes actually seen during recording.
+	//Static export seeds (AddRomTiles/AddPrgScanTiles) land in _tileUsageCount
+	//with usage 0 and are never bumped, so usage>=1 separates gameplay sightings
+	//from the pre-seeded ROM dump (on-disk tiles loaded at construction get
+	//0xFFFFFFFF - BitmapIndex, also >= 1). A shape is keyed by GetKey(true):
+	//PaletteColors wildcarded, so every palette variant of the same tile content
+	//collapses into one shape.
+	unordered_set<HdTileKey, HdTileKey> shapesSeen;
+	for(const auto& kv : _tileUsageCount) {
+		if(kv.second == 0) {
+			continue;
+		}
+		shapesSeen.insert(kv.first.GetKey(true));
+	}
+	report.TilesSeen = (uint32_t)shapesSeen.size();
+
+	//"With art" = a non-defaultTile entry covers the shape - exact palette key
+	//first, then the wildcard (GetKey(true)) default/recorded shape entry.
+	unordered_set<HdTileKey, HdTileKey> shapesWithArt;
+	for(const auto& kv : _tilesByKey) {
+		if(kv.second && !kv.second->DefaultTile) {
+			shapesWithArt.insert(kv.first.GetKey(true));
+		}
+	}
+	for(const HdTileKey& shape : shapesSeen) {
+		if(shapesWithArt.find(shape) != shapesWithArt.end()) {
+			report.TilesWithArt++;
+		}
+	}
+	return report;
+}
+
 void HdPackBuilder::AddTile(HdPackTileInfo* tile, uint32_t usageCount)
 {
 	bool isTileBlank = _options.GroupBlankTiles ? tile->Blank : false;

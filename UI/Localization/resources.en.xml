@@ -995,8 +995,18 @@
 			<Control ID="btnStartRecording">Start Recording</Control>
 			<Control ID="btnStopRecording">Stop Recording</Control>
 			<Control ID="btnOpenFolder">Open Save Folder</Control>
-			
+
+			<Control ID="btnPreviewBeforeAfter">Before/After</Control>
+			<Message ID="lblPreviewBeforeAfterHelp">Shows each generated PNG side by side with its "*.orig.png" reference (the pixel-exact, unfiltered capture), so you can see what the raw capture looked like before editing.</Message>
+			<Message ID="lblChrRamWarning">CHR RAM game: tiles are copied to VRAM by code, so the static "Export ROM Tiles" scan is heuristic and partial. Recording is the accurate way to capture tiles for this game.</Message>
+
 			<Control ID="lblSaveTo">Save to:</Control>
+		</Form>
+		<Form ID="HdPackPreviewWindow">
+			<Control ID="wndTitle">Before/After Preview</Control>
+			<Control ID="lblImage">Image:</Control>
+			<Control ID="lblBefore">Before (raw capture)</Control>
+			<Control ID="lblAfter">After (current PNG)</Control>
 		</Form>
 		<Form ID="InputBarcodeWindow">
 			<Control ID="wndTitle">Input barcode...</Control>

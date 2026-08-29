@@ -13,6 +13,8 @@
 #include "Core/Shared/CheatManager.h"
 #include "Core/Shared/DebuggerRequest.h"
 #include "Core/Shared/EnhancementPacks/MepPackManager.h"
+#include "Core/NES/NesConsole.h"
+#include "Core/NES/HdPacks/HdPackBuilder.h"
 #include "Core/Netplay/GameClient.h"
 #include "Core/Netplay/GameServer.h"
 #include "Utilities/ArchiveReader.h"
@@ -61,6 +63,17 @@ struct InteropRomInfo
 	DipSwitchInfo DipSwitches;
 	CpuType CpuTypes[5];
 	uint32_t CpuTypeCount;
+};
+
+//F5.4d: mirror of HdPackCoverageReport (HdPackBuilder.h) flattened for C#
+//marshaling. IsChrRam is 0/1 (uint32, not bool, to keep the struct layout
+//unambiguous across the C/C# boundary).
+struct InteropHdPackCoverageReport
+{
+	uint32_t TilesSeen = 0;
+	uint32_t TilesWithArt = 0;
+	uint32_t ScreensSeen = 0;
+	uint32_t IsChrRam = 0;
 };
 
 extern "C"
@@ -178,6 +191,25 @@ extern "C"
 	DllExport TimingInfo __stdcall GetTimingInfo(CpuType cpuType)
 	{
 		return _emu->GetTimingInfo(cpuType);
+	}
+
+	//F5.4d: "what you played" coverage for the HD Pack Builder window. Zero-fills
+	//when no NES console is loaded or the builder is not recording. Read via
+	//_emu->GetConsole() (safe weak_ptr lock - no Debug-only emulation-thread assert)
+	//so the UI thread can poll it while recording; NesConsole acquires the emulation
+	//lock internally before touching the builder's maps.
+	DllExport void __stdcall GetHdPackCoverageReport(InteropHdPackCoverageReport& report)
+	{
+		report = {};
+		auto console = _emu->GetConsole();
+		if(NesConsole* nes = dynamic_cast<NesConsole*>(console.get())) {
+			HdPackCoverageReport r = {};
+			nes->GetHdPackCoverageReport(r);
+			report.TilesSeen = r.TilesSeen;
+			report.TilesWithArt = r.TilesWithArt;
+			report.ScreensSeen = r.ScreensSeen;
+			report.IsChrRam = r.IsChrRam ? 1 : 0;
+		}
 	}
 
 	DllExport void __stdcall TakeScreenshot()

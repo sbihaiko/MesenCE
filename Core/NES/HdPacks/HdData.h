@@ -20,7 +20,7 @@ struct HdTileKey
 	int32_t TileIndex = 0;
 	bool IsChrRamTile = false;
 
-	HdTileKey GetKey(bool defaultKey)
+	HdTileKey GetKey(bool defaultKey) const
 	{
 		if(defaultKey) {
 			HdTileKey copy = *this;

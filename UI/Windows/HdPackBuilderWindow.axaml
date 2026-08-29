@@ -11,7 +11,7 @@
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="230"
 	x:Class="Mesen.Windows.HdPackBuilderWindow"
-	Width="520" Height="230"
+	Width="520" Height="300"
 	CanResize="False"
 	x:DataType="vm:HdPackBuilderViewModel"
 	Title="{l:Translate wndTitle}"
@@ -22,6 +22,7 @@
 			<StackPanel Orientation="Horizontal">
 				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" IsEnabled="{Binding IsOpenFolderEnabled}" />
 				<c:ButtonWithIcon Icon="Assets/Export.png" Command="{Binding ExportRomTiles}" Text="{l:Translate btnExportRomTiles}" IsEnabled="{Binding !IsRecording}" ToolTip.Tip="{l:Translate lblExportRomTilesHelp}" />
+				<c:ButtonWithIcon Icon="Assets/Camera.png" Command="{Binding PreviewBeforeAfter}" Text="{l:Translate btnPreviewBeforeAfter}" ToolTip.Tip="{l:Translate lblPreviewBeforeAfterHelp}" />
 			</StackPanel>
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Grid.Column="2">
 				<c:ButtonWithIcon Icon="Assets/Record.png" Command="{Binding StartRecording}" Text="{l:Translate btnStartRecording}" IsVisible="{Binding !IsRecording}" />
@@ -60,6 +61,9 @@
 					<Image Stretch="None" Margin="5 0" Source="/Assets/Help.png" ToolTip.Tip="{l:Translate lblIgnoreOverscanHelp}" ToolTip.Placement="Right" ToolTip.ShowDelay="100" />
 				</WrapPanel>
 			</c:OptionSection>
+
+			<TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0 6 0 0" Text="{Binding Coverage}" />
+			<TextBlock Grid.Row="4" Grid.ColumnSpan="2" Margin="0 2 0 0" Foreground="#C0392B" TextWrapping="Wrap" IsVisible="{Binding ShowChrRamWarning}" Text="{l:Translate lblChrRamWarning}" />
 		</Grid>
 	</DockPanel>
 </Window>

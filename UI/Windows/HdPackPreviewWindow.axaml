@@ -1,0 +1,31 @@
+<Window
+	xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:l="using:Mesen.Localization"
+	xmlns:vm="using:Mesen.ViewModels"
+	mc:Ignorable="d"
+	Width="700" Height="440" MinWidth="520" MinHeight="300"
+	CanResize="True"
+	x:Class="Mesen.Windows.HdPackPreviewWindow"
+	Title="{l:Translate wndTitle}"
+	x:DataType="vm:HdPackPreviewViewModel"
+>
+	<DockPanel Margin="5">
+		<StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0 0 0 5">
+			<TextBlock VerticalAlignment="Center" Margin="0 0 5 0" Text="{l:Translate lblImage}" />
+			<ComboBox MinWidth="320" HorizontalAlignment="Left" ItemsSource="{Binding ImagePairs}" SelectedItem="{Binding SelectedPair}" />
+		</StackPanel>
+		<Grid ColumnDefinitions="*,*">
+			<DockPanel Grid.Column="0" Margin="0 0 5 0">
+				<TextBlock DockPanel.Dock="Top" FontWeight="Bold" Text="{l:Translate lblBefore}" />
+				<Image Margin="0 4 0 0" Stretch="Uniform" Source="{Binding BeforeImage}" />
+			</DockPanel>
+			<DockPanel Grid.Column="1" Margin="5 0 0 0">
+				<TextBlock DockPanel.Dock="Top" FontWeight="Bold" Text="{l:Translate lblAfter}" />
+				<Image Margin="0 4 0 0" Stretch="Uniform" Source="{Binding AfterImage}" />
+			</DockPanel>
+		</Grid>
+	</DockPanel>
+</Window>

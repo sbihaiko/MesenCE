@@ -83,6 +83,14 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern FrameInfo GetBaseScreenSize();
 		[DllImport(DllPath)] public static extern Int32 GetGameMemorySize(MemoryType type);
 
+		//F5.4d: "what you played" coverage for the HD Pack Builder window
+		[DllImport(DllPath, EntryPoint = "GetHdPackCoverageReport")] private static extern void GetHdPackCoverageReportWrapper(out InteropHdPackCoverageReport report);
+		public static InteropHdPackCoverageReport GetHdPackCoverageReport()
+		{
+			GetHdPackCoverageReportWrapper(out InteropHdPackCoverageReport report);
+			return report;
+		}
+
 		[DllImport(DllPath)] public static extern void SetRendererSize(UInt32 width, UInt32 height);
 
 		[DllImport(DllPath)] public static extern void ExecuteShortcut(ExecuteShortcutParams p);
@@ -242,6 +250,14 @@ namespace Mesen.Interop
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
 		public CpuType[] CpuTypes;
 		public UInt32 CpuTypeCount;
+	}
+
+	public struct InteropHdPackCoverageReport
+	{
+		public UInt32 TilesSeen;
+		public UInt32 TilesWithArt;
+		public UInt32 ScreensSeen;
+		public UInt32 IsChrRam;
 	}
 
 	public class RomInfo
