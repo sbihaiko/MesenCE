@@ -22,6 +22,7 @@
 			<StackPanel Orientation="Horizontal">
 				<c:ButtonWithIcon Icon="Assets/Folder.png" Command="{Binding OpenFolder}" Text="{l:Translate btnOpenFolder}" IsEnabled="{Binding IsOpenFolderEnabled}" />
 				<c:ButtonWithIcon Icon="Assets/Export.png" Command="{Binding ExportRomTiles}" Text="{l:Translate btnExportRomTiles}" IsEnabled="{Binding !IsRecording}" ToolTip.Tip="{l:Translate lblExportRomTilesHelp}" />
+				<c:ButtonWithIcon Icon="Assets/Audio.png" Command="{Binding ExtractAudio}" Text="{l:Translate btnExtractAudio}" IsEnabled="{Binding !IsRecording}" IsVisible="{Binding IsExtractAudioEnabled}" ToolTip.Tip="{l:Translate lblExtractAudioHelp}" />
 				<c:ButtonWithIcon Icon="Assets/Camera.png" Command="{Binding PreviewBeforeAfter}" Text="{l:Translate btnPreviewBeforeAfter}" ToolTip.Tip="{l:Translate lblPreviewBeforeAfterHelp}" />
 			</StackPanel>
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Grid.Column="2">

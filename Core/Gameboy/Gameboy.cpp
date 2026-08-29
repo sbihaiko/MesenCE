@@ -770,6 +770,7 @@ void Gameboy::ProcessNotification(ConsoleNotificationType type, void* parameter)
 	if(type == ConsoleNotificationType::ExecuteShortcut) {
 		ExecuteShortcutParams* params = (ExecuteShortcutParams*)parameter;
 		switch(params->Shortcut) {
+			//ExtractAudioHdPack is NES/APU-specific (ADR-0135); GB falls through to default (ignored).
 			default: break;
 			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;

@@ -380,6 +380,7 @@ void SmsConsole::ProcessNotification(ConsoleNotificationType type, void* paramet
 	if(type == ConsoleNotificationType::ExecuteShortcut) {
 		ExecuteShortcutParams* params = (ExecuteShortcutParams*)parameter;
 		switch(params->Shortcut) {
+			//ExtractAudioHdPack is NES/APU-specific (ADR-0135); SMS falls through to default (ignored).
 			default: break;
 			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;

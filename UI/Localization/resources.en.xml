@@ -999,6 +999,8 @@
 
 			<Control ID="btnExportRomTiles">Export ROM Tiles</Control>
 			<Message ID="lblExportRomTilesHelp">Writes every tile found in the ROM to the pack as palette-agnostic "defaultTile" entries, without playing.&#xA;NES: the whole CHR ROM (CHR RAM games must be recorded instead).&#xA;GB/SMS: heuristic scan for uncompressed tiles - compressed graphics are not found; record to fill the gaps (re-recording merges into the same pack).</Message>
+			<Control ID="btnExtractAudio">Extract Audio</Control>
+			<Message ID="lblExtractAudioHelp">Runs the headless extract-audio probe (ADR-0135) on the current NES game to seed the pack's audio layer: it drives the sound driver through the debugger, validates a trigger, and writes fingerprints.json + midi/ + enumeration.log under the pack folder's auto/audio/. The probe runs as its own process in the background, so the game keeps playing.&#xA;NES only (APU). Render the seed MIDIs to OGG with scripts/mep_render_audio.py afterwards.</Message>
 			<Control ID="btnStartRecording">Start Recording</Control>
 			<Control ID="btnStopRecording">Stop Recording</Control>
 			<Control ID="btnOpenFolder">Open Save Folder</Control>
@@ -1906,6 +1908,11 @@ E
 			<Message ID="InstallMepPackConfirmReset">The enhancement pack has been installed. Do you want to power cycle the console to apply it now?</Message>
 			<Message ID="EnhancementPacksConfirmReset">Enhancement pack settings apply on the next power cycle. Power cycle now?</Message>
 			<Message ID="InstallHdPackConfirmReset">The HD Pack has been installed successfully. Do you want to reset the game and load the HD Pack now?</Message>
+			<Message ID="HdPack">HD Pack</Message>
+			<Message ID="HdPackExportDone">{0} tile(s) written to the pack</Message>
+			<Message ID="HdPackExtractAudioStarted">Extract audio: the probe is running in the background - the results will appear in the pack folder's auto/audio/ folder. The game can keep playing.</Message>
+			<Message ID="HdPackExtractAudioToolMissing">Extract audio: the tool binary was not found. Build it with `make spike-sound-driver` and set the MESEN_EXTRACT_AUDIO_TOOL environment variable, or drop the binary next to the Mesen executable / in ~/Tools.</Message>
+			<Message ID="HdPackExtractAudioStartFailed">Extract audio: failed to launch the tool process.</Message>
 
 		<Message ID="Player">Player</Message>
 

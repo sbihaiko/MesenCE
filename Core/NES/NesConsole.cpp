@@ -21,6 +21,9 @@
 #include "NES/HdPacks/NesAudioFingerprint.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
+#include "Utilities/ProcessUtilities.h"
+#include <cstdlib>
+#include <filesystem>
 #include "NES/NesDefaultVideoFilter.h"
 #include "NES/NesNtscFilter.h"
 #include "NES/BisqwitNtscFilter.h"
@@ -914,6 +917,7 @@ void NesConsole::ProcessNotification(ConsoleNotificationType type, void* paramet
 			case EmulatorShortcut::StartRecordHdPack: StartRecordingHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 			case EmulatorShortcut::StopRecordHdPack: StopRecordingHdPack(); break;
 			case EmulatorShortcut::ExportRomTilesHdPack: ExportRomTilesHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
+			case EmulatorShortcut::ExtractAudioHdPack: ExtractAudioHdPack(*(HdPackBuilderOptions*)params->ParamPtr); break;
 		}
 	}
 }
@@ -942,6 +946,68 @@ void NesConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
 		MessageManager::Log("[HDPack] ROM tile export: " + std::to_string(added) + " new defaultTile entries from " + std::to_string(_mapper->GetChrRomSize() / 16) + " CHR ROM tiles");
 	}
 	MessageManager::DisplayMessage("HdPack", "HdPackExportDone", std::to_string(added));
+}
+
+//F5.4g Block D item 11: "Extract audio" — launches the headless extract-audio
+//probe (ADR-0135) as its own process. The tool is NES/APU-specific, keeps a
+//private home and a private copy of the ROM in a scratch workdir, and writes
+//<pack-folder>/auto/audio/{fingerprints.json,midi/,enumeration.log}. The GUI
+//action only resolves the tool binary and spawns it detached; the game keeps
+//playing and the results are picked up from the pack folder afterwards.
+static string ResolveExtractAudioToolPath()
+{
+	//1. Explicit override (dev builds, CI, custom installs).
+	const char* env = getenv("MESEN_EXTRACT_AUDIO_TOOL");
+	if(env && *env) {
+		return env;
+	}
+
+	//2. Next to the app executable (shipped/bundled layout).
+	string exeFolder = ProcessUtilities::GetExecutableFolder();
+	if(!exeFolder.empty()) {
+		string nextTo = FolderUtilities::CombinePath(exeFolder, "spike_sound_driver");
+		if(std::filesystem::exists(nextTo)) {
+			return nextTo;
+		}
+	}
+
+	//3. ~/Tools (user-level install).
+	string homeTools = FolderUtilities::CombinePath(
+		FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "Tools"), "spike_sound_driver");
+	if(std::filesystem::exists(homeTools)) {
+		return homeTools;
+	}
+
+	return "";
+}
+
+void NesConsole::ExtractAudioHdPack(HdPackBuilderOptions options)
+{
+	auto lock = _emu->AcquireLock();
+
+	string toolPath = ResolveExtractAudioToolPath();
+	if(toolPath.empty()) {
+		MessageManager::Log("[HDPack] extract-audio: tool not found - build it with `make spike-sound-driver` and set MESEN_EXTRACT_AUDIO_TOOL (or drop the binary next to the Mesen executable / in ~/Tools)");
+		MessageManager::DisplayMessage("HdPack", "HdPackExtractAudioToolMissing");
+		return;
+	}
+
+	VirtualFile romFile = _emu->GetRomInfo().RomFile;
+	string workdir = FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "tmp/extract-audio");
+	vector<string> args = {
+		romFile.GetFilePath(),
+		workdir,
+		options.SaveFolder ? options.SaveFolder : FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "HdPacks")
+	};
+
+	if(!ProcessUtilities::StartDetached(toolPath, args)) {
+		MessageManager::Log("[HDPack] extract-audio: failed to start " + toolPath);
+		MessageManager::DisplayMessage("HdPack", "HdPackExtractAudioStartFailed");
+		return;
+	}
+
+	MessageManager::Log("[HDPack] extract-audio: probe started (" + toolPath + ") on " + romFile.GetFilePath() + " - results will land in the pack folder's auto/audio/");
+	MessageManager::DisplayMessage("HdPack", "HdPackExtractAudioStarted");
 }
 
 //F5.4d: coverage report for the builder window. Reads the live builder under the

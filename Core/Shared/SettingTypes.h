@@ -1150,6 +1150,7 @@ enum class EmulatorShortcut
 	StartRecordHdPack,
 	StopRecordHdPack,
 	ExportRomTilesHdPack,
+	ExtractAudioHdPack,
 
 	ShortcutCount,
 };

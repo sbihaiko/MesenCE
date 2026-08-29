@@ -105,6 +105,22 @@ Proposed runtime contract for the productised probe:
   budget + whole-run wall-clock budget, SIGINT abort at frame boundaries,
   guaranteed no-op (`enumeration.log` only) when no trigger validates, output
   relocated into `<sibling>/auto/audio/`.
+- Point 7 (shortcut wiring) implemented 2026-08-29: the checklist of §7 is
+  complete. `Utilities/ProcessUtilities.{h,cpp}` (new, cross-platform:
+  `fork`/`execvp` on POSIX, `CreateProcessW` on Windows, `GetExecutableFolder`
+  via `_NSGetExecutablePath`/`/proc/self/exe`/`GetModuleFileNameW`) provides the
+  detached-process launch the checklist's "Core process-spawn utility" required
+  (there was none in the codebase). `EmulatorShortcut::ExtractAudioHdPack`
+  (`SettingTypes.h` + `EmulatorShortcut.cs` mirror), the `NesConsole` switch
+  case + `ExtractAudioHdPack()` handler (NES-only; GB/SMS switches ignore it
+  explicitly), a tool-binary resolver (`MESEN_EXTRACT_AUDIO_TOOL` env →
+  next-to-app → `~/Tools`), the `HdPackBuilderViewModel.ExtractAudio()` action
+  gated on NES, the `HdPackBuilderWindow` button and localisation strings.
+  `MepPackManager` needed no case — it emits shortcuts, it does not receive
+  them. Validated: UI `dotnet build` 0/0, a standalone `ProcessUtilities` test
+  (spawn + exe-folder) and an end-to-end headless spike (synthetic NES ROM →
+  shortcut → resolver → detached child with the pack folder forwarded). The
+  remaining GUI button-click on a real display is recorded as manual/pending.
 - This ADR moves to `accepted` when the feature ships with all seven points
   verifiable; ADR-0051 stays the record of the technique and its measured hit
   rate.

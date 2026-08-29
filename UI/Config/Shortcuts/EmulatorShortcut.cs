@@ -148,6 +148,7 @@ namespace Mesen.Config.Shortcuts
 		StartRecordHdPack,
 		StopRecordHdPack,
 		ExportRomTilesHdPack,
+		ExtractAudioHdPack,
 
 		LastValidValue,
 		[Obsolete] LoadRandomGame,

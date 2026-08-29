@@ -74,6 +74,7 @@ private:
 	void StartRecordingHdPack(HdPackBuilderOptions options);
 	void StopRecordingHdPack();
 	void ExportRomTilesHdPack(HdPackBuilderOptions options);
+	void ExtractAudioHdPack(HdPackBuilderOptions options);
 
 public:
 	NesConsole(Emulator* emulator);

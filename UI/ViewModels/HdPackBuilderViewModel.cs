@@ -21,6 +21,7 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial string SaveFolder { get; set; }
 		[ObservableProperty] public partial bool IsRecording { get; set; }
 		[ObservableProperty] public partial bool IsBankSizeVisible { get; set; }
+		[ObservableProperty] public partial bool IsExtractAudioEnabled { get; set; }
 		[ObservableProperty] public partial bool IsOpenFolderEnabled { get; set; }
 		[ObservableProperty] public partial HdPackBuilderConfig Config { get; set; }
 		[ObservableProperty] public partial FilterInfo? SelectedFilter { get; set; }
@@ -53,6 +54,7 @@ namespace Mesen.ViewModels
 			SelectedFilter = Filters.Where(x => x.FilterType == Config.FilterType && x.Scale == Config.Scale).FirstOrDefault() ?? Filters[0];
 			SelectedBankSize = BankSizes.Where(x => x.BankSize == Config.ChrRamBankSize).FirstOrDefault() ?? BankSizes[0];
 			IsBankSizeVisible = EmuApi.GetGameMemorySize(MemoryType.NesChrRam) > 0;
+			IsExtractAudioEnabled = IsBankSizeVisible; //extract-audio is NES/APU-specific (ADR-0135)
 			ShowChrRamWarning = IsBankSizeVisible;
 
 			//F5.4d: poll the live builder's coverage while recording. Reading the
@@ -162,6 +164,33 @@ namespace Mesen.ViewModels
 					IsOpenFolderEnabled = true;
 					UpdateFilterDropdown();
 				});
+			});
+		}
+
+		//F5.4g Block D item 11: seed the pack's audio layer by running the
+		//headless extract-audio probe (ADR-0135) as a detached process (the tool
+		//keeps its own private home + a copy of the ROM). NES only - GB/SMS have
+		//no APU driver the probe understands, and their consoles ignore the
+		//shortcut (the button is hidden via IsExtractAudioEnabled anyway).
+		public void ExtractAudio()
+		{
+			if(IsRecording) {
+				return;
+			}
+
+			Task.Run(() => {
+				HdPackBuilderOptions options = Config.ToInterop(SaveFolder);
+
+				IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
+				try {
+					Marshal.StructureToPtr(options, optionsPtr, false);
+					EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
+						Shortcut = EmulatorShortcut.ExtractAudioHdPack,
+						ParamPtr = optionsPtr
+					});
+				} finally {
+					Marshal.FreeHGlobal(optionsPtr);
+				}
 			});
 		}
 
