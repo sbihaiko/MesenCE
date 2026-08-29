@@ -40,10 +40,13 @@ def fetch_accepted_items(accepted_statuses):
     CONFIRMED live (gh 2.83.1) against the real GitHub API: the Status field
     id (PVTSSF_lAHOB1MsbM4BhjpNzhge86c) and the Pack Hash one
     (PVTF_lAHOB1MsbM4BhjpNzhge9Is), via `gh project field-list`. Per-item key
-    names remain an open COVERAGE GAP -- `gh project item-list` returned zero
-    items at write time -- so this and the Pack URL/Hash/ROM SHA1 reads below
-    all use defensive `dict.get` lookups; negative conclusions are qualified
-    by that gap, and parsing must not crash on an unexpected key.
+    names were an open COVERAGE GAP at write time (`gh project item-list`
+    returned zero items) and are now CONFIRMED (2026-08-29, board holds 11
+    accepted items): `gh project item-list` lowercases the first letter of
+    each Project field name, so "Pack URL"/"Pack Hash"/"ROM SHA1" surface as
+    "pack URL"/"pack Hash"/"ROM SHA1" item keys. The accessors below check the
+    confirmed lowercase key first and keep camelCase/underscore aliases for
+    safety; parsing never crashes on an unexpected key.
     """
     raw = run_gh(["project", "item-list", str(PROJECT_NUMBER), "--owner", OWNER, "--format", "json"])
     items = json.loads(raw).get("items", [])
@@ -60,15 +63,25 @@ def item_issue_number(item):
 
 
 def item_pack_url(item):
-    return item.get("packUrl") or item.get("Pack URL") or item.get("pack_url")
+    # `gh project item-list` lowercases the first letter of each Project field
+    # name when building its JSON keys: the "Pack URL" field surfaces as
+    # "pack URL" (CONFIRMED 2026-08-29 against the live board, which the
+    # COVERAGE-GAP note below could not do at write time). Check the lowercase
+    # key first, keep the camelCase/underscore aliases for safety.
+    return (item.get("pack URL") or item.get("Pack URL")
+            or item.get("packUrl") or item.get("pack_url"))
 
 
 def item_pack_hash(item):
-    return item.get("packHash") or item.get("Pack Hash") or item.get("pack_hash")
+    return (item.get("pack Hash") or item.get("Pack Hash")
+            or item.get("packHash") or item.get("pack_hash"))
 
 
 def item_rom_sha1(item):
-    return item.get("romSha1") or item.get("ROM SHA1") or item.get("rom_sha1")
+    # The ROM SHA1 field is returned by item-list only when populated; the
+    # generator treats it as optional (None -> MEI entry without a rom_sha1).
+    return (item.get("ROM SHA1") or item.get("romSha1")
+            or item.get("rom_sha1"))
 
 
 def fetch_issue_details(issue_number):

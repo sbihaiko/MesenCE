@@ -2,6 +2,131 @@
   "maintainer": "sbihaiko",
   "mei": "1.1.0",
   "name": "MesenCE community packs",
-  "packs": [],
-  "updated": "2026-08-28"
+  "packs": [
+    {
+      "game": "Pac-Man (Namco, US, 1993)",
+      "issue": 94,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
+      "pack_id": "pepcodes/hdnes-graphics-pac",
+      "rom": {},
+      "sha256": "570f03fd0daf1eae0c4218388e02bced9877d066dd9d806d2ef83560d47ca3e3",
+      "system": "nes",
+      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
+      "validated_at": "2026-08-29T04:09:24Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "game": "Zelda II: The Adventure of Link (USA)",
+      "issue": 95,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "Zelda II: The Adventure of Link (USA) \u2014 community submission",
+      "pack_id": "modernretrodesign/zii-mesen",
+      "rom": {},
+      "sha256": "23851444c051733159948bbdeca01e3cc835578527ec3dd2a3e05439279f5452",
+      "system": "nes",
+      "url": "https://github.com/ModernRetroDesign/ZII-mesen/archive/refs/heads/main.zip",
+      "validated_at": "2026-08-29T04:10:53Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "game": "Contra (USA)",
+      "issue": 85,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Contra (USA) \u2014 community submission",
+      "pack_id": "tastichacks/contra80s",
+      "rom": {},
+      "sha256": "bbe002445f6afc4b5d66987beb55b856bb90eda3cb81935e28d6b913a352cfd2",
+      "system": "nes",
+      "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
+      "validated_at": "2026-08-29T04:11:55Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "game": "Duck Hunt (World)",
+      "issue": 93,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Duck Hunt (World) \u2014 community submission",
+      "pack_id": "liquidzgit/hdnes",
+      "rom": {},
+      "sha256": "a6ea61b89bce6518f7793f5c807d43988ef481b7690571316988817b91cad33d",
+      "system": "nes",
+      "url": "https://raw.githubusercontent.com/LiQuiDzGit/HDnes/main/Duck_Hunt/DuckHuntHDV1.1.zip",
+      "validated_at": "2026-08-29T04:13:04Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "game": "The Legend of Zelda (USA)",
+      "issue": 87,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures",
+        "assets:audio"
+      ],
+      "license": "unknown",
+      "name": "The Legend of Zelda (USA) \u2014 community submission",
+      "pack_id": "issue-87",
+      "rom": {},
+      "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
+      "system": "nes",
+      "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
+      "validated_at": "2026-08-29T04:13:21Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "game": "Mega Man (USA)",
+      "issue": 86,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "console:nes",
+        "assets:textures",
+        "assets:audio"
+      ],
+      "license": "unknown",
+      "name": "Mega Man (USA) \u2014 community submission",
+      "pack_id": "axlrocks/megaman-super",
+      "rom": {},
+      "sha256": "b9bb04737307e6561af0add8e02a0a90fac22716dcae1f91eb600781e495ee3b",
+      "system": "nes",
+      "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
+      "validated_at": "2026-08-29T04:30:47Z",
+      "verdict": "accepted",
+      "votes": 1
+    }
+  ],
+  "updated": "2026-08-29"
 }
