@@ -43,8 +43,13 @@ bool ShortcutKeyHandler::IsKeyPressed(EmulatorShortcut shortcut)
 {
 	//When running while a keyboard is plugged into the console, disable all keyboard
 	//shortcut keys. The pause shortcut is always enabled, allowing it to be used to
-	//pause normally, which allows other shortcuts to be used (while paused)
-	bool blockKeyboardKeys = shortcut != EmulatorShortcut::Pause && _isKeyboardConnected && !_isPaused;
+	//pause normally, which allows other shortcuts to be used (while paused).
+	//P.4: ToggleOverlay is exempted too - in Player mode it is the primary way to
+	//pause (the Pause binding on the same key is suppressed by
+	//UiModeShortcutPrecedence on the UI side), so it must stay reachable even in a
+	//keyboard game. The UI ignores it while UiMode == Advanced, so the exemption
+	//has no effect outside Player.
+	bool blockKeyboardKeys = shortcut != EmulatorShortcut::Pause && shortcut != EmulatorShortcut::ToggleOverlay && _isKeyboardConnected && !_isPaused;
 
 	KeyCombination keyComb = _emu->GetSettings()->GetShortcutKey(shortcut, _keySetIndex);
 	vector<KeyCombination> supersets = _emu->GetSettings()->GetShortcutSupersets(shortcut, _keySetIndex);

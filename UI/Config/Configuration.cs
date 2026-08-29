@@ -4,6 +4,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Mesen.Config.Shortcuts;
 using Mesen.Interop;
+using Mesen.Logic;
 using Mesen.Utilities;
 using System;
 using System.Collections.Generic;
@@ -55,6 +56,12 @@ namespace Mesen.Config
 		{
 			Configuration cfg = new();
 			cfg.ConfigUpgrade = (int)ConfigUpgradeHint.FirstRun;
+			//P.4 (PRD-player-shell §6): CreateConfig only runs when no
+			//settings.json exists (fresh unzip, or the Setup Wizard's first
+			//Config.Save before the main window runs) - the default rule says
+			//that is Player mode. An existing file without the UiMode key keeps
+			//the property's Advanced initializer (upgrade path).
+			cfg.Preferences.UiMode = UiModeDefaultRule.ForMissingKey(settingsFileExists: false);
 			return cfg;
 		}
 

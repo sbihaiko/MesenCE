@@ -37,6 +37,13 @@
 
 					<c:OptionSection Header="{l:Translate lblMiscSettings}">
 						<CheckBox Content="{l:Translate chkAutoLoadIps}" IsChecked="{Binding Config.AutoLoadPatches}" />
+						<!--P.4 (PRD-player-shell §6): switching Player/Advanced is instant
+						and persisted. In Player, AutoHideMenu (below) is ignored - there
+						is no menu bar; it only applies in Advanced.-->
+						<StackPanel Orientation="Horizontal" Margin="0 0 0 5">
+							<TextBlock Text="{l:Translate lblUiMode}" VerticalAlignment="Center" />
+							<c:EnumComboBox SelectedItem="{Binding Config.UiMode}" MinWidth="250" />
+						</StackPanel>
 						<CheckBox Content="{l:Translate chkAutoHideMenu}" IsChecked="{Binding Config.AutoHideMenu}" />
 						<CheckBox Content="{l:Translate chkShowMovieIcons}" IsChecked="{Binding Config.ShowMovieIcons}" />
 						<CheckBox Content="{l:Translate chkShowTurboRewindIcons}" IsChecked="{Binding Config.ShowTurboRewindIcons}" />

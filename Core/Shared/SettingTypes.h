@@ -1071,6 +1071,11 @@ enum class EmulatorShortcut
 	SetScale9x,
 	SetScale10x,
 	ToggleFullscreen,
+	//P.4 (PRD-player-shell §6): UI-side shortcut - the core forwards it to the
+	//UI (ShortcutKeyHandler's default case) and takes no action of its own.
+	//Kept in lockstep with the C# UI/Config/Shortcuts/EmulatorShortcut.cs
+	//(the enum crosses the interop boundary by value).
+	ToggleOverlay,
 	ToggleFps,
 	ToggleGameTimer,
 	ToggleFrameCounter,

@@ -806,6 +806,7 @@
 			<Control ID="lblGameSelectionScreenSettings">Game Selection Screen Settings</Control>
 			<Control ID="chkGameSelectionScreenResetGame">Start game from power-on instead of resuming the previous gameplay session</Control>
 			<Control ID="lblGameSelectionScreen">Game selection screen:</Control>
+			<Control ID="lblUiMode">UI mode:</Control>
 
 			<Control ID="chkDisableGameDatabase">Disable game database</Control>
 			<Control ID="chkDisableHighResolutionTimer">Disable high resolution timer</Control>
@@ -2473,6 +2474,10 @@ E
 			<Value ID="Disabled">Disabled</Value>
 			<Value ID="ResumeState">Enabled (resume from save state)</Value>
 			<Value ID="PowerOn">Enabled (restart from power on)</Value>
+		</Enum>
+		<Enum ID="UiMode">
+			<Value ID="Advanced">Advanced</Value>
+			<Value ID="Player">Player</Value>
 		</Enum>
 		<Enum ID="ConsoleRegion">
 			<Value ID="Auto">Auto</Value>

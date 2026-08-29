@@ -5,6 +5,7 @@ using Mesen.Config;
 using Mesen.Controls;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.Windows;
 using System;
@@ -30,6 +31,12 @@ namespace Mesen.ViewModels
 
 		[ObservableProperty] public partial bool IsMenuVisible { get; set; }
 
+		//P.4 (PRD-player-shell §6): the thin Player-mode overlay panel (Resume,
+		//Save/Load slot, Pack, Settings, Advanced GUI, Quit), shown on top of the
+		//game while UiMode == Player. Opening it pauses the game so the couch
+		//user can navigate; closing never auto-resumes - Resume is an overlay item.
+		[ObservableProperty] public partial bool IsPlayerOverlayVisible { get; set; }
+
 		[ObservableProperty] public partial bool IsNativeRendererVisible { get; private set; }
 		[ObservableProperty] public partial bool IsSoftwareRendererVisible { get; private set; }
 
@@ -47,7 +54,41 @@ namespace Mesen.ViewModels
 			RomInfo = new RomInfo();
 			RecentGames = new RecentGamesViewModel();
 
-			IsMenuVisible = !Config.Preferences.AutoHideMenu;
+			UpdateMenuVisibility();
+		}
+
+		//P.4 (PRD-player-shell §6): Player hides the menu bar entirely (AutoHideMenu
+		//is ignored in Player - there is no menu bar); Advanced keeps the classic
+		//AutoHideMenu rule. Re-evaluated whenever UiMode changes (the Advanced GUI
+		//overlay item / the Preferences combo flip it, instant and persisted).
+		private void UpdateMenuVisibility()
+		{
+			IsMenuVisible = Config.Preferences.UiMode != UiMode.Player && !Config.Preferences.AutoHideMenu;
+		}
+
+		//P.4 (PRD-player-shell §6): the overlay shortcut toggles the thin Player
+		//overlay. Opening pauses the game (so the couch user can navigate with
+		//D-pad/A/B); closing never auto-resumes - Resume is an overlay item. The
+		//overlay only exists in Player mode; in Advanced the press is ignored
+		//(ShortcutHandler checks the mode before acting).
+		public void TogglePlayerOverlay()
+		{
+			if(IsPlayerOverlayVisible) {
+				IsPlayerOverlayVisible = false;
+			} else {
+				IsPlayerOverlayVisible = true;
+				EmuApi.Pause();
+			}
+		}
+
+		//P.4: "Advanced GUI" overlay item - switches to Advanced mode, instant and
+		//persisted. The chrome re-applies via the UiMode observer (menu bar back,
+		//overlay hidden).
+		public void SwitchToAdvancedMode()
+		{
+			Config.Preferences.UiMode = UiMode.Advanced;
+			Config.ApplyConfig();
+			Config.Save();
 		}
 
 		public void Init(MainWindow wnd)
@@ -68,6 +109,15 @@ namespace Mesen.ViewModels
 			AddDisposable(ReactiveHelper.RegisterForeignObserver([(() => Config, nameof(Configuration.Video)), (() => Config.Video, nameof(VideoConfig.AspectRatio))], UpdateWindowTitle));
 			AddDisposable(ReactiveHelper.RegisterForeignObserver([(() => Config, nameof(Configuration.Video)), (() => Config.Video, nameof(VideoConfig.VideoFilter))], UpdateWindowTitle));
 			AddDisposable(ReactiveHelper.RegisterForeignObserver([(() => Config, nameof(Configuration.Preferences)), (() => Config.Preferences, nameof(PreferencesConfig.ShowTitleBarInfo))], UpdateWindowTitle));
+			//P.4: UiMode switches (overlay "Advanced GUI" item or the Preferences
+			//combo) re-evaluate the chrome immediately - menu bar on/off, and the
+			//overlay hides when leaving Player.
+			AddDisposable(ReactiveHelper.RegisterForeignObserver([(() => Config.Preferences, nameof(PreferencesConfig.UiMode))], () => {
+				UpdateMenuVisibility();
+				if(Config.Preferences.UiMode != UiMode.Player) {
+					IsPlayerOverlayVisible = false;
+				}
+			}));
 
 			UpdateWindowTitle();
 		}

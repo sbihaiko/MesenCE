@@ -2,6 +2,7 @@
 using Mesen.Config;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.Utilities;
 using System;
 using System.Collections.Generic;
@@ -23,12 +24,15 @@ namespace Mesen.ViewModels
 
 		public RecentGamesViewModel()
 		{
-			Visible = ConfigManager.Config.Preferences.GameSelectionScreenMode != GameSelectionMode.Disabled;
+			//P.4 (PRD-player-shell §6): in Player mode the recent-games grid is the
+			//home screen and is always shown when no ROM runs - GameSelectionScreenMode
+			//keeps its current meaning (ResumeState/PowerOn/Disabled) only in Advanced.
+			Visible = ConfigManager.Config.Preferences.UiMode == UiMode.Player || ConfigManager.Config.Preferences.GameSelectionScreenMode != GameSelectionMode.Disabled;
 		}
 
 		public void Init(GameScreenMode mode)
 		{
-			if(mode == GameScreenMode.RecentGames && ConfigManager.Config.Preferences.GameSelectionScreenMode == GameSelectionMode.Disabled) {
+			if(mode == GameScreenMode.RecentGames && ConfigManager.Config.Preferences.UiMode != UiMode.Player && ConfigManager.Config.Preferences.GameSelectionScreenMode == GameSelectionMode.Disabled) {
 				Visible = false;
 				GameEntries = new List<RecentGameInfo>();
 				return;

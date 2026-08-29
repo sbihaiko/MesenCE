@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Mesen.Config.Shortcuts;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -52,6 +53,14 @@ namespace Mesen.Config
 		[ObservableProperty] public partial bool AlwaysOnTop { get; set; } = false;
 
 		[ObservableProperty] public partial bool AutoHideMenu { get; set; } = false;
+
+		//P.4 (PRD-player-shell §6): Player vs Advanced chrome. Defaults to
+		//Advanced - the upgrade-safe value when an existing settings.json has
+		//no UiMode key yet (the key is always written on first save, so this
+		//initializer only ever matters once). A fresh unzip (no settings.json)
+		//starts in Player, set explicitly in Configuration.CreateConfig.
+		//AutoHideMenu is ignored while UiMode == Player (there is no menu bar).
+		[ObservableProperty] public partial UiMode UiMode { get; set; } = UiMode.Advanced;
 
 		[ObservableProperty] public partial bool ShowFps { get; set; } = false;
 		[ObservableProperty] public partial bool ShowFrameCounter { get; set; } = false;
@@ -119,6 +128,13 @@ namespace Mesen.Config
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.PowerCycle, KeyCombination = new KeyCombination() { Key1 = ctrl, Key2 = InputApi.GetKeyCode("T") } });
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.ReloadRom, KeyCombination = new KeyCombination() { Key1 = ctrl, Key2 = shift, Key3 = InputApi.GetKeyCode("R") } });
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.Pause, KeyCombination = new KeyCombination() { Key1 = InputApi.GetKeyCode("Esc") } });
+			//P.4 (PRD-player-shell §6): the overlay shortcut defaults to the
+			//same Esc as Pause; in Player mode UiModeShortcutPrecedence gives
+			//the overlay ownership of that key (the Pause binding is suppressed
+			//on apply), so Esc opens the overlay instead of pausing. Binding it
+			//to a controller button is a config choice - then Esc keeps meaning
+			//Pause.
+			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.ToggleOverlay, KeyCombination = new KeyCombination() { Key1 = InputApi.GetKeyCode("Esc") } });
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.RunSingleFrame, KeyCombination = new KeyCombination() { Key1 = InputApi.GetKeyCode("`") } });
 
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.SetScale1x, KeyCombination = new KeyCombination() { Key1 = alt, Key2 = InputApi.GetKeyCode("1") } });
@@ -214,12 +230,27 @@ namespace Mesen.Config
 		{
 			UpdateFonts();
 
+			//P.4 (PRD-player-shell §6): in Player mode the overlay shortcut owns
+			//its key(s) - any Pause/other binding on the same combination is
+			//suppressed here, so the core never fires pause+overlay together
+			//(it matches every pressed shortcut; identical-key shortcuts are
+			//not subsets of each other). Advanced mode filters nothing - the
+			//overlay binding stays configured but is ignored by ShortcutHandler.
+			HashSet<string> overlayOwned = UiModeShortcutPrecedence.OverlayOwnedSignatures(
+				UiMode,
+				ShortcutKeys.Select(sk => new ShortcutBinding(
+					sk.Shortcut == EmulatorShortcut.ToggleOverlay,
+					ShortcutSignature(sk.KeyCombination)
+				)).Where(b => !string.IsNullOrEmpty(b.Signature))
+			);
+
 			List<InteropShortcutKeyInfo> shortcutKeys = new List<InteropShortcutKeyInfo>();
 			foreach(ShortcutKeyInfo shortcutInfo in ShortcutKeys) {
-				if(!shortcutInfo.KeyCombination.IsEmpty) {
+				bool isOverlay = shortcutInfo.Shortcut == EmulatorShortcut.ToggleOverlay;
+				if(!shortcutInfo.KeyCombination.IsEmpty && (isOverlay || !overlayOwned.Contains(ShortcutSignature(shortcutInfo.KeyCombination)))) {
 					shortcutKeys.Add(new InteropShortcutKeyInfo(shortcutInfo.Shortcut, shortcutInfo.KeyCombination.ToInterop()));
 				}
-				if(!shortcutInfo.KeyCombination2.IsEmpty) {
+				if(!shortcutInfo.KeyCombination2.IsEmpty && (isOverlay || !overlayOwned.Contains(ShortcutSignature(shortcutInfo.KeyCombination2)))) {
 					shortcutKeys.Add(new InteropShortcutKeyInfo(shortcutInfo.Shortcut, shortcutInfo.KeyCombination2.ToInterop()));
 				}
 			}
@@ -244,6 +275,14 @@ namespace Mesen.Config
 				RewindBufferSize = EnableRewind ? RewindBufferSize : 0,
 				AutoSaveStateDelay = EnableAutoSaveState ? AutoSaveStateDelay : 0
 			});
+		}
+
+		//P.4 (PRD-player-shell §6): the identity of one KeyCombination for
+		//UiModeShortcutPrecedence - the ordered scan codes. Two shortcuts on
+		//the identical combination share the same signature.
+		private static string ShortcutSignature(KeyCombination combo)
+		{
+			return combo.Key1 + "-" + combo.Key2 + "-" + combo.Key3;
 		}
 	}
 

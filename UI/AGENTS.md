@@ -62,6 +62,23 @@ can be exercised by real xunit tests without Avalonia or the native
   the same decision per ROM via `MepPackManager::FindPreferredPack` (the
   preference is pushed at config-apply through `SetPreferredMepPack`/
   `ClearPreferredMepPacks`).
+- `UiModeDefaultRule` (P.4, PRD-player-shell §6) is the host-free one-shot
+  default for `PreferencesConfig.UiMode`: no settings.json at startup (the
+  `Configuration.CreateConfig` path) → `Player`; an existing keyless
+  settings.json (a pre-Player upgrade) keeps `Advanced` — which is also the
+  property initializer value, so a missing key never degrades to Player. The
+  key is written on first save. `UiMode` (enum: `Advanced`, `Player`) lives
+  here too so both the UI project and UI.Tests share it.
+- `UiModeShortcutPrecedence` (P.4, §6) resolves the Esc collision inside the
+  shortcut config: the core fires every pressed shortcut, so in Player mode
+  the `ToggleOverlay` shortcut owns its key(s) — `PreferencesConfig.ApplyConfig`
+  suppresses any Pause/other binding on the same combination before pushing
+  the shortcut list to the core. Advanced mode filters nothing; the overlay
+  press is ignored by `ShortcutHandler` there. The enum `ToggleOverlay` is
+  mirrored in the core (`Core/Shared/SettingTypes.h`) because the shortcut id
+  crosses the interop boundary by value; the core also exempts it from the
+  keyboard-block in `ShortcutKeyHandler::IsKeyPressed` so it stays reachable
+  in keyboard games.
 
 - **New ViewModels** (Phase 3 of the plan — applied opportunistically, "in
   the code we touch", not as a retrofit of existing VMs): a *new*

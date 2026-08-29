@@ -4,6 +4,7 @@ using Mesen.Config;
 using Mesen.Config.Shortcuts;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.ViewModels;
 using Mesen.Windows;
 using System;
@@ -62,6 +63,17 @@ namespace Mesen.Utilities
 				case EmulatorShortcut.MaxSpeed: ToggleMaxSpeed(); break;
 
 				case EmulatorShortcut.ToggleFullscreen: _mainWindow.ToggleFullscreen(); break;
+
+				//P.4 (PRD-player-shell §6): the thin Player-mode overlay. Only
+				//acted on in Player mode - in Advanced the press is ignored (the
+				//overlay is a Player-only surface, and the same key still means
+				//Pause there because UiModeShortcutPrecedence only suppresses the
+				//Pause binding in Player).
+				case EmulatorShortcut.ToggleOverlay:
+					if(MainWindowModel.Config.Preferences.UiMode == UiMode.Player) {
+						MainWindowModel.TogglePlayerOverlay();
+					}
+					break;
 
 				case EmulatorShortcut.OpenFile: OpenFile(); break;
 				case EmulatorShortcut.IncreaseSpeed: IncreaseEmulationSpeed(); break;

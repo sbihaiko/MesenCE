@@ -343,6 +343,12 @@ Depends on: F6.4b for catalog auto-install in the overlay (P.6). P.3–P.5
 can run on local packs before F6.4b. P.0 ADRs must be accepted before
 P.1/P.2.
 
+Status: P.0–P.4 done (2026-08-29). P.4 shipped the `UiMode` default rule,
+the Player overlay + its Esc-owned shortcut, hidden menu, recent-games
+home and the Advanced switch — see the dedicated PRD header. P.5 (pack
+picker/toast) and P.6 (overlay ↔ F6.4b install/update) remain; P.6 waits
+for F6.4b.
+
 ## 5. Order of execution
 
 1. **F6.2 → F6.3 → F6.3b → F6.4a (Core, offline) → F6.4b (UI, network) → F6.4c → F6.5 → F6.6**, one run each (ADR-0138 §37, §39).

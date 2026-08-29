@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Mesen.Config;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.ViewModels;
 using Mesen.Views;
 using Mesen.Windows;
@@ -153,6 +154,14 @@ namespace Mesen.Utilities
 
 		private void UpdateMainMenuVisibility()
 		{
+			//P.4 (PRD-player-shell §6): Player hides the menu bar entirely - the
+			//AutoHideMenu mouse-hover re-show below is ignored in Player (there is
+			//no menu bar to show).
+			if(ConfigManager.Config.Preferences.UiMode == UiMode.Player) {
+				MainWindowViewModel.Instance.IsMenuVisible = false;
+				return;
+			}
+
 			//Get global mouse position without restrictions - need to know if mouse is over menu or not
 			SystemMouseState mouseState = InputApi.GetSystemMouseState(IntPtr.Zero);
 			PixelPoint mousePos = new PixelPoint(mouseState.XPosition, mouseState.YPosition);

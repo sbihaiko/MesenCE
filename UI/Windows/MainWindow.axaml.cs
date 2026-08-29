@@ -95,6 +95,17 @@ namespace Mesen.Windows
 
 			InitializeComponent();
 
+			//P.4 (PRD-player-shell §6): give the overlay's first button focus when
+			//it opens, so D-pad/A/B (Avalonia focus navigation) works without a
+			//pointer - the same trick OnOpened uses for the recent-games grid.
+			//Posted so the layout pass runs first (Focus() on a not-yet-visible
+			//panel is a no-op).
+			_model.PropertyChanged += (s, e) => {
+				if(e.PropertyName == nameof(MainWindowViewModel.IsPlayerOverlayVisible) && _model.IsPlayerOverlayVisible) {
+					Dispatcher.UIThread.Post(() => this.GetControl<Button>("OverlayResumeButton")?.Focus());
+				}
+			};
+
 			_shortcutHandler = new ShortcutHandler(this);
 
 			AddHandler(DragDrop.DropEvent, OnDrop);
@@ -225,6 +236,61 @@ namespace Mesen.Windows
 					DisplayMessageHelper.DisplayMessage("Error", ResourceHelper.GetMessage("FileNotFound", filename));
 				}
 			}
+		}
+
+		//P.4 (PRD-player-shell §6): Player-mode overlay items. The overlay is the
+		//couch surface - Resume/Quit pause-safe, Save/Load route to the existing
+		//slot grid (the same path the SaveStateDialog/LoadStateDialog shortcuts
+		//use), Pack opens the pack window (the pack picker is P.5), Settings
+		//opens the Preferences tab, and Advanced GUI switches modes (instant and
+		//persisted, chrome re-applies via the UiMode observer).
+
+		private void OnOverlayResume(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			EmuApi.Resume();
+		}
+
+		private void OnOverlaySave(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			if(WindowState == WindowState.FullScreen && ConfigManager.Config.Video.UseExclusiveFullscreen) {
+				ToggleFullscreen();
+			}
+			_model.RecentGames.Init(GameScreenMode.SaveState);
+		}
+
+		private void OnOverlayLoad(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			if(WindowState == WindowState.FullScreen && ConfigManager.Config.Video.UseExclusiveFullscreen) {
+				ToggleFullscreen();
+			}
+			_model.RecentGames.Init(GameScreenMode.LoadState);
+		}
+
+		private void OnOverlayPack(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new EnhancementPacksWindow());
+		}
+
+		private void OnOverlaySettings(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new ConfigWindow(ConfigWindowTab.Preferences));
+		}
+
+		private void OnOverlayAdvanced(object? sender, RoutedEventArgs e)
+		{
+			//SwitchToAdvancedMode closes the overlay through the UiMode observer.
+			_model.SwitchToAdvancedMode();
+		}
+
+		private void OnOverlayQuit(object? sender, RoutedEventArgs e)
+		{
+			_model.IsPlayerOverlayVisible = false;
+			Close();
 		}
 
 		protected override void OnOpened(EventArgs e)

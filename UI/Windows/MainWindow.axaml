@@ -56,6 +56,30 @@
 					Height="{Binding Height}"
 			  />
 			</Panel>
+
+			<!--P.4 (PRD-player-shell §6): the thin Player-mode overlay. Painted on
+			top of the game; D-pad/A/B navigation comes from Avalonia focus
+			(normal buttons, no pointer required). "Save/Load slot" is two buttons
+			here (Save slot / Load slot) for clarity; the Pack item opens the pack
+			window for now - the pack picker that replaces it is P.5.-->
+			<Border
+				Name="PlayerOverlay"
+				Background="#CC000000"
+				HorizontalAlignment="Center"
+				VerticalAlignment="Center"
+				Padding="24"
+				IsVisible="{Binding IsPlayerOverlayVisible}"
+			>
+				<StackPanel Spacing="10" MinWidth="220">
+					<Button Name="OverlayResumeButton" Content="Resume" HorizontalAlignment="Stretch" Click="OnOverlayResume" />
+					<Button Content="Save slot" HorizontalAlignment="Stretch" Click="OnOverlaySave" />
+					<Button Content="Load slot" HorizontalAlignment="Stretch" Click="OnOverlayLoad" />
+					<Button Content="Pack" HorizontalAlignment="Stretch" Click="OnOverlayPack" />
+					<Button Content="Settings" HorizontalAlignment="Stretch" Click="OnOverlaySettings" />
+					<Button Content="Advanced GUI" HorizontalAlignment="Stretch" Click="OnOverlayAdvanced" />
+					<Button Content="Quit" HorizontalAlignment="Stretch" Click="OnOverlayQuit" />
+				</StackPanel>
+			</Border>
 		</Panel>
 	</DockPanel>
 </Window>
