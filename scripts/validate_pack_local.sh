@@ -404,6 +404,24 @@ else
     --field-id "$PACK_HASH_FIELD_ID" --text "$PACK_SHA256" >/dev/null
   gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
     --field-id "$PACK_MD5_FIELD_ID" --text "$PACK_MD5" >/dev/null
+  # Submission metadata fields (Game/Console/Pack URL), mirroring the CI's
+  # "Record submission metadata" step so the board's columns are readable.
+  gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+    --field-id "$GAME_FIELD_ID" --text "$GAME" >/dev/null
+  gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+    --field-id "$PACK_URL_FIELD_ID" --text "$PACK_URL" >/dev/null
+  case "$CONSOLE" in
+    NES) CO="$CONSOLE_NES" ;;
+    GB) CO="$CONSOLE_GB" ;;
+    GBC) CO="$CONSOLE_GBC" ;;
+    SMS) CO="$CONSOLE_SMS" ;;
+    Other) CO="$CONSOLE_OTHER" ;;
+    *) CO="" ;;
+  esac
+  if [ -n "$CO" ]; then
+    gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+      --field-id "$CONSOLE_FIELD_ID" --single-select-option-id "$CO" >/dev/null
+  fi
   # Seed the 👍 reaction docs/community-packs.md ranks on ("Most popular"):
   # the catalog's 👍 cell links to the submission issue, so the count starts
   # at one reaction instead of zero. The reactions API is idempotent (an
