@@ -412,18 +412,68 @@ def _root_game_name(src: Source, root_prefix: str):
     return None
 
 
+def find_nested_game_zips(src: Source):
+    """ADR-0143 last-resort for a container shaped like a GitHub repo archive:
+    the wrapper folder (e.g. `<Repo>-<branch>/`) holds subfolders that each
+    contain a game `.zip` rather than an extracted pack, so no direct
+    subfolder candidate exists (LiQuiDzGit/HDnes stores its games this way).
+    Scans every `.zip` under a subfolder (depth-capped by FALLBACK_MAX_DEPTH,
+    entry-capped by FALLBACK_MAX_ENTRIES), opens it in memory, and returns
+    (outer_prefix, game) for each zip that IS a pack root when opened —
+    `_root_is_pack` on the inner Source plus `_root_game_name` (pack.json
+    targets[0].name, else the zip's own subfolder name). A zip that is not a
+    pack (a docs/bonus zip with no hires.txt/pack.json at its root) is not a
+    candidate — same fail-closed discipline as every other discovery path.
+
+    Each zip keyed by its parent subfolder, so a repo wrapper that prefixes
+    every entry (`HDnes-main/`) is naturally ignored: the game root is the
+    subfolder *after* the wrapper, not the wrapper itself. One root per
+    subfolder: when a subfolder holds several valid zips (Duck_Hunt's
+    Audio/NEA/HDV1.1 variants, say), the first by sorted name wins — a
+    subfolder is one game, one slot, one issue (ADR-0143), never N issues
+    for the same game."""
+    if len(src.names) > FALLBACK_MAX_ENTRIES:
+        return []
+    by_subfolder = {}
+    for name in sorted(src.names):
+        normalized = safe_rel(name)
+        if normalized is None or not normalized.lower().endswith(".zip"):
+            continue
+        segments = normalized.split("/")
+        if len(segments) < 2 or len(segments) > FALLBACK_MAX_DEPTH:
+            continue
+        outer = "/".join(segments[:-1])
+        if outer in by_subfolder:
+            continue  # first (sorted) valid zip for this subfolder already won
+        try:
+            inner = Source.from_zip_bytes(src.read(normalized), label=f"{src.path}!{normalized}")
+        except (zipfile.BadZipFile, OSError, ValueError):
+            continue  # not a real zip — not a candidate
+        if not _root_is_pack(inner):
+            continue
+        game = _root_game_name(inner, "") or segments[-2] or None
+        by_subfolder[outer] = (outer, game)
+    return list(by_subfolder.values())
+
+
 def discover_game_roots(src: Source, rom_name):
     """The distinct game pack roots the container holds (ADR-0143): one
     ("", game) entry when the container root is itself a pack, else one
     (prefix, game) entry per fallback subfolder candidate. `game` is
     _root_game_name (pack.json targets[0].name, else the subfolder name),
     falling back to the submitter-declared rom_name when structurally
-    unnamed. The pipeline splits a result with N>1 roots into N packs and
-    N sibling issues; a single root keeps the existing one-issue flow."""
+    unnamed. When neither the root nor any direct subfolder candidate
+    resolves (a repo-archive shape whose games are nested zips, not
+    extracted packs), falls back to find_nested_game_zips. The pipeline
+    splits a result with N>1 roots into N packs and N sibling issues; a
+    single root keeps the existing one-issue flow."""
     if _root_is_pack(src):
         return [("", _root_game_name(src, "") or rom_name)]
-    return [(prefix, _root_game_name(src, f"{prefix}/") or prefix.rsplit("/", 1)[-1])
-            for prefix, _ in find_fallback_subfolder_candidates(src.names)]
+    direct = find_fallback_subfolder_candidates(src.names)
+    if direct:
+        return [(prefix, _root_game_name(src, f"{prefix}/") or prefix.rsplit("/", 1)[-1])
+                for prefix, _ in direct]
+    return [(prefix, game) for prefix, game in find_nested_game_zips(src)]
 
 
 def discover_scoped(src: Source, rep: Report, root_prefix):
