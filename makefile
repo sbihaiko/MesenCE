@@ -262,6 +262,16 @@ doc-checks: check-manifest
 	./scripts/checks/verify_mep_nested_zip_fallback.sh
 	./scripts/checks/verify_status_kind_parity.sh
 	./scripts/checks/verify_synthetic_nrom.sh
+	#Unit tests for the community-pack pipeline's leaf modules (stdlib-only,
+	#no network/PAT/ROM): the MEI/recipe/content-id/identity/meta/rules
+	#interpreters and dispatch keep their own golden/PASS-style checks.
+	python3 scripts/test_mei_rules.py
+	python3 scripts/test_mep_compare_render_dispatch.py
+	python3 scripts/test_mep_content_id.py
+	python3 scripts/test_mep_identity_check.py
+	python3 scripts/test_mep_meta_parser.py
+	python3 scripts/test_mep_recipe_fence.py
+	python3 scripts/test_pack_id_rules.py
 	python3 scripts/test_mep_build.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
