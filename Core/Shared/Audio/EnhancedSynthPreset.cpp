@@ -76,6 +76,49 @@ namespace
 		size_t end = s.find_last_not_of(" \t\r\n");
 		s = s.substr(start, end - start + 1);
 	}
+
+	//F5.4g Bloco B item 6 (ADR-0052): parse one "FixedRole.<ch>=<value>" line
+	//into outPresets[presetIndex].FixedRole[ch]. ch is a physical channel
+	//0..3; value is -1 (auto) / 0..2 (Lead/Harmony/Bass) or their names.
+	//Returns true when the key was a FixedRole line (even if malformed, which
+	//is skipped silently like the other fields).
+	bool ApplyFixedRole(const string& key, const string& value, EnhancedSynthPreset* outPresets, int presetIndex)
+	{
+		if(key.rfind("FixedRole.", 0) != 0) {
+			return false;
+		}
+		if(presetIndex >= 0 && outPresets) {
+			string chStr = key.substr(strlen("FixedRole."));
+			int channel = -1;
+			try {
+				channel = std::stoi(chStr);
+			} catch(const std::exception&) {
+				return true; //malformed channel - skipped
+			}
+			if(channel >= 0 && channel < 4) {
+				int role = -2;
+				if(value == "auto" || value == "Auto") {
+					role = -1;
+				} else if(value == "lead" || value == "Lead") {
+					role = 0;
+				} else if(value == "harm" || value == "harmony" || value == "Harmony") {
+					role = 1;
+				} else if(value == "bass" || value == "Bass") {
+					role = 2;
+				} else {
+					try {
+						role = std::stoi(value);
+					} catch(const std::exception&) {
+						return true; //malformed value - skipped
+					}
+				}
+				if(role >= -1 && role <= 2) {
+					outPresets[presetIndex].FixedRole[channel] = role;
+				}
+			}
+		}
+		return true;
+	}
 }
 
 //Optional per-field overrides, with no rebuild, for the built-in presets.
@@ -152,6 +195,13 @@ void EnhancedSynthPresetLoader::ApplyFile(const string& path, EnhancedSynthPrese
 		string value = line.substr(eq + 1);
 		Trim(key);
 		Trim(value);
+
+		//F5.4g Bloco B item 6 (ADR-0052): "FixedRole.<ch>=<value>" is handled
+		//first - its key is dotted (not a plain field name) and its value is an
+		//int/enum, not a double/bool.
+		if(ApplyFixedRole(key, value, outPresets, presetIndex)) {
+			continue;
+		}
 
 		bool applied = false;
 		for(const PresetDoubleField& f : _presetDoubleFields) {

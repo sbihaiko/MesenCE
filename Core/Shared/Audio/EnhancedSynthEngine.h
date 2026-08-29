@@ -16,6 +16,41 @@ class EnhancedSynthEngine
 public:
 	static constexpr uint32_t MaxFmVoices = 9;
 	static constexpr uint32_t MaxSfxVoices = 4;
+	//F5.4g Bloco B item 3 (ADR-0052): a folded arpeggio holds at most a 2-4
+	//note cycle as a sustained chord, so a slot can stack up to 4 notes.
+	static constexpr uint32_t MaxChordNotes = 4;
+
+	//F5.4g Bloco B item 4 (ADR-0052): expression read from the live chip state
+	//- decay, vibrato and portamento - that picks the patch family (pluck ×
+	//sustained × strings) and modulates the voice. EvaluateExpression turns
+	//the three measurements into a family; Render applies the family to the
+	//SoundFont program choice (kFamilyPrograms) and the DSP attack/release.
+	struct ExpressionEnvelope
+	{
+		double DecayRate = 0;      //volume fall after the note's peak, vol/s
+		double VibratoDepth = 0;   //peak-to-peak pitch oscillation, semitones
+		double PortamentoRate = 0; //pitch slide rate, semitones/s
+		uint32_t Family = 0;       //FamilyPluck / FamilySustained / FamilyStrings
+		static constexpr uint32_t FamilyPluck = 0;
+		static constexpr uint32_t FamilySustained = 1;
+		static constexpr uint32_t FamilyStrings = 2;
+	};
+	//F5.4g Bloco B item 4: classify the three measurements into a patch
+	//family. A note that falls fast after its onset and barely oscillates is a
+	//pluck; a pitch that oscillates while held or slides between notes reads
+	//as a bowed/pad instrument (strings); otherwise the tone sustains as-is.
+	static ExpressionEnvelope EvaluateExpression(double decayRate, double vibratoDepth, double portamentoRate);
+
+	//F5.4g Bloco B item 4: GM programs (0-based) per expression family for the
+	//three music slots - pluck and strings replace the preset's Gm*Program
+	//(which stays the sustained default); -1 keeps the preset choice. A slot
+	//with a FixedRole override (item 6) is exempt, so a human choice always
+	//wins.
+	static constexpr int kFamilyPrograms[3][3] = {
+		{ 26, 24, 33 }, //pluck: steel guitar, nylon guitar, electric bass (finger)
+		{ -1, -1, -1 }, //sustained: preset's Gm*Program unchanged
+		{ 49, 48, 44 }, //strings: string ensemble 2, string ensemble 1, tremolo strings
+	};
 
 	//Per-flush channel snapshot filled in by the console-specific wrapper.
 	//Volumes are 0..1, frequencies in Hz.
@@ -32,6 +67,24 @@ public:
 		uint32_t FmVoiceCount = 0; //0 on consoles with no FM add-on
 		double FmFreq[MaxFmVoices] = {};
 		double FmVol[MaxFmVoices] = {};
+
+		//F5.4g Bloco B item 3: sustained-chord stacks for the music slots.
+		//When a channel plays a fast arpeggio (20-60 Hz cycle), Route() folds
+		//its notes into these (>= 2 frequencies) and Render sounds all of them
+		//together instead of the single note. Count 0/1 = the slot's plain
+		//frequency is used.
+		uint32_t LeadChordCount = 0, HarmChordCount = 0, BassChordCount = 0;
+		double LeadChord[MaxChordNotes] = {};
+		double HarmChord[MaxChordNotes] = {};
+		double BassChord[MaxChordNotes] = {};
+
+		//F5.4g Bloco B item 4: per-slot expression family from the live chip
+		//state (EvaluateExpression), used by Render to pick the SoundFont
+		//program (kFamilyPrograms) and shape the DSP attack/release.
+		//FamilyLocked = the slot's channel carries a FixedRole override
+		//(item 6), so the family must not replace its program.
+		uint32_t Family[3] = { ExpressionEnvelope::FamilySustained, ExpressionEnvelope::FamilySustained, ExpressionEnvelope::FamilySustained };
+		bool FamilyLocked[3] = {};
 
 		//Channels the wrapper's ChannelRoleClassifier flagged as sound
 		//effects (ADR-0052 item 2): rendered as plain dry pulses, outside the
@@ -61,6 +114,12 @@ private:
 	Voice _lead;
 	Voice _harmony;
 	Voice _bass;
+	//F5.4g Bloco B item 3: per-note oscillators for the folded sustained
+	//chords (one voice per slot per chord note; the single _lead/_harmony/
+	//_bass voices play when the slot is a plain note)
+	Voice _leadChord[MaxChordNotes];
+	Voice _harmChord[MaxChordNotes];
+	Voice _bassChord[MaxChordNotes];
 	double _noiseVol = 0;
 	uint32_t _noiseRng = 0x1D872B41;
 
@@ -85,6 +144,10 @@ private:
 	uint32_t _sfRate = 0;
 	int _sfPrograms[3] = { -1, -1, -1 };
 	SfNote _sfNotes[3];
+	//F5.4g Bloco B item 3: the SoundFont side of a folded chord - up to
+	//MaxChordNotes held notes per music channel (the single _sfNotes entry
+	//plays when the slot is a plain note)
+	SfNote _sfChordNotes[3][MaxChordNotes] = {};
 	//Percussion voices must be released explicitly: a drum kit region with an
 	//infinite sustain never leaves its sustain segment on its own, and TSF
 	//(with a voice cap set) can only recycle voices that are *in release* - a
@@ -106,6 +169,7 @@ private:
 	uint64_t _sfNoteOns = 0;
 	uint64_t _sfNoteOnFails = 0;
 	void SfUpdateVoice(int channel, SfNote& note, double freq, double vol, double gain);
+	void SfUpdateChord(int channel, SfNote* notes, uint32_t count, const double* freqs, double vol, double gain);
 
 	//Drum tone shaping (one-pole states) + low thump oscillator
 	double _drumLpLow = 0;
@@ -197,6 +261,13 @@ public:
 	//SoundFont to use for the given setting: the configured path if any,
 	//else "<Mesen home>/EnhancedAudio.sf2" when that file exists, else "".
 	static string ResolveSoundFontPath(const char* configuredPath);
+
+	//F5.4g Bloco B item 3 (ADR-0052): fold a fast periodic arpeggio into a
+	//sustained chord. cycleKeys = the 2-4 distinct MIDI notes the channel
+	//alternates between at 20-60 Hz (from ChannelRoleClassifier::ArpeggioKeys);
+	//writes their frequencies, lowest first, into outFreq[] and returns the
+	//chord size (0 when cycleCount == 0 - a single note, no chord).
+	static uint32_t FoldArpeggioToChord(const int* cycleKeys, uint32_t cycleCount, double outFreq[MaxChordNotes]);
 
 	//Synthesizes sampleCount stereo samples from the Input snapshot and adds
 	//them onto "out" (interleaved L/R). "p" comes from GetPreset();

@@ -95,6 +95,10 @@ public:
 	static constexpr double kSfxReleaseS = 0.04;
 	static constexpr double kSfxMaxHoldS = 1.5;
 	static constexpr uint32_t kOnsetHistory = 8;
+	//F5.4g Bloco B item 3: an arpeggio detection stays reportable until this
+	//long after its last confirmation (slightly beyond the retrigger window so
+	//consecutive cycle confirmations never gap).
+	static constexpr double kArpeggioFreshS = 0.15;
 
 private:
 	struct State
@@ -104,8 +108,19 @@ private:
 		double Note = 0; //current pitch in MIDI note units (fractional)
 		double HeldNote = 0; //pitch the current note started at (for onset-by-jump)
 		double LastNote = 0;
+		double LastVol = 0; //volume of the last flush (for the expression decay)
 		double SoundingS = 0; //time since the current sound started (through onsets)
 		double SilentS = 0;
+
+		//F5.4g Bloco B item 4 (ADR-0052): expression measurements. PeakVol/
+		//PeakAtS = the note's volume peak and when it happened, so DecayRate
+		//can read how fast the note falls after its onset (pluck vs sustained);
+		//VibratoDepth = peak semitones covered by opposing glide runs (pitch
+		//oscillation); GlideRate = the current portamento slide rate (st/s).
+		double PeakVol = 0;
+		double PeakAtS = 0;
+		double VibratoDepth = 0;
+		double GlideRate = 0;
 
 		//Glide detector
 		int GlideDir = 0;
@@ -137,6 +152,20 @@ private:
 	ChannelRole _role[MaxChannels] = {};
 	ChannelRole _defaultRole[MaxChannels] = {};
 	ChannelRole _pendingRole[MaxChannels] = {};
+	//F5.4g Bloco B: role each channel held when it last fell silent, for
+	//HandleChannelSteal - when a channel's *native* role (its defaultRole) was
+	//reassigned to another channel while it was away, the moment it resumes
+	//that role is handed back (the composer-swap-back case ADR-0052 names)
+	ChannelRole _heldRoleAtSilence[MaxChannels] = {};
+	//F5.4g Bloco B item 6: per-channel FixedRole override from the pack's ESP
+	//(-1 = auto; 0/1/2 = force Lead/Harmony/Bass), see SetFixedRoles
+	int32_t _fixedRole[MaxChannels] = {};
+	//F5.4g Bloco B item 3: the channel's current arpeggio cycle (2-4 distinct
+	//notes at 20-60 Hz) + the last time it was re-confirmed, for
+	//EnhancedSynthEngine::FoldArpeggioToChord
+	int _arpeggioKeys[MaxChannels][4] = {};
+	uint32_t _arpeggioCount[MaxChannels] = {};
+	double _arpeggioAt[MaxChannels] = {};
 	bool _swapPending = false;
 	double _swapWaitS = 0;
 	uint32_t _pendingVotes = 0;
@@ -161,6 +190,13 @@ public:
 	void SetAutoRoles(bool enabled) { _autoRoles = enabled; }
 	void SetSfxSeparation(bool enabled) { _sfxSeparation = enabled; }
 
+	//F5.4g Bloco B item 6 (ADR-0052): per-channel FixedRole override from the
+	//pack's synth/preset.cfg (ESP) - index = physical channel, value -1 (auto)
+	/// 0 (Lead) / 1 (Harmony) / 2 (Bass). A pinned channel always reports that
+	//role, regardless of the auto decision (see EnhancedSynthPresetLoader).
+	void SetFixedRoles(const int32_t fixedRoles[MaxChannels]);
+	bool HasFixedRole(uint32_t i) const { return i < MaxChannels && _fixedRole[i] >= 0; }
+
 	//One step of dt seconds (the audio flush duration) with the current
 	//channel snapshot.
 	void Update(const Channel* channels, double dt);
@@ -168,6 +204,28 @@ public:
 	ChannelRole Role(uint32_t i) const { return _role[i]; }
 	bool IsSfx(uint32_t i) const { return _sfxSeparation && _ch[i].Sfx; }
 	uint8_t SfxCues(uint32_t i) const { return _ch[i].Cue; }
+
+	//F5.4g Bloco B (ADR-0052 item 2): a role that was reassigned to another
+	//channel while its original channel was silent is handed back the moment
+	//that channel resumes, bypassing the kDecisionsToSwitch hysteresis (only
+	//fires for a brief silence - kStealMaxSilenceS - so a genuine melody
+	//handoff stays as the classifier decided it). See UpdateNoteTracking.
+	void HandleChannelSteal(uint32_t channel, ChannelRole stolenRole);
+
+	//F5.4g Bloco B item 3: the channel's current arpeggio cycle - 2-4 distinct
+	//MIDI notes alternating at 20-60 Hz - written into outKeys; returns the
+	//note count (0 = not arpeggiating). Feeds EnhancedSynthEngine's
+	//FoldArpeggioToChord so a fast broken chord becomes a sustained chord.
+	uint32_t ArpeggioKeys(uint32_t i, int outKeys[4]) const;
+
+	//F5.4g Bloco B item 4: expression measurements for the engine's
+	//patch-family choice (EnhancedSynthEngine::ExpressionEnvelope) - decay in
+	//vol/s since the note's peak, peak volume, vibrato depth in semitones and
+	//the portamento slide rate in semitones/s.
+	double DecayRate(uint32_t i) const;
+	double PeakVol(uint32_t i) const { return _ch[i].PeakVol; }
+	double VibratoDepth(uint32_t i) const { return _ch[i].VibratoDepth; }
+	double PortamentoRate(uint32_t i) const { return _ch[i].GlideRate; }
 
 	//Diagnostics (harness / debug HUD)
 	double MeanNote(uint32_t i) const { return _ch[i].MeanNote; }

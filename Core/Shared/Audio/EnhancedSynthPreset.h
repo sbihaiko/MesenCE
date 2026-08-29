@@ -69,6 +69,16 @@ struct EnhancedSynthPreset
 	double GmHarmProgram;
 	double GmBassProgram;
 	bool GmDrums;
+
+	//F5.4g Bloco B item 6 (ADR-0052): per-channel fixed-role override for a
+	//specific game - the human override stays optional in the pack's
+	//synth/preset.cfg (ESP). Index = physical melodic channel 0..3 (NES:
+	//pulse1/pulse2/triangle/…); value -1 = auto (the ChannelRoleClassifier
+	//decides), 0/1/2 = force Lead/Harmony/Bass. The wrapper feeds these into
+	//the classifier (SetFixedRoles) so the pinned channel always reports that
+	//role, regardless of the auto decision. Parsed by
+	//EnhancedSynthPresetLoader as "FixedRole.<ch>=<value>".
+	int32_t FixedRole[4];
 };
 
 //Loads EnhancedAudioPresets.cfg overrides (shared file, all engines) on top of

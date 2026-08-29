@@ -16,6 +16,7 @@
 //failure (see roles_probe.cpp). Run from the repo root so the golden paths
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
+#include "Shared/Audio/EnhancedSynthEngine.h"
 #include "Shared/EnhancementPacks/MepPack.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/MessageManager.h"
@@ -638,6 +639,129 @@ namespace
 			std::filesystem::remove_all(pyOut, ec);
 		}
 	}
+
+	//--- Bloco F: F5.4g Bloco B (ADR-0052 items 3/4/6 + channel steal) --------
+	//Arpeggio→chord folding (item 3), expression family (item 4), per-channel
+	//FixedRole override (item 6) and HandleChannelSteal (item 2's "stolen and
+	//handed back"). Pure logic - no emulator, no SoundFont file.
+
+	void TestFoldArpeggioToChord()
+	{
+		//A C-E-G arpeggio (MIDI 60, 64, 67) folds into a C-E-G sustained chord,
+		//frequencies lowest first (C4 < E4 < G4)
+		int cycle[3] = { 60, 64, 67 };
+		double chord[EnhancedSynthEngine::MaxChordNotes];
+		uint32_t count = EnhancedSynthEngine::FoldArpeggioToChord(cycle, 3, chord);
+		Check(count == 3, "BlocoF: a 3-note arpeggio folds into a 3-note chord");
+		bool notesMatch = count >= 3
+			&& std::abs(chord[0] - NoteToFreq(60.0)) < 0.01
+			&& std::abs(chord[1] - NoteToFreq(64.0)) < 0.01
+			&& std::abs(chord[2] - NoteToFreq(67.0)) < 0.01;
+		Check(notesMatch, "BlocoF: chord frequencies match the cycle's notes, sorted lowest-first");
+
+		//Unsorted input is sorted ascending
+		int shuffled[3] = { 67, 60, 64 };
+		count = EnhancedSynthEngine::FoldArpeggioToChord(shuffled, 3, chord);
+		Check(count >= 3 && chord[0] < chord[1] && chord[1] < chord[2], "BlocoF: fold sorts the chord lowest-first regardless of input order");
+
+		//Empty cycle = single note, no chord
+		count = EnhancedSynthEngine::FoldArpeggioToChord(cycle, 0, chord);
+		Check(count == 0, "BlocoF: an empty cycle folds to no chord");
+	}
+
+	void TestEvaluateExpression()
+	{
+		//A note falling fast after its onset with little oscillation is a pluck
+		EnhancedSynthEngine::ExpressionEnvelope pluck = EnhancedSynthEngine::EvaluateExpression(2.0, 0.3, 0.5);
+		Check(pluck.Family == EnhancedSynthEngine::ExpressionEnvelope::FamilyPluck, "BlocoF: fast decay + little vibrato classifies as pluck");
+		//Sustained tone, no oscillation, slow glide -> sustained
+		EnhancedSynthEngine::ExpressionEnvelope sustained = EnhancedSynthEngine::EvaluateExpression(0.2, 0.2, 0.8);
+		Check(sustained.Family == EnhancedSynthEngine::ExpressionEnvelope::FamilySustained, "BlocoF: slow decay + no oscillation classifies as sustained");
+		//Vibrato-heavy held note -> strings
+		EnhancedSynthEngine::ExpressionEnvelope strings = EnhancedSynthEngine::EvaluateExpression(0.1, 1.8, 0.3);
+		Check(strings.Family == EnhancedSynthEngine::ExpressionEnvelope::FamilyStrings, "BlocoF: vibrato-heavy tone classifies as strings");
+		//Fast portamento -> strings (a sliding line)
+		EnhancedSynthEngine::ExpressionEnvelope slide = EnhancedSynthEngine::EvaluateExpression(0.1, 0.3, 6.0);
+		Check(slide.Family == EnhancedSynthEngine::ExpressionEnvelope::FamilyStrings, "BlocoF: a fast portamento classifies as strings");
+	}
+
+	void TestFixedRoleOverride()
+	{
+		//With auto roles on, a FixedRole override pins channel 0 to Bass even
+		//though its default is Lead and it plays high the whole time
+		static constexpr ChannelRoleClassifier::ChannelRole defaults[2] = { ChannelRoleClassifier::ChannelRole::Lead, ChannelRoleClassifier::ChannelRole::Harmony };
+		ChannelRoleClassifier roles;
+		roles.Init(2, defaults);
+		int32_t fixedRoles[4] = { 2, -1, -1, -1 }; //channel 0 forced to Bass
+		roles.SetFixedRoles(fixedRoles);
+		ChannelRoleClassifier::Channel ch[2] = {
+			{ NoteToFreq(84.0), 0.8, false }, //high, steady - would normally be Lead
+			{ NoteToFreq(48.0), 0.8, false }, //low
+		};
+		for(int i = 0; i < 400; i++) {
+			roles.Update(ch, 0.01);
+		}
+		Check(roles.Role(0) == ChannelRoleClassifier::ChannelRole::Bass, "BlocoF: FixedRole pins channel 0 to Bass despite a high mean pitch");
+		Check(roles.HasFixedRole(0) && !roles.HasFixedRole(1), "BlocoF: HasFixedRole reports the pinned channel only");
+	}
+
+	void TestChannelStealRestore()
+	{
+		//Composer swap-back (ADR-0052 item 2): channel 0 (default Lead) leads,
+		//falls silent long enough for the classifier to hand Lead to channel 1;
+		//the moment channel 0 resumes, Lead is restored instantly - no full
+		//hysteresis re-classification cycle.
+		static constexpr ChannelRoleClassifier::ChannelRole defaults[3] = { ChannelRoleClassifier::ChannelRole::Lead, ChannelRoleClassifier::ChannelRole::Harmony, ChannelRoleClassifier::ChannelRole::Bass };
+		ChannelRoleClassifier roles;
+		roles.Init(3, defaults);
+		ChannelRoleClassifier::Channel ch[3] = {
+			{ NoteToFreq(72.0), 0.8, false }, //lead melody
+			{ NoteToFreq(55.0), 0.8, false }, //harmony
+			{ NoteToFreq(36.0), 0.8, false }, //bass
+		};
+		for(int i = 0; i < 300; i++) {
+			roles.Update(ch, 0.01);
+		}
+		Check(roles.Role(0) == ChannelRoleClassifier::ChannelRole::Lead, "BlocoF: channel 0 holds the lead before the steal");
+
+		//Channel 0 falls silent while channel 1 carries a high line (3s - long
+		//enough for the classifier to reassign Lead to channel 1)
+		ch[0].Vol = 0;
+		ch[1] = { NoteToFreq(79.0), 0.8, false };
+		for(int i = 0; i < 300; i++) {
+			roles.Update(ch, 0.01);
+		}
+		Check(roles.Role(1) == ChannelRoleClassifier::ChannelRole::Lead, "BlocoF: the classifier hands Lead to channel 1 while channel 0 is out");
+
+		//Channel 0 resumes - the stolen role is handed back on this first flush
+		ch[0] = { NoteToFreq(72.0), 0.8, false };
+		ch[1] = { NoteToFreq(55.0), 0.8, false };
+		roles.Update(ch, 0.01);
+		Check(roles.Role(0) == ChannelRoleClassifier::ChannelRole::Lead, "BlocoF: HandleChannelSteal restores the lead instantly on resume");
+	}
+
+	void TestArpeggioKeysDetection()
+	{
+		//A 50 Hz C-E alternation (one pitch change per 2 flushes at dt=0.01) is
+		//a fast arpeggio (item 3), not SFX - the classifier exposes its cycle
+		//for the engine's chord folding
+		ChannelRoleClassifier roles = MakeLeadOnlyClassifier();
+		ChannelRoleClassifier::Channel ch { NoteToFreq(60.0), 0.8, false };
+		bool high = false;
+		for(int i = 0; i < 60; i++) { //0.6s of alternation
+			if((i & 1) == 0) {
+				high = !high; //pitch changes every 2 flushes -> 50 Hz cycle
+			}
+			ch.Freq = NoteToFreq(high ? 64.0 : 60.0);
+			roles.Update(&ch, 0.01);
+		}
+		int keys[4] = { 0, 0, 0, 0 };
+		uint32_t count = roles.ArpeggioKeys(0, keys);
+		Check(count == 2, "BlocoF: a 50 Hz C-E alternation is detected as a 2-note arpeggio");
+		bool hasC = count >= 2 && (std::abs(keys[0] - 60) <= 1 || std::abs(keys[1] - 60) <= 1);
+		bool hasE = count >= 2 && (std::abs(keys[0] - 64) <= 1 || std::abs(keys[1] - 64) <= 1);
+		Check(hasC && hasE, "BlocoF: the arpeggio cycle is the two alternating notes");
+	}
 }
 
 int main()
@@ -667,6 +791,12 @@ int main()
 	TestHashMismatchAbortsWritesNothing();
 	TestUnknownOpAndVersionLogsAndSkips();
 	TestDiscoveryEdgeCaseParity();
+
+	TestFoldArpeggioToChord();
+	TestEvaluateExpression();
+	TestFixedRoleOverride();
+	TestChannelStealRestore();
+	TestArpeggioKeysDetection();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

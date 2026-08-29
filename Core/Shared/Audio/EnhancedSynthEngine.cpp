@@ -62,6 +62,11 @@ bool EnhancedSynthEngine::LoadSoundFont(const string& path)
 	for(SfNote& n : _sfNotes) {
 		n = {};
 	}
+	for(uint32_t ch = 0; ch < 3; ch++) {
+		for(SfNote& n : _sfChordNotes[ch]) {
+			n = {};
+		}
+	}
 	for(SfDrumHit& hit : _sfDrums) {
 		hit = {};
 	}
@@ -106,6 +111,49 @@ string EnhancedSynthEngine::ResolveSoundFontPath(const char* configuredPath)
 	return std::ifstream(def) ? def : "";
 }
 
+uint32_t EnhancedSynthEngine::FoldArpeggioToChord(const int* cycleKeys, uint32_t cycleCount, double outFreq[MaxChordNotes])
+{
+	//Convert the arpeggio's distinct notes (MIDI keys, e.g. from
+	//ChannelRoleClassifier::ArpeggioKeys) into the frequencies of a sustained
+	//chord, sorted ascending so the stack is voiced root-up.
+	uint32_t count = std::min(cycleCount, (uint32_t)MaxChordNotes);
+	for(uint32_t i = 0; i < count; i++) {
+		outFreq[i] = 440.0 * std::pow(2.0, (cycleKeys[i] - 69.0) / 12.0);
+	}
+	//insertion sort (tiny, and the cycle notes are distinct)
+	for(uint32_t i = 1; i < count; i++) {
+		double f = outFreq[i];
+		uint32_t j = i;
+		while(j > 0 && outFreq[j - 1] > f) {
+			outFreq[j] = outFreq[j - 1];
+			j--;
+		}
+		outFreq[j] = f;
+	}
+	return count;
+}
+
+EnhancedSynthEngine::ExpressionEnvelope EnhancedSynthEngine::EvaluateExpression(double decayRate, double vibratoDepth, double portamentoRate)
+{
+	ExpressionEnvelope env;
+	env.DecayRate = decayRate;
+	env.VibratoDepth = vibratoDepth;
+	env.PortamentoRate = portamentoRate;
+	//A note that falls fast after its onset and barely oscillates is
+	//percussive (pluck); a pitch that oscillates while held or slides between
+	//notes reads as a bowed/pad instrument (strings); otherwise the tone
+	//sustains as-is. Calibration constants - see the classifier's decay/
+	//vibrato/portamento getters for the units.
+	if(decayRate >= 1.5 && vibratoDepth < 1.0) {
+		env.Family = ExpressionEnvelope::FamilyPluck;
+	} else if(vibratoDepth >= 1.0 || portamentoRate >= 3.0) {
+		env.Family = ExpressionEnvelope::FamilyStrings;
+	} else {
+		env.Family = ExpressionEnvelope::FamilySustained;
+	}
+	return env;
+}
+
 void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const RawChannel* raw, uint32_t count, double dt)
 {
 	ChannelRoleClassifier::Channel ch[ChannelRoleClassifier::MaxChannels];
@@ -119,6 +167,9 @@ void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const R
 
 	in.LeadVol = in.HarmVol = in.BassVol = 0;
 	in.SfxCount = 0;
+	in.LeadChordCount = in.HarmChordCount = in.BassChordCount = 0;
+	in.Family[0] = in.Family[1] = in.Family[2] = ExpressionEnvelope::FamilySustained;
+	in.FamilyLocked[0] = in.FamilyLocked[1] = in.FamilyLocked[2] = false;
 	bool slotUsed[3] = {};
 	for(uint32_t i = 0; i < count; i++) {
 		if(raw[i].Vol <= 0.0 && !roles.IsSfx(i)) {
@@ -171,6 +222,28 @@ void EnhancedSynthEngine::Route(Input& in, ChannelRoleClassifier& roles, const R
 		} else {
 			in.BassFreq = raw[i].Freq;
 			in.BassVol = raw[i].Vol;
+		}
+		//F5.4g Bloco B: expression family (item 4) and arpeggio fold (item 3)
+		//for this slot's channel - the family drives the patch choice, a fast
+		//arpeggio becomes a sustained chord.
+		ExpressionEnvelope env = EvaluateExpression(roles.DecayRate(i), roles.VibratoDepth(i), roles.PortamentoRate(i));
+		in.Family[slot] = env.Family;
+		in.FamilyLocked[slot] = roles.HasFixedRole(i);
+		int arp[4];
+		uint32_t arpCount = roles.ArpeggioKeys(i, arp);
+		if(arpCount >= 2) {
+			double chord[MaxChordNotes];
+			arpCount = FoldArpeggioToChord(arp, arpCount, chord);
+			if(slot == 0) {
+				in.LeadChordCount = arpCount;
+				for(uint32_t k = 0; k < arpCount; k++) in.LeadChord[k] = chord[k];
+			} else if(slot == 1) {
+				in.HarmChordCount = arpCount;
+				for(uint32_t k = 0; k < arpCount; k++) in.HarmChord[k] = chord[k];
+			} else {
+				in.BassChordCount = arpCount;
+				for(uint32_t k = 0; k < arpCount; k++) in.BassChord[k] = chord[k];
+			}
 		}
 	}
 }
@@ -258,6 +331,58 @@ void EnhancedSynthEngine::SfUpdateVoice(int channel, SfNote& note, double freq, 
 	tsf_channel_set_volume(_sf, channel, (float)chVol);
 }
 
+//F5.4g Bloco B item 3 (ADR-0052): the SoundFont side of arpeggio folding -
+//holds up to count simultaneous notes on one channel as the sustained chord.
+//Each note is struck at its fixed key; per-channel pitch bend is NOT applied
+//while the chord is held (the chip's current pitch is the arpeggio's active
+//note, which would detune the stack). Notes that leave the chord are released
+//so the stack cannot leak voices.
+void EnhancedSynthEngine::SfUpdateChord(int channel, SfNote* notes, uint32_t count, const double* freqs, double vol, double gain)
+{
+	if(vol <= 0.001) {
+		for(uint32_t k = 0; k < MaxChordNotes; k++) {
+			if(notes[k].Key >= 0) {
+				tsf_channel_note_off(_sf, channel, notes[k].Key);
+				notes[k].Key = -1;
+			}
+		}
+		if(channel >= 0 && channel < 3) {
+			_sfChannelVol[channel] = 0;
+		}
+		return;
+	}
+	uint32_t noteCount = std::min(count, (uint32_t)MaxChordNotes);
+	for(uint32_t k = 0; k < MaxChordNotes; k++) {
+		int key = -1;
+		if(k < noteCount) {
+			double n = freqs[k] > 1.0 ? 69.0 + 12.0 * std::log2(freqs[k] / 440.0) : -1.0;
+			if(n >= 0.0 && n <= 127.0) {
+				key = (int)std::lround(n);
+			}
+		}
+		if(key >= 0) {
+			if(notes[k].Key != key) {
+				if(notes[k].Key >= 0) {
+					tsf_channel_note_off(_sf, channel, notes[k].Key);
+				}
+				notes[k].Key = key;
+				notes[k].OnVol = std::max(vol, 0.05);
+				tsf_channel_set_volume(_sf, channel, (float)std::clamp(gain, 0.0, 2.0));
+				if(!tsf_channel_note_on(_sf, channel, key, (float)std::clamp(std::sqrt(vol), 0.1, 1.0))) {
+					_sfNoteOnFails++;
+				}
+				_sfNoteOns++;
+			}
+		} else if(notes[k].Key >= 0) {
+			tsf_channel_note_off(_sf, channel, notes[k].Key);
+			notes[k].Key = -1;
+		}
+	}
+	if(channel >= 0 && channel < 3) {
+		_sfChannelVol[channel] = std::clamp(gain, 0.0, 2.0);
+	}
+}
+
 void EnhancedSynthEngine::InitPresets(const EnhancedSynthPreset builtInPresets[5], const char* sectionSuffix, const vector<string>& packPresetPaths)
 {
 	_builtInPresets = builtInPresets;
@@ -284,6 +409,15 @@ void EnhancedSynthEngine::Reset()
 	_lead = {};
 	_harmony = {};
 	_bass = {};
+	for(Voice& v : _leadChord) {
+		v = {};
+	}
+	for(Voice& v : _harmChord) {
+		v = {};
+	}
+	for(Voice& v : _bassChord) {
+		v = {};
+	}
 	for(Voice& v : _fmVoices) {
 		v = {};
 	}
@@ -295,6 +429,11 @@ void EnhancedSynthEngine::Reset()
 		tsf_reset(_sf);
 		for(SfNote& n : _sfNotes) {
 			n = {};
+		}
+		for(uint32_t ch = 0; ch < 3; ch++) {
+			for(SfNote& n : _sfChordNotes[ch]) {
+				n = {};
+			}
 		}
 		_sfRate = 0;
 	}
@@ -356,6 +495,13 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	Retrigger(_lead, in.LeadVol);
 	Retrigger(_harmony, in.HarmVol);
 	Retrigger(_bass, in.BassVol);
+	//F5.4g Bloco B item 3: retrigger the folded-chord oscillators once per
+	//flush (same attack-out-of-silence rule as the single voices)
+	for(uint32_t c = 0; c < MaxChordNotes; c++) {
+		Retrigger(_leadChord[c], in.LeadVol);
+		Retrigger(_harmChord[c], in.HarmVol);
+		Retrigger(_bassChord[c], in.BassVol);
+	}
 
 	//A low thump is triggered only on attacks (volume rising into a slow+loud
 	//noise), so sustained noise (wind, engines) does not turn into a hum - the
@@ -374,6 +520,24 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	//Separate attack/release smoothing (orchestral preset uses slow attacks)
 	double attackCoeff = 1.0 - std::exp(-1.0 / (sampleRate * std::max(0.5, p.AttackMs) / 1000.0));
 	double releaseCoeff = 1.0 - std::exp(-1.0 / (sampleRate * std::max(0.5, p.ReleaseMs) / 1000.0));
+	//F5.4g Bloco B item 4: the expression family shapes each music slot's
+	//envelope - pluck = fast attack and release (percussive), strings = slower
+	//attack (soft onset); sustained keeps the preset's smoothing.
+	auto familySmoothing = [&](uint32_t family, double& attack, double& release) {
+		if(family == ExpressionEnvelope::FamilyPluck) {
+			attack = 1.0 - std::exp(-1.0 / (sampleRate * 0.002));
+			release = 1.0 - std::exp(-1.0 / (sampleRate * 0.03));
+		} else if(family == ExpressionEnvelope::FamilyStrings) {
+			attack = 1.0 - std::exp(-1.0 / (sampleRate * std::max(0.5, p.AttackMs * 2.5) / 1000.0));
+			release = releaseCoeff;
+		}
+	};
+	double leadAttack = attackCoeff, leadRelease = releaseCoeff;
+	double harmAttack = attackCoeff, harmRelease = releaseCoeff;
+	double bassAttack = attackCoeff, bassRelease = releaseCoeff;
+	familySmoothing(in.Family[0], leadAttack, leadRelease);
+	familySmoothing(in.Family[1], harmAttack, harmRelease);
+	familySmoothing(in.Family[2], bassAttack, bassRelease);
 	double masterGain = (volumePct / 100.0) * 5000.0;
 
 	double leadInc = in.LeadFreq / sampleRate;
@@ -429,6 +593,18 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 			tsf_channel_set_presetnumber(_sf, 9, 0, 1);
 		}
 		int programs[3] = { (int)p.GmLeadProgram, (int)p.GmHarmProgram, (int)p.GmBassProgram };
+		//F5.4g Bloco B item 4: the expression family replaces the preset's GM
+		//program for a slot when it is confidently pluck/strings (sustained
+		//keeps the preset choice; a FixedRole channel is exempt - item 6's
+		//human override always wins).
+		for(int ch = 0; ch < 3; ch++) {
+			if(!in.FamilyLocked[ch] && in.Family[ch] != ExpressionEnvelope::FamilySustained) {
+				int fp = kFamilyPrograms[in.Family[ch]][ch];
+				if(fp >= 0) {
+					programs[ch] = fp;
+				}
+			}
+		}
 		for(int ch = 0; ch < 3; ch++) {
 			if(_sfPrograms[ch] != programs[ch]) {
 				if(_sfNotes[ch].Key >= 0) {
@@ -441,9 +617,30 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 				_sfPrograms[ch] = programs[ch];
 			}
 		}
-		SfUpdateVoice(0, _sfNotes[0], in.LeadFreq, in.LeadVol, p.LeadGain);
-		SfUpdateVoice(1, _sfNotes[1], in.HarmFreq, in.HarmVol, p.HarmGain);
-		SfUpdateVoice(2, _sfNotes[2], in.BassFreq, in.BassVol, p.BassGain);
+		//F5.4g Bloco B item 3: a folded chord on the slot sends a held note
+		//stack to the SoundFont; a plain note uses the single-voice path.
+		//Switching paths releases the other side's held notes so no voice
+		//leaks across a fold/unfold transition.
+		auto sfSlot = [&](int channel, SfNote& single, SfNote* chordNotes, uint32_t chordCount, const double* chordFreqs, double freq, double vol, double gain) {
+			if(chordCount >= 2) {
+				if(single.Key >= 0) {
+					tsf_channel_note_off(_sf, channel, single.Key);
+					single.Key = -1;
+				}
+				SfUpdateChord(channel, chordNotes, chordCount, chordFreqs, vol, gain);
+			} else {
+				for(uint32_t c = 0; c < MaxChordNotes; c++) {
+					if(chordNotes[c].Key >= 0) {
+						tsf_channel_note_off(_sf, channel, chordNotes[c].Key);
+						chordNotes[c].Key = -1;
+					}
+				}
+				SfUpdateVoice(channel, single, freq, vol, gain);
+			}
+		};
+		sfSlot(0, _sfNotes[0], _sfChordNotes[0], in.LeadChordCount, in.LeadChord, in.LeadFreq, in.LeadVol, p.LeadGain);
+		sfSlot(1, _sfNotes[1], _sfChordNotes[1], in.HarmChordCount, in.HarmChord, in.HarmFreq, in.HarmVol, p.HarmGain);
+		sfSlot(2, _sfNotes[2], _sfChordNotes[2], in.BassChordCount, in.BassChord, in.BassFreq, in.BassVol, p.BassGain);
 		SfAgeDrums((double)sampleCount / sampleRate);
 		if(sfDrums) {
 			//One percussion hit per noise attack: bright LFSR = closed hi-hat,
@@ -492,6 +689,12 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	auto smooth = [&](double& state, double target) {
 		state += (target - state) * (target > state ? attackCoeff : releaseCoeff);
 	};
+	//F5.4g Bloco B item 4: per-slot smoothing so the expression family can
+	//shape each music voice's envelope independently of the preset's global
+	//attack/release (pluck snaps, strings bloom)
+	auto smoothTo = [](double& state, double target, double attack, double release) {
+		state += (target - state) * (target > state ? attack : release);
+	};
 
 	//Master bus soft-compressor (Studio preset): approximates an offline
 	//normalize+tanh master. CompThreshold <= 0 disables it (the other presets
@@ -503,9 +706,9 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 	double compReleaseCoeff = compEnabled ? 1.0 - std::exp(-1.0 / (sampleRate * std::max(0.5, p.CompReleaseMs) / 1000.0)) : 0;
 
 	for(uint32_t i = 0; i < sampleCount; i++) {
-		smooth(_lead.SmoothedVol, in.LeadVol);
-		smooth(_harmony.SmoothedVol, in.HarmVol);
-		smooth(_bass.SmoothedVol, in.BassVol);
+		smoothTo(_lead.SmoothedVol, in.LeadVol, leadAttack, leadRelease);
+		smoothTo(_harmony.SmoothedVol, in.HarmVol, harmAttack, harmRelease);
+		smoothTo(_bass.SmoothedVol, in.BassVol, bassAttack, bassRelease);
 		smooth(_noiseVol, in.NoiseVol);
 		_thumpGate *= thumpDecay;
 
@@ -516,8 +719,18 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 			sfR = _sfBuf[i * 2 + 1] * kSfGain;
 		} else {
 			//Lead: detuned pulse pair + octave-up saw shimmer, or (Studio) a fixed
-			//detuned-saw stack that ignores the pulse width entirely
-			if(p.LeadAlwaysSaw) {
+			//detuned-saw stack that ignores the pulse width entirely. A folded
+			//arpeggio chord (F5.4g Bloco B item 3) stacks a detuned pulse pair
+			//per chord note instead.
+			if(in.LeadChordCount >= 2) {
+				lead = 0;
+				for(uint32_t c = 0; c < in.LeadChordCount && c < MaxChordNotes; c++) {
+					double cInc = in.LeadChord[c] / sampleRate;
+					lead += 0.45 * pulse(step(_leadChord[c].Phase, cInc * (1.0 + p.LeadDetune)), cInc * (1.0 + p.LeadDetune), in.LeadWidth)
+						+ 0.45 * pulse(step(_leadChord[c].PhaseB, cInc * (1.0 - p.LeadDetune)), cInc * (1.0 - p.LeadDetune), in.LeadWidth);
+				}
+				lead *= 0.55; //stacked notes sum louder; scale back
+			} else if(p.LeadAlwaysSaw) {
 				lead = 0.55 * BlepSaw(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune)) + 0.55 * BlepSaw(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune)) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
 			} else {
 				lead = 0.45 * pulse(step(_lead.Phase, leadInc * (1.0 + p.LeadDetune)), leadInc * (1.0 + p.LeadDetune), in.LeadWidth) + 0.45 * pulse(step(_lead.PhaseB, leadInc * (1.0 - p.LeadDetune)), leadInc * (1.0 - p.LeadDetune), in.LeadWidth) + p.LeadOctaveUpMix * BlepSaw(step(_lead.SubPhase, leadInc * 2.0), leadInc * 2.0);
@@ -526,15 +739,37 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 			_lead.Lp += (lead - _lead.Lp) * leadLpCoeff;
 			lead = _lead.Lp * _lead.SmoothedVol;
 
-			//Harmony: softer detuned pulse pair
-			harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
+			//Harmony: softer detuned pulse pair (a folded chord stacks one per
+			//note - F5.4g Bloco B item 3)
+			if(in.HarmChordCount >= 2) {
+				harm = 0;
+				for(uint32_t c = 0; c < in.HarmChordCount && c < MaxChordNotes; c++) {
+					double cInc = in.HarmChord[c] / sampleRate;
+					harm += 0.45 * pulse(step(_harmChord[c].Phase, cInc * (1.0 + p.HarmDetune)), cInc * (1.0 + p.HarmDetune), in.HarmWidth)
+						+ 0.45 * pulse(step(_harmChord[c].PhaseB, cInc * (1.0 - p.HarmDetune)), cInc * (1.0 - p.HarmDetune), in.HarmWidth);
+				}
+				harm *= 0.55;
+			} else {
+				harm = 0.45 * pulse(step(_harmony.Phase, harmInc * (1.0 + p.HarmDetune)), harmInc * (1.0 + p.HarmDetune), in.HarmWidth) + 0.45 * pulse(step(_harmony.PhaseB, harmInc * (1.0 - p.HarmDetune)), harmInc * (1.0 - p.HarmDetune), in.HarmWidth);
+			}
 			_harmony.Lp += (harm - _harmony.Lp) * harmLpCoeff;
 			harm = _harmony.Lp * _harmony.SmoothedVol;
 
-			//Bass: sine + saw + half-frequency sub sine, mildly driven
-			step(_bass.Phase, bassInc);
-			step(_bass.SubPhase, bassInc * 0.5);
-			bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
+			//Bass: sine + saw + half-frequency sub sine, mildly driven. A folded
+			//chord stacks the sine (the saw/sub of a chord stack is muddy).
+			if(in.BassChordCount >= 2) {
+				bass = 0;
+				for(uint32_t c = 0; c < in.BassChordCount && c < MaxChordNotes; c++) {
+					double cInc = in.BassChord[c] / sampleRate;
+					step(_bassChord[c].Phase, cInc);
+					bass += p.BassSine * std::sin(pi2 * _bassChord[c].Phase);
+				}
+				bass *= 0.7;
+			} else {
+				step(_bass.Phase, bassInc);
+				step(_bass.SubPhase, bassInc * 0.5);
+				bass = p.BassSine * std::sin(pi2 * _bass.Phase) + p.BassSaw * BlepSaw(step(_bass.PhaseB, bassInc), bassInc) + p.BassSub * std::sin(pi2 * _bass.SubPhase);
+			}
 			bass = softClip(bass * p.BassDrive);
 			_bass.Lp += (bass - _bass.Lp) * bassLpCoeff;
 			bass = _bass.Lp * _bass.SmoothedVol;

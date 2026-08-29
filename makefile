@@ -250,6 +250,8 @@ core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 core-unit-tests:
 	$(CXX) -std=c++17 -O2 -w -I . -I Core -I Utilities scripts/core_unit_tests.cpp \
 	  Core/Shared/Audio/ChannelRoleClassifier.cpp \
+	  Core/Shared/Audio/EnhancedSynthEngine.cpp \
+	  Core/Shared/Audio/EnhancedSynthPreset.cpp \
 	  Core/Shared/EnhancementPacks/MepPack.cpp \
 	  Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp \
 	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \

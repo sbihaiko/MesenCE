@@ -1,6 +1,6 @@
 # ADR-0052: Sound level 2 — automatic GM cover from live APU state, SoundFont timbres
 
-- Status: accepted (items 1, 2, 5 and 6 — Block A implemented 2026-08-25; items 3, 4 and the bundled-SoundFont question still open)
+- Status: accepted (items 1, 2, 5 and 6 — Block A implemented 2026-08-25; items 3, 4 and 6 implemented 2026-08-29 as Block B — arpeggio→chord, expression→patch family, per-channel FixedRole override, channel-steal/return; only the bundled-SoundFont question still open)
 - Date: 2026-08-25
 - Phase 5, F5.4g. Builds on F1 (`EnhancedSynth`/`EnhancedSynthEngine`), ADR-0042 (ESP per pack), ADR-0047/0051 (track identification).
 

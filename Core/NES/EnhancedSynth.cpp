@@ -23,7 +23,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.24, 0.45, 0.65, 0.16,
 		1.0, 0.56, 0.85, 0.75,
 		0, 0, 0, 0, 0,
-		81, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
+		81, 80, 38, true, { -1, -1, -1, -1 } //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont; FixedRole = auto
 	},
 	//Chip deluxe: stays close to the 2A03 character - pure-ish pulses,
 	//round bass, crisp drums, just a touch of space
@@ -35,7 +35,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.12, 0.25, 0.35, 0.08,
 		1.0, 0.6, 0.8, 0.85,
 		0, 0, 0, 0, 0,
-		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
+		80, 80, 38, true, { -1, -1, -1, -1 } //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont; FixedRole = auto
 	},
 	//Orchestral lite: slow-attack string-like leads, low string bass,
 	//timpani-weight drums, larger room
@@ -47,7 +47,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.30, 0.30, 0.45, 0.30,
 		0.95, 0.65, 0.9, 0.6,
 		0, 0, 0, 0, 0,
-		73, 48, 43, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
+		73, 48, 43, true, { -1, -1, -1, -1 } //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont; FixedRole = auto
 	},
 	//Dry: Synthwave voices with no echo/reverb tail - SFX stay tight
 	{
@@ -58,7 +58,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.05, 0.0, 0.0, 0.0,
 		1.0, 0.56, 0.85, 0.75,
 		0, 0, 0, 0, 0,
-		80, 80, 38, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
+		80, 80, 38, true, { -1, -1, -1, -1 } //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont; FixedRole = auto
 	},
 	//Studio: verbatim port of the offline remaster mix - always-saw fat lead
 	//(duty ignored), same tuned pan/bass/drum values as Synthwave (already
@@ -72,7 +72,7 @@ static constexpr EnhancedSynthPreset _presets[5] = {
 		0.24, 0.45, 0.65, 0.18,
 		1.0, 0.56, 0.85, 0.75,
 		0.55, 3.0, 8, 140, 1.18,
-		81, 4, 33, true //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont
+		81, 4, 33, true, { -1, -1, -1, -1 } //GM programs (0-based): lead, harmony (fast attack - it may carry arpeggios), bass; drums via SoundFont; FixedRole = auto
 	},
 };
 // clang-format on
@@ -168,6 +168,9 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 	EnhancedSynthEngine::Input in;
 	_roles.SetAutoRoles(cfg.EnhancedAudioAutoRoles);
 	_roles.SetSfxSeparation(cfg.EnhancedAudioSfxSeparation);
+	//F5.4g Bloco B item 6 (ADR-0052): per-channel fixed-role override from the
+	//pack's synth/preset.cfg (ESP) - the human override for a given game
+	_roles.SetFixedRoles(p.FixedRole);
 	EnhancedSynthEngine::Route(in, _roles, raw, 3, (double)sampleCount / sampleRate);
 
 	if(apu.Noise.Enabled && apu.Noise.LengthCounter.Counter > 0) {
