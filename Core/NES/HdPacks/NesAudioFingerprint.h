@@ -51,6 +51,9 @@ private:
 	NesConsole* _console;
 	FingerprintMatcher _matcher;
 	vector<int> _trackIds; //index -> BgmFilesById key (or -1 when the track has no OGG)
+	//F5.4g Block C item 9 (ADR-0133): the last replacement mute mask pushed to
+	//the mixer, so we only write it when the SFX picture changed (point 3).
+	uint8_t _lastMuteMask = 0;
 
 public:
 	NesAudioReplacer(NesConsole* console) : _console(console) {}
@@ -63,4 +66,12 @@ public:
 
 	bool HasTracks() const { return _matcher.HasTracks(); }
 	void OnFrame(const ApuState& apu);
+
+private:
+	//F5.4g Block C item 9 (ADR-0133): recompute the replacement mute mask from
+	//the ChannelRoleClassifier (SFX-flagged melodic channels pass dry) and push
+	//it to the mixer only when it changed. Degraded modes (EnhancedAudio or
+	//SFX separation off, classifier not warmed up) leave the mask at 0x0F =
+	//today's full tonal mute - never "unmute all", which would double the music.
+	void UpdateReplacementMuteMask();
 };

@@ -64,6 +64,10 @@ void NesSoundMixer::Reset()
 	memset(_channelOutput, 0, sizeof(_channelOutput));
 	memset(_currentOutput, 0, sizeof(_currentOutput));
 
+	//F5.4g Block C item 9 (ADR-0133 point 5): a reset clears the replacement
+	//mask - a new session must not keep silencing channels for a stale OGG.
+	_replacementMuteMask = 0;
+
 	UpdateRates(true);
 }
 
@@ -171,7 +175,10 @@ void NesSoundMixer::UpdateRates(bool forceUpdate)
 
 double NesSoundMixer::GetChannelOutput(AudioChannel channel, bool forRightChannel)
 {
-	if(_replacementMute && (int)channel <= (int)AudioChannel::Noise) {
+	//F5.4g Block C item 9 (ADR-0133): a per-channel bit silences only the
+	//channels the mask names (0..4 = Square1..DMC); expansion channels have no
+	//bit and always pass, matching pre-Block-C behaviour.
+	if(_replacementMuteMask & (1 << (int)channel)) {
 		return 0;
 	}
 	if(forRightChannel) {

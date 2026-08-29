@@ -2,6 +2,7 @@
 #include "NES/HdPacks/NesAudioFingerprint.h"
 #include "NES/HdPacks/HdData.h"
 #include "NES/HdPacks/HdAudioDevice.h"
+#include "NES/EnhancedSynth.h"
 #include "NES/NesConsole.h"
 #include "NES/NesSoundMixer.h"
 #include "Shared/MessageManager.h"
@@ -130,7 +131,8 @@ void NesAudioReplacer::OnFrame(const ApuState& apu)
 		//Pack audio turned off (Tools > Enhancement Packs > Audio (OGG)): the
 		//device stops its OGG; give the APU back and forget the match
 		if(_matcher.GetPlaying() >= 0) {
-			_console->GetSoundMixer()->SetReplacementMute(false);
+			_console->GetSoundMixer()->SetReplacementMuteMask(0);
+			_lastMuteMask = 0;
 			_matcher.SetPlaying(-1);
 			MessageManager::Log("[MEP] audio: pack audio disabled - APU restored");
 		}
@@ -144,7 +146,8 @@ void NesAudioReplacer::OnFrame(const ApuState& apu)
 		if(device) {
 			device->StopReplacementBgm();
 		}
-		_console->GetSoundMixer()->SetReplacementMute(false);
+		_console->GetSoundMixer()->SetReplacementMuteMask(0);
+		_lastMuteMask = 0;
 		MessageManager::Log("[MEP] audio: music stopped - APU restored");
 		return;
 	}
@@ -155,9 +158,40 @@ void NesAudioReplacer::OnFrame(const ApuState& apu)
 		return;
 	}
 	if(device->PlayReplacementBgm(_trackIds[result], true)) {
-		_console->GetSoundMixer()->SetReplacementMute(true);
-		MessageManager::Log("[MEP] audio: fingerprint match '" + track.Id + "' at frame " + std::to_string(_matcher.GetFrame()) + " - playing replacement, APU muted");
+		//F5.4g Block C item 9 (ADR-0133): the APU is not muted wholesale - the
+		//mask lets SFX-flagged melodic channels pass dry while the OGG replaces
+		//the music. Falls back to 0x0F (full tonal mute) when classification is
+		//unavailable, matching pre-Block-C output exactly.
+		UpdateReplacementMuteMask();
+		char maskHex[8];
+		snprintf(maskHex, sizeof(maskHex), "%02X", _lastMuteMask);
+		MessageManager::Log("[MEP] audio: fingerprint match '" + track.Id + "' at frame " + std::to_string(_matcher.GetFrame()) + " - playing replacement, APU muted (mask 0x" + maskHex + ")");
 	} else {
 		_matcher.SetPlaying(-1);
+	}
+}
+
+//F5.4g Block C item 9 (ADR-0133): compute the per-channel replacement mute
+//mask from the ChannelRoleClassifier. Default 0x0F mutes Square1..Noise
+//(today's behaviour); a melodic channel flagged SFX (stable, hysteresis-held
+//by the classifier) has its bit cleared so it passes dry. DMC and expansion
+//channels have no bit and always play. Degraded modes leave 0x0F untouched:
+//with EnhancedAudio or SFX separation off the classifier never flags anything,
+//and before warm-up no channel is SFX yet - never "unmute all", which would
+//double the music. Pushed only when the mask changes (ADR-0133 point 3).
+void NesAudioReplacer::UpdateReplacementMuteMask()
+{
+	uint8_t mask = 0x0F;
+	if(EnhancedSynth* synth = _console->GetEnhancedSynth()) {
+		ChannelRoleClassifier& roles = synth->GetClassifier();
+		for(int i = 0; i < 3; i++) {
+			if(roles.IsSfx(i)) {
+				mask &= ~(uint8_t)(1 << i);
+			}
+		}
+	}
+	if(mask != _lastMuteMask) {
+		_lastMuteMask = mask;
+		_console->GetSoundMixer()->SetReplacementMuteMask(mask);
 	}
 }

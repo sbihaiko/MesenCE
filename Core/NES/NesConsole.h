@@ -88,6 +88,10 @@ public:
 	//console only); NesSoundMixer uses it to decide whether the
 	//enhanced-audio chip mix should duck its output
 	bool HasEnhancedSynth() { return _enhancedSynth != nullptr; }
+	//F5.4g Block C item 9 (ADR-0133): the enhanced synth (always present on a
+	//normal console) whose ChannelRoleClassifier lets the fingerprint replacer
+	//let SFX pass dry during OGG replacement.
+	EnhancedSynth* GetEnhancedSynth() { return _enhancedSynth.get(); }
 	void WarnAboutSilentPatchedMusic();
 	BaseNesPpu* GetPpu() { return _ppu.get(); }
 	NesApu* GetApu() { return _apu.get(); }

@@ -15,7 +15,12 @@ enum class ConsoleRegion;
 class NesSoundMixer : public ISerializable
 {
 public:
-	void SetReplacementMute(bool mute) { _replacementMute = mute; }
+	//F5.4g Block C item 9 (ADR-0133): per-channel replacement mute mask - one
+	//bit per AudioChannel index 0..4 (Square1, Square2, Triangle, Noise, DMC);
+	//a set bit silences that channel while a replacement OGG plays. The mixer
+	//owns nothing but the mask; the policy (which channels stay muted) is
+	//NesAudioReplacer's, computed from the ChannelRoleClassifier.
+	void SetReplacementMuteMask(uint8_t mask) { _replacementMuteMask = mask; }
 	static constexpr uint32_t CycleLength = 10000;
 	static constexpr uint32_t BitsPerSample = 16;
 
@@ -43,9 +48,11 @@ private:
 	int16_t* _outputBuffer = nullptr;
 	size_t _sampleCount = 0;
 	double _volumes[MaxChannelCount] = {};
-	//F5.3: the fingerprint replacer mutes the tonal APU channels while an OGG
-	//plays (DMC/FDS/expansion audio untouched)
-	bool _replacementMute = false;
+	//F5.3/Block C item 9 (ADR-0133): the fingerprint replacer mutes the tonal
+	//APU channels while an OGG plays (DMC/FDS/expansion audio untouched); the
+	//mask lets SFX-flagged melodic channels pass through dry. Default 0 = no
+	//replacement playing. Serialized as false on older saves - Reset clears it.
+	uint8_t _replacementMuteMask = 0;
 	double _enhancedDuck = 1.0;
 	double _panning[MaxChannelCount] = {};
 

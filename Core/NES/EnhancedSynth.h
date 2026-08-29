@@ -41,6 +41,11 @@ public:
 
 	void MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sampleRate) override;
 
+	//F5.4g Block C item 9 (ADR-0133): the channel-role classifier, so the
+	//fingerprint replacer can let SFX-flagged melodic channels pass dry while
+	//an OGG replaces the music. Read-only for callers.
+	ChannelRoleClassifier& GetClassifier() { return _roles; }
+
 private:
 	void LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg, uint32_t sampleCount, uint32_t sampleRate);
 };
