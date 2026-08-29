@@ -18,7 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # checks read it directly instead of an inline workflow copy.
 PROMPT_FILE = REPO_ROOT / ".github" / "ai" / "validate-classify.md"
 
+# The autofix prompt (ADR-0138, single source, dormant): the workflow's
+# prepare-autofix-prompt step renders this file; the local harness does not
+# run the autofix subsystem, so only the CI reads it — but it must still
+# live here (not inline in the workflow) so the dormant copy cannot drift.
+AUTOFIX_PROMPT_FILE = REPO_ROOT / ".github" / "ai" / "validate-autofix.md"
+
 _prompt_cache = None
+_autofix_prompt_cache = None
 
 
 def prompt_text():
@@ -43,6 +50,33 @@ def prompt_block():
 def schema_block():
     """The <!-- SCHEMA --> body (mirrors validate_pack_local.sh's rsplit)."""
     text = prompt_text()
+    if not text:
+        return ""
+    return text.rsplit("<!-- SCHEMA -->", 1)[1].strip()
+
+
+def autofix_prompt_text():
+    """The .github/ai/validate-autofix.md contents (cached), or '' if missing."""
+    global _autofix_prompt_cache
+    if _autofix_prompt_cache is None:
+        try:
+            _autofix_prompt_cache = AUTOFIX_PROMPT_FILE.read_text(encoding="utf-8")
+        except OSError:
+            _autofix_prompt_cache = ""
+    return _autofix_prompt_cache
+
+
+def autofix_prompt_block():
+    """The autofix <!-- PROMPT --> body (mirrors the classify rsplit)."""
+    text = autofix_prompt_text()
+    if not text:
+        return ""
+    return text.rsplit("<!-- PROMPT -->", 1)[1].rsplit("<!-- SCHEMA -->", 1)[0].strip()
+
+
+def autofix_schema_block():
+    """The autofix <!-- SCHEMA --> body (mirrors the classify rsplit)."""
+    text = autofix_prompt_text()
     if not text:
         return ""
     return text.rsplit("<!-- SCHEMA -->", 1)[1].strip()

@@ -39,9 +39,14 @@ def _classify_block(text):
 
 
 def _prepare_block(text):
+    # Match on the step's `id:` (unique) rather than the display name or a
+    # bare "prepare-classify-prompt" mention: comments elsewhere in the
+    # workflow legitimately reference the pattern by name (e.g. the autofix
+    # prepare step's "mirroring the prepare-classify-prompt step" note), so
+    # a name/substring match can grab the wrong step.
     blocks = [
         b for b in text.split("\n      - name:")
-        if "prepare-classify-prompt" in b or "Prepare classify" in b
+        if "id: prepare-classify-prompt" in b
     ]
     if not blocks:
         fail("prepare-classify-prompt step not found")

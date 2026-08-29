@@ -14,8 +14,9 @@ different task, covers its side of AC-6).
 The 28+ checks that made this file grow well past the project's 200-line
 guardrail are split into topic modules under
 scripts/checks/community_pack_validate/ (ADR-0138 Clarification §23,
-F6.2c): general, classify, assemble_recipe, recipe_gate, apply_verdict,
-mep_meta. This file stays the sole invocation entry point — it only loads
+F6.2c): general, classify, autofix, assemble_recipe, recipe_gate,
+apply_verdict, mep_meta. This file stays the sole invocation entry point —
+it only loads
 the workflow file, runs the workflow_call-inputs check that needs the
 parsed YAML, assembles CHECKS from the topic modules' functions, and
 reports failures.
@@ -30,6 +31,7 @@ import yaml
 from community_pack_validate import (
     apply_verdict,
     assemble_recipe,
+    autofix,
     classify,
     general,
     mep_meta,
@@ -87,6 +89,10 @@ CHECKS = (
     classify.check_classify_step_references_prepare_outputs,
     classify.check_prepare_classify_prompt_renders_md,
     classify.check_prompt_file_markers,
+    autofix.check_autofix_step_references_prepare_outputs,
+    autofix.check_prepare_autofix_prompt_renders_md,
+    autofix.check_autofix_prompt_file_markers,
+    autofix.check_autofix_prompt_data_not_instruction,
     assemble_recipe.check_assemble_recipe_step_present,
     assemble_recipe.check_assemble_recipe_issue_body_via_gh,
     assemble_recipe.check_assemble_recipe_runner_temp_handoff,

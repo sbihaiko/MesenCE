@@ -12,9 +12,12 @@ judged against identical instructions.
 | `validate-classify.md` | Verdict / assets / author / comment / recipe fragment | Yes |
 | `validate-autofix.md` | mep_lint.py drift autofix (live-core cross-check) | Dormant (`LIVE_VALIDATION_ENABLED: 'false'`) |
 
-`validate-autofix.md` is extracted from the CI workflow for completeness but
-the live-core subsystem it belongs to is off by default; it is not invoked by
-the local script.
+`validate-autofix.md` is the single source for the autofix step, same as
+`validate-classify.md` is for classify: the workflow's "Prepare autofix
+prompt" step renders it (fills `{{DRIFT_LINES}}`/`{{GAME}}`) and the
+"Autofix mep_lint.py drift" step consumes the rendered prompt. The
+live-core subsystem it belongs to is off by default, and the local script
+does not run the autofix step at all.
 
 ## Flow (deterministic + one LLM step)
 
