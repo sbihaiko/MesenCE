@@ -230,6 +230,13 @@ doc-checks: check-manifest
 	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
 	./scripts/checks/verify_smoke_pack_headless.sh
 	python3 scripts/test_mep_build.py
+	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
+	#in sync with the emit code and the specs, or these gates fail.
+	python3 scripts/validate-specs.py
+	python3 scripts/test_mep_content_id_golden.py
+	python3 scripts/test_mep_recipe.py
+	python3 scripts/test_mep_compare_auto_palettes.py
+	python3 scripts/test_gen_mep_recipe_fixture.py
 
 ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p $(OUTFOLDER)/Dependencies

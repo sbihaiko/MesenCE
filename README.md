@@ -78,6 +78,7 @@ This fork takes that pipeline to **Game Boy and Master System**, bundles it with
 | **Pack format** | `hires.txt` per game | **MEP**: one hash-keyed pack for textures + audio + synth presets, folder or `.zip`, per-layer toggles |
 | **Finding packs** | Forum threads | **Validated [community catalog](docs/community-packs.md)** — every entry lint-checked, hash-tracked, labeled by content |
 | **Music export** | — | **Record Music (MIDI/VGM)** while you play |
+| **Player mode** | — | **Couch-friendly shell on a fresh install**: menu hidden, one overlay (resume / save / load / pack chip / settings / quit), recent-games home, pack picker when packs compete |
 | **Correctness** | Build check | **CI-gated unit tests** on every push |
 | **Consoles** | 10+ systems | **4 families**, chosen because their enhancement ecosystems already exist ([why](#why-this-fork)) |
 
@@ -113,8 +114,9 @@ Textures, music and synth presets ship as **one hash-keyed pack**, matched to yo
 - **Install:** a folder or `.zip` in `EnhancementPacks/`, or a folder named like the ROM right beside it (the sibling folder always wins).
 - **Toggle per layer:** textures / audio (OGG) / synth / ROM patches, from **Tools → HD Packs → Enhancement Packs (MEP)…**.
 - **Never start from nothing:** with *Bootstrap* on, playing a game with no pack writes `<Game>/auto/` beside the ROM — xBRZ 4× tiles, static screens as backgrounds and (NES) fingerprinted music ready for `scripts/mep_render_audio.py`. An artist gets a real starting point; a player gets something better than raw pixels immediately.
+- **Player mode** (the default shell on a fresh install): the menu is hidden and a small overlay — resume / save slot / load slot / **Pack** chip / settings / **Advanced GUI** / quit — sits over the game, with a recent-games home screen. When two or more packs compete for the loaded ROM and none is preferred, a **pack picker** opens once over the un-enhanced game; picking stores the per-ROM preference (power-cycles to apply), and the overlay's pack chip reopens it any time. **Advanced GUI** returns to the classic menu/IDE shell — existing installs keep it by default.
 - **Built on existing standards** (No-Intro hashes, HDNes `hires.txt`, VGM/GD3, SMF/GM, OGG, BPS) — and where a gap exists, small **CC0 specs anyone can implement**: [MEP v1](docs/specs/MEP-v1.md) (pack) · [ESP v1](docs/specs/ESP-v1.md) (presets) · [MEI v1](docs/specs/MEI-v1.md) (federated discovery) · [hires.txt GB/SMS](docs/specs/hires-gbsms-v1-draft.md) (draft).
-- **Tooling:** `scripts/mep_lint.py` validates a pack offline; **Tools → HD Packs → HD Pack Builder** records tiles while you play.
+- **Tooling:** `scripts/mep_lint.py` validates a pack offline; **Tools → HD Packs → HD Pack Builder** records tiles while you play, and its **Extract Audio** button (NES) runs the headless sound-driver probe (`scripts/spike_sound_driver`) to seed the pack's `auto/audio/` straight from the game's own driver — then `scripts/mep_render_audio.py` + `audio_cleanup_suggest.py` turn those seeds into a curated OGG layer (see the [pack authoring guide](docs/hd-pack-authoring.md)).
 
 Current limits: the `audio` layer is applied on NES only (GB/SMS wait for the hires.txt extension to freeze). Roadmap and design notes: [docs/enhancement-ecosystem.md](docs/enhancement-ecosystem.md).
 

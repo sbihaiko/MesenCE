@@ -441,7 +441,8 @@ namespace Mesen.Windows
 					Dispatcher.UIThread.Post(() => {
 						bool pickerOpen = _model.EvaluatePlayerPackPicker(EmuApi.GetMepPackList(), EmuApi.GetMepRomSha1());
 						if(!pickerOpen && _model.Config.Preferences.UiMode == UiMode.Player && !string.IsNullOrEmpty(_model.CurrentPackName)) {
-							EmuApi.DisplayMessage("MEP", "Applied " + _model.CurrentPackName + (string.IsNullOrEmpty(_model.CurrentPackLayers) ? "" : " — " + _model.CurrentPackLayers));
+							string layers = string.IsNullOrEmpty(_model.CurrentPackLayers) ? "" : " — " + _model.CurrentPackLayers;
+							EmuApi.DisplayMessage("MEP", "MepPackApplied", _model.CurrentPackName + layers);
 						}
 					});
 					if(!evtParams.IsPowerCycle) {

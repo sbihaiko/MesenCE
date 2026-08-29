@@ -9,6 +9,17 @@
 			<Control ID="mnuDebug">_Debug</Control>
 			<Control ID="mnuHelp">_Help</Control>
 		</Form>
+		<Form ID="MainWindow">
+			<Control ID="btnOverlayResume">Resume</Control>
+			<Control ID="btnOverlaySaveSlot">Save slot</Control>
+			<Control ID="btnOverlayLoadSlot">Load slot</Control>
+			<Control ID="btnOverlayPack">Pack</Control>
+			<Control ID="btnOverlaySettings">Settings</Control>
+			<Control ID="btnOverlayAdvancedGui">Advanced GUI</Control>
+			<Control ID="btnOverlayQuit">Quit</Control>
+			<Control ID="lblChoosePackForThisGame">Choose a pack for this game</Control>
+			<Control ID="btnPlayWithoutPack">Play without a pack</Control>
+		</Form>
 		<Form ID="AudioConfigView">
 			<Control ID="tpgGeneral">General</Control>
 
@@ -965,6 +976,10 @@
 			<Control ID="chkBootstrapEnhancementFolder">Bootstrap an enhancement folder beside played ROMs (records the game's tiles upscaled into &lt;Game&gt;/auto/ when no pack applies yet)</Control>
 			<Control ID="btnOpenSiblingFolder">Open Game Folder</Control>
 			<Control ID="chkApplyPatchOnHashMismatch">Apply ROM patches even when the hash does not match (may break other revisions)</Control>
+			<Control ID="chkAutoInstallCommunityPacks">Automatically install matching community packs</Control>
+			<Control ID="tipAutoInstallCommunityPacks">When a ROM is loaded and no local pack matches it, download and install a matching community pack from the online catalog, if one exists. The first automatic download always asks for confirmation.</Control>
+			<Control ID="lblPreferredPackForRom">Preferred pack for this ROM:</Control>
+			<Control ID="lblCurrentChoice">Current choice:</Control>
 			<Control ID="lblPacksHelp">Packs matching the loaded ROM, in precedence order (first enabled pack providing a layer wins). A folder named like the ROM beside it ("sibling") always comes first, then a loose HD pack in HdPacks/, then installed packs. Files under a pack's auto/ folder are the machine layer; anything outside it overrides them. Changes apply on the next power cycle.</Control>
 			<Control ID="lblNoPacks">No enhancement pack matches this ROM. Create a folder named like the ROM beside it, install a .zip, or drop a pack folder into the EnhancementPacks folder.</Control>
 			<Control ID="colName">Name</Control>
@@ -1908,11 +1923,6 @@ E
 			<Message ID="InstallMepPackConfirmReset">The enhancement pack has been installed. Do you want to power cycle the console to apply it now?</Message>
 			<Message ID="EnhancementPacksConfirmReset">Enhancement pack settings apply on the next power cycle. Power cycle now?</Message>
 			<Message ID="InstallHdPackConfirmReset">The HD Pack has been installed successfully. Do you want to reset the game and load the HD Pack now?</Message>
-			<Message ID="HdPack">HD Pack</Message>
-			<Message ID="HdPackExportDone">{0} tile(s) written to the pack</Message>
-			<Message ID="HdPackExtractAudioStarted">Extract audio: the probe is running in the background - the results will appear in the pack folder's auto/audio/ folder. The game can keep playing.</Message>
-			<Message ID="HdPackExtractAudioToolMissing">Extract audio: the tool binary was not found. Build it with `make spike-sound-driver` and set the MESEN_EXTRACT_AUDIO_TOOL environment variable, or drop the binary next to the Mesen executable / in ~/Tools.</Message>
-			<Message ID="HdPackExtractAudioStartFailed">Extract audio: failed to launch the tool process.</Message>
 
 		<Message ID="Player">Player</Message>
 

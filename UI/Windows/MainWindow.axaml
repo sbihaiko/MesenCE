@@ -71,20 +71,20 @@
 				IsVisible="{Binding IsPlayerOverlayVisible}"
 			>
 				<StackPanel Spacing="10" MinWidth="220">
-					<Button Name="OverlayResumeButton" Content="Resume" HorizontalAlignment="Stretch" Click="OnOverlayResume" />
-					<Button Content="Save slot" HorizontalAlignment="Stretch" Click="OnOverlaySave" />
-					<Button Content="Load slot" HorizontalAlignment="Stretch" Click="OnOverlayLoad" />
+					<Button Name="OverlayResumeButton" Content="{l:Translate btnOverlayResume}" HorizontalAlignment="Stretch" Click="OnOverlayResume" />
+					<Button Content="{l:Translate btnOverlaySaveSlot}" HorizontalAlignment="Stretch" Click="OnOverlaySave" />
+					<Button Content="{l:Translate btnOverlayLoadSlot}" HorizontalAlignment="Stretch" Click="OnOverlayLoad" />
 					<!--P.5 (§5): the current pack chip - shows the applied pack and
 					opens the picker (2+ choices) or the pack window (single).-->
 					<Button HorizontalAlignment="Stretch" Click="OnOverlayPack">
 						<StackPanel Orientation="Horizontal" Spacing="6">
-							<TextBlock Text="Pack" />
+							<TextBlock Text="{l:Translate btnOverlayPack}" />
 							<TextBlock Text="{Binding CurrentPackName}" FontWeight="Bold" />
 						</StackPanel>
 					</Button>
-					<Button Content="Settings" HorizontalAlignment="Stretch" Click="OnOverlaySettings" />
-					<Button Content="Advanced GUI" HorizontalAlignment="Stretch" Click="OnOverlayAdvanced" />
-					<Button Content="Quit" HorizontalAlignment="Stretch" Click="OnOverlayQuit" />
+					<Button Content="{l:Translate btnOverlaySettings}" HorizontalAlignment="Stretch" Click="OnOverlaySettings" />
+					<Button Content="{l:Translate btnOverlayAdvancedGui}" HorizontalAlignment="Stretch" Click="OnOverlayAdvanced" />
+					<Button Content="{l:Translate btnOverlayQuit}" HorizontalAlignment="Stretch" Click="OnOverlayQuit" />
 				</StackPanel>
 			</Border>
 
@@ -102,7 +102,7 @@
 				IsVisible="{Binding IsPlayerPackPickerVisible}"
 			>
 				<StackPanel Spacing="10" MinWidth="340" MaxWidth="520">
-					<TextBlock Text="Choose a pack for this game" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
+					<TextBlock Text="{l:Translate lblChoosePackForThisGame}" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
 					<ItemsControl Name="PackPickerList" ItemsSource="{Binding PlayerPackChoices}">
 						<ItemsControl.ItemsPanel>
 							<ItemsPanelTemplate>
@@ -120,7 +120,7 @@
 							</DataTemplate>
 						</ItemsControl.ItemTemplate>
 					</ItemsControl>
-					<Button Content="Play without a pack" HorizontalAlignment="Stretch" Click="OnDismissPlayerPackPicker" />
+					<Button Content="{l:Translate btnPlayWithoutPack}" HorizontalAlignment="Stretch" Click="OnDismissPlayerPackPicker" />
 				</StackPanel>
 			</Border>
 		</Panel>
