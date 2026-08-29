@@ -184,6 +184,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   including an empty-but-present classify fragment, an unmatched
   `external_assets` line surviving into `sources.deps`, and the CLI round
   trip).
+  `mep_build.py` (F5.4c, ADR-0049 §2) is the author-side builder: `build`
+  regenerates `textures/hires.txt` from `textures/sheets/*.png` (16-column
+  grids of `8*scale`-px cells) by re-pointing each tile key from a key
+  source (`--source`, else `textures/hires.txt`, else the bootstrap's
+  `auto/textures/hires.txt`) at the sheet cell that owns it — tile keys are
+  not derivable from art, so the key source is mandatory — and regenerates
+  `audio/hires.txt` from `audio/bgm|sfx/*.ogg` (a numeric file name IS the
+  track/sfx id); the `mep_lint` gate failing is a build failure. `pack`
+  writes `pack.json` (sections derived from the tree, targets from `--rom`
+  No-Intro sha1 or `--system/--sha1`) and a byte-deterministic zip
+  (fixed timestamps, STORED, 0o644, pack.json first). `scripts/checks/
+  verify_mep_build.py` is the CI verifier wired into `make doc-checks`.
   `gen_mep_recipe_fixture.py` (F6.4a) writes the real-bytes MEP-recipe-v1
   golden under `docs/specs/golden/mep-recipe/fixture/` (`primary.zip`,
   `audio-dep.zip`, `recipe.json`, `recipe-missing-dep.json`) that a

@@ -271,7 +271,7 @@ editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
 
 | Slice | Deliverable | Decision |
 |---|---|---|
-| F5.4c | `scripts/mep_build.py <folder>`: sheets → tiles → `textures/hires.txt`, new OGGs into `audio/`, runs the linter; `mep pack` → zip with `pack.json` (MEP-v1 §2.1 rule 6: `hires.txt` is generated, ADR-0049) | ready |
+| F5.4c | shipped 2026-08-29 — `scripts/mep_build.py <folder>`: sheets → tiles → `textures/hires.txt`, new OGGs into `audio/` (`audio/hires.txt`, NES-only — GB/SMS frozen), runs the linter as the gate; `pack` → deterministic zip with generated `pack.json` (MEP-v1 §2.1 rule 6, ADR-0049); `rename-audio-id` id lifecycle (F5.4g item 12). Tile keys come from a key source (`--source`/`textures/hires.txt`/bootstrap `auto/textures/hires.txt`) — not derivable from art. `scripts/test_mep_build.py` in `make doc-checks` | ready |
 | F5.4d | "what you played" coverage in the HD Pack Builder UI; before/after preview; *Open Game Folder* already exists | ready |
 | F5.4e | objects from spatial co-occurrence + OAM, per-object upscale, `textures/sheets/<object>.png`, `# inferred` `tileNearby` candidates | after F5.4c/d |
 | F5.4g **Block B** | items 3 arpeggio→chord (verify), 4 expression, 6 human override incl. fixed per-channel role in ESP, "channel stolen and returned" | ADR-0052 |

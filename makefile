@@ -229,6 +229,7 @@ doc-checks: check-manifest
 	./scripts/checks/verify_core_no_http_client.sh
 	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
 	./scripts/checks/verify_smoke_pack_headless.sh
+	python3 scripts/test_mep_build.py
 
 ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p $(OUTFOLDER)/Dependencies
