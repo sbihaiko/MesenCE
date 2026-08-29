@@ -409,6 +409,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
+            --model claude-haiku-4-5
             --allowedTools "Read,Glob,Grep,Edit(scripts/mep_lint.py),Bash(python3 scripts/mep_lint.py *),Bash(python3 scripts/mep_live_validate.py *),Bash(python3 -c *)"
             --json-schema '{"type":"object","properties":{"converged":{"type":"boolean"},"summary":{"type":"string"}},"required":["converged","summary"]}'
           prompt: |
@@ -530,6 +531,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
+            --model claude-haiku-4-5
             --disallowedTools Bash
             --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["accepted","invalid"]},"assets":{"type":"array","items":{"type":"string","enum":["textures","audio","ips","bps"]}},"author":{"type":"string"},"comment":{"type":"string"},"recipe":{"type":"object","properties":{"ops":{"type":"array","items":{"type":"object"}},"deps":{"type":"array","items":{"type":"object"}},"pack":{"type":"object"}},"required":["ops","deps","pack"]}},"required":["verdict","assets","comment"]}'
           prompt: |
