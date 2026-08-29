@@ -17,6 +17,7 @@ stdlib only.
 from __future__ import annotations
 
 import mei_rules
+import pack_id_rules
 
 MEI_VERSION = "1.1.0"
 CATALOG_NAME = "MesenCE community packs"
@@ -138,10 +139,11 @@ def pack_version_fields(recipe):
     return pack.get("version"), pack.get("mep")
 
 
-def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta):
+def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0):
     """Assembles one MEI v1.1 packs[] entry (§26/§27). `kind` comes from
-    `mei_rules.resolve_kind` (§29). Returns (entry, mismatch) -- see
-    `recipe_fields` for `mismatch`.
+    `mei_rules.resolve_kind` (§29). `votes` is the community 👍 count (P.2,
+    additive MAY). Returns (entry, mismatch) -- see `recipe_fields` for
+    `mismatch`.
     """
     kind = mei_rules.resolve_kind(mep_meta, status)
     entry = _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind)
@@ -161,6 +163,7 @@ def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, 
         if mep_version:
             entry["mep"] = mep_version
     _apply_mep_meta_passthrough(entry, mep_meta)
+    pack_id_rules.apply_mei_identity(entry, pack_url, issue_number, mep_meta, votes)
     return entry, mismatch
 
 

@@ -887,6 +887,30 @@ jobs:
               --field-id "$CATEGORY_FIELD_ID" --single-select-option-id "$CATEGORY" >/dev/null
           fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"
+      # P.2 identity collisions (PRD §3.3, ADR-0140/0141): for an accepted
+      # verdict, tell whether this submission is a byte-duplicate of an
+      # already-accepted pack (same content_id -> comment "duplicate of #N")
+      # or claims an existing pack_id from a DIFFERENT origin (pack:needs-review
+      # label + comment for human triage). The catalog generator independently
+      # enforces the same outcome (never lists a duplicate or a foreign-origin
+      # claim twice), so this step only posts the notices — it never changes
+      # the verdict or the slot. `continue-on-error`: a transient `gh` failure
+      # must not strand the item; the catalog still dedups correctly without
+      # the notice.
+      - name: Check identity collisions (content_id / pack_id origin)
+        id: identity-check
+        if: steps.download.outcome == 'success' && steps.apply-verdict.outputs.verdict == 'accepted'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          PACK_URL: ${{ inputs.pack_url }}
+          CONTENT_ID: ${{ steps.content-id.outputs.content_id }}
+        run: |
+          set -euo pipefail
+          python3 scripts/mep_identity_check.py check \
+            --issue-number "$ISSUE_NUMBER" --pack-url "$PACK_URL" --content-id "$CONTENT_ID" \
+            --classify "$RUNNER_TEMP/mep_classify_clean.json" --post
       # Upsert mep-meta comment (ADR-0138 §5/§11/§16/§18, F6.2b complete).
       # Runs on EVERY successful classify+apply-verdict pass, regardless of
       # `recipe_status` — deliberately never gated on
@@ -922,8 +946,11 @@ jobs:
           KIND: ${{ steps.apply-verdict.outputs.kind }}
           AUTHOR: ${{ steps.apply-verdict.outputs.author }}
           CONTENT_ID: ${{ steps.content-id.outputs.content_id }}
+          PACK_URL: ${{ inputs.pack_url }}
         run: |
           set -euo pipefail
+          ISSUE_AUTHOR=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json author -q .author.login 2>/dev/null || true)
+          export ISSUE_AUTHOR
           RECIPE_PATH="$RUNNER_TEMP/mep_recipe.json"
           RECIPE_HASH=""
           if [ "$RECIPE_STATUS" = "present" ] && [ -f "$RECIPE_PATH" ]; then
@@ -966,6 +993,19 @@ jobs:
           content_id = os.environ.get("CONTENT_ID", "").strip()
           if content_id:
               meta["content_id"] = content_id
+          # ADR-0140/§3.3 (P.2): pack_id (id -> owner/repo -> issue-n) and
+          # the origin it is bound to (owner/repo for GitHub hosts, else the
+          # issue author's login). The catalog generator and the client (P.3)
+          # read these from here — one shared resolution function
+          # (pack_id_rules) used by the workflow, the generator and the MEI
+          # assembler, so they can never drift.
+          from pack_id_rules import pack_origin, resolve_pack_id
+          pack_id, _ = resolve_pack_id(os.environ.get("PACK_URL", ""), meta, int(os.environ["ISSUE_NUMBER"]))
+          if pack_id:
+              meta["pack_id"] = pack_id
+          origin = pack_origin(os.environ.get("PACK_URL", ""), os.environ.get("ISSUE_AUTHOR", ""))
+          if origin:
+              meta["pack_origin"] = origin
           # ADR-0138 §29: kind is set by apply-verdict from its own
           # CATEGORY selection (never re-derived from VERDICT here) and
           # omitted entirely -- never emitted empty -- when apply-verdict

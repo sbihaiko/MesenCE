@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Verifies scripts/ensure_community_pack_labels.sh (AC-2): the LABELS array
 # declares the assets:external content-index label (ADR-0138 §12/§6, additive
-# — never a third verdict state) and the full 12-entry label set is intact.
-# Per ADR-0035, a deliverable enumerating N items needs a count-based check,
-# not one representative grep for the new entry alone.
+# — never a third verdict state), the pack:needs-review origin-binding label
+# (P.2, PRD §3.3 — additive, human triage only), and the full 13-entry label
+# set is intact. Per ADR-0035, a deliverable enumerating N items needs a
+# count-based check, not one representative grep for the new entry alone.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -12,7 +13,7 @@ SCRIPT="$REPO_ROOT/scripts/ensure_community_pack_labels.sh"
 EXPECTED_NAMES=(
   community-pack pack:valid pack:invalid assets:textures assets:audio
   patch:ips patch:bps console:nes console:gb console:gbc console:sms
-  assets:external
+  assets:external pack:needs-review
 )
 # Derived from the name set above so the two cannot drift within this file;
 # the set itself stays an independent expectation (never parsed from the target).

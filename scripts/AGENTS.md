@@ -138,6 +138,54 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `find_fallback_subfolder`'s `safe_rel` guard refuses a `..`-segment
   candidate instead of discovering it as the pack root) that exercise it,
   mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
+  `pack_id_rules.py` (P.2, ADR-0140/0141, PRD-player-shell §3.3/§3.6) is
+  the dependency-free leaf holding the pack-identity rules, consumed by the
+  catalog generator, `mei_catalog_entry`, and the validate workflow's
+  mep-meta upsert — so the `pack_id` a submission's mep-meta records and
+  the one the catalog resolves are the same function, never two
+  hand-copied pairings. `resolve_pack_id` follows ADR-0140 first-match:
+  the MEP `id` field (a lowercase slug `[a-z0-9][a-z0-9-]{2,63}`, from
+  mep-meta's `pack_id` or the recipe `pack.id`), else `owner/repo` of a
+  github.com / codeload.github.com / raw.githubusercontent.com pack URL,
+  else `issue-{n}`. `pack_origin` binds an origin for §3.3 (owner/repo for
+  those hosts, else the issue author's login): a submission claiming an
+  existing `pack_id` from a different origin is not a revision and never
+  competes for the slot. `select_catalog_rows` implements §3.3/§3.6 over
+  the accepted items — content_id dedup is global (same content_id under
+  any pack_id is a byte-duplicate, not a second row), then per pack_id the
+  foreign-origin claims are dropped and `slot_winner` picks one occupant
+  (semver → validated_at → issue number); it returns `(kept, reasons)`
+  where `reasons` maps each dropped issue to a `("duplicate"|"origin"|
+  "slot", anchor)` pair the generator prints. Deterministic: candidates are
+  processed in validated_at then issue-number order. `test_pack_id_rules.py`
+  is the framework-free acceptance check (resolution order, origin binding,
+  slot rules, determinism, and `apply_mei_identity`'s additive MEI MAY
+  fields). `apply_mei_identity` (called by `mei_catalog_entry.
+  build_pack_entry`) stamps an entry with `pack_id`/`content_id`/`votes`,
+  each omitted when unknown — unknown-field ignore is already MEI v1.1
+  required, so no schema bump.
+  `mei_catalog_fetch.py` (P.2, ADR-0138 §35) is the gh-backed read half of
+  the catalog generator: every live `gh` call (`fetch_accepted_items`,
+  `fetch_issue_details`, `fetch_mep_meta` through `mep_meta_parser.
+  parse_mep_meta`, the `item_*` field accessors, `parse_form_field`/
+  `issue_form_fields`) lives here so the generator stays a pure-ish
+  orchestrator. Its docstring documents which Project 3 field ids were
+  verified live vs. the open per-item key COVERAGE GAP; accessors use
+  defensive `dict.get`, never direct indexing.
+  `mep_identity_check.py` (P.2) is the validate-workflow's `identity-check`
+  step (gated on an accepted verdict, `--post`): it re-reads the board,
+  resolves the submission's `pack_id`/`content_id`, and comments when the
+  new identity collides — same `content_id` under another pack_id
+  (duplicate) or an existing pack_id claimed from a different origin
+  (foreign claim, `pack:needs-review` label for human triage). `test_mep_
+  identity_check.py` is its framework-free check.
+  `generate_community_pack_catalog.py` (P.2) was split per §35 into
+  `mei_catalog_fetch` (fetch), `mei_catalog_entry` (assembly), and
+  `community_pack_markdown` (render); the generator now builds one
+  `_candidate` per accepted item with its P.2 identity resolved, feeds
+  `pack_id_rules.select_catalog_rows` for §3.3/§3.6, and hands the kept
+  rows to `render_table`, which does the final `sorted(...)` by `thumbs_up`
+  (community 👍 votes, most-voted-first — no usage telemetry).
   `mep_recipe.py` (F6.1, ADR-0138) is the stdlib interpreter of
   `docs/specs/MEP-recipe-v1.md` (`validate` / `dry-run` / `apply`). It
   reuses `mep_lint` discovery (`Source`, `discover_sections`,

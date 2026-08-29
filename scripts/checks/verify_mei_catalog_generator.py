@@ -11,9 +11,14 @@ the generator's own source text instead.
 Checks:
   1. The generator writes docs/community-packs.json (a JSON_OUTPUT_PATH-
      shaped constant, and main() writing to it).
-  2. It imports and uses mep_meta_parser.parse_mep_meta (ADR-0138 §27).
-  3. It derives an MEI `kind` value (via kind_from_status or an equivalent
-     "mep"/"hd-legacy" mapping, ADR-0138 §26).
+  2. Its mep-meta reads route through the parser (ADR-0138 §27): the
+     generator imports its fetch from `mei_catalog_fetch`, and THAT module
+     (not the generator — ADR-0138 §35 split) imports and calls
+     mep_meta_parser.parse_mep_meta.
+  3. It derives an MEI `kind` value (ADR-0138 §26/§29): the generator
+     assembles every entry through `build_pack_entry`, and `mei_catalog_
+     entry` (where the derivation lives, via mei_rules.STATUS_TO_KIND)
+     carries the "mep"/"hd-legacy" kind branches.
   4. Its Markdown table header keeps the Game/Console/Author/Date
      columns (AC-6's REQUIRED_COLUMNS). The "External assets" column this
      check once required was dropped from the table along with Submitted
@@ -39,6 +44,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS_DIR = ROOT / "scripts"
 SCRIPT = SCRIPTS_DIR / "generate_community_pack_catalog.py"
+FETCH_SCRIPT = SCRIPTS_DIR / "mei_catalog_fetch.py"
+ENTRY_SCRIPT = SCRIPTS_DIR / "mei_catalog_entry.py"
 
 EXISTING_COLUMNS = ["Game", "Console", "Author", "Date"]
 
@@ -85,20 +92,35 @@ def check_writes_json_catalog(failures, text):
 
 
 def check_uses_mep_meta_parser(failures, text):
-    if "mep_meta_parser" not in text:
-        failures.append("generator does not import mep_meta_parser")
-    if "parse_mep_meta" not in text:
-        failures.append("generator does not call parse_mep_meta")
+    """ADR-0138 §27 across the §35 split: the parser is wired where the
+    fetch lives, not in the orchestrator. The generator must route its
+    mep-meta reads through `mei_catalog_fetch`, and that module must import
+    and call mep_meta_parser.parse_mep_meta (no mocked parse)."""
+    if "mei_catalog_fetch" not in text:
+        failures.append("generator does not import its mep-meta fetch from mei_catalog_fetch")
+    fetch_text = _read(FETCH_SCRIPT, failures)
+    if "mep_meta_parser" not in fetch_text:
+        failures.append("mei_catalog_fetch does not import mep_meta_parser")
+    if "parse_mep_meta" not in fetch_text:
+        failures.append("mei_catalog_fetch does not call parse_mep_meta")
 
 
-def check_derives_kind(failures, script_text):
-    if "kind" not in script_text:
-        failures.append("generator does not mention a 'kind' value")
+def check_derives_kind(failures, text):
+    """ADR-0138 §26/§29 across the §35 split: kind derivation lives in the
+    assembler (`build_pack_entry` -> `mei_rules.STATUS_TO_KIND`), not the
+    orchestrator. The generator must assemble every entry through
+    `build_pack_entry`, and `mei_catalog_entry` must carry the "mep" and
+    "hd-legacy" kind branches."""
+    if "build_pack_entry" not in text:
+        failures.append("generator does not assemble entries via build_pack_entry (kind derivation)")
+    entry_text = _read(ENTRY_SCRIPT, failures)
+    if "kind" not in entry_text:
+        failures.append("mei_catalog_entry does not mention a 'kind' value")
         return
-    if "hd-legacy" not in script_text:
-        failures.append("no 'hd-legacy' kind derivation found (ADR-0138 §26)")
-    if '"mep"' not in script_text:
-        failures.append("no 'mep' kind branch found (ADR-0138 §26)")
+    if "hd-legacy" not in entry_text:
+        failures.append("no 'hd-legacy' kind derivation found in mei_catalog_entry (ADR-0138 §26)")
+    if '"mep"' not in entry_text:
+        failures.append("no 'mep' kind branch found in mei_catalog_entry (ADR-0138 §26)")
 
 
 def check_table_columns(failures, text):
