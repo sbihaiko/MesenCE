@@ -43,6 +43,21 @@ namespace
 		return true;
 	}
 
+	//Section paths may legitimately be empty (= the pack root, MEP-v1 §3.2;
+	//the MEP recipe installer writes `"path": ""` for a section at the root),
+	//so the generic RequireString - which rejects empty strings - is the wrong
+	//validator here. Presence and type are still required.
+	bool RequireSectionPath(const JsonValue& root, string& out, string& error)
+	{
+		const JsonValue* value = root.Get("path");
+		if(!value || !value->IsString()) {
+			error = string("missing or invalid required field 'path'");
+			return false;
+		}
+		out = value->GetString();
+		return true;
+	}
+
 	bool IsFallbackProbeBasename(const string& basename)
 	{
 		string lower = StringUtilities::ToLower(basename);
@@ -379,7 +394,7 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 			return false;
 		}
 		string path;
-		if(!RequireString(member.second, "path", path, error)) {
+		if(!RequireSectionPath(member.second, path, error)) {
 			error = "section '" + member.first + "': " + error;
 			return false;
 		}

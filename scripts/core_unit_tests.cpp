@@ -228,6 +228,50 @@ namespace
 		Check(error.find("object") != std::string::npos, "BlocoB: Parse's non-object error names the reason", error);
 	}
 
+	//F6.6 (ADR-0138 §3.2 / round-trip fix): the MEP recipe installer writes
+	//`"path": ""` for a section at the pack root (WriteSections/DeriveSections),
+	//so Parse must accept an empty path for textures/audio and resolve it to the
+	//root, while synth - whose path names a preset file, never a folder - must
+	//still be rejected.
+	void TestParseEmptySectionPath()
+	{
+		MepPack pack;
+		std::string error;
+		const char* json = R"({
+			"mep": "1.1.0",
+			"name": "Root Sections",
+			"version": "1.0.0",
+			"license": "CC0-1.0",
+			"targets": [{"system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"}],
+			"sections": {
+				"textures": {"path": ""},
+				"audio": {"path": ""}
+			}
+		})";
+		bool ok = MepPack::Parse(json, pack, error);
+		Check(ok, "BlocoB: Parse accepts an empty textures/audio section path (= the pack root)", error);
+		if(!ok) {
+			return;
+		}
+		Check(pack.HasSection(MepSectionType::Textures) && pack.HasSection(MepSectionType::Audio), "BlocoB: empty-path sections are still detected as present");
+		Check(pack.Sections[(int)MepSectionType::Textures].Path.empty(), "BlocoB: empty textures path parses to Path=\"\"", pack.Sections[(int)MepSectionType::Textures].Path);
+		Check(pack.GetSectionPath(MepSectionType::Textures) == pack.RootFolder, "BlocoB: empty textures path resolves to RootFolder");
+
+		MepPack synthPack;
+		std::string synthError;
+		const char* synthJson = R"({
+			"mep": "1.1.0",
+			"name": "Empty Synth",
+			"version": "1.0.0",
+			"license": "CC0-1.0",
+			"targets": [{"system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"}],
+			"sections": {"synth": {"path": ""}}
+		})";
+		bool synthOk = MepPack::Parse(synthJson, synthPack, synthError);
+		Check(!synthOk, "BlocoB: Parse still rejects an empty synth path", synthOk ? "unexpectedly succeeded" : synthError);
+		Check(synthError.find("path must point to a file") != std::string::npos, "BlocoB: empty synth rejection names the reason", synthError);
+	}
+
 	//--- Bloco C: MepPack::FindFallbackSubfolder (ADR-0120) -------------------
 
 	void TestFallbackSubfolderContra80sResolves()
@@ -607,6 +651,7 @@ int main()
 	TestNormalizeRelativePathRejectsControlChars();
 	TestParseValidPackJson();
 	TestParseFailureCases();
+	TestParseEmptySectionPath();
 
 	TestFallbackSubfolderContra80sResolves();
 	TestFallbackSubfolderAmbiguousIsEmpty();

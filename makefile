@@ -228,6 +228,7 @@ doc-checks: check-manifest
 	./scripts/checks/verify_pack_host_allowlist_embed.sh
 	./scripts/checks/verify_core_no_http_client.sh
 	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
+	./scripts/checks/verify_smoke_pack_headless.sh
 
 ui: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 	mkdir -p $(OUTFOLDER)/Dependencies
