@@ -56,14 +56,38 @@ namespace Mesen.Services
 			}
 
 			string outFolder = ResolveOutFolder(containerName);
-			CommunityPackReinstallVerdict verdict = CommunityPackReinstallDecision.Decide(entry.Sha256, ReadInstallStamp(outFolder));
-			if(verdict == CommunityPackReinstallVerdict.UpToDate) {
-				return (CommunityPackInstallOutcome.Skipped("already up to date"), "");
+			//P.6 (PRD-player-shell §3.6, amends ADR-0138 §37): the update trigger
+			//is the installed content_id vs the slot's, not source.sha256 - a
+			//different content_id reinstalls (unless the installed semver is
+			//newer, no auto-downgrade); an unchanged content_id never reinstalls
+			//(wrapper-only repack); a removed slot keeps the install. The
+			//container name is unchanged by an update, so DisabledPacks and the
+			//per-section flags survive the reinstall.
+			InstallStampFields? stamp = CommunityCatalogUpdateDecision.ReadStampFields(ReadInstallStamp(outFolder));
+			CommunityCatalogUpdateVerdict verdict = CommunityCatalogUpdateDecision.Decide(
+				entry.ContentId, entry.Version, entry.Sha256, entry.IsHdLegacy, stamp, GetInstalledVersion(containerName));
+
+			switch(verdict) {
+				case CommunityCatalogUpdateVerdict.UpToDate:
+				case CommunityCatalogUpdateVerdict.WrapperOnly:
+				case CommunityCatalogUpdateVerdict.NoDowngrade:
+				case CommunityCatalogUpdateVerdict.RemovedFromCatalog:
+					//Silent by §3.6: these keep the install (no toast).
+					return (CommunityPackInstallOutcome.Skipped(verdict.ToString()), "");
+				case CommunityCatalogUpdateVerdict.Updated:
+					ClearFolderForReinstall(outFolder);
+					return (null, outFolder);
+				default: //NotInstalled - a fresh install proceeds
+					return (null, outFolder);
 			}
-			if(verdict == CommunityPackReinstallVerdict.Reinstall) {
-				ClearFolderForReinstall(outFolder);
-			}
-			return (null, outFolder);
+		}
+
+		//The installed pack's declared version (GetMepPackList column 3) for the
+		//no-downgrade guard - the .mep-install.json stamp carries no version.
+		private static string? GetInstalledVersion(string containerName)
+		{
+			MepPackListResult parsed = MepPackListParser.Parse(EmuApi.GetMepPackList());
+			return parsed.Packs.FirstOrDefault(p => p.Container.Equals(containerName, StringComparison.OrdinalIgnoreCase))?.Version;
 		}
 
 		//Clarification 46 scratch folder; downloaded/user-supplied deps live here by sha256.

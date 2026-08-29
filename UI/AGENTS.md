@@ -91,7 +91,26 @@ can be exercised by real xunit tests without Avalonia or the native
   from the core's `GetPackListText` columns (name/author/version/licence/
   sections/origin already there), and `PickPlayerPack` stores the P.3
   preference then power-cycles (applied on the reload); `DismissPlayerPackPicker`
-  stores nothing so the next launch asks again.
+  stores nothing so the next launch asks again. The picker's order is
+  community 👍 first (`CommunityPackInstallService.GetVotes(pack_id)`, from
+  the last catalog fetch's MEI `votes`), then name — local-only packs (no
+  catalog row, votes 0) fall back to name order.
+- `CommunityCatalogUpdateDecision` (P.6, PRD-player-shell §3.6) is the
+  host-free verdict for the F6.4b reinstall gate, replacing the old
+  source.sha256 trigger (ADR-0138 §37) with the §3.6 content_id rule: an
+  installed content_id differing from the catalog slot's → `Updated`
+  (reinstall, unless the installed semver is newer → `NoDowngrade`, and
+  hd-legacy has no semver so any diff updates); unchanged content_id →
+  `UpToDate` or `WrapperOnly` (source sha256 changed, content same — no
+  reinstall); fetch-returns-null (removed slot) → `RemovedFromCatalog`
+  (keep the install, silent). `ReadStampFields` reads the `.mep-install.json`
+  `content_id`/`source.sha256`; `CompareSemver` is numeric (no prerelease
+  parsing). The coordinator (`CommunityPackInstallCoordinator.EvaluateGates`)
+  feeds it the stamp + the installed version from `GetMepPackList` column 3
+  (the stamp carries no version). The container name is unchanged by an
+  update, so `DisabledPacks` and the per-section flags survive a reinstall.
+  The catalog DTO's additive P.2 fields (`pack_id`/`content_id`/`votes`) are
+  what carry the slot identity and 👍 into these decisions.
 
 - **New ViewModels** (Phase 3 of the plan — applied opportunistically, "in
   the code we touch", not as a retrofit of existing VMs): a *new*

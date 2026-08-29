@@ -23,6 +23,15 @@ namespace Mesen.Services
 		//§51 per-session idempotency key: one attempt per ROM sha1 per process, decided before any
 		//network call; the .mep-install.json stamp (§43) remains the cross-session gate.
 		private static readonly HashSet<string> _attemptedRomSha1 = new(StringComparer.OrdinalIgnoreCase);
+		//P.6: community 👍 counts from the last catalog fetch (MEI `votes`), keyed
+		//by pack_id - the Player picker sorts by them (§5). Read-only for the
+		//UI; local-only packs have no entry and sort by name (votes 0).
+		private static readonly Dictionary<string, int> _catalogVotesByPackId = new(StringComparer.OrdinalIgnoreCase);
+
+		public static int GetVotes(string packId)
+		{
+			return _catalogVotesByPackId.TryGetValue(packId, out int votes) ? votes : 0;
+		}
 
 		//Called from MainWindow.OnNotification(GameLoaded); power cycles are not new loads
 		//(a pack we just installed is applied through exactly such a power cycle).
@@ -56,6 +65,15 @@ namespace Mesen.Services
 				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
 				if(fetched == null) {
 					return; //no catalog, no match, host not allowed or hash mismatch - all silent (§41/§42)
+				}
+
+				//P.6 §5: remember the matched entry's community 👍 count so the
+				//Player picker sorts its competing packs by it (votes 0 when the
+				//entry carries none).
+				if(!string.IsNullOrWhiteSpace(fetched.Entry.PackId) && fetched.Entry.Votes is int votes) {
+					lock(_catalogVotesByPackId) {
+						_catalogVotesByPackId[fetched.Entry.PackId] = votes;
+					}
 				}
 
 				CommunityPackInstallOutcome outcome = CommunityPackInstallCoordinator.Install(

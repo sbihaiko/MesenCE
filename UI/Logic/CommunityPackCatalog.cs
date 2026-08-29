@@ -45,6 +45,12 @@ namespace Mesen.Logic
 		[JsonPropertyName("kind")] public string? Kind { get; set; }
 		[JsonPropertyName("name")] public string Name { get; set; } = "";
 		[JsonPropertyName("version")] public string? Version { get; set; }
+		//P.2 (ADR-0140) additive MEI fields, MAY - read-only for the client:
+		//the resolved pack_id, the content_id (ADR-0139 revision), and the
+		//community 👍 count that sorts the Player picker. Each may be absent.
+		[JsonPropertyName("pack_id")] public string? PackId { get; set; }
+		[JsonPropertyName("content_id")] public string? ContentId { get; set; }
+		[JsonPropertyName("votes")] public int? Votes { get; set; }
 		[JsonPropertyName("game")] public string Game { get; set; } = "";
 		[JsonPropertyName("system")] public string System { get; set; } = "";
 		[JsonPropertyName("rom")] public CommunityPackRom Rom { get; set; } = new();

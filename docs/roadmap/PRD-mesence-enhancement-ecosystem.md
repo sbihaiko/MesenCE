@@ -343,13 +343,15 @@ Depends on: F6.4b for catalog auto-install in the overlay (P.6). P.3–P.5
 can run on local packs before F6.4b. P.0 ADRs must be accepted before
 P.1/P.2.
 
-Status: P.0–P.5 done (2026-08-29). P.4 shipped the `UiMode` default rule,
-the Player overlay + its Esc-owned shortcut, hidden menu, recent-games
-home and the Advanced switch; P.5 shipped the Player pack picker decision
-and panel (2+ competing pack_ids, sibling suppresses, pick power-cycles,
-dismiss asks again), the current-pack chip and the apply toast — see the
-dedicated PRD header. P.6 (overlay ↔ F6.4b install/update) remains and
-waits for F6.4b.
+Status: **Phase 7 fully shipped — P.0–P.6 done (2026-08-29).** P.4 shipped
+the `UiMode` default rule, the Player overlay + its Esc-owned shortcut,
+hidden menu, recent-games home and the Advanced switch; P.5 shipped the
+Player pack picker decision and panel (2+ competing pack_ids, sibling
+suppresses, pick power-cycles, dismiss asks again), the current-pack chip
+and the apply toast; P.6 wired the overlay to the F6.4b catalog
+install/update through the §3.6 `content_id` trigger (wrapper-only no
+reinstall, no auto-downgrade, removed slot keeps the install) and made
+community 👍 sort the picker — see the dedicated PRD header.
 
 ## 5. Order of execution
 

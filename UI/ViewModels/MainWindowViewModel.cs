@@ -6,6 +6,7 @@ using Mesen.Controls;
 using Mesen.Interop;
 using Mesen.Localization;
 using Mesen.Logic;
+using Mesen.Services;
 using Mesen.Utilities;
 using Mesen.Windows;
 using System;
@@ -187,9 +188,13 @@ namespace Mesen.ViewModels
 			resolution = PackPreferenceResolver.Resolve(candidates, Config.EnhancementPacks.GetRomPackPreference(romSha1));
 			hasSibling = parsed.Packs.Any(e => e.Source == "sibling");
 
+			//P.6 §5: the picker sorts by community 👍 (catalog MEI votes) first,
+			//then by name - local-only packs (votes 0) fall back to name order.
 			PlayerPackChoices = resolution.Candidates
-				.Select(c => new PlayerPackChoice(c, entriesByContainer.TryGetValue(c.Container, out MepPackListEntry? entry) ? entry : null))
-				.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+				.Select(c => new PlayerPackChoice(c, entriesByContainer.TryGetValue(c.Container, out MepPackListEntry? entry) ? entry : null,
+					CommunityPackInstallService.GetVotes(PackPreferenceResolver.DerivePackId(c))))
+				.OrderByDescending(c => c.Votes)
+				.ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
 				.ToList();
 		}
 
@@ -325,10 +330,13 @@ namespace Mesen.ViewModels
 		public string Version { get; }
 		public string License { get; }
 		public string Layers { get; }
+		//P.6 §5: community 👍 count (catalog MEI `votes`); 0 for local-only packs,
+		//which sort by name. Not a download ranking - it only orders the picker.
+		public int Votes { get; }
 		//One-line metadata row for the picker: "v1.0 · Author · textures, audio · MIT"
 		public string Detail { get; }
 
-		public PlayerPackChoice(PackPreferenceResolver.Candidate candidate, MepPackListEntry? entry)
+		public PlayerPackChoice(PackPreferenceResolver.Candidate candidate, MepPackListEntry? entry, int votes = 0)
 		{
 			Container = candidate.Container;
 			PackId = PackPreferenceResolver.DerivePackId(candidate);
@@ -337,6 +345,7 @@ namespace Mesen.ViewModels
 			Author = entry?.Author ?? "";
 			License = entry?.License ?? "";
 			Layers = string.IsNullOrEmpty(entry?.Sections) ? "" : entry.Sections.Replace(",", ", ");
+			Votes = Math.Max(0, votes);
 
 			List<string> detail = new();
 			if(!string.IsNullOrEmpty(Version)) {
