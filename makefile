@@ -249,6 +249,19 @@ doc-checks: check-manifest
 	python3 scripts/checks/verify_mei_catalog_split.py
 	./scripts/checks/verify_community_pack_labels_script.sh
 	./scripts/checks/verify_agents_md_recipe_handoff.sh
+	./scripts/checks/verify_claude_md_section.sh
+	./scripts/checks/verify_community_packs_catalog_doc.sh
+	./scripts/checks/verify_hd_pack_authoring_doc.sh
+	./scripts/checks/verify_mep_fallback_adr_provenance.sh
+	./scripts/checks/verify_mep_fallback_adr.sh
+	./scripts/checks/verify_mep_fallback_authoring_doc.sh
+	./scripts/checks/verify_mep_fallback_by_name_underscore.sh
+	./scripts/checks/verify_mep_fallback_constant_parity.sh
+	./scripts/checks/verify_mep_fallback_lint_fixture.sh
+	./scripts/checks/verify_mep_fallback_spec_doc.sh
+	./scripts/checks/verify_mep_nested_zip_fallback.sh
+	./scripts/checks/verify_status_kind_parity.sh
+	./scripts/checks/verify_synthetic_nrom.sh
 	python3 scripts/test_mep_build.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.

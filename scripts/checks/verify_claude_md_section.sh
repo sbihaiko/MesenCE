@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# AC-10: CLAUDE.md keeps the original "Rastreamento de bugs (GitHub Project)"
-# section byte-for-byte untouched and gains a new "Triagem de Community
-# HD/MEP Packs (GitHub Project)" section documenting the second, separate
-# board/flow. No mocks: this reads the real CLAUDE.md from the repo root.
+# AC-10: CLAUDE.md keeps its bug-tracking section intact and carries a
+# separate Community HD/MEP Pack triage section after it. No mocks: this
+# reads the real CLAUDE.md from the repo root.
 #
-# NOTE: the reference heading/body strings below are matched verbatim
-# against a specific historical (pt-BR) snapshot of CLAUDE.md. They are
-# intentionally left untranslated — see the translation task's final
-# report for why this check is currently stale against the real file.
+# History: AC-10 originally asserted the pre-translation pt-BR section
+# ("Rastreamento de bugs (GitHub Project)") stayed byte-for-byte a file
+# prefix. CLAUDE.md has since been translated to en-US (CLAUDE.md language
+# rule) and gained the ADR section before the bug section, so a byte-for-byte
+# prefix check is no longer the right shape. This rewrite keeps the AC-10
+# intent — bug-tracking section present and un-duplicated, pack-triage
+# section present after it — against the current en-US headings.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 
-ORIG_HEADING="## Rastreamento de bugs (GitHub Project)"
-NEW_HEADING="## Triagem de Community HD/MEP Packs (GitHub Project)"
+BUG_HEADING="## Bug tracking (GitHub Project)"
+PACK_HEADING="## Community HD/MEP Pack triage (GitHub Project)"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -23,73 +25,28 @@ fail() {
 
 [[ -f "$CLAUDE_MD" ]] || fail "CLAUDE.md not found at $CLAUDE_MD"
 
-# Exactly one occurrence of each heading: no duplication of the old section,
-# and the new section must actually be present.
-orig_count=$(grep -Fc "$ORIG_HEADING" "$CLAUDE_MD")
-[[ "$orig_count" -eq 1 ]] || fail "expected 1 occurrence of '$ORIG_HEADING', found $orig_count"
+# Exactly one occurrence of each heading: no duplication of either section.
+bug_count=$(grep -Fc "$BUG_HEADING" "$CLAUDE_MD")
+[[ "$bug_count" -eq 1 ]] || fail "expected 1 occurrence of '$BUG_HEADING', found $bug_count"
 
-new_count=$(grep -Fc "$NEW_HEADING" "$CLAUDE_MD")
-[[ "$new_count" -eq 1 ]] || fail "expected 1 occurrence of '$NEW_HEADING', found $new_count"
+pack_count=$(grep -Fc "$PACK_HEADING" "$CLAUDE_MD")
+[[ "$pack_count" -eq 1 ]] || fail "expected 1 occurrence of '$PACK_HEADING', found $pack_count"
 
-# Byte-for-byte check: the original file content (title + bug-tracker
-# section) must be an exact, untouched prefix of the current CLAUDE.md.
-REF_FILE="$(mktemp)"
-cleanup() { rm -f "$REF_FILE" "$ACTUAL_PREFIX"; }
-trap cleanup EXIT
+# The pack-triage section must come strictly after the bug section (the two
+# flows are separate; the pack section references the bug section as
+# "a separate flow from the bug tracking above").
+bug_line=$(grep -Fn "$BUG_HEADING" "$CLAUDE_MD" | cut -d: -f1)
+pack_line=$(grep -Fn "$PACK_HEADING" "$CLAUDE_MD" | cut -d: -f1)
+[[ "$pack_line" -gt "$bug_line" ]] \
+  || fail "'$PACK_HEADING' must appear after '$BUG_HEADING' (bug line $bug_line, pack line $pack_line)"
 
-cat > "$REF_FILE" <<'EOF_REF'
-# CLAUDE.md
+# The bug section's key content markers must be present (the section was not
+# gutted): board name, report-bug.sh helper, and the Status/Priority fields.
+grep -Fq "MesenCE Bug Tracker" "$CLAUDE_MD" || fail "bug section missing 'MesenCE Bug Tracker' board reference"
+grep -Fq "scripts/report-bug.sh" "$CLAUDE_MD" || fail "bug section missing the scripts/report-bug.sh helper reference"
+grep -Fq "To triage" "$CLAUDE_MD" || fail "bug section missing the Status 'To triage' field reference"
 
-## Rastreamento de bugs (GitHub Project)
+# The pack-triage section must reference the separate board (Project 3).
+grep -Fq "MesenCE Community Packs" "$CLAUDE_MD" || fail "pack-triage section missing 'MesenCE Community Packs' board reference"
 
-Bugs deste projeto são registrados como GitHub Issues e acompanhados no board
-"MesenCE Bug Tracker": https://github.com/users/sbihaiko/projects/1
-
-### Quando registrar
-
-- Você (ou um subagente do dev-squad) encontra um bug real, reproduzível, que
-  está **fora do escopo da tarefa atual** — não conserte de passagem, registre.
-- O usuário pede explicitamente para "abrir um bug" / "registrar uma issue".
-- Não use isso para decisões de arquitetura/trade-offs — isso continua indo
-  para ADR via `/dev-squad:adr` (`.dev-squad/adr/`). O board é só para bugs
-  acionáveis, não para decisões de design.
-
-### Como registrar
-
-Use o helper `scripts/report-bug.sh` em vez de comandos `gh` manuais — ele já
-seta o Status inicial ("To triage") e a Priority com os IDs corretos do board:
-
-```bash
-scripts/report-bug.sh "<título curto do bug>" "<descrição: repro, esperado vs observado>" [P0|P1|P2]
-```
-
-Isso cria a Issue no repo (label `bug`) e a adiciona ao board com Status =
-"To triage". Requer `gh` autenticado com escopo `project`
-(`gh auth refresh -h github.com -s project`, uma vez por máquina).
-
-Campos do board disponíveis: Status (To triage → Todo → Doing → Testing →
-Done), Priority (P0/P1/P2), Size (S/M/L). O script só seta Status e,
-opcionalmente, Priority — mover para Todo/Doing/Done é manual (triagem
-humana) ou feito pelo usuário no board.
-EOF_REF
-
-ref_len=$(wc -c < "$REF_FILE" | tr -d '[:space:]')
-actual_len=$(wc -c < "$CLAUDE_MD" | tr -d '[:space:]')
-[[ "$actual_len" -gt "$ref_len" ]] || fail "CLAUDE.md did not grow — new section was not appended"
-
-ACTUAL_PREFIX="$(mktemp)"
-head -c "$ref_len" "$CLAUDE_MD" > "$ACTUAL_PREFIX"
-
-cmp -s "$REF_FILE" "$ACTUAL_PREFIX" || {
-  echo "--- diff (expected vs. current original section) ---" >&2
-  diff -u "$REF_FILE" "$ACTUAL_PREFIX" >&2 || true
-  fail "the 'Rastreamento de bugs (GitHub Project)' section was changed"
-}
-
-# The new heading must appear strictly after the untouched original block,
-# i.e. it was appended, not spliced into the middle of the old section.
-tail_from_ref_len="$(tail -c +"$((ref_len + 1))" "$CLAUDE_MD")"
-grep -Fq "$NEW_HEADING" <<< "$tail_from_ref_len" \
-  || fail "'$NEW_HEADING' does not appear after the preserved original section"
-
-echo "PASS: CLAUDE.md keeps the bug-tracking section intact and contains the new pack-triage section"
+echo "PASS: CLAUDE.md keeps the bug-tracking section intact and contains the pack-triage section after it"

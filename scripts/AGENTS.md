@@ -482,10 +482,11 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   runs (one script per AC, invoked directly by its AC's Verification
   command). Same PASS/FAIL-and-exit-code convention as the top-level shell
   checks above; no shared test framework. `checks/verify_claude_md_section.sh`
-  guards `CLAUDE.md` (AC-10): the pre-existing "Rastreamento de bugs (GitHub
-  Project)" section must stay byte-for-byte untouched (checked as an exact
-  file prefix) while a new "Triagem de Community HD/MEP Packs (GitHub
-  Project)" section is appended after it. `verify_community_pack_issue_template.py`
+  guards `CLAUDE.md` (AC-10): the "Bug tracking (GitHub Project)" section
+  must stay intact (un-duplicated, key markers present) while the
+  "Community HD/MEP Pack triage (GitHub Project)" section sits strictly
+  after it — the en-US rewrite of the original pt-BR byte-for-byte check,
+  which went stale when CLAUDE.md was translated. `verify_community_pack_issue_template.py`
   parses `.github/ISSUE_TEMPLATE/community-pack.yml` with PyYAML and asserts
   the required fields/labels/doc-link, plus (ADR-0138 §12) that the optional
   `external_assets` textarea and `external_assets_license` input exist, are
