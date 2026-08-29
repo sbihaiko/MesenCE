@@ -138,7 +138,7 @@ namespace
 int main(int argc, char** argv)
 {
 	if(argc < 3) {
-		fprintf(stderr, "uso: %s <rom.nes> <workdir> [seconds=20] [--state f.mss] [--input script] [--wav out.wav] [--sf2 f.sf2] [--no-auto-roles] [--no-sfx]\n", argv[0]);
+		fprintf(stderr, "usage: %s <rom.nes> <workdir> [seconds=20] [--state f.mss] [--input script] [--wav out.wav] [--sf2 f.sf2] [--no-auto-roles] [--no-sfx]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
