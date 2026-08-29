@@ -546,7 +546,7 @@ jobs:
           fi
           {
             echo "prompt_suffix<<__SUFFIX_EOF__"
-            printf '%s' "$SUFFIX"
+            printf '%s\n' "$SUFFIX"
             echo "__SUFFIX_EOF__"
           } >> "$GITHUB_OUTPUT"
       - name: Classify pack (Claude Code Action)
