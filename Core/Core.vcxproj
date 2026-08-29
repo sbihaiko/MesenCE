@@ -795,6 +795,7 @@
     <ClCompile Include="Shared\EnhancementPacks\MepPack.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepPackManager.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\AudioFingerprint.cpp" />
+    <ClCompile Include="Shared\EnhancementPacks\MepContentId.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepRecipeInstaller.cpp" />
     <ClCompile Include="Shared\EnhancementPacks\MepRecipeOps.cpp" />
     <ClCompile Include="Shared\Video\BaseVideoFilter.cpp" />

@@ -20,10 +20,17 @@ summary; exit code 1 when there is an error, 0 otherwise. Each finding's text
 is always in en-US (GitHub Issues/comments are en-US per CLAUDE.md).
 
 Usage: python3 scripts/mep_lint.py <folder-or-zip> [rom_name] [--quiet]
+       python3 scripts/mep_lint.py --content-id <folder-or-zip> [rom_name]
   rom_name (optional): target ROM name declared by the submitter (e.g.
   "Contra (U) [!]"). When present, enables the ROM-name fallback (ADR-0120
   §3's named follow-up) in addition to the structural fallback — see
   find_fallback_subfolder_by_name.
+
+  --content-id (ADR-0139/P.1): run the same pack-root discovery, then print
+  only the tree content_id (hex SHA-256 over the canonical manifest of the
+  discovered root — scripts/mep_content_id.py) and exit. Exit 1 when no
+  section is found (content_id undefined), so the CI workflow can record the
+  hash in mep-meta only for packs discovery actually resolved.
 
   Last resort (issue #19): if no convention or fallback finds anything and
   the container has exactly one .zip directly at its root, that .zip is
@@ -37,6 +44,8 @@ import struct
 import sys
 import zipfile
 from pathlib import Path, PurePosixPath
+
+import mep_content_id  # ADR-0139 tree content_id of the discovered pack root
 
 SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg"}
 PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg"}
@@ -351,6 +360,12 @@ def discover_sections(src: Source, rep: Report, rom_name):
     a nested .zip discovered by find_top_level_nested_zip (issue #19) with
     no duplicated logic between the two passes."""
     sections = {}
+    # Track the discovered pack root so compute_content_id can hash exactly
+    # the files under it (ADR-0139: files outside the root — e.g. sibling
+    # folders in a container that wrapped the pack one level deeper — are
+    # NOT part of the pack's content_id). "" = the container root; the
+    # fallback branches below set the subfolder prefix when they win.
+    src.root_prefix = ""
     if src.exists("pack.json"):
         sections = lint_pack_json(src, rep)
     else:
@@ -378,6 +393,7 @@ def discover_sections(src: Source, rep: Report, rom_name):
             fallback_kind = "ROM-name" if fallback else None
         if fallback:
             fb_prefix, fb_depth = fallback
+            src.root_prefix = fb_prefix
             rep.info(fb_prefix, f"{fallback_kind} fallback (ADR-0120): pack root discovered at '{fb_prefix}' (depth {fb_depth})")
             fb_root = f"{fb_prefix}/"
             if src.exists(f"{fb_root}pack.json"):
@@ -400,6 +416,27 @@ def discover_sections(src: Source, rep: Report, rom_name):
                 sections.setdefault("textures", fb_prefix)
 
     return sections
+
+
+def compute_content_id(src: Source) -> str:
+    """Tree content_id (ADR-0139/P.1) of the discovered pack root: the files
+    under `src.root_prefix` (set by discover_sections — "" = the container
+    root, a subfolder after a fallback win), hashed by the normative
+    scripts/mep_content_id.py. Raises ValueError when a path is too long; the
+    caller decides whether that fails the pack (--content-id mode) or merely
+    reports it (a plain lint keeps working without the hash)."""
+    prefix = getattr(src, "root_prefix", "")
+    entries = []
+    for name in sorted(src.names):
+        rel = safe_rel(name)
+        if rel is None:
+            continue
+        if prefix:
+            if not rel.startswith(f"{prefix}/"):
+                continue
+            rel = rel[len(prefix) + 1:]
+        entries.append((rel, src.read(name)))
+    return mep_content_id.compute_tree_content_id(entries)
 
 
 def scan_convention_sections(src: Source, rep: Report, sections: dict, root_prefix: str = ""):
@@ -868,6 +905,7 @@ def main(argv):
         print(__doc__)
         return 2
     quiet = "--quiet" in argv
+    content_id_only = "--content-id" in argv
     positional = [a for a in argv[1:] if not a.startswith("--")]
     target = Path(positional[0])
     rom_name = positional[1] if len(positional) > 1 else None
@@ -896,6 +934,16 @@ def main(argv):
                 rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
                 src = nested_src
                 sections = discover_sections(src, rep, rom_name)
+
+    if content_id_only:
+        if not sections:
+            return 1
+        try:
+            print(compute_content_id(src))
+            return 0
+        except ValueError as exc:
+            print(f"error: content_id not computed: {exc}", file=sys.stderr)
+            return 2
 
     if not sections:
         rep.error(".", "no section found (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")

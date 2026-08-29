@@ -299,6 +299,23 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/mep_lint.py pack_download.bin "$GAME" --quiet 2>&1 | tee mep_lint_output.txt
+      # ADR-0139/P.1: the tree content_id of the discovered pack root (same
+      # discovery as the lint step above, via mep_lint --content-id). Printed
+      # alone so the upsert step below can record it in mep-meta. A pack
+      # discovery cannot resolve (no sections) yields no content_id and an
+      # empty output here — the upsert omits the field then; the hash only
+      # ever records a pack that actually resolved. `continue-on-error` keeps
+      # this from ever blocking the lint-based verdict path.
+      - name: Compute pack content_id (mep_lint --content-id)
+        id: content-id
+        if: steps.download.outcome == 'success'
+        continue-on-error: true
+        env:
+          GAME: ${{ steps.rename-title.outputs.game }}
+        run: |
+          set -euo pipefail
+          CONTENT_ID=$(python3 scripts/mep_lint.py --content-id pack_download.bin "$GAME" 2>/dev/null || true)
+          echo "content_id=$CONTENT_ID" >> "$GITHUB_OUTPUT"
       - name: Reject on lint failure
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'failure'
         env:
@@ -904,6 +921,7 @@ jobs:
           LABELS: ${{ steps.apply-verdict.outputs.labels }}
           KIND: ${{ steps.apply-verdict.outputs.kind }}
           AUTHOR: ${{ steps.apply-verdict.outputs.author }}
+          CONTENT_ID: ${{ steps.content-id.outputs.content_id }}
         run: |
           set -euo pipefail
           RECIPE_PATH="$RUNNER_TEMP/mep_recipe.json"
@@ -940,6 +958,14 @@ jobs:
               "labels": os.environ["LABELS"].split(),
               "validated_at": os.environ["VALIDATED_AT"],
           }
+          # ADR-0139/P.1: content_id of the discovered pack root — the tree
+          # hash mep_lint computed (--content-id step above), replaced below
+          # by the recipe composite when a recipe is present. Omitted
+          # entirely when discovery never resolved a root (empty output).
+          from mep_content_id import compute_recipe_content_id
+          content_id = os.environ.get("CONTENT_ID", "").strip()
+          if content_id:
+              meta["content_id"] = content_id
           # ADR-0138 §29: kind is set by apply-verdict from its own
           # CATEGORY selection (never re-derived from VERDICT here) and
           # omitted entirely -- never emitted empty -- when apply-verdict
@@ -967,6 +993,20 @@ jobs:
                   for dep in deps
               ]
               meta["recipe_hash"] = recipe_hash
+              # ADR-0139: a split pack's content_id is the recipe composite —
+              # primary tree + recipe doc hash + declared dep digests sorted
+              # by dep id. CI has all three without fetching user_supplied
+              # bytes; the client computes the same function at install time
+              # (Core MepRecipeInstaller) so both sides converge on one value.
+              dep_hashes = {
+                  dep.get("id"): dep.get("sha256")
+                  for dep in deps
+                  if dep.get("id") and dep.get("sha256")
+              }
+              if content_id and len(dep_hashes) == len(deps):
+                  meta["content_id"] = compute_recipe_content_id(
+                      content_id, recipe_hash, dep_hashes
+                  )
               # ADR-0138 §25: the comment is the ONLY durable store of the
               # assembled recipe document (the runner-temp file dies with
               # the job); F6.3's catalog generator copies it verbatim.

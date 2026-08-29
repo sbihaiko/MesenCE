@@ -1,0 +1,50 @@
+{
+  "adr": "ADR-0139 / PRD-player-shell P.1",
+  "fixtures": [
+    {
+      "entries": [
+        {
+          "data": "{\"version\": \"1.2\", \"id\": \"contra80s\", \"targets\": [{\"sha1\": \"0123456789abcdef0123456789abcdef01234567\"}]}",
+          "encoding": "utf8",
+          "path": "pack.json"
+        },
+        {
+          "data": "1:0:0:0 2 3\n2:0:0:1 4 5\n",
+          "encoding": "utf8",
+          "path": "textures/hires.txt"
+        },
+        {
+          "data": "iVBORw0KGgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "encoding": "base64",
+          "path": "textures/tile1.png"
+        },
+        {
+          "data": "com.apple.metadata",
+          "encoding": "utf8",
+          "path": "__MACOSX/textures/._hires.txt"
+        },
+        {
+          "data": "junk",
+          "encoding": "utf8",
+          "path": ".DS_Store"
+        }
+      ],
+      "expected_content_id": "4a8a777cfe0b92b5e923c1926f425bf926e6db262a73bb4ec7ff9feec8ef831c",
+      "kind": "tree",
+      "name": "hdmesen-plain"
+    },
+    {
+      "deps": {
+        "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "patch": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "expected_content_id": "86d55b86070343d440fb748ff0bc45ba01c72ef257d7383b56e947d8f02bcbc7",
+      "kind": "recipe",
+      "name": "mep-recipe",
+      "primary_tree_hash": "8b806e6d3c5e98a1c781265ef6f14e6083ce478109a0d3d306e0f76f90557ea0",
+      "recipe_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "note": "Parity fixture: scripts/mep_content_id.py (normative) and the Core must produce the same values. Entry order is deliberately shuffled: the tree hasher sorts by path.",
+  "schema": "mep-content-id v1"
+}

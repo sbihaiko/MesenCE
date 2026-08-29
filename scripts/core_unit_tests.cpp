@@ -19,7 +19,9 @@
 #include "Shared/Audio/EnhancedSynthEngine.h"
 #include "Shared/EnhancementPacks/MepPack.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
+#include "Shared/EnhancementPacks/MepContentId.h"
 #include "Shared/MessageManager.h"
+#include "Utilities/Base64.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/JsonReader.h"
 #include "Utilities/sha256.h"
@@ -762,6 +764,53 @@ namespace
 		bool hasE = count >= 2 && (std::abs(keys[0] - 64) <= 1 || std::abs(keys[1] - 64) <= 1);
 		Check(hasC && hasE, "BlocoF: the arpeggio cycle is the two alternating notes");
 	}
+
+	//--- Bloco G: MepContentId golden parity (ADR-0139/P.1) ----------------
+	//The Core hasher and the normative Python hasher (scripts/mep_content_id.py)
+	//must agree on the SAME goldens: docs/specs/golden/mep-content-id.json is
+	//run by both sides (the Python side via scripts/test_mep_content_id_golden.py,
+	//this block via MepContentId) so the two implementations can never drift.
+	void TestContentIdGoldenParity()
+	{
+		JsonValue root;
+		JsonReader reader;
+		if(!reader.Parse(ReadFileBytes("docs/specs/golden/mep-content-id.json"), root) || !root.IsObject()) {
+			Check(false, "BlocoG: the content_id golden parses as JSON", reader.GetError());
+			return;
+		}
+		const JsonValue* fixtures = root.Get("fixtures");
+		if(!fixtures || !fixtures->IsArray()) {
+			Check(false, "BlocoG: the content_id golden has a fixtures array");
+			return;
+		}
+		for(const JsonValue& fx : fixtures->GetArray()) {
+			std::string name = fx.GetString("name");
+			std::string kind = fx.GetString("kind");
+			std::string expected = fx.GetString("expected_content_id");
+			if(kind == "tree") {
+				std::vector<MepContentId::Entry> entries;
+				const JsonValue* list = fx.Get("entries");
+				for(const JsonValue& e : list->GetArray()) {
+					std::string data = e.GetString("data");
+					if(e.GetString("encoding") == "base64") {
+						entries.push_back({ e.GetString("path"), Base64::Decode(data) });
+					} else {
+						entries.push_back({ e.GetString("path"), std::vector<uint8_t>(data.begin(), data.end()) });
+					}
+				}
+				std::string got = MepContentId::ComputeTree(entries);
+				Check(got == expected, "BlocoG: tree fixture '" + name + "' matches golden", got + " != " + expected);
+			} else if(kind == "recipe") {
+				unordered_map<string, string> deps;
+				const JsonValue* d = fx.Get("deps");
+				for(const auto& member : d->GetObject()) {
+					deps[member.first] = member.second.GetString();
+				}
+				std::string got = MepContentId::ComputeRecipe(fx.GetString("primary_tree_hash"), fx.GetString("recipe_hash"), deps);
+				Check(got == expected, "BlocoG: recipe fixture '" + name + "' matches golden", got + " != " + expected);
+			}
+		}
+	}
 }
 
 int main()
@@ -797,6 +846,8 @@ int main()
 	TestFixedRoleOverride();
 	TestChannelStealRestore();
 	TestArpeggioKeysDetection();
+
+	TestContentIdGoldenParity();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

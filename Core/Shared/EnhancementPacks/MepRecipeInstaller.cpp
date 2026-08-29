@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/EnhancementPacks/MepRecipeOps.h"
+#include "Shared/EnhancementPacks/MepContentId.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/JsonReader.h"
 #include "Utilities/FolderUtilities.h"
@@ -300,6 +301,14 @@ namespace
 		WriteJsonString(out, pack.GetString("name"));
 		out << ",\n  \"version\": ";
 		WriteJsonString(out, pack.GetString("version"));
+		//ADR-0140 pack_id source (1): the pack's own `id` (MEP-v1.4 SHOULD
+		//slug). Carried into the installed pack.json so the identity survives
+		//on disk for MepPackManager and the `.mep-install.json` record below.
+		string id = pack.GetString("id");
+		if(!id.empty()) {
+			out << ",\n  \"id\": ";
+			WriteJsonString(out, id);
+		}
 		out << ",\n  \"license\": ";
 		WriteJsonString(out, pack.GetString("license", "NOASSERTION"));
 	}
@@ -366,12 +375,23 @@ namespace
 	//Writes `outFolder`/.mep-install.json: recipe_hash is the sha256 of the
 	//recipe document text itself; depSha256 is dep-id -> the sha256 actually
 	//verified for it (only the deps that were supplied and verified, not
-	//the missing ones).
+	//the missing ones). packId/contentId (ADR-0139/0140, P.1) are the pack's
+	//declared `id` and the recipe-composite content_id; each is omitted when
+	//empty (a pack without an `id`, or a content_id a too-long path made
+	//undefined).
 	bool WriteInstallStamp(const string& recipeHash, const string& primarySha256,
-		const unordered_map<string, string>& depSha256, const string& outFolder, string& error)
+		const unordered_map<string, string>& depSha256, const string& packId, const string& contentId,
+		const string& outFolder, string& error)
 	{
 		std::ostringstream out;
-		out << "{\n  \"recipe_hash\": \"" << recipeHash << "\",\n";
+		out << "{\n";
+		if(!packId.empty()) {
+			out << "  \"pack_id\": \"" << packId << "\",\n";
+		}
+		if(!contentId.empty()) {
+			out << "  \"content_id\": \"" << contentId << "\",\n";
+		}
+		out << "  \"recipe_hash\": \"" << recipeHash << "\",\n";
 		out << "  \"source\": { \"sha256\": \"" << primarySha256 << "\" },\n";
 		out << "  \"deps\": {";
 		size_t i = 0;
@@ -447,7 +467,27 @@ namespace
 		return RunOps(state.Root, state.Ctx, error);
 	}
 
+	//Collects the primary source's discovered-root files (root-relative, safe-
+	//normalized paths - ListRelative applies _rootPrefix) for the tree hash.
+	bool CollectTreeEntries(const MepRecipeSource& src, vector<MepContentId::Entry>& out)
+	{
+		for(const string& rel : src.ListRelative()) {
+			vector<uint8_t> data;
+			if(!src.Read(rel, data)) {
+				return false;
+			}
+			out.push_back({ rel, std::move(data) });
+		}
+		return true;
+	}
+
 	//Phase 3: pack.json (MEP-recipe-v1 §8) + the F6.4-only .mep-install.json.
+	//The .mep-install.json content_id is the ADR-0139 recipe composite:
+	//SHA-256(primary_tree_hash + "\n" + recipe_hash + "\n" + dep digests sorted
+	//by dep id) - computed HERE from the primary bytes at install time (never
+	//re-derived from the installed output tree), stored once, and equal to the
+	//value CI computes for the same recipe (mep_content_id.py in the validate
+	//workflow), so both sides converge on one revision identity.
 	bool WriteOutputs(const InstallState& state, const string& recipeJson, const string& outFolder, string& error)
 	{
 		const JsonValue* pack = state.Root.Get("pack");
@@ -455,7 +495,16 @@ namespace
 			return false;
 		}
 		string recipeHash = SHA256::GetHash((uint8_t*)recipeJson.data(), recipeJson.size());
-		return WriteInstallStamp(recipeHash, state.PrimaryHash, state.DepHashes, outFolder, error);
+		string contentId;
+		vector<MepContentId::Entry> entries;
+		if(CollectTreeEntries(state.PrimarySrc, entries)) {
+			string primaryTreeHash = MepContentId::ComputeTree(entries);
+			if(!primaryTreeHash.empty()) {
+				contentId = MepContentId::ComputeRecipe(primaryTreeHash, recipeHash, state.DepHashes);
+			}
+		}
+		return WriteInstallStamp(recipeHash, state.PrimaryHash, state.DepHashes,
+			pack->GetString("id"), contentId, outFolder, error);
 	}
 }
 

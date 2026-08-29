@@ -91,6 +91,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   for the leaf (constant shapes, `required_mei_pack_fields`/
   `mei_entry_conforms` per kind, `resolve_kind`'s mep-meta-first /
   Status-fallback / None-when-unmapped precedence).
+  `mep_content_id.py` (P.1, ADR-0139) is the normative `content_id` hasher:
+  `compute_tree_content_id` (canonical manifest of a resolved pack root —
+  sorted paths, excluded `__MACOSX`/`screenshots`/`.DS_Store`/`README*`,
+  canonical `pack.json` with `version` dropped) and
+  `compute_recipe_content_id` (primary tree + recipe doc hash + dep digests
+  sorted by dep id). `mep_lint.py` exposes the tree hash as
+  `python3 scripts/mep_lint.py --content-id <pack> [rom_name]` (prints only
+  the hex, exit 1 when discovery resolves no root) and the validate workflow
+  records it in mep-meta (the recipe composite for split packs). The Core
+  `MepContentId` mirrors it and both are checked against
+  `docs/specs/golden/mep-content-id.json` (Python:
+  `scripts/test_mep_content_id_golden.py`; C++: core-unit-tests BlocoG).
   `mep_lint.py` mirrors the ADR-0120 structural (name-agnostic) last-priority
   subfolder fallback that `Core::MepPack::FindFallbackSubfolder` (C++, name
   match) and `MepZipValidator.FindStructuralFallbackPrefix` (C#, structural
