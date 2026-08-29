@@ -211,6 +211,11 @@ scripts/core_unit_tests
 
 **/__pycache__/
 
+# Local community-pack validation work (scripts/validate_pack_local.sh)
+.cache/
+pack_download.bin
+mep_lint_output.txt
+
 # >>> dev-squad shared team assets (managed — do not edit) >>>
 .claude/*
 !.claude/guardrails/

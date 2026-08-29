@@ -251,7 +251,7 @@ declared licence, nothing more).
 | **F6.4b** UI fetch + consent | ADR-0138 §37/§38: catalog fetch (ETag cache in MEP `.cache`), No-Intro sha1 match, download within the CI host allow-list (shared constant, parity-checked), sha256 verify, downloads-cache lookup, prompt for `user_supplied` deps with hints + licence, settings toggle + first-run consent for `AutoInstallCommunityPacks`, interop call into `MepRecipeInstaller`, reinstall on `source.sha256` change, UI notice when the patch is withheld | UI.Tests for allow-list/ETag/consent logic under `UI/Logic/`; manual GUI pass |
 | **F6.4c** parity fixture set | ADR-0138 §39: grow `gen_mep_recipe_fixture.py` to wrapped-subfolder, nested top-level zip and ADR-0120/0121 fallback cases; Bloco E iterates the set | all cases byte-for-byte |
 | **F6.4** (original row, superseded by F6.4a/b/c) | `MepRecipeInstaller` (Core): fetch catalog (ETag cache in the MEP `.cache`), match ROM by No-Intro sha1, download primary within the CI host allow-list, verify sha256, prompt for `user_supplied` deps with hints + licence, run ops, write `pack.json` + `.mep-install.json`; reinstall when `source.sha256` changes; setting `AutoInstallCommunityPacks` (default on for packs without user-supplied deps; prompt otherwise); UI notice when the patch is withheld | headless: synthetic catalog + split pack → installed folder equals `mep_recipe.py apply` output byte-for-byte; hash mismatch aborts; missing dep → no patch, textures still applied |
-| **F6.5** rollout | `/revalidate` #65/#66/#68/#69/#71; update this header | all five `pack:valid` + `assets:external`; one of them installed end-to-end in the GUI with user-supplied audio |
+| **F6.5** rollout | shipped 2026-08-29 — re-validated all 11 approved packs (run-clean: old issues deleted, recreated as 74–84, validated locally in parallel via `scripts/validate_pack_local.sh` + the `.github/ai/validate-classify.md` prompt family, the single source the CI will invoke); classify headless fixed (model, stdin prompt, `--output-format text`, empty `--mcp-config`), ops schema tightened (oneOf), console label added | all eleven `pack:valid` + `console:nes` + `assets:*`/`patch:*` labels; board "Aceito parcial (HD Mesen)"; 77/78/80/81 = LiQuiDz split-distribution audio (`assets:external` + MEP recipe dry-runs clean); GUI end-to-end install with user-supplied audio still pending |
 
 Edge cases the pipeline must keep handling (evidence from the 2026-08-27
 spike, all already covered by `mep_lint.py`): nested zip-in-zip (#64
@@ -355,7 +355,7 @@ P.1/P.2.
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.4b shipped; remaining work list = F6.4c, F6.5 |
+| 0138 | accepted | Phase 6 design; F6.0–F6.4b + F6.5 shipped; remaining work list = F6.4c |
 | 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4 |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |
