@@ -32,13 +32,13 @@ test project.
 **Option A — allow public test-facing helpers, documented** (chosen by the
 user on 2026-08-28; Option B is recorded under Alternatives).
 
-- [ ] Add to `UI/AGENTS.md` Work Guidance: "`UI/Logic/` types may expose pure
+- [x] Add to `UI/AGENTS.md` Work Guidance: "`UI/Logic/` types may expose pure
       helpers publicly when a test needs to drive them directly (e.g.
       `MepZipValidator.IsSafePath` over `path-cases.txt`). Keep the production
       entry point the documented one; a `//` header line on the helper must
       name it as test-facing / reusable so its public status reads as
       intentional."
-- [ ] Add the same one-line note above `IsSafePath` in `MepZipValidator.cs`.
+- [x] Add the same one-line note above `IsSafePath` in `MepZipValidator.cs`.
 
 Rationale: the dual-compile already erases the public/internal distinction
 from the tests' point of view, so keeping helpers `internal` buys no

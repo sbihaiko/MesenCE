@@ -1,6 +1,6 @@
 # ADR-0128: CheatTypeDetector parity tests use Assert.ThrowsAny; Gb/Sms support deferred
 
-- Status: accepted (test change pending; product decision on Gb/Sms explicitly deferred)
+- Status: accepted (ThrowsAny change implemented 2026-08-29; product decision on Gb/Sms remains explicitly deferred)
 - Date: 2026-08-27
 - Consolidates: ADR-0069, ADR-0070
 
@@ -25,12 +25,12 @@ later change; ADR-0070 argued the loosening is a one-line change now and a
 test-touching change later, so it belongs in the parity phase itself.
 
 ## Decision
-- [ ] `UI.Tests/Cheats/CheatTypeDetectorTests.cs`: replace both
+- [x] `UI.Tests/Cheats/CheatTypeDetectorTests.cs`: replace both
       `Assert.Throws<Exception>(...)` with `Assert.ThrowsAny<Exception>(...)`
       (lines 52 and 62). The parity statement ("unsupported consoles throw")
       is preserved exactly; the exception type is no longer part of the
       tested contract.
-- [ ] Keep `FromCode` unchanged in this step: no Gb/Sms branches, no
+- [x] Keep `FromCode` unchanged in this step: no Gb/Sms branches, no
       exception-type change.
 - Deferred product decision (not part of this ADR's checklist; needs its own
   follow-up when someone owns cheat support for GB/SMS): (a) whether

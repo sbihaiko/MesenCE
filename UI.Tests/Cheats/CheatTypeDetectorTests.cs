@@ -49,7 +49,7 @@ namespace Mesen.Tests.Cheats
 			// console branch produces them (documented pre-existing gap,
 			// not changed in this phase) - Gameboy throws like any other
 			// unhandled console.
-			Assert.Throws<Exception>(() => CheatTypeDetector.FromCode(ConsoleType.Gameboy, "01XX-XXX"));
+			Assert.ThrowsAny<Exception>(() => CheatTypeDetector.FromCode(ConsoleType.Gameboy, "01XX-XXX"));
 		}
 
 		[Theory]
@@ -59,7 +59,7 @@ namespace Mesen.Tests.Cheats
 		[InlineData(ConsoleType.Ws)]
 		public void FromCode_OtherUnsupportedConsoles_Throw(ConsoleType consoleType)
 		{
-			Assert.Throws<Exception>(() => CheatTypeDetector.FromCode(consoleType, "0000-0000"));
+			Assert.ThrowsAny<Exception>(() => CheatTypeDetector.FromCode(consoleType, "0000-0000"));
 		}
 	}
 }

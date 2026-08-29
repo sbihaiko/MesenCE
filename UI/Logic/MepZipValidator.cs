@@ -159,6 +159,10 @@ namespace Mesen.Logic
 			return bestPrefix;
 		}
 
+		//Test-facing / reusable pure predicate (ADR-0125): public so
+		//UI.Tests drives it row-by-row over docs/specs/golden/mep/path-cases.txt
+		//without building a ZipArchive per row; the production entry point is
+		//Validate(ZipArchive), this stays a documented reusable helper.
 		//Rejects zip-slip entry names: absolute paths (leading '/'), a colon
 		//anywhere (Windows drive letters and NTFS alternate data streams alike),
 		//any ".." path segment (checked after normalizing '\' to '/', since a

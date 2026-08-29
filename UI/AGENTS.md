@@ -173,6 +173,14 @@ can be exercised by real xunit tests without Avalonia or the native
 
 - New host-free helpers extracted from ViewModels go under `UI/Logic/`,
   paired with tests under the matching `UI.Tests/<Area>/` subfolder.
+- **Public test-facing helpers** (ADR-0125, H6): `UI/Logic/` types may
+  expose pure helpers publicly when a test needs to drive them directly
+  (e.g. `MepZipValidator.IsSafePath` over `path-cases.txt`). Keep the
+  production entry point the documented one; a `//` header line on the
+  helper must name it as test-facing / reusable, so its public status reads
+  as intentional. (Under the dual-compile, `internal` buys the tests no
+  encapsulation — they compile the sources — so "public is fine if the
+  header says why" is the cheapest consistent rule.)
 - Never add an `Avalonia` or `EmuApi` reference to a file under
   `UI/Logic/` — if a helper needs a UI-side type (an enum, etc.), move
   that type out of its Avalonia-tainted file first (see Phase 2 of the plan
