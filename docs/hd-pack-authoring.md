@@ -159,6 +159,61 @@ classify verdict. So declaring `external_assets` is worth doing whenever your
 pack references files you cannot bundle: it is the mechanism that can turn
 an otherwise-`invalid` split pack into an `accepted` one, not a no-op.
 
+## Seeding audio for your pack (record → MIDI → OGG)
+
+A pack's `audio/` layer is the pair `audio/fingerprints.json` (which track
+plays for which id, MEP-v1 §2.1) plus the OGG files under `audio/bgm/` and
+`audio/sfx/`. The workflow below turns a game's own sound driver into that
+layer without recording audio manually:
+
+1. **Record the seeds.** Either play the game in Mesen with the F5.3 audio
+   recorder active (the bootstrap writes `auto/audio/fingerprints.json` +
+   `midi/` next to the ROM), or, for a headless pass over a specific title,
+   run the extract-audio tool (ADR-0135) on its own copy of the ROM:
+
+   ```bash
+   make spike-sound-driver
+   scripts/spike_sound_driver "<rom.nes>" "<workdir>" "<pack-folder>" [maxIds] [secondsPerId] [startAt] [wallClockBudget]
+   ```
+
+   The tool drives the game's sound driver through the debugger (no
+   gameplay), validates a trigger, enumerates ids, and writes
+   `<pack-folder>/auto/audio/fingerprints.json` + `midi/` plus
+   `enumeration.log` beside them. When no trigger validates it writes only
+   the log ("no validated trigger") — the pack folder is left untouched.
+   Expect it to take minutes (it runs the game at real time); `wallClockBudget`
+   caps the worst case and `Ctrl-C` aborts at a frame boundary, keeping what
+   was already written.
+
+2. **Render the MIDI to OGG.**
+
+   ```bash
+   python3 scripts/mep_render_audio.py <pack-folder> [--sf2 path/to/generaluser-gs.sf2]
+   ```
+
+   With `fluidsynth` + a General MIDI SoundFont this gives a GM render of
+   each track under `auto/audio/bgm/`; without a SoundFont the internal chip
+   synthesizer writes a placeholder timbre close to the original NES chip.
+   The renderer never overwrites a human-layer OGG.
+
+3. **Listen, prune, promote.** `enumeration.log` lists every id with its
+   kind (bgm/sfx/short/title), length, hash and first notes. Delete the
+   garbage ids from `audio/fingerprints.json`, rename the keepers
+   (`scripts/mep_build.py rename-audio-id <folder> <old-id> <new-id>`),
+   set a MIDI loop marker where a track should loop (MEP-v1 §5.2 `loop`),
+   and move the good OGGs from `auto/audio/bgm/` to `audio/bgm/`.
+
+4. **Build and lint.** `scripts/mep_build.py <pack-folder>` regenerates
+   `audio/hires.txt` from the OGGs, applies the split-pack conventions, and
+   runs the MEP linter — the audio lint (fingerprints schema, resolved
+   `<bgm>`/`<sfx>` targets, `loop` sanity) is part of that gate, so an
+   invalid audio layer is a build failure, exactly like a broken texture
+   layer.
+
+This is the seed-MIDI→OGG path: the seed MIDIs come from the game itself,
+are rendered once, and a human curates the result — no manual recording or
+transcription required.
+
 ## Before submitting
 
 - **Distribution rights.** The pack MUST NOT contain ROM bytes or assets
