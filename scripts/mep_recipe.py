@@ -218,9 +218,13 @@ def validate_recipe(recipe: dict) -> list:
         fail("'pack.targets' must be a non-empty array")
     else:
         for i, target in enumerate(targets):
-            if not isinstance(target, dict) or not isinstance(target.get("sha1"), str):
-                fail(f"pack.targets[{i}] needs sha1")
-            elif not re.fullmatch(r"[0-9A-Fa-f]{40}", target["sha1"]):
+            if not isinstance(target, dict):
+                fail(f"pack.targets[{i}] must be an object")
+                continue
+            # MEI v1.1 §2.3: ROM sha1 MAY be absent (hd-legacy packs without a
+            # pack.json to transcribe it from); only validate it when present.
+            sha1 = target.get("sha1")
+            if sha1 is not None and (not isinstance(sha1, str) or not re.fullmatch(r"[0-9A-Fa-f]{40}", sha1)):
                 fail(f"pack.targets[{i}].sha1 must be 40 hex digits")
     if "patches" in pack:
         patches = pack["patches"]

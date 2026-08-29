@@ -462,7 +462,10 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
                 continue
             if t.get("system") not in KNOWN_SYSTEMS:
                 rep.error(where, f"targets[{i}].system unknown: {t.get('system')}")
-            if not isinstance(t.get("sha1"), str) or not HEX40.match(t["sha1"]):
+            # MEI v1.1 §2.3: rom.sha1 MAY be absent regardless of kind — an
+            # entry without one is listable/installable but not hash-matchable.
+            sha1 = t.get("sha1")
+            if sha1 is not None and (not isinstance(sha1, str) or not HEX40.match(sha1)):
                 rep.error(where, f"targets[{i}].sha1 must be 40 hex digits")
     patches = root.get("patches")
     if patches is not None:
@@ -470,10 +473,13 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
             rep.error(where, "'patches' must be an array")
         else:
             for i, p in enumerate(patches):
-                if not isinstance(p, dict) or not isinstance(p.get("sha1"), str) or not isinstance(p.get("file"), str):
-                    rep.error(where, f"patches[{i}] needs 'sha1' and 'file'")
+                if not isinstance(p, dict) or not isinstance(p.get("file"), str):
+                    rep.error(where, f"patches[{i}] needs 'file'")
                     continue
-                if not HEX40.match(p["sha1"]):
+                # MEI v1.1 §2.3: patch ROM sha1 MAY be absent (an un-hashed
+                # patch is applied on user override with a warning).
+                p_sha1 = p.get("sha1")
+                if p_sha1 is not None and (not isinstance(p_sha1, str) or not HEX40.match(p_sha1)):
                     rep.error(where, f"patches[{i}].sha1 must be 40 hex digits")
                 rel = safe_rel(p["file"])
                 if rel is None:
