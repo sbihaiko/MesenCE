@@ -249,6 +249,23 @@ def main() -> int:
         (wide / "textures" / "sheets" / "objects.png").write_bytes(png(512, 16))  # 32 columns
         run("build", str(wide), expect=2)
 
+        # --- F5.4g item 12: audio_cleanup_suggest reads the probe's log ---
+        sug = root / "sug-pack"
+        (sug / "auto" / "audio").mkdir(parents=True)
+        (sug / "auto" / "audio" / "enumeration.log").write_text(
+            "id,kind,audible,frames,last,hash,first-notes,repeat\n"
+            "0,bgm,300,300,299,37CEFCA2,\"s2 1\",no\n"
+            "1,short,12,300,20,811C9DC5,\"s0 1\",no\n"
+            "2,bgm,300,300,298,37CEFCA2,\"s2 1\",yes\n"
+        )
+        p = subprocess.run([PY, str(REPO / "scripts" / "audio_cleanup_suggest.py"), str(sug)],
+                           capture_output=True, text=True)
+        out = (p.stdout + p.stderr).strip()
+        if p.returncode != 1 or "kind=short" not in out or "repeat of an earlier id" not in out:
+            fail(f"audio_cleanup_suggest -> exit {p.returncode}, expected 1 + garbage ids: {out}")
+        else:
+            ok("audio_cleanup_suggest flags short/repeat/silent ids from the probe's enumeration.log")
+
     return 1 if FAILED else 0
 
 

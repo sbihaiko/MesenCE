@@ -197,7 +197,9 @@ layer without recording audio manually:
    The renderer never overwrites a human-layer OGG.
 
 3. **Listen, prune, promote.** `enumeration.log` lists every id with its
-   kind (bgm/sfx/short/title), length, hash and first notes. Delete the
+   kind (bgm/sfx/short/title), length, hash and first notes;
+   `scripts/audio_cleanup_suggest.py <pack-folder>` summarises which ids
+   look like garbage (short/title/repeat/silent) from the log. Delete the
    garbage ids from `audio/fingerprints.json`, rename the keepers
    (`scripts/mep_build.py rename-audio-id <folder> <old-id> <new-id>`),
    set a MIDI loop marker where a track should loop (MEP-v1 §5.2 `loop`),
