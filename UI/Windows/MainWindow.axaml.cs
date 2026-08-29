@@ -13,6 +13,7 @@ using Mesen.Debugger.Utilities;
 using Mesen.Debugger.Windows;
 using Mesen.Interop;
 using Mesen.Localization;
+using Mesen.Logic;
 using Mesen.Services;
 using Mesen.Utilities;
 using Mesen.ViewModels;
@@ -95,14 +96,16 @@ namespace Mesen.Windows
 
 			InitializeComponent();
 
-			//P.4 (PRD-player-shell §6): give the overlay's first button focus when
-			//it opens, so D-pad/A/B (Avalonia focus navigation) works without a
-			//pointer - the same trick OnOpened uses for the recent-games grid.
-			//Posted so the layout pass runs first (Focus() on a not-yet-visible
-			//panel is a no-op).
+			//P.4/P.5 (PRD-player-shell §6): give the overlay's first button / the
+			//picker's first choice focus when they open, so D-pad/A/B (Avalonia
+			//focus navigation) works without a pointer - the same trick OnOpened
+			//uses for the recent-games grid. Posted so the layout pass runs first
+			//(Focus() on a not-yet-visible panel is a no-op).
 			_model.PropertyChanged += (s, e) => {
 				if(e.PropertyName == nameof(MainWindowViewModel.IsPlayerOverlayVisible) && _model.IsPlayerOverlayVisible) {
 					Dispatcher.UIThread.Post(() => this.GetControl<Button>("OverlayResumeButton")?.Focus());
+				} else if(e.PropertyName == nameof(MainWindowViewModel.IsPlayerPackPickerVisible) && _model.IsPlayerPackPickerVisible) {
+					Dispatcher.UIThread.Post(() => this.GetControl<ItemsControl>("PackPickerList")?.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus());
 				}
 			};
 
@@ -272,7 +275,24 @@ namespace Mesen.Windows
 		private void OnOverlayPack(object? sender, RoutedEventArgs e)
 		{
 			_model.IsPlayerOverlayVisible = false;
-			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new EnhancementPacksWindow());
+			//P.5 §5: the current-pack chip opens the picker when 2+ distinct
+			//pack_ids exist (even with a stored choice - "changing the choice
+			//later"); otherwise the pack window inspects the single pack.
+			if(!_model.OpenPlayerPackPickerForChange(EmuApi.GetMepPackList(), EmuApi.GetMepRomSha1())) {
+				ApplicationHelper.GetOrCreateUniqueWindow(this, () => new EnhancementPacksWindow());
+			}
+		}
+
+		private void OnPickPlayerPack(object? sender, RoutedEventArgs e)
+		{
+			if(sender is Button button && button.Tag is string container) {
+				_model.PickPlayerPack(container);
+			}
+		}
+
+		private void OnDismissPlayerPackPicker(object? sender, RoutedEventArgs e)
+		{
+			_model.DismissPlayerPackPicker();
 		}
 
 		private void OnOverlaySettings(object? sender, RoutedEventArgs e)
@@ -411,6 +431,19 @@ namespace Mesen.Windows
 
 					GameLoadedEventParams evtParams = Marshal.PtrToStructure<GameLoadedEventParams>(e.Parameter);
 					CommunityPackInstallService.OnGameLoaded(evtParams.IsPowerCycle);
+
+					//P.5 (PRD-player-shell §5/§6): Player pack UX - the picker opens
+					//once over the un-enhanced game when 2+ competing pack_ids exist
+					//and no stored per-ROM choice applies; a pick stores the choice
+					//(P.3) and power-cycles, and the reload applies silently (no
+					//picker, just the "Applied ..." toast). No toast while the picker
+					//is open - the game is un-enhanced until a pick.
+					Dispatcher.UIThread.Post(() => {
+						bool pickerOpen = _model.EvaluatePlayerPackPicker(EmuApi.GetMepPackList(), EmuApi.GetMepRomSha1());
+						if(!pickerOpen && _model.Config.Preferences.UiMode == UiMode.Player && !string.IsNullOrEmpty(_model.CurrentPackName)) {
+							EmuApi.DisplayMessage("MEP", "Applied " + _model.CurrentPackName + (string.IsNullOrEmpty(_model.CurrentPackLayers) ? "" : " — " + _model.CurrentPackLayers));
+						}
+					});
 					if(!evtParams.IsPowerCycle) {
 						Dispatcher.UIThread.Post(() => {
 							_model.RecentGames.Visible = false;

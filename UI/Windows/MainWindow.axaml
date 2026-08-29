@@ -74,10 +74,53 @@
 					<Button Name="OverlayResumeButton" Content="Resume" HorizontalAlignment="Stretch" Click="OnOverlayResume" />
 					<Button Content="Save slot" HorizontalAlignment="Stretch" Click="OnOverlaySave" />
 					<Button Content="Load slot" HorizontalAlignment="Stretch" Click="OnOverlayLoad" />
-					<Button Content="Pack" HorizontalAlignment="Stretch" Click="OnOverlayPack" />
+					<!--P.5 (§5): the current pack chip - shows the applied pack and
+					opens the picker (2+ choices) or the pack window (single).-->
+					<Button HorizontalAlignment="Stretch" Click="OnOverlayPack">
+						<StackPanel Orientation="Horizontal" Spacing="6">
+							<TextBlock Text="Pack" />
+							<TextBlock Text="{Binding CurrentPackName}" FontWeight="Bold" />
+						</StackPanel>
+					</Button>
 					<Button Content="Settings" HorizontalAlignment="Stretch" Click="OnOverlaySettings" />
 					<Button Content="Advanced GUI" HorizontalAlignment="Stretch" Click="OnOverlayAdvanced" />
 					<Button Content="Quit" HorizontalAlignment="Stretch" Click="OnOverlayQuit" />
+				</StackPanel>
+			</Border>
+
+			<!--P.5 (PRD-player-shell §5): the pack picker - opens once over the
+			un-enhanced game when 2+ competing pack_ids exist and no stored choice
+			applies. Picking stores the per-ROM preference (P.3) and power-cycles;
+			dismissing plays un-enhanced and asks again next launch. D-pad/A/B via
+			Avalonia focus (first choice auto-focused on open).-->
+			<Border
+				Name="PlayerPackPicker"
+				Background="#DD000000"
+				HorizontalAlignment="Center"
+				VerticalAlignment="Center"
+				Padding="24"
+				IsVisible="{Binding IsPlayerPackPickerVisible}"
+			>
+				<StackPanel Spacing="10" MinWidth="340" MaxWidth="520">
+					<TextBlock Text="Choose a pack for this game" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
+					<ItemsControl Name="PackPickerList" ItemsSource="{Binding PlayerPackChoices}">
+						<ItemsControl.ItemsPanel>
+							<ItemsPanelTemplate>
+								<StackPanel Spacing="8" />
+							</ItemsPanelTemplate>
+						</ItemsControl.ItemsPanel>
+						<ItemsControl.ItemTemplate>
+							<DataTemplate>
+								<Button HorizontalAlignment="Stretch" Tag="{Binding Container}" Click="OnPickPlayerPack">
+									<StackPanel Spacing="2">
+										<TextBlock FontWeight="Bold" Text="{Binding Name}" />
+										<TextBlock FontSize="11" Opacity="0.7" Text="{Binding Detail}" />
+									</StackPanel>
+								</Button>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+					<Button Content="Play without a pack" HorizontalAlignment="Stretch" Click="OnDismissPlayerPackPicker" />
 				</StackPanel>
 			</Border>
 		</Panel>

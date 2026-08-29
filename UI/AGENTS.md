@@ -79,6 +79,19 @@ can be exercised by real xunit tests without Avalonia or the native
   crosses the interop boundary by value; the core also exempts it from the
   keyboard-block in `ShortcutKeyHandler::IsKeyPressed` so it stays reachable
   in keyboard games.
+- `PlayerPackPicker` (P.5, §5) is the host-free decision for the Player pack
+  picker: it opens only when 2+ distinct pack_ids exist (after the §5
+  content_id merge — feed it `PackPreferenceResolver.Resolve`'s `Candidates`,
+  never the raw entry list, or a dropped copy of an installed pack would
+  count as a second choice), with no sibling-folder pack (that pack always
+  wins, §4) and no effective stored per-ROM preference (silent apply).
+  `DistinctPackIdCount` uses `DerivePackId` (ADR-0140 id, else
+  `local:<container>`). The owning VM (`MainWindowViewModel`) injects the pack
+  list + ROM sha1 (data-injected from the code-behind), builds the choices
+  from the core's `GetPackListText` columns (name/author/version/licence/
+  sections/origin already there), and `PickPlayerPack` stores the P.3
+  preference then power-cycles (applied on the reload); `DismissPlayerPackPicker`
+  stores nothing so the next launch asks again.
 
 - **New ViewModels** (Phase 3 of the plan — applied opportunistically, "in
   the code we touch", not as a retrofit of existing VMs): a *new*
