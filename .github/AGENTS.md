@@ -285,6 +285,12 @@ what CI actually runs; this doc records why they're split the way they are.
 - `grep -F "cancel-in-progress: \${{ github.event_name == 'issues' }}" .github/workflows/community-pack-submitted.yml`
 - `grep -A2 "id: classify" .github/workflows/community-pack-validate.yml | grep timeout-minutes`
 - `./scripts/checks/verify_agents_md_recipe_handoff.sh`
+- `grep -c "verify_community_pack_validate_workflow" makefile` — the
+  community-pack verifiers and pipeline unit tests are wired into
+  `make doc-checks` (2026-08-29), so the Linux/macOS build jobs run them
+  as a CI gate; the ROM-dependent validators
+  (`validate_palette_variants.py`, `validate_hdpack_dump.py`) stay manual
+  because they need a real ROM + `make core`.
 
 ## Child DOX Index
 
