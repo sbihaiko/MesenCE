@@ -139,6 +139,10 @@
 			<Control ID="lblStickCircularity">Left stick circularity</Control>
 			<Control ID="lblStickCircularityHint">Rotate the left stick in a full circle to measure its travel.</Control>
 			<Control ID="btnResetCircularity">Reset</Control>
+			<Control ID="lblStickDeadzone">Deadzone</Control>
+			<Control ID="lblDeadzoneUsesGlobal">using global setting</Control>
+			<Control ID="lblDeadzoneUsesOverride">per-device</Control>
+			<Control ID="btnDeadzoneReset">Reset to global</Control>
 			<Control ID="lblCircularityExcellent">Excellent</Control>
 			<Control ID="lblCircularityGood">Good</Control>
 			<Control ID="lblCircularityFair">Fair</Control>

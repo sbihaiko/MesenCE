@@ -60,7 +60,8 @@ namespace Mesen.ViewModels
 		public void Refresh()
 		{
 			uint count = InputApi.GetConnectedGamepadCount();
-			uint deadzoneSize = ConfigManager.Config.Input.ControllerDeadzoneSize;
+			uint globalDeadzoneSize = ConfigManager.Config.Input.ControllerDeadzoneSize;
+			IReadOnlyList<DeviceDeadzoneOverride> overrides = ConfigManager.Config.Input.PerDeviceDeadzones;
 			while(Gamepads.Count < count) {
 				Gamepads.Add(new GamepadTestItem((uint)Gamepads.Count));
 			}
@@ -68,7 +69,7 @@ namespace Mesen.ViewModels
 				Gamepads.RemoveAt(Gamepads.Count - 1);
 			}
 			foreach(GamepadTestItem item in Gamepads) {
-				item.RefreshState(deadzoneSize);
+				item.RefreshState(globalDeadzoneSize, overrides);
 			}
 			HasPads = Gamepads.Count > 0;
 			ShowNoPadsHint = !HasPads;
@@ -86,8 +87,24 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial uint Slot { get; set; }
 		[ObservableProperty] public partial string VendorId { get; set; } = "";
 		[ObservableProperty] public partial string ProductId { get; set; } = "";
+		[ObservableProperty] public partial uint VendorIdValue { get; set; }
+		[ObservableProperty] public partial uint ProductIdValue { get; set; }
 		[ObservableProperty] public partial bool HasRumble { get; set; }
 		[ObservableProperty] public partial string InfoText { get; set; } = "";
+
+		//Per-device deadzone (PRD I.3): the pad's own deadzone size when an
+		//override exists for its VID:PID, else the global ControllerDeadzoneSize.
+		//IsUsingPerDeviceDeadzone distinguishes "override set" from "fell back to
+		//global" even when the two happen to be equal; the 0-4 toggle buttons bind
+		//to IsDz0..IsDz4, and SetDeadzone/ClearDeadzone persist via InputConfig.
+		[ObservableProperty] public partial uint EffectiveDeadzoneSize { get; set; }
+		[ObservableProperty] public partial uint GlobalDeadzoneSize { get; set; }
+		[ObservableProperty] public partial bool IsUsingPerDeviceDeadzone { get; set; }
+		public bool IsDz0 => EffectiveDeadzoneSize == 0;
+		public bool IsDz1 => EffectiveDeadzoneSize == 1;
+		public bool IsDz2 => EffectiveDeadzoneSize == 2;
+		public bool IsDz3 => EffectiveDeadzoneSize == 3;
+		public bool IsDz4 => EffectiveDeadzoneSize == 4;
 
 		public List<GamepadButtonState> Buttons { get; } = new();
 		[ObservableProperty] public partial int LeftX { get; set; }
@@ -129,7 +146,7 @@ namespace Mesen.ViewModels
 			}
 		}
 
-		public void RefreshState(uint deadzoneSize)
+		public void RefreshState(uint globalDeadzoneSize, IReadOnlyList<DeviceDeadzoneOverride> overrides)
 		{
 			if(InputApi.GetGamepadInfo(Index, out GamepadInfo info)) {
 				Name = info.Name;
@@ -137,9 +154,17 @@ namespace Mesen.ViewModels
 				Slot = info.Slot;
 				VendorId = info.VendorId.ToString("X4");
 				ProductId = info.ProductId.ToString("X4");
+				VendorIdValue = info.VendorId;
+				ProductIdValue = info.ProductId;
 				HasRumble = info.HasRumble;
 				InfoText = $"{Backend} · Pad{Slot + 1} · VID:{VendorId} · PID:{ProductId}";
 			}
+
+			//Resolve the effective deadzone from the per-device overrides before
+			//rendering the ring, so a pad with its own setting shows that ring.
+			GlobalDeadzoneSize = globalDeadzoneSize;
+			IsUsingPerDeviceDeadzone = PerDeviceDeadzone.HasOverride(overrides, VendorIdValue, ProductIdValue);
+			EffectiveDeadzoneSize = PerDeviceDeadzone.Resolve(globalDeadzoneSize, overrides, VendorIdValue, ProductIdValue);
 
 			if(InputApi.GetGamepadState(Index, out GamepadState state)) {
 				for(int i = 0; i < Buttons.Count; i++) {
@@ -151,7 +176,48 @@ namespace Mesen.ViewModels
 				RightY = state.Axes[3];
 			}
 
-			UpdateStickDiagnostics(deadzoneSize);
+			UpdateStickDiagnostics(EffectiveDeadzoneSize);
+		}
+
+		partial void OnEffectiveDeadzoneSizeChanged(uint value)
+		{
+			OnPropertyChanged(nameof(IsDz0));
+			OnPropertyChanged(nameof(IsDz1));
+			OnPropertyChanged(nameof(IsDz2));
+			OnPropertyChanged(nameof(IsDz3));
+			OnPropertyChanged(nameof(IsDz4));
+		}
+
+		//Persist a per-device deadzone override for this pad (PRD I.3). Reassigning
+		//InputConfig.PerDeviceDeadzones raises the recursive observer that calls
+		//InputConfig.ApplyConfig() - the same lifecycle as the global slider. A pad
+		//with no identity (0:0000) cannot be keyed, so it is ignored.
+		[RelayCommand]
+		private void SetDeadzone(string sizeText)
+		{
+			if(!uint.TryParse(sizeText, out uint size) || (VendorIdValue == 0 && ProductIdValue == 0)) {
+				return;
+			}
+			uint clamped = PerDeviceDeadzone.ClampSize(size);
+			List<DeviceDeadzoneOverride> overrides = new(ConfigManager.Config.Input.PerDeviceDeadzones);
+			overrides.RemoveAll(o => o.VendorId == VendorIdValue && o.ProductId == ProductIdValue);
+			overrides.Add(new DeviceDeadzoneOverride(VendorIdValue, ProductIdValue, clamped));
+			ConfigManager.Config.Input.PerDeviceDeadzones = overrides;
+			EffectiveDeadzoneSize = clamped;
+			IsUsingPerDeviceDeadzone = true;
+		}
+
+		[RelayCommand]
+		private void ClearDeadzone()
+		{
+			if(VendorIdValue == 0 && ProductIdValue == 0) {
+				return;
+			}
+			List<DeviceDeadzoneOverride> overrides = new(ConfigManager.Config.Input.PerDeviceDeadzones);
+			overrides.RemoveAll(o => o.VendorId == VendorIdValue && o.ProductId == ProductIdValue);
+			ConfigManager.Config.Input.PerDeviceDeadzones = overrides;
+			EffectiveDeadzoneSize = GlobalDeadzoneSize;
+			IsUsingPerDeviceDeadzone = false;
 		}
 
 		private void UpdateStickDiagnostics(uint deadzoneSize)

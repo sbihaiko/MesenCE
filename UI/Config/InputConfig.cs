@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Mesen.Interop;
+using Mesen.Logic;
 using Mesen.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,11 @@ namespace Mesen.Config
 	public partial class InputConfig : BaseConfig<InputConfig>
 	{
 		[ObservableProperty][MinMax(0, 4)] public partial UInt32 ControllerDeadzoneSize { get; set; } = 2;
+		//Per-device deadzone overrides (PRD I.3), keyed by the pad's VendorId/ProductId.
+		//Host-side only: the input tester's Test tab uses them (falling back to
+		//ControllerDeadzoneSize); they are not mirrored to the core, whose input path
+		//stays global-only. Empty list = every pad uses the global setting.
+		[ObservableProperty] public partial List<DeviceDeadzoneOverride> PerDeviceDeadzones { get; set; } = new();
 		[ObservableProperty][MinMax(0, 9)] public partial UInt32 MouseSensitivity { get; set; } = 5;
 		[ObservableProperty] public partial bool HidePointerForLightGuns { get; set; } = false;
 		[ObservableProperty][MinMax(0, 10)] public partial UInt32 ForceFeedbackIntensity { get; set; } = 5;

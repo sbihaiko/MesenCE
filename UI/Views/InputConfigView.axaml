@@ -175,6 +175,20 @@
 
 										<!-- Circularity test (PRD I.3): accumulate a full stick rotation and
 											 report coverage x radial consistency. -->
+										<!-- Per-device deadzone (PRD I.3): a 0-4 selector that persists per
+										     VID:PID; a pad without an override shows the global setting. -->
+										<StackPanel Orientation="Horizontal" Margin="0 8 0 0" Spacing="4" VerticalAlignment="Center">
+											<TextBlock Text="{l:Translate lblStickDeadzone}" VerticalAlignment="Center" FontSize="11" Margin="0 0 4 0" />
+											<ToggleButton Content="0" IsChecked="{Binding IsDz0}" Command="{Binding SetDeadzoneCommand}" CommandParameter="0" Padding="6 2" FontSize="11" />
+											<ToggleButton Content="1" IsChecked="{Binding IsDz1}" Command="{Binding SetDeadzoneCommand}" CommandParameter="1" Padding="6 2" FontSize="11" />
+											<ToggleButton Content="2" IsChecked="{Binding IsDz2}" Command="{Binding SetDeadzoneCommand}" CommandParameter="2" Padding="6 2" FontSize="11" />
+											<ToggleButton Content="3" IsChecked="{Binding IsDz3}" Command="{Binding SetDeadzoneCommand}" CommandParameter="3" Padding="6 2" FontSize="11" />
+											<ToggleButton Content="4" IsChecked="{Binding IsDz4}" Command="{Binding SetDeadzoneCommand}" CommandParameter="4" Padding="6 2" FontSize="11" />
+											<TextBlock Text="{l:Translate lblDeadzoneUsesOverride}" FontSize="11" Foreground="#cc6633" VerticalAlignment="Center" IsVisible="{Binding IsUsingPerDeviceDeadzone}" />
+											<TextBlock Text="{l:Translate lblDeadzoneUsesGlobal}" FontSize="11" Foreground="Gray" VerticalAlignment="Center" IsVisible="{Binding !IsUsingPerDeviceDeadzone}" />
+											<Button Content="{l:Translate btnDeadzoneReset}" Command="{Binding ClearDeadzoneCommand}" Padding="6 2" FontSize="11" IsVisible="{Binding IsUsingPerDeviceDeadzone}" />
+										</StackPanel>
+
 										<StackPanel Margin="0 10 0 0">
 											<Grid ColumnDefinitions="*,Auto">
 												<TextBlock Text="{l:Translate lblStickCircularity}" FontWeight="Bold" />
