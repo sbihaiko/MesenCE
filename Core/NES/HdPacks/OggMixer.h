@@ -9,6 +9,15 @@ class OggMixer : public IAudioProvider
 {
 private:
 	shared_ptr<OggReader> _bgm;
+	//F5.4g Block C item 10 (ADR-0142): a releasing track overlapping the
+	//current one for a short crossfade window when the BGM switches or stops.
+	shared_ptr<OggReader> _bgmFadeOut;
+	//Sample counters counting down from kBgmFadeSamples: the current _bgm
+	//ramps 0->1 over its window, the releasing track 1->0 over its own.
+	uint32_t _bgmFadeInSamplesLeft = 0;
+	uint32_t _bgmFadeOutSamplesLeft = 0;
+	static constexpr uint32_t kBgmFadeSamples = 1764; //~40ms at 44.1kHz
+
 	vector<shared_ptr<OggReader>> _sfx;
 
 	Emulator* _emu = nullptr;

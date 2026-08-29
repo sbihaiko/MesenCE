@@ -18,6 +18,9 @@ OggMixer::OggMixer(Emulator* emu)
 void OggMixer::Reset(uint32_t sampleRate)
 {
 	_bgm.reset();
+	_bgmFadeOut.reset();
+	_bgmFadeInSamplesLeft = 0;
+	_bgmFadeOutSamplesLeft = 0;
 	_sfx.clear();
 	_sfxVolume = 128;
 	_bgmVolume = 128;
@@ -43,7 +46,14 @@ void OggMixer::SetPausedFlag(bool paused)
 
 void OggMixer::StopBgm()
 {
-	_bgm.reset();
+	//F5.4g Block C item 10 (ADR-0142): fade the current track out instead of
+	//cutting it; a lone fade-in (no releasing track) still removes the stop
+	//click, and a switch later takes over the releasing slot.
+	if(_bgm) {
+		_bgmFadeOut = _bgm;
+		_bgmFadeOutSamplesLeft = kBgmFadeSamples;
+		_bgm.reset();
+	}
 }
 
 void OggMixer::StopSfx()
@@ -100,7 +110,15 @@ bool OggMixer::Play(string filename, bool isSfx, uint32_t startOffset, uint32_t 
 		if(isSfx) {
 			_sfx.push_back(reader);
 		} else {
+			//F5.4g Block C item 10 (ADR-0142): a music switch crossfades - the
+			//old track becomes the releasing reader and the new one fades in.
+			//A rapid second switch replaces the releasing slot (never stacks).
+			if(_bgm) {
+				_bgmFadeOut = _bgm;
+				_bgmFadeOutSamplesLeft = kBgmFadeSamples;
+			}
 			_bgm = reader;
+			_bgmFadeInSamplesLeft = kBgmFadeSamples;
 		}
 		return true;
 	}
@@ -118,11 +136,34 @@ int OggMixer::GetBgmOffset()
 
 void OggMixer::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sampleRate)
 {
+	//F5.4g Block C item 10 (ADR-0142): the fade counters advance only on real
+	//audio (not run-ahead frames - OggReader::ApplySamples no-ops on those, so
+	//advancing here would burn the fade on audio that never plays).
+	bool realAudio = !_emu->IsRunAheadFrame();
+
 	if(_bgm && !_paused) {
+		double fadeIn = 1.0;
+		if(_bgmFadeInSamplesLeft > 0) {
+			fadeIn = 1.0 - (double)_bgmFadeInSamplesLeft / kBgmFadeSamples;
+			if(realAudio) {
+				_bgmFadeInSamplesLeft = _bgmFadeInSamplesLeft > sampleCount ? _bgmFadeInSamplesLeft - sampleCount : 0;
+			}
+		}
 		_bgm->SetSampleRate(sampleRate);
-		_bgm->ApplySamples(out, sampleCount, _bgmVolume);
+		_bgm->ApplySamples(out, sampleCount, (uint8_t)(_bgmVolume * fadeIn));
 		if(_bgm->IsPlaybackOver()) {
 			_bgm.reset();
+		}
+	}
+	if(_bgmFadeOut && !_paused) {
+		double fadeOut = (double)_bgmFadeOutSamplesLeft / kBgmFadeSamples;
+		if(realAudio) {
+			_bgmFadeOutSamplesLeft = _bgmFadeOutSamplesLeft > sampleCount ? _bgmFadeOutSamplesLeft - sampleCount : 0;
+		}
+		_bgmFadeOut->SetSampleRate(sampleRate);
+		_bgmFadeOut->ApplySamples(out, sampleCount, (uint8_t)(_bgmVolume * fadeOut));
+		if(_bgmFadeOut->IsPlaybackOver() || _bgmFadeOutSamplesLeft == 0) {
+			_bgmFadeOut.reset();
 		}
 	}
 	for(shared_ptr<OggReader>& sfx : _sfx) {
