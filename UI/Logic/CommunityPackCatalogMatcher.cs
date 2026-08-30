@@ -16,12 +16,32 @@ namespace Mesen.Logic
 				return null;
 			}
 			foreach(CommunityPackCatalogEntry entry in catalog.Packs) {
-				if(!string.IsNullOrWhiteSpace(entry.Rom?.Sha1) &&
-					string.Equals(entry.Rom!.Sha1, romSha1, StringComparison.OrdinalIgnoreCase)) {
+				if(Matches(entry.Rom, romSha1)) {
 					return entry;
 				}
 			}
 			return null;
+		}
+
+		public static bool Matches(CommunityPackRom? rom, string romSha1)
+		{
+			if(rom == null || string.IsNullOrWhiteSpace(romSha1)) {
+				return false;
+			}
+			if(!string.IsNullOrWhiteSpace(rom.Sha1) &&
+				string.Equals(rom.Sha1, romSha1, StringComparison.OrdinalIgnoreCase)) {
+				return true;
+			}
+			if(rom.Sha1s == null) {
+				return false;
+			}
+			foreach(string extra in rom.Sha1s) {
+				if(!string.IsNullOrWhiteSpace(extra) &&
+					string.Equals(extra, romSha1, StringComparison.OrdinalIgnoreCase)) {
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 }

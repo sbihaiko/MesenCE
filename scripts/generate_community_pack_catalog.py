@@ -104,14 +104,18 @@ def _render(c):
         return markdown.build_row(issue, status, details, form), None
     rom_sha1 = c["rom_sha1"]
     rom_crc32 = None
-    if not rom_sha1:
-        target = rom_target.resolve_rom_target(form["game"])
-        if target:
-            rom_sha1 = target["sha1"]
-            rom_crc32 = target.get("crc32")
+    target = rom_target.resolve_rom_target(form["game"])
+    if not rom_sha1 and target:
+        rom_sha1 = target["sha1"]
+        rom_crc32 = target.get("crc32")
     entry, mismatch = build_pack_entry(issue, form["game"].strip(), system, form["license"],
         c["pack_url"], c["pack_hash"], rom_sha1, status, c["mep_meta"], votes=c["votes"],
         crc32=rom_crc32)
+    if entry and target:
+        primary = (entry.get("rom") or {}).get("sha1")
+        extras = [s for s in target.get("alt_sha1") or [] if s and s != primary]
+        if extras:
+            entry.setdefault("rom", {})["sha1s"] = extras
     if mismatch:
         _warn(f"issue #{issue}: mep-meta source_sha256 disagrees with Pack Hash; omitting deps/recipe.")
     if not mei_entry_conforms(entry, entry.get("kind")):

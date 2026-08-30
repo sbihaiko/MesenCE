@@ -70,5 +70,28 @@ namespace Mesen.Tests.CommunityPacks
 			Assert.Null(CommunityPackCatalogMatcher.FindMatchingEntry(new CommunityPackCatalog(), "979494E7869AC7AB4815FDBD1DC99F893F713FBF"));
 			Assert.Null(CommunityPackCatalogMatcher.FindMatchingEntry(null!, "979494E7869AC7AB4815FDBD1DC99F893F713FBF"));
 		}
+
+		[Fact]
+		public void FindMatchingEntry_AltSha1s_MatchesRevision()
+		{
+			CommunityPackCatalog catalog = new() {
+				Packs = new[] {
+					new CommunityPackCatalogEntry {
+						Name = "Castlevania (USA)",
+						Kind = "hd-legacy",
+						Rom = new CommunityPackRom {
+							Sha1 = "EE09B857C90916EDD92A20C463485A610B0A76FD",
+							Sha1s = new[] { "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A" },
+						},
+					},
+				},
+			};
+
+			CommunityPackCatalogEntry? match = CommunityPackCatalogMatcher.FindMatchingEntry(
+				catalog, "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A");
+
+			Assert.NotNull(match);
+			Assert.Equal("Castlevania (USA)", match!.Name);
+		}
 	}
 }

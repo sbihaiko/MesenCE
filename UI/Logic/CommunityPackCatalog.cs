@@ -90,6 +90,9 @@ namespace Mesen.Logic
 	public class CommunityPackRom
 	{
 		[JsonPropertyName("sha1")] public string? Sha1 { get; set; }
+		//Additive MAY (MEI-v1 §2.2 unknown-field ignore): extra No-Intro
+		//sha1s the same pack also matches (e.g. Castlevania USA Rev A).
+		[JsonPropertyName("sha1s")] public string[]? Sha1s { get; set; }
 		[JsonPropertyName("crc32")] public string? Crc32 { get; set; }
 	}
 

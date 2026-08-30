@@ -80,6 +80,12 @@ namespace Mesen.Services
 
 				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
 				if(fetched == null) {
+					//No catalog row for this dump (or a failed download): allow a
+					//later load this session to retry, so a catalog update is
+					//picked up without restarting the process.
+					lock(_attemptedRomSha1) {
+						_attemptedRomSha1.Remove(romSha1);
+					}
 					EmuApi.WriteLogEntry("[CommunityPack] no match/fetch result (see [CommunityPackFetch] lines above for the stage that returned null)");
 					return; //no catalog, no match, host not allowed or hash mismatch - all silent (§41/§42)
 				}

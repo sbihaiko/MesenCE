@@ -65,8 +65,13 @@ NO_INTRO_TARGETS = {
         "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
     },
     "castlevania usa": {
-        "source": "Mesen CheatDb.Nes.json 'Castlevania (USA)' sha1 (same value GetMepRomSha1 returns; Rev A is 3DCB69A8... and does not match this pack)",
+        "source": "Mesen CheatDb.Nes.json 'Castlevania (USA)' sha1 (GetMepRomSha1)",
         "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD",
+        # The kya HD pack still loads textures on Rev A (ADR-0044: a
+        # <patch> that does not match the dump is skipped; tiles still apply).
+        "alt_sha1": [
+            "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A",  # Castlevania (USA) (Rev A)
+        ],
     },
 }
 
@@ -105,4 +110,11 @@ def resolve_rom_target(game):
     rom = {"sha1": sha1}
     if crc32:
         rom["crc32"] = crc32
+    extras = []
+    for raw in target.get("alt_sha1") or []:
+        extra = (raw or "").strip().upper()
+        if SHA1_UPPER.match(extra) and extra != sha1:
+            extras.append(extra)
+    if extras:
+        rom["alt_sha1"] = extras
     return rom

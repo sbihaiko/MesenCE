@@ -109,6 +109,10 @@ def check_catalog_games_resolve():
         if not rom:
             fail(f"expected {game!r} to resolve")
             return
+    cv = rom_target.resolve_rom_target("Castlevania (USA)")
+    if not cv or "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A" not in (cv.get("alt_sha1") or []):
+        fail(f"Castlevania (USA) should also match Rev A via alt_sha1: {cv!r}")
+        return
     ok(f"{len(resolved)} of {len(catalog['packs'])} catalog games resolve "
        f"({sorted(resolved)}); the rest keep rom {{}} until a verified target hash exists")
 
