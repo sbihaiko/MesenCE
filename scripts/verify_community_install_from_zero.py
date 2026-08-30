@@ -9,8 +9,9 @@ the actual C++ loader picks the installed pack up headlessly:
 
   1. compute each ROM's No-Intro sha1 (Python mirror of
      MepPackManager::ComputeNoIntroSha1, ADR-0044);
-  2. match against the live catalog (docs/community-packs.json) - exact sha1,
-     an entry with no `rom.sha1` is never hash-matched;
+  2. match against the live catalog (docs/community-packs.json) - exact
+     `rom.sha1` or any `rom.sha1s[]` (revision dumps, e.g. Castlevania USA
+     Rev A); an entry with no sha1 is never hash-matched;
   3. for matched ROMs, install from zero: wipe the scratch mesen-home
      (HdPacks/, EnhancementPacks/) and the catalog cache, download the
      artifact (scripts/fetch_pack.py - the allow-listed, sha256-capped,
@@ -230,8 +231,9 @@ def load_catalog(path: Path):
 def find_catalog_match(packs, sha1):
     for p in packs:
         rom = p.get("rom") or {}
-        s = (rom.get("sha1") or "").strip().upper()
-        if s and s == sha1:
+        hashes = [(rom.get("sha1") or "").strip().upper()]
+        hashes.extend((s or "").strip().upper() for s in (rom.get("sha1s") or []))
+        if sha1 in hashes and sha1:
             return p
     return None
 
