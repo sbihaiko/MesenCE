@@ -2,11 +2,12 @@
 
 Community HD/MEP submissions name their target game ("Target game/ROM and
 region") but rarely declare a No-Intro ROM hash. `CommunityPackCatalogFetcher`
-matches a loaded ROM against the catalog by `rom.sha1`, so an entry with an
-empty `rom` object can never auto-match — it stays listable/installable by
-hand, but the auto-install path silently never fires. This module closes that
-gap for NES packs: a deterministic, versioned map from the normalized catalog
-game name to the hash of the ROM it targets.
+matches a loaded ROM against the catalog by `rom.sha1` (then `rom.sha1s`,
+then same-game identity for entries that already carry a sha1), so an entry
+with an empty `rom` object can never auto-match — it stays
+listable/installable by hand, but the auto-install path silently never
+fires. This module closes that gap for NES packs: a deterministic, versioned
+map from the normalized catalog game name to the hash of the ROM it targets.
 
 Source of the hashes — two legitimate sources:
   1. **A real No-Intro dump of the target game**, verified against the Mesen
@@ -63,6 +64,12 @@ NO_INTRO_TARGETS = {
     "the legend of zelda usa": {
         "source": "pack-declared <supportedRom>/<patch> sha1 (Zelda Remastered v1.3, issue #139)",
         "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
+        # Nearby USA dumps the pack's tiles still apply to (ADR-0044: a
+        # <patch> that does not match the dump is skipped; tiles still apply).
+        "alt_sha1": [
+            "A12D74C73A0481599A5D832361D168F4737BBCF6",  # CheatDb Legend of Zelda, The (USA)
+            "BE2F5DC8C5BA8EC1A344A71F9FB204750AF24FE7",  # CheatDb Legend of Zelda, The (USA) (Rev A)
+        ],
     },
     "castlevania usa": {
         "source": "Mesen CheatDb.Nes.json 'Castlevania (USA)' sha1 (GetMepRomSha1)",

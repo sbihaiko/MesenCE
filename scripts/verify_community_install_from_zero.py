@@ -11,7 +11,10 @@ the actual C++ loader picks the installed pack up headlessly:
      MepPackManager::ComputeNoIntroSha1, ADR-0044);
   2. match against the live catalog (docs/community-packs.json) - exact
      `rom.sha1` or any `rom.sha1s[]` (revision dumps, e.g. Castlevania USA
-     Rev A); an entry with no sha1 is never hash-matched;
+     Rev A), then the same-game identity fallback used by
+     CommunityPackCatalogMatcher (ROM filename vs entry `game`, only when
+     the entry already carries a sha1); an entry with no sha1 is never
+     auto-matched;
   3. for matched ROMs, install from zero: wipe the scratch mesen-home
      (HdPacks/, EnhancementPacks/) and the catalog cache, download the
      artifact (scripts/fetch_pack.py - the allow-listed, sha256-capped,
@@ -228,13 +231,20 @@ def load_catalog(path: Path):
     return json.load(open(path))["packs"]
 
 
-def find_catalog_match(packs, sha1):
+def find_catalog_match(packs, sha1, rom_name=None):
     for p in packs:
         rom = p.get("rom") or {}
         hashes = [(rom.get("sha1") or "").strip().upper()]
         hashes.extend((s or "").strip().upper() for s in (rom.get("sha1s") or []))
         if sha1 in hashes and sha1:
             return p
+    if rom_name:
+        for p in packs:
+            rom = p.get("rom") or {}
+            has_hash = (rom.get("sha1") or "").strip() or any(
+                (s or "").strip() for s in (rom.get("sha1s") or []))
+            if has_hash and same_game(p.get("game") or "", rom_name):
+                return p
     return None
 
 
@@ -270,7 +280,7 @@ def coverage(roms, packs):
     rows = []
     for rom in roms:
         sha1 = rom_sha1(rom)
-        match = find_catalog_match(packs, sha1)
+        match = find_catalog_match(packs, sha1, rom.stem)
         stem_norm = normalize_rom_core_name(rom.stem)
         cross = None
         tgt = rom_target.NO_INTRO_TARGETS.get(stem_norm) or rom_target.NO_INTRO_TARGETS.get(
@@ -351,10 +361,10 @@ def install_and_load(rom: Path, args, work: Path) -> str:
 
     packs = load_catalog(args.catalog)
     sha1 = rom_sha1(rom)
-    entry = find_catalog_match(packs, sha1)
+    rom_name = rom.stem
+    entry = find_catalog_match(packs, sha1, rom_name)
     if entry is None:
         return "SKIP (no catalog match)"
-    rom_name = rom.stem
 
     try:
         pack = acquire_pack(entry, args, work)

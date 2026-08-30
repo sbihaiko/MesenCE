@@ -121,7 +121,12 @@ split part of their content into third-party artifacts:
   deliberate v1.1 downgrade of a v1.0 MUST for every `kind`, not gated on
   the declared `mei` minor: a v1.0 document stays valid under v1.1 rules, and
   the only opt-in relaxation is the explicit `kind: "hd-legacy"` (absent
-  `kind` means `mep`).
+  `kind` means `mep`). A client MAY additionally auto-match a nearby dump
+  of the same title to an entry that already carries a `sha1`, when the ROM
+  display name and the entry's `game` identify the same title after stripping
+  trailing region/dump tags (so "Legend of Zelda, The (USA)" matches
+  "The Legend of Zelda (USA)"). An entry with no `sha1` MUST still not
+  auto-match. IPS/patches stay hash-gated (ADR-0044).
 - `deps` (when present) is a list of objects, each SHOULD carry `license`
   (SPDX id or a short declared-licence string, mirroring MEP-recipe-v1 §3.3)
   and SHOULD carry `url`/`sha256`/`size` identifying the third-party

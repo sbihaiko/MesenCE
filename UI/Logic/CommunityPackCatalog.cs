@@ -84,9 +84,11 @@ namespace Mesen.Logic
 
 	//`rom` object (MEI-v1.md §2.2/§2.3). `Sha1` is a single 40-uppercase-hex
 	//No-Intro hash (MEP-v1 §4), MAY be absent per the v1.1 downgrade of the
-	//v1.0 MUST (§2.3) - entries without one are listable but not
-	//hash-matchable against a loaded ROM. `Crc32` is the legacy fallback for
-	//`kind: "hd-legacy"` entries pre-dating MEP.
+	//v1.0 MUST (§2.3) - entries without one are listable but never auto-
+	//matched against a loaded ROM. Entries that carry a sha1 also accept
+	//nearby dumps of the same `game` (CommunityPackCatalogMatcher.SameGame).
+	//`Crc32` is the legacy fallback for `kind: "hd-legacy"` entries
+	//pre-dating MEP.
 	public class CommunityPackRom
 	{
 		[JsonPropertyName("sha1")] public string? Sha1 { get; set; }

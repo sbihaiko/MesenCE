@@ -54,6 +54,9 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
 
 - Add new test files under a subfolder matching the `UI/Logic/` area they
   cover (e.g. `UI.Tests/Mep/` for `UI/Logic/Mep*.cs`).
+- `CommunityPacks/CommunityPackCatalogMatcherTests` covers SHA1/`sha1s`
+  matching and the same-game identity fallback (`SameGame`); keep the
+  `rom: {}` never-auto-matches case when touching the matcher.
 - Never add a `PackageReference` to Avalonia, or a `ProjectReference` to
   `UI/UI.csproj` — that reintroduces the native/SDL2 dependency this project
   is built to avoid.

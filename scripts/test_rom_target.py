@@ -113,6 +113,12 @@ def check_catalog_games_resolve():
     if not cv or "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A" not in (cv.get("alt_sha1") or []):
         fail(f"Castlevania (USA) should also match Rev A via alt_sha1: {cv!r}")
         return
+    zelda_alts = (rom_target.resolve_rom_target("The Legend of Zelda (USA)") or {}).get("alt_sha1") or []
+    for extra in ("A12D74C73A0481599A5D832361D168F4737BBCF6",
+                  "BE2F5DC8C5BA8EC1A344A71F9FB204750AF24FE7"):
+        if extra not in zelda_alts:
+            fail(f"Zelda (USA) should also match CheatDb dumps via alt_sha1: {zelda_alts!r}")
+            return
     ok(f"{len(resolved)} of {len(catalog['packs'])} catalog games resolve "
        f"({sorted(resolved)}); the rest keep rom {{}} until a verified target hash exists")
 

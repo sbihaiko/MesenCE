@@ -13,7 +13,8 @@ using System.Threading.Tasks;
 namespace Mesen.Services
 {
 	//Network-facing half of F6.4b-2 (ADR-0138 §37/§38/§41/§42/§46): fetches the MEI v1.1 catalog,
-	//matches the loaded ROM by No-Intro sha1 (EmuApi.GetMepRomSha1), downloads+verifies the
+	//matches the loaded ROM by No-Intro sha1 (EmuApi.GetMepRomSha1) then, if that misses, by
+	//game identity (GetRomName vs entry.game) for entries that already carry a sha1, downloads+verifies the
 	//matched entry's primary artifact and its directly-downloadable deps. Only class in UI/
 	//issuing HTTP for community packs - Core/ stays HTTP-free (§37), UI/Logic/*.cs stays
 	//host-free (UI/AGENTS.md firewall), hence UI/Services/. CONTRACT (shared with
@@ -41,14 +42,20 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPackFetch] no ROM sha1 available");
 				return null;
 			}
+			string romName = EmuApi.GetRomInfo().GetRomName();
 
 			IReadOnlyList<CommunityPackHostEntry> allowedHosts = LoadAllowlist();
 			EmuApi.WriteLogEntry("[CommunityPackFetch] allow-listed hosts: " + allowedHosts.Count +
 				" (" + string.Join(", ", allowedHosts.Select(h => h.Host)) + ")");
 			CommunityPackCatalog? catalog = await LoadCatalogAsync(allowedHosts);
 			EmuApi.WriteLogEntry("[CommunityPackFetch] catalog loaded: " + (catalog == null ? "null" : catalog.Packs?.Length + " packs"));
-			CommunityPackCatalogEntry? entry = catalog == null ? null : CommunityPackCatalogMatcher.FindMatchingEntry(catalog, romSha1);
-			EmuApi.WriteLogEntry("[CommunityPackFetch] matching entry for romSha1=" + romSha1 + ": " +
+			CommunityPackCatalogEntry? entry = catalog == null ? null : CommunityPackCatalogMatcher.FindMatchingEntry(catalog, romSha1, romName);
+			string via = "none";
+			if(entry != null) {
+				via = CommunityPackCatalogMatcher.Matches(entry.Rom, romSha1) ? "sha1" : "game";
+			}
+			EmuApi.WriteLogEntry("[CommunityPackFetch] matching entry for romSha1=" + romSha1 +
+				" romName=" + romName + " via=" + via + ": " +
 				(entry == null ? "none" : entry.PackId + " url=" + entry.Url + " sha256=" + entry.Sha256));
 			if(entry == null) {
 				return null;

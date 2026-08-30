@@ -122,6 +122,14 @@ can be exercised by real xunit tests without Avalonia or the native
   update, so `DisabledPacks` and the per-section flags survive a reinstall.
   The catalog DTO's additive P.2 fields (`pack_id`/`content_id`/`votes`) are
   what carry the slot identity and 👍 into these decisions.
+- `CommunityPackCatalogMatcher` (F6.4b, MEI-v1 §2.3): auto-match is exact
+  No-Intro `rom.sha1` / `rom.sha1s` first, then a same-game identity
+  fallback (`SameGame`: core-title token multiset after stripping trailing
+  region/dump tags) so a nearby dump of a catalogued title still
+  auto-installs. The fallback only runs on entries that already carry a
+  sha1 — `rom: {}` stays listable/manual. SHA1 always wins over the
+  filename. IPS/patches stay hash-gated (ADR-0044). `CommunityPackCatalogFetcher`
+  passes `EmuApi.GetRomInfo().GetRomName()` as the ROM display name.
 
 - **New ViewModels** (Phase 3 of the plan — applied opportunistically, "in
   the code we touch", not as a retrofit of existing VMs): a *new*

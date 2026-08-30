@@ -21,6 +21,10 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   exact `host` and/or `host_ends_with`. `kind: mediafire` fetches the
   `/file/` share page then the `downloadN.mediafire.com` CDN hop, which is
   re-checked against the same list.
+- `verify_community_install_from_zero.py` mirrors
+  `CommunityPackCatalogMatcher`: exact `rom.sha1`/`rom.sha1s` first, then
+  same-game identity (ROM filename vs catalog `game`) only for entries that
+  already carry a sha1. `rom: {}` never auto-matches.
 - No test framework in C++: harnesses are `main()` + manual checks that
   print `PASS`/`FAIL` per case and return a non-zero exit code on any
   failure (see `core_unit_tests.cpp`, `roles_probe.cpp`).
