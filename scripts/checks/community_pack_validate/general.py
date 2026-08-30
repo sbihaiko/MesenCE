@@ -63,7 +63,9 @@ def check_host_allowlist(text):
         fail(f"missing file: {ALLOWLIST_PATH}")
         return
     try:
-        allowlist_hosts = {h["host"] for h in json.loads(ALLOWLIST_PATH.read_text())["hosts"]}
+        allowlist_hosts = {
+            h["host"] for h in json.loads(ALLOWLIST_PATH.read_text())["hosts"] if h.get("host")
+        }
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         fail(f"scripts/pack_host_allowlist.json did not parse as expected: {exc}")
         return
@@ -73,6 +75,8 @@ def check_host_allowlist(text):
     allowlist_text = ALLOWLIST_PATH.read_text()
     if "/releases/" not in allowlist_text:
         fail("host allow-list missing github.com /releases/ path restriction")
+    if "mediafire" not in allowlist_text:
+        fail("host allow-list missing MediaFire entries")
     if not FETCH_PACK_PATH.is_file():
         fail(f"missing file: {FETCH_PACK_PATH}")
         return

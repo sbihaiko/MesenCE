@@ -38,8 +38,9 @@ cover audio/synth, so it receives the `pack:partial-hd` label instead of
 
 The submission is rejected when:
 
-- the link is not on the allow-list of accepted hosts, or the download
-  exceeds the size limit;
+- the link is not on the allow-list of accepted hosts (GitHub
+  releases/archives, gist/raw, Google Drive, MediaFire `/file/` links), or
+  the download exceeds the size limit;
 - `scripts/mep_lint.py` fails (invalid `pack.json` structure, sections, or
   paths);
 - the pack violates the spec's security section (MEP-v1.md §6): zip entries

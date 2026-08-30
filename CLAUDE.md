@@ -142,7 +142,9 @@ https://github.com/users/sbihaiko/projects/3
   `.github/workflows/community-pack-validate.yml` workflow, which:
   - downloads the pack, restricted to a host allow-list
     (`github.com/*/releases/*`, `raw.githubusercontent.com`,
-    `gist.githubusercontent.com`, `gist.github.com`) with a 300MB cap;
+    `gist.githubusercontent.com`, `gist.github.com`, Google Drive,
+    MediaFire `www.mediafire.com/file/*` plus `downloadN.mediafire.com`)
+    with a 300MB cap;
   - runs `python3 scripts/mep_lint.py` unmodified against the downloaded
     pack;
   - always computes the `sha256` of the content and writes it to the

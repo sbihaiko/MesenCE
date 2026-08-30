@@ -43,7 +43,10 @@ can be exercised by real xunit tests without Avalonia or the native
   `Avalonia`/`EmuApi`/`HttpClient`/`Mesen.Services`, and `HttpClient` under
   `UI/` is confined to `UI/Services/*.cs` (plus the pre-existing
   `UpdatePromptViewModel`) — never Windows code-behind or ViewModels. Every
-  community-pack GET goes through `CommunityPackDownloader` (§50).
+  community-pack GET goes through `CommunityPackDownloader` (§50). A
+  `kind: "mediafire"` URL fetches the share page then the
+  `downloadN.mediafire.com` href (`CommunityPackMediaFire.ExtractDownloadUrl`);
+  the CDN hop is allow-listed via `host_ends_with`.
 - `UI/Logic/*.cs` types return plain, host-free records/DTOs — never
   `ViewModelBase`/`ObservableObject` subtypes. The owning ViewModel maps
   the result into its UI-facing type (e.g. `MepPackListEntry` →
@@ -167,7 +170,16 @@ can be exercised by real xunit tests without Avalonia or the native
   `UI/Logic/`. `CommunityPackInstallCoordinator.Install()` is the seam: it
   takes the fetcher's already-verified output (matched catalog entry,
   primary artifact path, dep-id → path map) and is the only call site of
-  `EmuApi.InstallMepRecipe` for this feature.
+  `EmuApi.InstallMepRecipe` for this feature. After a successful
+  auto-install (`CommunityPackInstallStatus.Installed`),
+  `CommunityPackInstallService` power-cycles (`LoadRomHelper.PowerCycle`)
+  when the same ROM is still loaded, so `HdPacks/<rom>/` applies without a
+  second manual load; `OnGameLoaded` already skips power cycles, so this
+  does not re-fetch. A ROM switch during the download does not power-cycle.
+  `CommunityPackDownloader` follows only 301/302/303/307/308
+  (`CommunityPackHttpStatus.IsFollowableRedirect`); HTTP 304 is a terminal
+  catalog-cache status for `CommunityCatalogCacheDecision`, never a
+  redirect.
 
 ## Work Guidance
 

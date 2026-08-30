@@ -68,9 +68,13 @@ namespace Mesen.Services
 				string romSha1 = EmuApi.GetMepRomSha1();
 				EmuApi.WriteLogEntry("[CommunityPack] romSha1=" + romSha1);
 				lock(_attemptedRomSha1) {
-					if(string.IsNullOrWhiteSpace(romSha1) || !_attemptedRomSha1.Add(romSha1)) {
-						EmuApi.WriteLogEntry("[CommunityPack] skipped: no hash, or already attempted this session");
-						return; //no hash, or already attempted this session
+					if(string.IsNullOrWhiteSpace(romSha1)) {
+						EmuApi.WriteLogEntry("[CommunityPack] skipped: no ROM sha1");
+						return;
+					}
+					if(!_attemptedRomSha1.Add(romSha1)) {
+						EmuApi.WriteLogEntry("[CommunityPack] skipped: already attempted this session for " + romSha1);
+						return;
 					}
 				}
 
@@ -94,7 +98,7 @@ namespace Mesen.Services
 					fetched.Entry, fetched.PrimaryPackPath, fetched.ResolvedDepPaths);
 				EmuApi.WriteLogEntry("[CommunityPack] Install() outcome: Status=" + outcome.Status +
 					" ContainerName=" + outcome.ContainerName + " Message=" + outcome.Message);
-				Surface(outcome);
+				Surface(outcome, romSha1);
 			} catch(Exception ex) {
 				EmuApi.WriteLogEntry("[CommunityPack] RunAsync threw: " + ex);
 				Notify("Community pack auto-install failed: " + ex.Message);
@@ -103,16 +107,17 @@ namespace Mesen.Services
 			}
 		}
 
-		private static void Surface(CommunityPackInstallOutcome outcome)
+		private static void Surface(CommunityPackInstallOutcome outcome, string installedRomSha1)
 		{
 			switch(outcome.Status) {
 				case CommunityPackInstallStatus.Installed:
-					Notify("Community pack '" + outcome.ContainerName + "' installed - power cycle to apply");
+					Notify("Community pack '" + outcome.ContainerName + "' installed");
 					foreach(string withheld in outcome.Withheld) {
 						//§6: a patch whose dependency is missing is withheld, never applied blindly.
 						Notify("Patch withheld (missing dependency): " + withheld);
 					}
 					NotifyPendingDeps(outcome.PendingDeps);
+					ApplyInstalledPack(installedRomSha1);
 					break;
 
 				case CommunityPackInstallStatus.Failed:
@@ -124,6 +129,26 @@ namespace Mesen.Services
 					//Routine: up to date, disabled by user, consent declined - nothing to say.
 					break;
 			}
+		}
+
+		//HD/MEP packs are applied at console init, not live. After a background
+		//auto-install, power-cycle the same ROM so the new HdPacks/<rom>/ (or MEP
+		//container) is picked up without a second manual load. OnGameLoaded skips
+		//power cycles, so this does not re-fetch. If the user switched games while
+		//the download was in flight, leave the newly loaded ROM alone.
+		private static void ApplyInstalledPack(string installedRomSha1)
+		{
+			Dispatcher.UIThread.Post(() => {
+				string currentSha1 = EmuApi.GetMepRomSha1();
+				if(!string.Equals(currentSha1, installedRomSha1, StringComparison.OrdinalIgnoreCase)) {
+					EmuApi.WriteLogEntry("[CommunityPack] not power-cycling: ROM changed since install started (was " +
+						installedRomSha1 + ", now " + currentSha1 + ")");
+					Notify("Community pack installed - reload the game to apply");
+					return;
+				}
+				EmuApi.WriteLogEntry("[CommunityPack] power-cycling to apply newly installed pack");
+				LoadRomHelper.PowerCycle();
+			});
 		}
 
 		//MEI-v1.md §2.3 user_supplied deps: tell the user what to drop where, with the

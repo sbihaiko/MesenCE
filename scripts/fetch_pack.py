@@ -9,7 +9,7 @@ community-pack-validate.yml. Two things make this more than a plain `curl`:
 2. Before connecting, the target host's resolved IPs are checked against
    private/loopback/link-local/reserved ranges (this also catches the
    cloud-metadata address, 169.254.169.254) and rejected. The allow-listed
-   hosts are all public multi-tenant platforms (GitHub, Google Drive) whose
+   hosts are all public multi-tenant platforms (GitHub, Google Drive, MediaFire) whose
    DNS we don't control, so this is what actually stands in for "no SSRF",
    not the hostname string match by itself.
 
@@ -17,6 +17,10 @@ Google Drive (`kind: "google-drive"` in the allow-list) needs a second
 request: the first response for a file too large to virus-scan is an HTML
 warning page, not the file -- the real bytes come from
 drive.usercontent.google.com/download with a confirm token.
+
+MediaFire (`kind: "mediafire"`) is the same shape: the /file/ share URL
+is an HTML page, and the zip is on downloadN.mediafire.com (matched via
+`host_ends_with: ".mediafire.com"`).
 
 Usage:
   python3 scripts/fetch_pack.py <url> <out-path> --max-bytes N
@@ -27,6 +31,7 @@ any rejection (disallowed host, private-IP target, over the size cap,
 malformed Drive link) -- the workflow step treats any non-zero exit as a
 download failure, same as a network error.
 """
+import html as htmlmod
 import ipaddress
 import json
 import re
@@ -50,7 +55,11 @@ def match_host(url, hosts):
     if parsed.scheme != "https":
         return None
     for entry in hosts:
-        if parsed.netloc != entry["host"]:
+        host = entry.get("host") or ""
+        suffix = entry.get("host_ends_with") or ""
+        host_match = bool(host) and parsed.netloc == host
+        suffix_match = bool(suffix) and parsed.netloc.endswith(suffix)
+        if not (host_match or suffix_match):
             continue
         substrings = entry.get("path_contains_any")
         if substrings and not any(s in parsed.path for s in substrings):
@@ -98,6 +107,17 @@ def open_validated(url, hosts, max_redirects=5):
             raise
         return resp, entry
     raise ValueError("too many redirects")
+
+
+MEDIAFIRE_DOWNLOAD = re.compile(
+    r"""href=["'](https://download\d+\.mediafire\.com/[^"'<>]+)["']""",
+    re.IGNORECASE,
+)
+
+
+def extract_mediafire_download_url(page_html):
+    m = MEDIAFIRE_DOWNLOAD.search(page_html)
+    return htmlmod.unescape(m.group(1)) if m else None
 
 
 def extract_drive_id(url):
@@ -168,6 +188,19 @@ def fetch_google_drive(url, hosts, out_path, max_bytes):
     return written
 
 
+def fetch_mediafire(url, hosts, out_path, max_bytes):
+    resp, _ = open_validated(url, hosts)
+    content_type = resp.headers.get("Content-Type", "")
+    if "text/html" not in content_type.lower():
+        return stream_to_file(resp, out_path, max_bytes)
+    page = resp.read(16 * 1024 * 1024).decode("utf-8", errors="replace")
+    href = extract_mediafire_download_url(page)
+    if not href:
+        raise ValueError("mediafire share page has no downloadN.mediafire.com link")
+    resp2, _ = open_validated(href, hosts)
+    return stream_to_file(resp2, out_path, max_bytes)
+
+
 def main(argv):
     if len(argv) < 3:
         print(__doc__)
@@ -201,6 +234,8 @@ def main(argv):
     try:
         if entry["kind"] == "google-drive":
             written = fetch_google_drive(url, hosts, out_path, max_bytes)
+        elif entry["kind"] == "mediafire":
+            written = fetch_mediafire(url, hosts, out_path, max_bytes)
         else:
             written = fetch_direct(url, hosts, out_path, max_bytes)
     except (ValueError, urllib.error.URLError, OSError) as e:

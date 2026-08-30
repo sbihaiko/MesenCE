@@ -43,9 +43,13 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPackDownloader] REJECTED (host not allow-listed): " + url);
 				return null;
 			}
-			return string.Equals(matched.Kind, "google-drive", StringComparison.OrdinalIgnoreCase)
-				? await GetGoogleDriveAsync(url, allowedHosts, maxBytes, ifNoneMatchETag)
-				: await GetDirectAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			if(string.Equals(matched.Kind, "google-drive", StringComparison.OrdinalIgnoreCase)) {
+				return await GetGoogleDriveAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			}
+			if(string.Equals(matched.Kind, "mediafire", StringComparison.OrdinalIgnoreCase)) {
+				return await GetMediaFireAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			}
+			return await GetDirectAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
 		}
 
 		private static async Task<Response?> GetDirectAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
@@ -82,6 +86,29 @@ namespace Mesen.Services
 			return new Response(first.StatusCode, first.ETag, first.Body);
 		}
 
+		//Mirror of scripts/fetch_pack.py::fetch_mediafire: the share page is HTML;
+		//the zip is the downloadN.mediafire.com href. A CDN URL pasted directly
+		//is kind "direct" (host_ends_with) and never lands here.
+		private static async Task<Response?> GetMediaFireAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
+		{
+			FetchResult? first = await FetchAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			if(first == null) {
+				return null;
+			}
+			string contentType = first.ContentType ?? "";
+			if(!contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase)) {
+				return new Response(first.StatusCode, first.ETag, first.Body);
+			}
+			string html = first.Body == null ? "" : System.Text.Encoding.UTF8.GetString(first.Body);
+			string? href = CommunityPackMediaFire.ExtractDownloadUrl(html);
+			if(href == null) {
+				EmuApi.WriteLogEntry("[CommunityPackDownloader] mediafire share page has no downloadN.mediafire.com link");
+				return null;
+			}
+			FetchResult? second = await FetchAsync(href, allowedHosts, maxBytes, ifNoneMatchETag);
+			return second == null ? null : new Response(second.StatusCode, second.ETag, second.Body);
+		}
+
 		private sealed record FetchResult(int StatusCode, string? ContentType, string? ETag, byte[]? Body);
 
 		private static async Task<FetchResult?> FetchAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
@@ -103,7 +130,7 @@ namespace Mesen.Services
 					using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 					int status = (int)response.StatusCode;
 					EmuApi.WriteLogEntry("[CommunityPackDownloader] hop " + hop + " GET " + current + " -> " + status);
-					if(status is >= 300 and < 400) {
+					if(CommunityPackHttpStatus.IsFollowableRedirect(status)) {
 						Uri? location = response.Headers.Location;
 						if(location == null) {
 							EmuApi.WriteLogEntry("[CommunityPackDownloader] redirect with no Location header");

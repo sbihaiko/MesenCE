@@ -79,6 +79,7 @@ Default section order:
 - Product branch is `main`. `master` is a frozen full-console snapshot of the upstream-shaped tree. Never merge `upstream/master` (or GitHub Sync fork) into `main`.
 - This fork does not maintain SNES, PC Engine, WonderSwan, or ColecoVision. Remaining cores: NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA. See `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` §1 (the console-reduction plan was consolidated there).
 - SNES **gamepads** stay: `SnesController` (and mouse/NTT on NES ports) are host/console input devices, not a SNES core. Do not drop them when touching input.
+- Community-pack download allow-list (`scripts/pack_host_allowlist.json`) includes MediaFire (`kind: mediafire` on `/file/` share pages, plus `host_ends_with: ".mediafire.com"` for the `downloadN.mediafire.com` CDN hop). Yandex Disk (`yadi.sk`) is not on the list (the original Castlevania HD link is dead).
 
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 

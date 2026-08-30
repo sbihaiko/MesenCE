@@ -57,9 +57,11 @@ namespace Mesen.Logic
 		//Mirrors scripts/fetch_pack.py:match_host exactly:
 		//  1. HTTPS-only scheme check (Python lower-cases the scheme before
 		//     comparing, so this does too);
-		//  2. exact netloc equality against each entry's "host" (no
+		//  2. host match: exact netloc equality against "host" (no
 		//     case-folding, no port defaulting - a byte-for-byte match of
-		//     the URL's authority component, same as urlparse().netloc);
+		//     the URL's authority component, same as urlparse().netloc)
+		//     OR netloc.EndsWith("host_ends_with") when that field is set
+		//     (MediaFire CDN hops are downloadN.mediafire.com);
 		//  3. when the entry declares "path_contains_any", a substring gate
 		//     over the URL's path component alone (query/fragment excluded),
 		//     same as `any(s in parsed.path for s in substrings)`.
@@ -73,7 +75,10 @@ namespace Mesen.Logic
 			}
 
 			foreach(CommunityPackHostEntry entry in hosts) {
-				if(netloc != entry.Host) {
+				bool hostMatch = !string.IsNullOrEmpty(entry.Host) && netloc == entry.Host;
+				bool suffixMatch = !string.IsNullOrEmpty(entry.HostEndsWith) &&
+					netloc.EndsWith(entry.HostEndsWith, StringComparison.Ordinal);
+				if(!hostMatch && !suffixMatch) {
 					continue;
 				}
 				if(entry.PathContainsAny != null && entry.PathContainsAny.Count > 0 &&
@@ -141,13 +146,19 @@ namespace Mesen.Logic
 		[JsonPropertyName("host")]
 		public string Host { get; init; } = "";
 
+		//Optional suffix match on the URL netloc (e.g. ".mediafire.com" for
+		//downloadN.mediafire.com CDN hops). Empty means unused. Mirrors
+		//fetch_pack.py's host_ends_with field.
+		[JsonPropertyName("host_ends_with")]
+		public string HostEndsWith { get; init; } = "";
+
 		//Substring gate over the URL path; null/empty means "no gate - any
 		//path under this host is allowed" (e.g. codeload.github.com).
 		[JsonPropertyName("path_contains_any")]
 		public List<string>? PathContainsAny { get; init; }
 
-		//"direct" (plain HTTPS GET) or "google-drive" (needs the two-step
-		//confirm-token dance) - see fetch_pack.py's module docstring.
+		//"direct" (plain HTTPS GET), "google-drive" (two-step confirm-token
+		//dance), or "mediafire" (share page then CDN hop) - see fetch_pack.py.
 		[JsonPropertyName("kind")]
 		public string Kind { get; init; } = "";
 	}

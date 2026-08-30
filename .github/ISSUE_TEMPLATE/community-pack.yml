@@ -20,7 +20,7 @@ body:
     id: pack_link
     attributes:
       label: "Pack link"
-      description: "Direct download URL — a GitHub release, gist, or raw file."
+      description: "Direct download URL — a GitHub release, gist, raw file, Google Drive, or MediaFire."
       placeholder: "https://github.com/<user>/<repo>/releases/download/..."
     validations:
       required: true

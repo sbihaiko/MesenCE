@@ -33,9 +33,9 @@ namespace Mesen.Tests.CommunityPacks
 		}
 
 		[Fact]
-		public void LoadFromFile_RealAllowlist_HasExactlyEightEntries()
+		public void LoadFromFile_RealAllowlist_HasExactlyElevenEntries()
 		{
-			Assert.Equal(8, LoadRealAllowlist().Count);
+			Assert.Equal(11, LoadRealAllowlist().Count);
 		}
 
 		[Fact]
@@ -81,12 +81,19 @@ namespace Mesen.Tests.CommunityPacks
 		[InlineData("https://github.com/u/r/releases/download/v1/pack.zip", "github.com")]
 		[InlineData("https://codeload.github.com/u/r/zip/refs/heads/main", "codeload.github.com")]
 		[InlineData("https://drive.google.com/file/d/abc123/view", "drive.google.com")]
+		[InlineData("https://www.mediafire.com/file/abc123/pack.zip/file", "www.mediafire.com")]
+		[InlineData("https://download1532.mediafire.com/token/pack.zip", "")]
 		public void MatchHost_RealAllowlist_AllowedUrl_Matches(string url, string expectedHost)
 		{
 			CommunityPackHostEntry? match = CommunityPackHostAllowlist.MatchHost(url, LoadRealAllowlist());
 
 			Assert.NotNull(match);
-			Assert.Equal(expectedHost, match!.Host);
+			if(expectedHost.Length == 0) {
+				Assert.Equal(".mediafire.com", match!.HostEndsWith);
+				Assert.Equal("direct", match.Kind);
+			} else {
+				Assert.Equal(expectedHost, match!.Host);
+			}
 		}
 
 		[Theory]
