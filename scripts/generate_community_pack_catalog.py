@@ -26,6 +26,7 @@ from pathlib import Path
 import community_pack_markdown as markdown
 import mei_catalog_entry as entry_mod
 import pack_id_rules
+import rom_target
 from mei_catalog_entry import (  # noqa: F401 -- facade re-export (ADR-0138 §24)
     STATUS_HD_PARCIAL,
     STATUS_MEP_COMPLETO,
@@ -89,14 +90,28 @@ def _candidate(item):
 
 def _render(c):
     """(markdown_row, mei_entry_or_None) for a KEPT candidate; the entry is
-    None on a non-conformant Pack URL/Hash/system or a conform failure."""
+    None on a non-conformant Pack URL/Hash/system or a conform failure.
+    `rom.sha1` comes from the board's "ROM SHA1" field when the submitter/
+    pipeline populated it; otherwise the catalog game name is resolved
+    against the versioned No-Intro map (rom_target) so the auto-install can
+    match a clean No-Intro dump of the target game (ADR-0138 §2.3). An
+    unresolved game keeps `rom: {}` (listable/installable, not hash-matchable).
+    """
     issue, status, form, details = c["issue_number"], c["status"], c["form"], c["details"]
     system = (form["console"] or "?").strip().lower()
     if not entry_mod.mei_entry_preconditions_ok(c["pack_url"], c["pack_hash"], system):
         _warn(f"issue #{issue}: missing/invalid Pack URL/Hash, or no MEI system ({system!r}); omitting JSON entry.")
         return markdown.build_row(issue, status, details, form), None
+    rom_sha1 = c["rom_sha1"]
+    rom_crc32 = None
+    if not rom_sha1:
+        target = rom_target.resolve_rom_target(form["game"])
+        if target:
+            rom_sha1 = target["sha1"]
+            rom_crc32 = target["crc32"]
     entry, mismatch = build_pack_entry(issue, form["game"].strip(), system, form["license"],
-        c["pack_url"], c["pack_hash"], c["rom_sha1"], status, c["mep_meta"], votes=c["votes"])
+        c["pack_url"], c["pack_hash"], rom_sha1, status, c["mep_meta"], votes=c["votes"],
+        crc32=rom_crc32)
     if mismatch:
         _warn(f"issue #{issue}: mep-meta source_sha256 disagrees with Pack Hash; omitting deps/recipe.")
     if not mei_entry_conforms(entry, entry.get("kind")):

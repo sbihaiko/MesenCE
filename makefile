@@ -266,6 +266,7 @@ doc-checks: check-manifest
 	#no network/PAT/ROM): the MEI/recipe/content-id/identity/meta/rules
 	#interpreters and dispatch keep their own golden/PASS-style checks.
 	python3 scripts/test_mei_rules.py
+	python3 scripts/test_rom_target.py
 	python3 scripts/test_mep_compare_render_dispatch.py
 	python3 scripts/test_mep_content_id.py
 	python3 scripts/test_mep_identity_check.py

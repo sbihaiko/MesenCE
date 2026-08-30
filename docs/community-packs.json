@@ -171,7 +171,10 @@
       "license": "unknown",
       "name": "Super_Mario_Bros \u2014 community submission",
       "pack_id": "liquidzgit/hdnes:super-mario-bros",
-      "rom": {},
+      "rom": {
+        "crc32": "7C26958E",
+        "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7"
+      },
       "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
       "system": "nes",
       "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
@@ -259,7 +262,10 @@
       "license": "unknown",
       "name": "Mega Man (USA) \u2014 community submission",
       "pack_id": "axlrocks/megaman-super:mega-man-usa",
-      "rom": {},
+      "rom": {
+        "crc32": "6EE4BB0A",
+        "sha1": "6047E52929DFE8ED4708D325766CCB8D3D583C7D"
+      },
       "sha256": "666bdeae79a721cc6c9ff38e4613c144e0b971f271dd13a7b39780eb6fe557bc",
       "system": "nes",
       "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
@@ -280,7 +286,10 @@
       "license": "unknown",
       "name": "Contra (USA) \u2014 community submission",
       "pack_id": "tastichacks/contra80s:contra-usa",
-      "rom": {},
+      "rom": {
+        "crc32": "F6035030",
+        "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF"
+      },
       "sha256": "12f29dd1ee6d768b46b5757821895b331a3496085879bbc00707367c4bc34f77",
       "system": "nes",
       "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
@@ -311,5 +320,5 @@
       "votes": 1
     }
   ],
-  "updated": "2026-08-29"
+  "updated": "2026-08-30"
 }

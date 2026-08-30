@@ -98,12 +98,15 @@ def normalized_rom_sha1(rom_sha1):
     return candidate if mei_rules.SHA1_UPPER.match(candidate) else None
 
 
-def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind):
-    """Builds the fields every entry has; `rom` is always present (§2.3:
-    key required, not a non-empty value).
+def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind, crc32=None):
+    """Builds the fields every entry has; `rom` is always present (§2.3: key
+    required, not a non-empty value). `crc32` is the legacy fallback from a
+    resolved No-Intro target; an unparsable value is omitted.
     """
     sha1 = normalized_rom_sha1(rom_sha1)
     rom = {"sha1": sha1} if sha1 else {}
+    if crc32 and mei_rules.CRC32_UPPER.match(crc32.strip().upper()):
+        rom["crc32"] = crc32.strip().upper()
     name = f"{game} — community submission" if kind == "hd-legacy" else game
     entry = {
         "issue": issue_number,
@@ -139,14 +142,15 @@ def pack_version_fields(recipe):
     return pack.get("version"), pack.get("mep")
 
 
-def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0):
-    """Assembles one MEI v1.1 packs[] entry (§26/§27). `kind` comes from
-    `mei_rules.resolve_kind` (§29). `votes` is the community 👍 count (P.2,
-    additive MAY). Returns (entry, mismatch) -- see `recipe_fields` for
-    `mismatch`.
+def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0, crc32=None):
+    """Assembles one MEI v1.1 packs[] entry (§26/§27). `kind` from
+    `mei_rules.resolve_kind` (§29); `votes` the community 👍 count (P.2,
+    additive MAY). `crc32` is the legacy `rom.crc32` fallback for `hd-legacy`
+    targets resolved from the game name (rom_target); a declared `rom_sha1`
+    still wins. Returns (entry, mismatch) -- see `recipe_fields`.
     """
     kind = mei_rules.resolve_kind(mep_meta, status)
-    entry = _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind)
+    entry = _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, kind, crc32=crc32)
     deps, recipe, recipe_hash, recipe_ok, mismatch = recipe_fields(mep_meta, pack_hash)
     if deps:
         entry["deps"] = deps
