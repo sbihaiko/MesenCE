@@ -335,7 +335,9 @@
       "license": "unknown",
       "name": "Castlevania (USA) \u2014 community submission",
       "pack_id": "issue-143",
-      "rom": {},
+      "rom": {
+        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD"
+      },
       "sha256": "20cef2694cc02ab7d25cc0186d366bedc746fdeaf8ac29db7b0243fb65ad73d0",
       "system": "nes",
       "url": "https://www.mediafire.com/file/8zaqei9lmvel048/Castlevania_Mesen_HD_Music_and_Graphics.zip/file",
