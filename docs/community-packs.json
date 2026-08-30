@@ -336,7 +336,10 @@
       "name": "Castlevania (USA) \u2014 community submission",
       "pack_id": "issue-143",
       "rom": {
-        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD"
+        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD",
+        "sha1s": [
+          "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A"
+        ]
       },
       "sha256": "20cef2694cc02ab7d25cc0186d366bedc746fdeaf8ac29db7b0243fb65ad73d0",
       "system": "nes",
