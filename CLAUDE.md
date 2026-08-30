@@ -68,8 +68,8 @@ finds no remaining pt-BR in source).
   reason, when it has none).
 - `accepted` means "decided" — either already reflected in the code/docs,
   or decided and listed as a slice in
-  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (pack/core) or
-  `docs/roadmap/PRD-player-shell.md` (player GUI); each ADR's Status line
+  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (single consolidated
+  PRD; Part A = pack/core, Part B = player GUI); each ADR's Status line
   says which. An ADR whose Decision is
   still an open question or an either/or stays `proposed` until a human
   picks — the autonomous dev-squad task implements accepted ADRs on its

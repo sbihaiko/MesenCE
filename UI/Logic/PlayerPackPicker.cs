@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Mesen.Logic
 {
-	//P.5 (PRD-player-shell §5): when the Player-mode pack picker opens for a
+	//P.5 (PRD Part B §5): when the Player-mode pack picker opens for a
 	//loaded ROM. The picker is the only place the player chooses among
 	//competing packs - it never appears when a sibling-folder pack is present
 	//(that pack always wins, §4 "artist at work"), when fewer than two distinct

@@ -96,7 +96,7 @@ namespace Mesen.Windows
 
 			InitializeComponent();
 
-			//P.4/P.5 (PRD-player-shell §6): give the overlay's first button / the
+			//P.4/P.5 (PRD Part B §6): give the overlay's first button / the
 			//picker's first choice focus when they open, so D-pad/A/B (Avalonia
 			//focus navigation) works without a pointer - the same trick OnOpened
 			//uses for the recent-games grid. Posted so the layout pass runs first
@@ -241,7 +241,7 @@ namespace Mesen.Windows
 			}
 		}
 
-		//P.4 (PRD-player-shell §6): Player-mode overlay items. The overlay is the
+		//P.4 (PRD Part B §6): Player-mode overlay items. The overlay is the
 		//couch surface - Resume/Quit pause-safe, Save/Load route to the existing
 		//slot grid (the same path the SaveStateDialog/LoadStateDialog shortcuts
 		//use), Pack opens the pack window (the pack picker is P.5), Settings
@@ -298,7 +298,7 @@ namespace Mesen.Windows
 		private void OnOverlaySettings(object? sender, RoutedEventArgs e)
 		{
 			_model.IsPlayerOverlayVisible = false;
-			//PRD-player-shell §6: Player mode's Settings is the reduced essentials
+			//PRD Part B §6: Player mode's Settings is the reduced essentials
 			//page (video / audio / input), not the full Preferences tab.
 			ApplicationHelper.GetOrCreateUniqueWindow(this, () => new ConfigWindow(ConfigWindowTab.Audio, playerMode: true));
 		}
@@ -434,7 +434,7 @@ namespace Mesen.Windows
 					GameLoadedEventParams evtParams = Marshal.PtrToStructure<GameLoadedEventParams>(e.Parameter);
 					CommunityPackInstallService.OnGameLoaded(evtParams.IsPowerCycle);
 
-					//P.5 (PRD-player-shell §5/§6): Player pack UX - the picker opens
+					//P.5 (PRD Part B §5/§6): Player pack UX - the picker opens
 					//once over the un-enhanced game when 2+ competing pack_ids exist
 					//and no stored per-ROM choice applies; a pick stores the choice
 					//(P.3) and power-cycles, and the reload applies silently (no

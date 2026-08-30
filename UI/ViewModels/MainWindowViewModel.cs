@@ -32,13 +32,13 @@ namespace Mesen.ViewModels
 
 		[ObservableProperty] public partial bool IsMenuVisible { get; set; }
 
-		//P.4 (PRD-player-shell §6): the thin Player-mode overlay panel (Resume,
+		//P.4 (PRD Part B §6): the thin Player-mode overlay panel (Resume,
 		//Save/Load slot, Pack, Settings, Advanced GUI, Quit), shown on top of the
 		//game while UiMode == Player. Opening it pauses the game so the couch
 		//user can navigate; closing never auto-resumes - Resume is an overlay item.
 		[ObservableProperty] public partial bool IsPlayerOverlayVisible { get; set; }
 
-		//P.5 (PRD-player-shell §5): the Player-mode pack picker. Opens once over
+		//P.5 (PRD Part B §5): the Player-mode pack picker. Opens once over
 		//the un-enhanced game when 2+ competing pack_ids exist and no effective
 		//per-ROM preference is stored; picking stores the choice (P.3) and power
 		//cycles to apply it; dismissing stores nothing, so the next launch asks
@@ -46,7 +46,7 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial bool IsPlayerPackPickerVisible { get; set; }
 		[ObservableProperty] public partial List<PlayerPackChoice> PlayerPackChoices { get; set; } = new();
 
-		//P.5 (PRD-player-shell §6): the currently-applied pack's name/layers for
+		//P.5 (PRD Part B §6): the currently-applied pack's name/layers for
 		//the overlay chip and the "Applied ..." toast.
 		[ObservableProperty] public partial string CurrentPackName { get; private set; } = "";
 		[ObservableProperty] public partial string CurrentPackLayers { get; private set; } = "";
@@ -75,7 +75,7 @@ namespace Mesen.ViewModels
 			UpdateMenuVisibility();
 		}
 
-		//P.4 (PRD-player-shell §6): Player hides the menu bar entirely (AutoHideMenu
+		//P.4 (PRD Part B §6): Player hides the menu bar entirely (AutoHideMenu
 		//is ignored in Player - there is no menu bar); Advanced keeps the classic
 		//AutoHideMenu rule. Re-evaluated whenever UiMode changes (the Advanced GUI
 		//overlay item / the Preferences combo flip it, instant and persisted).
@@ -84,7 +84,7 @@ namespace Mesen.ViewModels
 			IsMenuVisible = Config.Preferences.UiMode != UiMode.Player && !Config.Preferences.AutoHideMenu;
 		}
 
-		//P.4 (PRD-player-shell §6): the overlay shortcut toggles the thin Player
+		//P.4 (PRD Part B §6): the overlay shortcut toggles the thin Player
 		//overlay. Opening pauses the game (so the couch user can navigate with
 		//D-pad/A/B); closing never auto-resumes - Resume is an overlay item. The
 		//overlay only exists in Player mode; in Advanced the press is ignored
@@ -115,7 +115,7 @@ namespace Mesen.ViewModels
 			Config.Save();
 		}
 
-		//P.5 (PRD-player-shell §5): decides whether the Player picker opens for
+		//P.5 (PRD Part B §5): decides whether the Player picker opens for
 		//the loaded ROM and, when it does, fills the competing choices. Data is
 		//injected (pack list + ROM sha1 from the code-behind) so the decision
 		//stays host-free: MepPackListParser -> PackPreferenceResolver (content_id
@@ -317,7 +317,7 @@ namespace Mesen.ViewModels
 		}
 	}
 
-	//P.5 (PRD-player-shell §5): one row of the Player pack picker - a
+	//P.5 (PRD Part B §5): one row of the Player pack picker - a
 	//content-merged competing pack. Name/author/version/license/layers come
 	//from the core's GetPackListText columns; PackId is the effective pack_id
 	//(ADR-0140 id, else the local:<container> rule-4 fallback) that P.3 stores.

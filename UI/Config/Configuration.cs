@@ -56,7 +56,7 @@ namespace Mesen.Config
 		{
 			Configuration cfg = new();
 			cfg.ConfigUpgrade = (int)ConfigUpgradeHint.FirstRun;
-			//P.4 (PRD-player-shell §6): CreateConfig only runs when no
+			//P.4 (PRD Part B §6): CreateConfig only runs when no
 			//settings.json exists (fresh unzip, or the Setup Wizard's first
 			//Config.Save before the main window runs) - the default rule says
 			//that is Player mode. An existing file without the UiMode key keeps

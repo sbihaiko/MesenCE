@@ -52,7 +52,11 @@ bool HdTilePack::LoadForRom(VirtualFile& romFile, string system, MepPackManager*
 	string loosePath = FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), romName), "hires.txt");
 	string mepFolder = mepManager ? mepManager->GetSectionPath(MepSectionType::Textures) : "";
 	string autoFolder = mepManager ? mepManager->GetSectionAutoPath(MepSectionType::Textures) : "";
-	bool fromSibling = mepManager && mepManager->IsSectionFromSibling(MepSectionType::Textures);
+	//An auto-only sibling (the F5 bootstrap's generic output, written before
+	//any pack was installed) is only a base layer: it must not shadow a real
+	//loose pack installed later (issue #142). The loose pack is skipped only
+	//for human-authored sibling textures (ADR-0049).
+	bool fromSibling = mepManager && mepManager->IsSectionFromSibling(MepSectionType::Textures) && !mepFolder.empty();
 
 	if(ifstream(loosePath)) {
 		if(fromSibling) {

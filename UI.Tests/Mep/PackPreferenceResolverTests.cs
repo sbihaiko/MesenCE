@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Mesen.Tests.Mep
 {
-	//P.3 (PRD-player-shell §5, ADR-0140/0141): coverage for the host-free
+	//P.3 (PRD Part B §5, ADR-0140/0141): coverage for the host-free
 	//per-ROM preference resolver (UI/Logic/PackPreferenceResolver.cs) -
 	//`local:<container>` fallback, content_id merge (a container duplicating
 	//another's content_id is not a new entry), and the lexicographic default

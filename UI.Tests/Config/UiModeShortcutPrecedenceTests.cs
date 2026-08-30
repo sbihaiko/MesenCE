@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Mesen.Tests.Config
 {
-	//P.4 (PRD-player-shell §6): the Player-mode shortcut precedence that
+	//P.4 (PRD Part B §6): the Player-mode shortcut precedence that
 	//resolves the Esc collision in the shortcut config. The core fires every
 	//pressed shortcut, so in Player the overlay shortcut must own its key(s) -
 	//a Pause (or any other) binding on the same combination is suppressed and

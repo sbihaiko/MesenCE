@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """mep_identity_check — P.2 collision check for the community-pack validate
-workflow (PRD-player-shell §3.3, ADR-0140/0141): after an `accepted` verdict,
+workflow (PRD Part B §3.3, ADR-0140/0141): after an `accepted` verdict,
 tells whether the just-validated submission collides with an already-accepted
 pack on the board and posts the matching notice.
 

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Mesen.Logic
 {
-	//Verdict of CommunityCatalogUpdateDecision.Decide() (P.6, PRD-player-shell
+	//Verdict of CommunityCatalogUpdateDecision.Decide() (P.6, PRD Part B
 	//§3.6 - amends ADR-0138 §37, whose trigger was source.sha256 only).
 	public enum CommunityCatalogUpdateVerdict
 	{
@@ -32,7 +32,7 @@ namespace Mesen.Logic
 	//.mep-install.json (written by MepRecipeInstaller::WriteInstallStamp).
 	public sealed record InstallStampFields(string? ContentId, string? SourceSha256);
 
-	//P.6 (PRD-player-shell §3.6): the client-side catalog update decision for
+	//P.6 (PRD Part B §3.6): the client-side catalog update decision for
 	//the chosen pack_id of a loaded ROM. The trigger is the installed
 	//content_id vs the catalog slot's content_id - not source.sha256 (that
 	//amends ADR-0138 §37): a different content_id reinstalls (unless the

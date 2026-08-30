@@ -29,7 +29,7 @@ private:
 	//Containers disabled by the user (UI/config), lower-cased; independent of
 	//the current scan so it can be pushed at any time
 	unordered_set<string> _disabledContainers;
-	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id pushed by the
+	//P.3 (PRD Part B §5): per-ROM-sha1 preferred pack_id pushed by the
 	//UI from EnhancementPackConfig. Keyed by the No-Intro sha1 of the ROM as
 	//loaded, so the right choice applies per ROM; "" or a missing key means no
 	//preference (lexicographic default, ADR-0040).

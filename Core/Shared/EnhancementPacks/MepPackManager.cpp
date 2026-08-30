@@ -725,12 +725,24 @@ const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 	if(const MepPack* preferred = FindPreferredPack(type)) {
 		return preferred;
 	}
+	//Issue #142: a pack whose section is present but auto-only (the F5
+	//bootstrap's generic upscale/fingerprints, written before any pack was
+	//installed) is just a base layer - it must not shadow a human-authored
+	//pack behind it in the precedence order. Auto-only content wins only when
+	//no human content exists anywhere, so a real pack's human layer is never
+	//masked by a stale bootstrap output folder.
+	const MepPack* autoOnlyFallback = nullptr;
 	for(const MepPack& pack : _packs) {
 		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName)) {
-			return &pack;
+			if(pack.Sections[(int)type].HasHuman) {
+				return &pack;
+			}
+			if(!autoOnlyFallback) {
+				autoOnlyFallback = &pack;
+			}
 		}
 	}
-	return nullptr;
+	return autoOnlyFallback;
 }
 
 string MepPackManager::GetPackListText() const

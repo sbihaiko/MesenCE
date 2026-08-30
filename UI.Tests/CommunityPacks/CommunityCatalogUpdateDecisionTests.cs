@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Mesen.Tests.CommunityPacks
 {
-	//P.6 (PRD-player-shell §3.6, amends ADR-0138 §37): the client-side catalog
+	//P.6 (PRD Part B §3.6, amends ADR-0138 §37): the client-side catalog
 	//update decision. Trigger is the installed content_id vs the slot's - a
 	//different content_id reinstalls (unless the installed semver is newer, no
 	//auto-downgrade), an unchanged content_id never reinstalls (wrapper-only

@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Mesen.Tests.Config
 {
-	//P.4 (PRD-player-shell §6): the one-shot default for PreferencesConfig.UiMode.
+	//P.4 (PRD Part B §6): the one-shot default for PreferencesConfig.UiMode.
 	//The rule only runs while the key is absent from the settings file - once
 	//saved, the stored value wins. No settings.json (fresh unzip, the
 	//Configuration.CreateConfig path) starts in Player; an existing settings.json

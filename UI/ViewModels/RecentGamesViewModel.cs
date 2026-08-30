@@ -24,7 +24,7 @@ namespace Mesen.ViewModels
 
 		public RecentGamesViewModel()
 		{
-			//P.4 (PRD-player-shell §6): in Player mode the recent-games grid is the
+			//P.4 (PRD Part B §6): in Player mode the recent-games grid is the
 			//home screen and is always shown when no ROM runs - GameSelectionScreenMode
 			//keeps its current meaning (ResumeState/PowerOn/Disabled) only in Advanced.
 			Visible = ConfigManager.Config.Preferences.UiMode == UiMode.Player || ConfigManager.Config.Preferences.GameSelectionScreenMode != GameSelectionMode.Disabled;

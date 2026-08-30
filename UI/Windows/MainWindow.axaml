@@ -57,7 +57,7 @@
 			  />
 			</Panel>
 
-			<!--P.4 (PRD-player-shell §6): the thin Player-mode overlay. Painted on
+			<!--P.4 (PRD Part B §6): the thin Player-mode overlay. Painted on
 			top of the game; D-pad/A/B navigation comes from Avalonia focus
 			(normal buttons, no pointer required). "Save/Load slot" is two buttons
 			here (Save slot / Load slot) for clarity; the Pack item opens the pack
@@ -88,7 +88,7 @@
 				</StackPanel>
 			</Border>
 
-			<!--P.5 (PRD-player-shell §5): the pack picker - opens once over the
+			<!--P.5 (PRD Part B §5): the pack picker - opens once over the
 			un-enhanced game when 2+ competing pack_ids exist and no stored choice
 			applies. Picking stores the per-ROM preference (P.3) and power-cycles;
 			dismissing plays un-enhanced and asks again next launch. D-pad/A/B via

@@ -154,7 +154,7 @@ namespace Mesen.Utilities
 
 		private void UpdateMainMenuVisibility()
 		{
-			//P.4 (PRD-player-shell §6): Player hides the menu bar entirely - the
+			//P.4 (PRD Part B §6): Player hides the menu bar entirely - the
 			//AutoHideMenu mouse-hover re-show below is ignored in Player (there is
 			//no menu bar to show).
 			if(ConfigManager.Config.Preferences.UiMode == UiMode.Player) {

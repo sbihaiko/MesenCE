@@ -33,9 +33,9 @@ namespace Mesen.Tests.CommunityPacks
 		}
 
 		[Fact]
-		public void LoadFromFile_RealAllowlist_HasExactlySevenEntries()
+		public void LoadFromFile_RealAllowlist_HasExactlyEightEntries()
 		{
-			Assert.Equal(7, LoadRealAllowlist().Count);
+			Assert.Equal(8, LoadRealAllowlist().Count);
 		}
 
 		[Fact]
@@ -47,8 +47,23 @@ namespace Mesen.Tests.CommunityPacks
 			Assert.Equal("direct", github.Kind);
 		}
 
+		[Fact]
+		public void LoadFromFile_RealAllowlist_ReleaseAssetHostIsDirectAndPathGated()
+		{
+			//release-assets.githubusercontent.com serves the actual bytes behind
+			//github.com release redirects - the client hits it on the second hop
+			//(issue #142 investigation).
+			CommunityPackHostEntry asset = Assert.Single(LoadRealAllowlist(), h => h.Host == "release-assets.githubusercontent.com");
+
+			Assert.Equal("direct", asset.Kind);
+			Assert.Null(asset.PathContainsAny);
+			Assert.NotNull(CommunityPackHostAllowlist.MatchHost(
+				"https://release-assets.githubusercontent.com/github-production-release-asset/1/2.zip", LoadRealAllowlist()));
+		}
+
 		[Theory]
 		[InlineData("codeload.github.com", "direct")]
+		[InlineData("release-assets.githubusercontent.com", "direct")]
 		[InlineData("raw.githubusercontent.com", "direct")]
 		[InlineData("gist.githubusercontent.com", "direct")]
 		[InlineData("gist.github.com", "direct")]

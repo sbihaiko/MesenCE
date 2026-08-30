@@ -1,6 +1,6 @@
 namespace Mesen.Logic;
 
-//PRD-player-shell §6 (P.4): the one-shot default for PreferencesConfig.UiMode.
+//PRD Part B §6 (P.4): the one-shot default for PreferencesConfig.UiMode.
 //Consulted only while the key is absent from the settings file - once the key
 //is written (first save), the stored value wins and this rule never runs
 //again. An existing settings.json is an upgrade from a pre-Player build and

@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Mesen.Tests.Config
 {
-	//PRD-player-shell §6: Player mode's Settings page shows only the essentials
+	//PRD Part B §6: Player mode's Settings page shows only the essentials
 	//tabs (video / audio / input) and clamps a non-essentials initial selection
 	//(e.g. Preferences from the Advanced GUI path) to Audio, so the window never
 	//lands on a hidden tab.

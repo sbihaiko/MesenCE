@@ -64,7 +64,7 @@ namespace Mesen.Utilities
 
 				case EmulatorShortcut.ToggleFullscreen: _mainWindow.ToggleFullscreen(); break;
 
-				//P.4 (PRD-player-shell §6): the thin Player-mode overlay. Only
+				//P.4 (PRD Part B §6): the thin Player-mode overlay. Only
 				//acted on in Player mode - in Advanced the press is ignored (the
 				//overlay is a Player-only surface, and the same key still means
 				//Pause there because UiModeShortcutPrecedence only suppresses the

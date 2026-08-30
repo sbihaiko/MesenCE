@@ -109,7 +109,7 @@ namespace Mesen.Interop
 		public static string GetMepRomSha1() { return Utf8Utilities.CallStringApi(GetMepRomSha1Wrapper, 100); }
 		[DllImport(DllPath)] public static extern void SetMepPackEnabled([MarshalAs(UnmanagedType.LPUTF8Str)] string containerName, [MarshalAs(UnmanagedType.I1)] bool enabled);
 
-		//P.3 (PRD-player-shell §5): records the per-ROM-sha1 preferred pack_id
+		//P.3 (PRD Part B §5): records the per-ROM-sha1 preferred pack_id
 		//(ADR-0140 id or "local:<container>"); the core prefers it per loaded ROM.
 		[DllImport(DllPath)] public static extern void SetPreferredMepPack([MarshalAs(UnmanagedType.LPUTF8Str)] string romSha1, [MarshalAs(UnmanagedType.LPUTF8Str)] string packId);
 

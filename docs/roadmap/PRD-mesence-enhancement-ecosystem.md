@@ -1,8 +1,29 @@
-# PRD — MesenCE Enhancement Ecosystem (consolidated roadmap)
+# PRD — MesenCE roadmap
+
+Consolidated roadmap of the MesenCE fork. This single document unifies the
+former two PRDs — `PRD-mesence-enhancement-ecosystem.md` (pack/core) and
+`PRD-player-shell.md` (default GUI / chrome) — into two Parts of one file
+(2026-08-30, per the project owner's decision). Each Part keeps its own
+internal `§N` numbering verbatim; a `§N` reference always resolves within
+the Part that uses it. The former ownership split still holds — pack/core
+work lives in Part A, player-shell/chrome work lives in Part B — it is now
+expressed as parts of one file instead of two files.
+
+Part A is the pack/core roadmap: vision and legal principles, standards,
+the shipped record, and the pending slices (Phase 5/6, repo hygiene, input
+tester, Phase 8 border layer). Part B is the default-GUI roadmap: player
+chrome, Advanced GUI, pack identity (`pack_id`/`content_id`/version),
+duplicates, the pack picker, and the quick-enhancements panel. The two
+Parts intentionally do not duplicate each other's prose: each holds its own
+header block, slice table, and ADR map.
+
+---
+
+## Part A — Enhancement ecosystem (pack/core)
 
 **Status:** active (2026-08-28) — pack/core roadmap of this fork. Player
 chrome, pack identity (`pack_id`/`content_id`/version) and the in-GUI
-picker live in [PRD-player-shell.md](PRD-player-shell.md) (Phase 7).
+picker live in Part B of this document (Phase 7).
 Earlier plans (`PRD-ecossistema-enhancement-comunitario.md`,
 `PRD-community-pack-mep-conversion.md`, `plano-execucao-F3.md`,
 `plano-execucao-F5.md`, `plano-reducao-consoles.md`,
@@ -16,7 +37,7 @@ Earlier plans (`PRD-ecossistema-enhancement-comunitario.md`,
 
 ---
 
-## 1. Vision and legal principles
+### 1. Vision and legal principles
 
 MesenCE turns the emulator into a **platform for extracting, authoring and
 consuming enhancement packs** (textures, replacement audio, synth presets),
@@ -47,7 +68,7 @@ on 2026-08-26 (`master` is the frozen full-console snapshot; never merge
 `upstream/master` into `main`). SNES **gamepads** (`SnesController`) stay as
 host/console input devices. MSU-1 left with the SNES core.
 
-## 2. Standards
+### 2. Standards
 
 Rule: adopt an existing standard when one exists; write an open spec (CC0,
 RFC 2119, semver, golden file, `scripts/validate-specs.py`) only for what
@@ -66,7 +87,7 @@ does not exist.
 | hires.txt extension GB/SMS (OGG on GB/SMS) | `docs/specs/hires-gbsms-v1-draft.md` | draft, frozen until a second implementer appears |
 | **MEP Recipe v1** — re-packaging of split-distribution packs | `docs/specs/MEP-recipe-v1.md` | v1 |
 
-## 3. What has shipped (record, one line each)
+### 3. What has shipped (record, one line each)
 
 - **F1 — MIDI/VGM exporter** from the Enhanced Synth tap; headless harness
   (`scripts/headless_record`) records without GUI.
@@ -226,9 +247,9 @@ does not exist.
   goldens (`lint_golden_packs`); `test_mep_compare_auto_palettes.py` uses the
   golden; `test_mep_compare_render_dispatch.py` added.
 
-## 4. Roadmap — pending work, by slice
+### 4. Roadmap — pending work, by slice
 
-### Phase 6 — Community pack auto-install (MEP Recipe v1) — **priority**
+#### Phase 6 — Community pack auto-install (MEP Recipe v1) — **priority**
 
 Problem: 5 of the 12 triaged packs (#65, #66, #68, #69, #71 — LiQuiDzGit/
 HDnes family) ship a zip with only `hires.txt` + IPS/BPS, with all `.ogg`
@@ -262,7 +283,7 @@ Zelda), whole-repo archive wrapper (#63, #72, #73), bare root (#62, #67,
 `hires.txt` after acceptance (#63 — fail closed, list candidates), Google
 Drive large-file interstitial (out of automatic scope, user supplies).
 
-### Phase 5 — remaining bootstrap items
+#### Phase 5 — remaining bootstrap items
 
 Success criterion unchanged: *playing for 5 minutes generates, next to the
 ROM, an enhanced game (image level 2, sound level 2/3) with no
@@ -282,7 +303,7 @@ editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
 | SoundFont | decided 2026-08-29 — **bundle GeneralUser GS (31 MB, permissive) in the installer**; level-2 GM works out-of-the-box, `.sf2`-hunting no longer required | done — bundle on the release path (blocked by the installer itself, which has no release yet) |
 | F5.5 | wrap-up — shipped 2026-08-29: (a) **bootstrap setting UI polish** — localized the last hardcoded pack-UI strings (EnhancementPacksWindow auto-install + P.3 preferred-pack labels, MainWindow Player overlay + pack picker, the P.5 "Applied" toast; on-screen messages moved to the Core `MessageManager::_enResources` map where the HUD actually localizes — the UI `resources.en.xml` is the window-label system); (b) **MEP-v1/MEI golden refresh** — goldens verified current and the 5 golden/recipe/validate-specs gates wired into `make doc-checks` (33 checks); (c) **README** — Player mode (P.4–P.6), Extract Audio tooling, community flow; (d) **F1–F3 regressions** green (MIDI/VGM on Mega Man 3, HD-pack skeleton on Zelda, MEP host path clean, core-unit-tests exit 0); (e) **dotnet 0 warnings** (build UI 0/0) | — |
 
-### Repo hygiene and tests
+#### Repo hygiene and tests
 
 | Slice | Deliverable | ADR |
 |---|---|---|
@@ -294,7 +315,7 @@ editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
 | H6 | UI-logic public helpers for direct testing | **0125** (accepted, Option A) |
 | H7 | `CheatTypeDetector` ThrowsAny (GB/SMS product decision still deferred) | **0128** (accepted) |
 
-### Host input tester (host UX, not a pack feature)
+#### Host input tester (host UX, not a pack feature)
 
 Goal: Settings → Input → **Test** tab that shows, with no ROM loaded, every
 connected pad (name, backend, `PadN` slot), live buttons/axes with the same
@@ -313,7 +334,7 @@ in-game `InputHud` stays the layer-3 source of truth.
 Out: preset redesign, HUD overlay, special devices (Zapper, Power Pad,
 Phaser), automatic remapping, browser Gamepad API, stats collection.
 
-### Deferred / optional
+#### Deferred / optional
 
 - OGG replacement audio on GB/SMS (`hires-gbsms-v1-draft`) — frozen until a
   second implementer exists (ADR-0041).
@@ -325,9 +346,9 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
   user-configurable extra MEI URLs with explicit confirmation, MEI §3.4) —
   after Phase 6, if the catalog grows past what a list can show. The
   player-shell picker (one ROM, 2+ `pack_id`s) is **not** that browser;
-  it lives in [PRD-player-shell.md](PRD-player-shell.md) §5.
+  it lives in Part B §5.
 
-### Phase 7 — Player shell (minimal GUI) — **see dedicated PRD**
+#### Phase 7 — Player shell (minimal GUI)
 
 Default chrome is a player shell (recent games, drop a ROM, packs apply
 themselves, thin overlay) with **Advanced GUI** restoring classic Mesen.
@@ -336,8 +357,8 @@ Pack identity is the pair `pack_id` (product, stable across versions) +
 source-zip sha256 is the download, not the pack. The catalog keeps **one
 live slot per `pack_id`**; the player never picks among versions.
 
-Normative text, slices P.0–P.6, and open ADR topics:
-[PRD-player-shell.md](PRD-player-shell.md). Do not copy that prose here.
+Normative text, slices P.0–P.7, and open ADR topics: see Part B
+below. Do not duplicate that prose here.
 
 Depends on: F6.4b for catalog auto-install in the overlay (P.6). P.3–P.5
 can run on local packs before F6.4b. P.0 ADRs must be accepted before
@@ -351,9 +372,33 @@ suppresses, pick power-cycles, dismiss asks again), the current-pack chip
 and the apply toast; P.6 wired the overlay to the F6.4b catalog
 install/update through the §3.6 `content_id` trigger (wrapper-only no
 reinstall, no auto-downgrade, removed slot keeps the install) and made
-community 👍 sort the picker — see the dedicated PRD header.
+community 👍 sort the picker — see the Part B header.
 
-## 5. Order of execution
+#### Phase 8 — Enhancement pack border layer
+
+A pack-declared decorative frame/border rendered around the game area
+(the one enhancement-toggle idea from the Player overlay's quick-toggle
+panel — see Part B §6.1 — that isn't UI over an existing
+setting). Needs: (1) a new optional field in the MEP-v1 manifest for a
+pack to declare a border asset; (2) a new Core compositing path that
+draws it around the emulated frame; (3)
+`EnhancementPackConfig.EnableBorder` gating it, consumed by the P.7
+toggle. This is Core/pack-format work, not chrome, so it stays in Part A
+(pack/core), not Part B (chrome) — see `docs/roadmap/AGENTS.md`'s
+ownership split.
+
+Non-goals: retrofitting existing HD packs with borders automatically;
+per-console border art (a border is a pack asset, not an engine feature).
+
+| Slice | Deliverable | ADR |
+|---|---|---|
+| F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **not written yet — blocks this phase** |
+| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | F8.1 |
+
+Status: **proposed (2026-08-30)** — not started; F8.1 (ADR) is the
+critical path.
+
+### 5. Order of execution
 
 1. **F6.2 → F6.3 → F6.3b → F6.4a (Core, offline) → F6.4b (UI, network) → F6.4c → F6.5 → F6.6**, one run each (ADR-0138 §37, §39).
 2. ~~H1–H4~~ shipped (2026-08-27/28).
@@ -361,9 +406,12 @@ community 👍 sort the picker — see the dedicated PRD header.
    decides the SoundFont question; **F5.4c/d** can run before that.
 4. **Input tester I.0–I.2** independent of everything above.
 5. **Phase 7 (player shell)** — P.0 ADRs, then P.1–P.5 independently of
-   F6.4b; P.6 after F6.4b. See [PRD-player-shell.md](PRD-player-shell.md).
+   F6.4b; P.6 after F6.4b. See Part B.
+   P.7 (quick-toggle panel + welcome/Continue cards) is independent of
+   Phase 8 below — it ships without a Border toggle and adds one later.
+6. **Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance.
 
-## 6. ADR map
+### 6. ADR map
 
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
@@ -375,9 +423,9 @@ community 👍 sort the picker — see the dedicated PRD header.
 | 0142 | accepted 2026-08-29 | Block C item 10 crossfade contract — implemented in c36043f5; click-free listening verification manual-pending |
 | 0123, 0125, 0128 | accepted 2026-08-29 | H5 UI-logic firewall parity scan (all five checklist items); H6 public test-facing helpers (Option A); H7 CheatTypeDetector ThrowsAny (GB/SMS product decision still deferred) |
 | 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
-| player-shell identity + chrome | ADR-0139/0140/0141 accepted (2026-08-28) | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in PRD-player-shell.md §9; `UiMode` still without an ADR |
+| player-shell identity + chrome | ADR-0139/0140/0141 accepted (2026-08-28) | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in Part B §9; `UiMode` still without an ADR |
 
-## 7. Risks
+### 7. Risks
 
 | Risk | Mitigation |
 |---|---|
@@ -387,8 +435,558 @@ community 👍 sort the picker — see the dedicated PRD header.
 | Upstream pack drift after acceptance | sha256 in the catalog + drift check; client reinstalls on hash change |
 | Scope explosion | phases independent; GitHub is the only backend; no telemetry |
 
-## 8. References
+### 8. References
 
 - SUPER ZSNES — https://www.zsnes.com/ · VGMusic · romhack.ing · Zeldix (MSU-1, other hosts)
 - No-Intro DATs — https://no-intro.org/ · rcheevos `rhash` · vgmrips (VGM/GD3) · beat/BPS spec
 - Precedents: *MGM v. Grokster* (2005); Yuzu/Nintendo settlement (2024)
+
+---
+
+## Part B — Player shell (default GUI)
+
+**Status:** active (2026-08-28) — product text of §3–§6 accepted by the
+user on 2026-08-28; P.0 done (ADR-0139/0140/0141 accepted 2026-08-28);
+P.1 done (content_id in scripts/ + Core, mep-meta + `.mep-install.json`,
+golden parity — 2026-08-29); P.2 done (catalog/mep-meta/MEI identity +
+one slot per pack_id — 2026-08-29); P.3 done (per-ROM preference resolver
++ Advanced picker — 2026-08-29); P.4 done (`UiMode` default rule + Player
+chrome + overlay + Esc precedence in the shortcut config — 2026-08-29;
+GUI acceptance pending a manual pass on a real display); P.5 done (Player
+pack UX: picker decision + panel, current-pack chip, apply toast —
+2026-08-29; picker/dismiss/sibling manual pass pending); P.6 done (§3.6
+catalog update trigger wired into F6.4b, wrapper-only no-reinstall,
+no-auto-downgrade, removed slot keeps install, votes sort the picker —
+2026-08-29). **Phase 7 fully shipped (P.0–P.6)**; P.7 proposed
+2026-08-30 (Enhancements quick-toggle panel + welcome/Continue cards, §6.1–§6.2) ·
+**Author:** sbihaiko ·
+**Scope:** MesenCE fork (`main`); nothing goes upstream ·
+**Parent roadmap:** Part A of this document (Phase 7 entry). Pack/core
+work stays there (Phase 6 F6.4b/c/F6.5, Phase 5,
+input tester). This Part (Part B) owns chrome, pack identity,
+duplicates, and
+the player-facing choice between packs ·
+**Specs:** [MEP-v1](../specs/MEP-v1.md) · [MEI-v1](../specs/MEI-v1.md) ·
+[MEP-recipe-v1](../specs/MEP-recipe-v1.md) ·
+**Decisions:** identity model (§3) and one-slot rule (§3.6) are accepted
+product requirements, specified by ADR-0139 (`content_id`), ADR-0140
+(`pack_id`, catalog uniqueness) and ADR-0141 (one slot, client update
+trigger — amends ADR-0138 §37). Chrome (§6) is a product requirement; it
+needs an ADR only if P.4 finds trade-offs beyond what §6 states ·
+**Process:** one dev-squad run per **slice** (P.1, P.2, …). Settle the
+slice's ADRs first. A slice is done when its acceptance checks pass and
+this header plus Part A's Phase 7 entry are updated.
+
+---
+
+### 1. Vision
+
+The fork's thesis is *faithful, then enhanced, on by default*. The current
+GUI is still classic Mesen: File / Game / Options / Tools / Debug / Help,
+plus debugger, HD Pack Builder, netplay, movies, Lua. That chrome is
+correct for authors and for anyone who already lives in Mesen. It is the
+wrong first screen for a player who should drop a ROM and already hear and
+see the enhanced game.
+
+Default chrome becomes a **player shell**: recent games, drop a ROM, the
+game fills the window, packs apply themselves, a thin overlay for pause /
+save / pack / settings. **Advanced GUI** restores the classic Mesen menus
+and tools unchanged.
+
+This is one Avalonia process and one window, not a second binary. Player
+and Advanced are chrome modes over the same ViewModels.
+
+The legal principles of Part A §1 still apply: the official
+channel carries URLs + hashes + licences, never third-party assets; hosts
+never execute pack content as code; no LLM in the client.
+
+Product consoles stay NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA
+(`docs/roadmap/AGENTS.md`). SNES gamepads stay as input.
+
+### 2. Problem
+
+Three pack-identity problems and one chrome problem.
+
+**Identity**
+
+1. **The zip the catalog hashes is not the pack.** Community submissions
+   are GitHub `/archive/` trees, release zips, nested folders, whole
+   repos. After ADR-0120/0121 discovery (and a MEP Recipe, when there is
+   one) the host loads a *subset* of that zip. Two wrappers of the same
+   tree look like two packs if identity is the source sha256. One primary
+   zip plus two different recipes is two packs even when the source
+   sha256 matches. Today's "Pack Hash" (mep-meta `source_sha256`, MEI
+   `sha256`) is the download, not the pack.
+2. **A content hash alone cannot version a pack.** Contra80s 1.0 and 1.2
+   are the same product and two artifacts. If the unique id is the
+   resolved-tree hash, they look like two competing packs for the same
+   ROM and the player is asked to choose. Updates need a stable lineage
+   id; integrity and duplicate-bytes detection need the content hash.
+3. **Several real packs can target the same ROM.** That is not a
+   duplicate. The player has to pick one, and the choice has to stick
+   per ROM. Today the host applies the first lexicographic container
+   (ADR-0040) and hides the rest behind Tools → Enhancement Packs (MEP)….
+
+**Chrome**
+
+4. **The GUI fights the product.** Enhanced Audio is already on by
+   default (`AudioConfig.EnableEnhancedAudio = true`); bootstrap already
+   writes `<Game>/auto/` beside the ROM; F6.4b will auto-install from the
+   catalog. None of that reads as a player product while Debug and HD
+   Pack Builder sit in the menu bar.
+
+### 3. Pack identity — two ids, not one
+
+A pack is a *product* that has *revisions*. Treating the content hash as
+"the" unique id makes versions look like different packs. Treating the
+source-zip sha256 as "the" unique id makes wrappers look like different
+packs. Neither is sufficient alone.
+
+#### 3.1 Four names, four jobs
+
+| Name | What it identifies | Changes when | Already exists? |
+|---|---|---|---|
+| **`pack_id`** | the product (lineage). "This is Contra80s by Tastic." Shared by every revision | never, unless it is a different product | no — new (§3.3) |
+| **`content_id`** | one revision: the canonical resolved pack tree the host will load | any loaded file changes | no — new (§3.2) |
+| **`version`** | human/semver label of that revision | the author bumps it (can lie; `content_id` is the truth) | yes — `pack.json` `version` (MEP-v1 §3.1, MUST); absent on `hd-legacy` |
+| **`source_sha256`** | the downloaded bytes (the wrapper) | the zip wrapper changes, even if the inner tree does not | yes — board "Pack Hash", mep-meta `source_sha256`, MEI `sha256`, `.mep-install.json` `source.sha256` |
+
+Also **not** a pack id:
+
+- **ROM No-Intro sha1** — the game. Many packs share one; one pack may
+  list several `targets[]`.
+- **GitHub issue number** — the submission. A second issue can be the
+  same `pack_id` (duplicate submit) or a different one (competing pack).
+  Useful as catalog provenance (`issue`, already in MEI v1.1 §2.2), not
+  as the product id.
+- **Container file name** — the local discovery key (ADR-0040/0049). It
+  is the fallback `pack_id` for a folder the user dropped (§3.3), never a
+  catalog id.
+
+#### 3.2 `content_id` — identity of a revision
+
+Computed **on the tree the host would actually load**, not on the zip
+bytes: discovery first (MEP-v1 §2.1 rules 5–9, ADR-0120/0121), then the
+recipe when one exists.
+
+- **No recipe:** unzip → find the pack root → hash that tree. A GitHub
+  archive whose pack lives in `HdPacks/Contra (U) [!]/` hashes only that
+  subfolder. `__MACOSX/`, `.DS_Store`, README, screenshots outside the
+  root do not enter the id.
+- **With a recipe:** `content_id` is a function of (hash of the resolved
+  *primary* tree, `recipe_hash`, the declared dep sha256s). CI can compute
+  it without fetching `user_supplied` deps (it has the primary zip and the
+  recipe's declared digests). Two recipes on the same primary zip are two
+  revisions. The same recipe plus the same deps is the same revision even
+  if CI never saw the dep bytes. The client computes the same function
+  **at install time**, when `MepRecipeInstaller` still holds the primary
+  bytes, and stores the result in `.mep-install.json` (§4); it does not
+  re-derive it from the installed output tree.
+
+Exact canonicalisation (path order, which files, newline folding, zip
+entry metadata ignored, whether `pack.json` `version` is part of the
+payload) is the P.0 ADR. The product constraint is: **same loaded files
+⇒ same `content_id`; wrapper-only change ⇒ same `content_id`; any
+loaded-file change ⇒ new `content_id`.** Recommendation for the ADR:
+hash payload files, not the `version` string, so a label-only bump is not
+a new revision.
+
+`content_id` answers: *are these two artifacts the same bytes the
+emulator will play?* It does **not** answer: *is this Contra80s 1.2 or a
+different Contra pack?*
+
+The algorithm has **two implementations, one normative reference**, like
+the recipe interpreter (ADR-0138 §39): `scripts/` (CI, normative) and the
+Core (client). A parity fixture keeps them equal.
+
+#### 3.3 `pack_id` — identity of the product
+
+Stable across revisions. Source, first match wins:
+
+1. An explicit `id` field in `pack.json` (slug, lowercase, unique in the
+   official catalog). This is a MEP minor bump and part of the P.0 ADR.
+   Best long-term id; authors already have `name`/`version`/`author`.
+2. Else, for a `github.com` / `codeload.github.com` pack URL:
+   `owner/repo` (the origin, not the tag or release filename).
+   `/archive/v1.2.zip` and `/releases/download/v1.2/pack.zip` of the same
+   repo are the same product.
+3. Else, catalog fallback: `issue-{n}` of the accepted submission. This
+   is the only option for gists, `raw.githubusercontent.com` and Google
+   Drive links (`scripts/pack_host_allowlist.json`) when the pack has no
+   `id` — so for those hosts **product-level deduplication does not
+   exist**; only byte-level (`content_id`) does.
+4. **Local drops** (a folder or zip the user put in `EnhancementPacks/`,
+   `HdPacks/<Game>/` or beside the ROM) with no `id`: `pack_id` is
+   `local:<container-name>` (the ADR-0040/0049 discovery key). Two local
+   containers with the same `content_id` are one pack (§5). A local
+   container whose `content_id` equals a catalog entry's is that catalog
+   `pack_id`, not a second choice. The local `content_id` is computed
+   **once** and cached under `EnhancementPacks/.cache/` keyed by the
+   container's path + size + mtime (recomputed only when those change);
+   it is never computed on the synchronous ROM-load path. Until the cache
+   is warm the container is treated as `local:<container-name>`; the
+   catalog merge happens on the next load. HD trees run to hundreds of
+   MB — hashing them at every boot is not acceptable.
+
+**Catalog uniqueness** (product requirement; enforcement is the P.0 ADR).
+The catalog holds **one live row per `pack_id`** (§3.6) — never two
+revisions of the same product.
+
+**Origin binding (anti-hijack).** A `pack_id` is bound to the **origin**
+of its first accepted submission: the `owner/repo` of the pack URL, or,
+for hosts without one (gist, raw, Drive), the GitHub login that opened the
+issue. A later submission that claims an existing `pack_id` (via `id` in
+`pack.json` or via the same `owner/repo`) but comes from a **different
+origin** is *not* a revision: it does not compete for the slot, is not
+listed, and gets a comment + the `pack:needs-review` label for human
+triage — a maintainer may re-bind the origin (author moved repos) or
+treat it as a competing pack. Without this rule anyone could publish
+`id: contra80s`, `version: 99.0.0` and have §3.6 push it to every
+client. The catalog stores the bound origin in mep-meta
+(`pack_origin`). Amends ADR-0140/0141 (recorded in both, 2026-08-28).
+
+Actions when the incoming submission is from the **same** origin:
+
+| Incoming vs existing | Meaning | Action |
+|---|---|---|
+| same `content_id` | byte-duplicate, even if `pack_id`/`version`/`source_sha256` differ | not a second pack; comment "duplicate of #N"; do not list twice |
+| same `pack_id`, new `content_id` | new revision of that product | occupies the single slot if it wins §3.6's order; never a picker choice. Triage warns when `version` did not bump |
+| different `pack_id`, different `content_id`, same ROM sha1 | competing packs | both listed; the player chooses (§5) |
+| different `pack_id`, same `content_id` | same files under two names | byte-duplicate; the existing row wins |
+
+`/revalidate` on the same issue rewrites that issue's **provenance**
+(mep-meta: `source_sha256`, recomputed `content_id`, `version`,
+`validated_at`) in place. Whether the revalidated revision **occupies the
+slot** follows §3.6 — a revalidation that republishes a lower semver does
+not displace a higher one already in the slot.
+
+#### 3.4 `version`
+
+Keep `pack.json` `version` (semver, MUST for MEP). It is a **label**, not
+an id. On its own it is not sufficient to know "newest" (authors forget to
+bump, or bump without changing files) — but it is the best available
+*ordering* signal, which is why §3.6 uses it first and `content_id`
+(unordered) never.
+
+- `hd-legacy` has no `version`; the catalog and picker show the
+  validation date and a short `content_id` prefix instead.
+- `version` bumps, `content_id` does not → the revision did not change
+  (wrapper-only, or a label bump). The client does not re-download.
+- `content_id` changes, `version` does not → still a new revision of that
+  `pack_id`. Triage warns; §3.6 still applies.
+
+Do not order competing *products* by `version`.
+
+#### 3.5 Why not one id
+
+| Candidate as "the" unique id | Breaks |
+|---|---|
+| `source_sha256` (Pack Hash) | wrappers; pack is a subset; two recipes on one zip |
+| `content_id` alone | every revision is a new pack; the player is asked to choose between 1.0 and 1.2 |
+| `pack_id` alone | cannot tell duplicate bytes from an update; cannot verify an install |
+| `version` alone | not unique; authors forget to bump; two products can both be "1.0" |
+| ROM sha1 | many packs per game |
+| issue number | second submit of the same product; local drops have no issue |
+
+The pair **`pack_id` + `content_id`** is the split npm (`name` + integrity
+hash), git (ref + commit) and Docker (`name:tag` + digest) already use. A
+single-id scheme is not proposed.
+
+#### 3.6 Current revision — one catalog slot
+
+**`content_id` is equality/integrity only.** The official catalog has
+**one live slot per `pack_id`**; whatever occupies that slot *is* current.
+The player never sees 1.0 vs 1.2 of the same pack.
+
+When two candidates compete for the same slot, the first rule that
+decides wins:
+
+1. **semver** of `pack.json` `version`, when both have a comparable
+   version — higher wins. The catalog knowingly accepts that an inflated
+   `version` can win **from the same origin** (§3.3 origin binding);
+   triage warns, it does not block. `mep_lint` already rejects any
+   non-`x.y.z` `version` (error), so "comparable" only fails for
+   `hd-legacy`, which has none.
+2. Else **`validated_at`** — later wins.
+3. Else **issue number** — higher wins (later submission).
+
+History may live in mep-meta / git; it is not a second catalog row and
+not a player choice.
+
+**Client**
+
+- Compare the installed `content_id` (from `.mep-install.json`) to the
+  catalog slot of the chosen `pack_id`. Different → reinstall, power
+  cycle, toast ("Updated …"). Wrapper-only change (`source_sha256`
+  changed, `content_id` did not) → do not reinstall. **This amends
+  ADR-0138 §37**, whose trigger is `source.sha256`; the P.0 ADR records
+  the amendment.
+- **No automatic downgrade.** If the installed revision's semver is
+  *greater* than the slot's (yank, rollback, author republished an older
+  label), keep the install; Advanced may offer "use catalog revision" with
+  confirmation. `hd-legacy` (no semver): a `content_id` difference against
+  the slot still updates — there is no version number to protect.
+- **Pack removed from the catalog** (no slot for that `pack_id` any
+  more): keep the install, keep the per-ROM choice, no toast. It stays
+  visible in Advanced; the player is not interrupted by a catalog
+  decision.
+- Reinstall preserves the user's per-container state (`DisabledPacks`,
+  per-section flags — both keyed by container name today), since the
+  container name does not change on an update.
+- Sibling folder still always wins. No catalog write, no update, no
+  picker while it is present.
+
+Old trees may remain under `EnhancementPacks/.cache/`; they are not
+listed in the picker and are not applied.
+
+### 4. Applying a pack to a ROM
+
+Already shipped, and this GUI must not bypass it:
+
+1. Load ROM → No-Intro sha1 (ADR-0039).
+2. `MepPackManager::LoadForRom` scans **sibling folder →
+   `HdPacks/<Game>/` → `EnhancementPacks/`** (ADR-0049/0040/0120/0121).
+3. A container matches when any `targets[].sha1` equals the ROM, or when
+   it is a convention pack named like the ROM (MEP-v1 §2.1 rule 5).
+4. Per section, the first pack in lexicographic container order wins,
+   unless the user disabled that container. The sibling folder beats
+   everything, in every section.
+5. `patches[]` apply in place before the console reads the ROM
+   (ADR-0044). Missing patch for this sha1 → skip the patch with a log
+   line and a UI notice, still load the other sections.
+6. Per-section toggles and enable/disable apply on the **next load /
+   power cycle**, not live. Pack switch in the player stays a power
+   cycle. Do not invent live texture/patch swap in this phase.
+
+F6.4b (Part A, Phase 6) adds: fetch official MEI, match ROM
+sha1, download within the host allow-list, sha256-verify the *source*, run
+`MepRecipeInstaller`, write into `EnhancementPacks/`, then the scan above
+applies it. The `AutoInstallCommunityPacks` toggle and first-run consent
+stay in F6.4b (ADR-0138 §38).
+
+This PRD adds, on top of that scan:
+
+- At install time, record `pack_id` + `content_id` in `.mep-install.json`
+  next to `recipe_hash`, `source.sha256`, `deps`, `installed_at` (all
+  already written by `MepRecipeInstaller::WriteInstallStamp`).
+- On the next load of that ROM sha1, follow §3.6: new `content_id` on the
+  chosen `pack_id`'s catalog slot → update (unless it would be a semver
+  downgrade).
+- Sibling folder still always wins. No catalog auto-install, no picker,
+  while a sibling pack is present (artist at work).
+
+### 5. Choosing among packs for the same ROM
+
+Not a duplicate. Two `pack_id`s with the same ROM sha1 and different
+`content_id`s are competing products (Contra80s vs another Contra HD
+pack).
+
+**Player mode**
+
+- 0 catalog/local matches → play with Enhanced Audio + bootstrap only.
+  If F6.4b is on and the catalog later gains a match, offer install as a
+  toast; never stall the first frame.
+- 1 `pack_id` (any number of revisions on disk or in history) → apply
+  the catalog slot (§3.6). No picker. Never ask 1.0 vs 1.2.
+- 2+ `pack_id`s and no stored choice for this ROM sha1 → the game starts
+  **un-enhanced** (Enhanced Audio + bootstrap only) and the picker opens
+  over it, once. Picking applies on the power cycle the picker triggers;
+  dismissing plays un-enhanced this session and asks again next launch.
+  The picker shows name, `author` (from `pack.json`; `hd-legacy` shows
+  the submission title), `version` (or validation date + short
+  `content_id` for `hd-legacy`), layers (textures / audio / synth /
+  patch), licence (or "not declared"), and catalog 👍 as **sort key**, not
+  as auto-pick. The choice is remembered **per ROM sha1** — the No-Intro
+  sha1 of the ROM as loaded, **before** any `patches[]` apply (§4 step 1
+  precedes step 5) — a pack with three `targets[]` is chosen up to three
+  times, once per ROM.
+- Changing the choice later: overlay → current pack chip → picker.
+  Applies on power cycle.
+- Mixing section A from pack 1 with section B from pack 2 is **Advanced
+  only** (today's Enhancement Packs window and per-section toggles).
+  Player picks a whole pack.
+
+**Advanced mode** keeps Tools → Enhancement Packs (MEP)… as it is: list
+of matching containers, per-pack enable, per-section flags, lexicographic
+default when nothing is chosen. When a per-ROM choice exists (P.3), it
+overrides the lexicographic default in Advanced too, and the window shows
+which container is the chosen one.
+
+**Local + catalog.** A user-dropped container in `EnhancementPacks/`
+whose `content_id` equals the pack already chosen for this ROM is the same
+pack, not a second choice. A local container with a different
+`content_id` and no `id` joins the picker as `local:<container-name>`
+(§3.3 rule 4). The merge only works for packs whose `content_id` is a
+tree hash: the *output* folder of a recipe install copied elsewhere
+without its `.mep-install.json` cannot be re-associated with the catalog
+row (§3.2 — the recipe composite is never derived from the output tree);
+it shows up as a `local:` entry. Documented non-goal (§7).
+
+**Where 👍 comes from.** The client has no GitHub access. P.2 adds an
+additive MEI field (`votes`, integer, MAY, non-normative like `issue`)
+written by the catalog generator from the submission issue's 👍 count.
+Clients ignore it for install decisions; the picker uses it only to sort.
+
+### 6. Player chrome and Advanced GUI
+
+One process. `PreferencesConfig.UiMode`: `Player` | `Advanced`.
+
+| | Player (default on a fresh install) | Advanced |
+|---|---|---|
+| Menu bar | hidden | classic File / Game / Options / Tools / Debug / Help |
+| Home (no ROM) | the existing recent-games grid (`RecentGamesViewModel`), always shown; drop a ROM anywhere; **P.7** adds a first-run welcome card (Load ROM CTA, shown once — recents are necessarily empty on a true first run) and, independently, a persistent "Continue: \<last game\>" entry whenever `GameEntries` is non-empty (not gated on first-run — see §8 P.7) | same grid, as today (`GameSelectionScreenMode` keeps its current meaning: what happens when a recent game is clicked; `Disabled` still hides the grid) |
+| Playing | game fills the window; the overlay shortcut opens a thin overlay: Resume, Save/Load slot, Pack (if 2+ `pack_id`s, or to inspect the current one), Settings (video / audio / input essentials), Advanced GUI, Quit. **P.7** adds an "Enhancements" panel (quick toggles for Texture/Audio/WideScrn/HiRes/Overclock — no new Save/Load buttons, it reuses the overlay's existing Save/Load slot row) | current menus and windows |
+| Overlay shortcut | a new configurable `EmulatorShortcut` (default Esc on keyboard; `KeyCombination` already accepts controller buttons, so a gamepad binding is a config choice, no new code). Default rule in Player: while a ROM runs, Esc opens the overlay and never leaves fullscreen; "Exit fullscreen" is an overlay item. P.4 implements that precedence inside the shortcut config, not by hard-coding | n/a |
+| Gamepad navigation | the overlay and the pack picker are fully operable with D-pad/A/B (Avalonia focus navigation; no pointer required). Acceptance of P.4/P.5 includes a keyboard-arrows pass as proxy | n/a |
+| Pack feedback | OSD toast on apply/update ("Applied Contra 80s — textures"); pack name on the overlay chip | Enhancement Packs window |
+| Debugger, HD Pack Builder, Lua, netplay, movies, cheats, Record Music | not in the overlay; reachable only after switching to Advanced | unchanged |
+| Existing `AutoHideMenu` | ignored in Player (no menu bar); left in Advanced preferences | unchanged |
+
+Switching modes is instant and persisted. **Default rule:** when the
+settings file already exists at startup and has no `UiMode` key, the
+value is `Advanced`, so a current Mesen user is not stripped of Debug on
+upgrade. When no settings file exists (fresh unzip), `UiMode` is `Player`.
+The key is always written on first save, so the rule only ever runs once.
+
+Do not fork ViewModels. Player hides chrome and routes a small overlay at
+windows that already exist (open-ROM dialog, save slots, a reduced
+settings page, the pack picker). Advanced is the current `MainMenuView`.
+
+#### 6.1 Enhancements quick-toggle panel (P.7)
+
+A new "Enhancements" entry sits next to Pack/Settings in the overlay,
+opening a checkbox grid over existing config — same D-pad/A/B
+accessibility bar as P.4/P.5. It does not add its own Save/Load buttons;
+the overlay's existing Save/Load slot row already covers that.
+
+| Toggle | Underlying config | Console coverage | Applies |
+|---|---|---|---|
+| Texture | `EnhancementPackConfig.EnableTextures` | all | needs ROM reload |
+| Audio | `EnhancementPackConfig.EnableAudio` | all | needs ROM reload |
+| WideScrn | `VideoConfig.AspectRatio` toggled between `Widescreen` (16:9 stretch, `Core/Shared/EmuSettings.cpp:521`) and the value it had before the toggle was turned on (restored, not hardcoded to `NoStretching`/`Auto`, so an Advanced-configured custom ratio survives) | all | immediate (renderer-only) |
+| HiRes | `VideoConfig.VideoFilterType` toggled between one curated hi-res preset (candidate `HQ4x`) and the value it had before — same restore-not-clobber rule as WideScrn, so a filter already chosen in Advanced is never silently discarded | all | immediate (renderer-only) |
+| Overclock | NES: `NesConfig.PpuExtraScanlinesBeforeNmi`/`PpuExtraScanlinesAfterNmi` (extra vblank scanlines, `Core/NES/NesPpu.cpp:188-190`); GB/GBA: `GameboyConfig`/`GbaConfig.OverclockScanlineCount`; all three toggled between `0` and one curated preset value. **SMS has no overclock knob today** — the toggle stays visible but disabled on SMS so the panel layout doesn't shift per console | NES, GB, GBA (not SMS) | needs reset |
+
+Both enum-backed toggles (WideScrn, HiRes) store the pre-toggle value the
+first time they are switched on, so switching off restores exactly what
+the player (or Advanced GUI) had configured — never a hardcoded default.
+This keeps the panel from drifting out of sync with Advanced's own
+settings pages (§6 non-goal: do not fork settings state).
+
+A **Border** toggle (a pack-declared decorative frame around the game
+area) is a natural seventh entry here, but it needs a new MEP-v1 field
+and a new Core render path first — that is Core/pack work, not chrome,
+so it is tracked as its own phase in
+Part A, Phase 8 (§4), gated on an ADR. P.7 ships without it; the panel adds the
+seventh row once that phase lands.
+
+#### 6.2 Welcome card and "Continue" (P.7)
+
+Two distinct, independent affordances — not one dialog wearing two hats:
+
+- **Welcome card**: shown once, on the very first Player-mode boot (the
+  same "settings file missing the `UiMode` key" signal `UiModeDefaultRule`
+  already uses, §6). At that point recents are necessarily empty, so its
+  only CTA is **"Load ROM"** plus one short line of orientation text. It
+  never reappears once dismissed.
+- **Continue card**: a persistent, always-shown-when-applicable entry on
+  the Player home whenever `RecentGamesViewModel.GameEntries` is
+  non-empty — **"Continue: \<most recent game's title\>"**, resuming that
+  game. This is not gated on first-run; it is simply what the home shows
+  once there is a game to return to, exactly like the rest of the recent-
+  games grid it sits alongside.
+
+### 7. Non-goals
+
+- A second executable or a rewrite off Avalonia.
+- Live swap of textures/patches without power cycle.
+- Auto-picking the 👍 leader when two `pack_id`s match; 👍 only sorts
+  the picker.
+- A full pack browser (search, extra MEI URLs). Part A defers
+  that until the catalog outgrows a list.
+- Replacing F6.4b. This PRD consumes it.
+- Hosting or committing pack bytes.
+- Changing discovery precedence (sibling still wins).
+- Product-level deduplication for packs without `id` hosted outside
+  GitHub (§3.3 rule 3).
+- Re-associating a recipe *output* folder copied without its
+  `.mep-install.json` with its catalog row (§5).
+- SNES / PCE / WonderSwan / ColecoVision chrome.
+- A widescreen mode that reveals more of the playfield (extra per-console
+  PPU/VDP decode) — the WideScrn toggle only stretches the existing 4:3
+  frame to 16:9 (§6.1); "see more of the game" would be its own
+  per-console engine ADR.
+- The welcome card reappearing on every boot, or blocking the recent-
+  games grid underneath it.
+
+### 8. Slices
+
+Architecture slices need their ADR accepted first. P.3–P.5 run on local
+packs and do not wait for F6.4b; catalog install/update in the overlay
+(P.6) does.
+
+| Slice | Deliverable | Depends | Acceptance |
+|---|---|---|---|
+| **P.0** | ADR-0139/0140/0141 (accepted 2026-08-28): (1) `content_id` canonicalisation, the recipe composite, and the two-implementation/parity rule; (2) `pack_id` sources incl. the MEP `id` field and the `local:` fallback; (3) catalog uniqueness (§3.3) + one-slot occupancy (§3.6) as CI/client policy, **amending ADR-0138 §37** (update trigger = `content_id`, no auto-downgrade) | — | **done 2026-08-28** — ADR-0139/0140/0141 accepted; ADR-0141 carries the ADR-0138 §37 amendment |
+| **P.1** | `content_id` in `scripts/` (normative) **and** in the Core (`MepPackManager`/`MepRecipeInstaller`), both on the discovered pack root and the recipe composite; `mep_lint` / validate workflow writes it to mep-meta; `.mep-install.json` gains `pack_id`/`content_id`. Goldens: same tree in two wrappers → same id; two recipes on one primary → two ids | P.0 | **done 2026-08-29** — `scripts/mep_content_id.py` (normative) + `scripts/test_mep_content_id.py` (8 checks) + `Core/Shared/EnhancementPacks/MepContentId.{h,cpp}`; `mep_lint --content-id` + the validate workflow's `content-id` step write the tree hash (and the recipe composite for split packs) into mep-meta; `MepRecipeInstaller::WriteOutputs` computes the composite at install time and `WriteInstallStamp` records `pack_id`/`content_id` in `.mep-install.json`; parity fixture `docs/specs/golden/mep-content-id.json` run by `scripts/test_mep_content_id_golden.py` (Python) and core-unit-tests BlocoG (C++), both green |
+| **P.2** | Catalog / mep-meta / MEI grow `pack_id`, `content_id`, `version`, `votes` (all additive; unknown-field ignore already required). One live row per `pack_id` (§3.6). Duplicate comment on same `content_id`. `/revalidate` rewrites provenance and occupies the slot only by §3.6 order. Origin binding (§3.3): mep-meta `pack_origin`; different origin → not listed, `pack:needs-review` (label added to `ensure_community_pack_labels.sh`) | P.1 | **done 2026-08-29** — `scripts/pack_id_rules.py` (leaf, stdlib-only): `resolve_pack_id` (MEP `id` → `owner/repo` → `issue-n`), `pack_origin` (§3.3), `slot_winner`/`select_catalog_rows` (§3.6: content-dedup global, per-pack_id origin filter then slot winner — semver → validated_at → issue, deterministic) + `scripts/test_pack_id_rules.py` (8 checks); `mei_catalog_entry.build_pack_entry` gains additive `pack_id`/`content_id`/`votes` (MAY, via `apply_mei_identity`); the validate workflow's mep-meta upsert writes `pack_id`/`pack_origin`/`content_id` and a new `identity-check` step (`scripts/mep_identity_check.py`, `--post`, `continue-on-error`) comments on duplicate `content_id` / foreign-origin claims; `pack:needs-review` label (13th) added to `ensure_community_pack_labels.sh`; the generator was split per ADR-0138 §35 into `mei_catalog_fetch` (all `gh` reads) + a 123-line orchestrator feeding `select_catalog_rows` (rows still 👍-sorted by `render_table`); AC-2/AC-4/AC-6 verifiers updated for the split and green; `make doc-checks` green |
+| **P.3** | Per-ROM-sha1 preference (`pack_id` chosen, `local:` fallback for local drops) persisted in `EnhancementPackConfig`; the **resolution logic** (sha1 → `pack_id`, `local:` fallback, `content_id` merge, lexicographic default) lives in a host-free class under `UI/Logic/` (ADR-0123: `UI.Tests` dual-compiles only `UI/Logic/**`, never `UI/Config`). Picker window usable from **Advanced** (ships before Player chrome). The preference overrides lexicographic order; lexicographic stays the default when no preference exists | P.0 (for the `pack_id` rules) | **done 2026-08-29** — `UI/Logic/PackPreferenceResolver.cs` (host-free): `DerivePackId` (stamped pack_id, else `local:<container>`, ADR-0140 rule 4) + `Resolve` (content_id merge — a container duplicating another's content_id is not a new entry — and preference → winning container, lexicographic default when none/stale); `scripts/`-side `.mep-install.json` identity exposed as pack_id/content_id columns 9–10 of `GetMepPackList` (parser extended, 8-column rows still accepted); `EnhancementPackConfig.RomPackPreference` (romSha1 → pack_id, reset-then-push via the new `ClearPreferredMepPacks`/`SetPreferredMepPack` interop) drives the core's per-ROM preferred pack (`MepPackManager::FindPreferredPack`, consulted before the ADR-0040 order in `GetPackForSection`); Advanced's Enhancement Packs window gained a "Preferred pack for this ROM" combo (content-merged choices + "(default)" clear). UI.Tests: `PackPreferenceResolverTests` (11 checks incl. `local:`, merge, stale, disabled) + 194 total green; `make core`/`ui`/`doc-checks` green |
+| **P.4** | `UiMode` + Player chrome: hide menu, overlay + its shortcut, recent games as home, Settings subset, Advanced switch. Existing settings file → Advanced; none → Player | — (chrome only) | done 2026-08-29 — `UI/Logic/UiMode.cs` (`UiModeDefaultRule`: no settings.json → Player, existing keyless file → Advanced via the property initializer; `Configuration.CreateConfig` hooks the fresh path, key written on first save) + 3 tests; `UI/Logic/UiModeShortcutPrecedence.cs` (Player overlay owns its key: a Pause binding on the same combination is suppressed in `PreferencesConfig.ApplyConfig` — the Esc collision resolved in the shortcut config) + 5 tests; `EmulatorShortcut.ToggleOverlay` (default Esc, mirrored in the core enum; core `IsKeyPressed` exempts it from the keyboard-block so it stays reachable in keyboard games); overlay panel (Resume / Save / Load slot / Pack / Settings / Advanced GUI / Quit) on the renderer panel, D-pad nav via focus, opened paused; menu hidden in Player (MouseManager + VM, AutoHideMenu ignored); recent-games grid always shown as Player home; `PreferencesConfig.UiMode` combo in the Preferences tab for the Advanced→Player switch. Pending (manual): Player cannot reach Debug without switching, Esc-while-playing passes. §6 "reduced settings page" **shipped 2026-08-29**: the overlay's Settings opens `ConfigWindow(playerMode: true)` showing only the essentials tabs — `UI/Logic/ConfigWindowTab.cs` (enum moved host-free) + `UI/Logic/PlayerSettingsEssentials.cs` (clamp, +9 UI.Tests), `ConfigViewModel.PlayerMode` hides the Emulation/console/Preferences tabs and the Reset/Open-Folder bar, initial tab clamps to Audio. Player Settings GUI run still pending |
+| **P.5** | Player pack UX: toast, overlay chip, picker from §5 wired to P.3; un-enhanced start while the picker is open | P.3, P.4 | done 2026-08-29 — `UI/Logic/PlayerPackPicker.cs` (host-free `ShouldOpen`: sibling pack always suppresses §4, <2 distinct pack_ids → slot applies/never ask, effective stored preference → silent apply; `DistinctPackIdCount` over the §5 content-merged candidates) + 8 tests; picker panel over the un-enhanced game (name/author/version/layers/licence from `GetPackListText` columns, sorted by name; pick stores the per-ROM preference P.3 and power-cycles, dismiss stores nothing → asks again next launch; Esc dismisses); overlay Pack button became the current-pack chip (opens the picker even with a stored choice — §5 "changing the choice later" — else the pack window); "Applied …" OSD toast via `EmuApi.DisplayMessage` on apply in Player, suppressed while the picker is open. UI.Tests 210 (8 new), UI osx-arm64 0 errors, firewall OK. Pending (manual): picker/dismiss/sibling flows, keyboard-arrows-as-gamepad-proxy pass, toast noise judgement |
+| **P.6** | Player overlay talks to F6.4b install/update using §3.6 (`content_id` trigger, no auto-downgrade, removed-from-catalog keeps install); `votes` sorts the picker | P.5, F6.4b | done 2026-08-29 — `UI/Logic/CommunityCatalogUpdateDecision.cs` (host-free §3.6 verdict: `Updated` on content_id diff, `WrapperOnly` no-reinstall on source-only change, `NoDowngrade` when the installed semver is newer (hd-legacy has none), `RemovedFromCatalog` keeps the install, `UpToDate`/`NotInstalled`; `ReadStampFields` + numeric `CompareSemver`) + 15 tests; `CommunityPackCatalogEntry` now deserializes the P.2 additive `pack_id`/`content_id`/`votes`; the F6.4b coordinator's reinstall gate switched from the ADR-0138 §37 source.sha256 trigger to the §3.6 content_id decision (container name unchanged, so `DisabledPacks`/per-section flags survive an update; "removed slot" is the fetch-returns-null path, already silent); the picker sorts by community 👍 (`votes` desc, then name — local-only packs fall back to name). UI.Tests 225 (15 new), UI osx-arm64 0 errors, firewall + doc-checks OK. Pending (manual): catalog update end-to-end on a real fetch, "Updated …" toast wording |
+| **P.7** | Enhancements quick-toggle panel (§6.1: Texture/Audio/WideScrn/HiRes/Overclock, restore-not-clobber semantics on the two enum-backed toggles) + welcome card and persistent Continue card on the Player home (§6.2) | P.4 (overlay), P.5 (home) | **proposed 2026-08-30** — not started. Border (a 7th toggle) is out of scope here; tracked in Part A, Phase 8, gated on its own ADR |
+
+### 9. ADR map
+
+| Topic | Status | Meaning |
+|---|---|---|
+| ADR-0139 — `content_id` algorithm (tree canonicalisation, recipe composite, excluded files, `version` string excluded, two implementations + parity) | **accepted** (2026-08-28) | P.1 cannot start without it |
+| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness + origin binding (amended 2026-08-28) | **accepted** (2026-08-28) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
+| ADR-0141 — one live slot per `pack_id`; amends ADR-0138 §37 (client update trigger `source.sha256` → `content_id`); no auto-downgrade; removed slot keeps install | **accepted** (2026-08-28) | P.6 conflicts with the accepted text until amended |
+| Player chrome (`UiMode`, overlay contents, overlay shortcut, upgrade default Advanced) | **needed only if** P.4 finds trade-offs beyond §6 | P.4 |
+| Enhancements quick-toggle panel + welcome/Continue cards (§6.1, §6.2) | not needed — UI over config that already exists | P.7 |
+| ADR-0039/0040/0044/0049/0120/0121 | accepted | precedence and ROM hash-matching do not change |
+| ADR-0138 (except §37 as above) | accepted | F6.4b is the network installer this shell consumes |
+
+### 10. Risks
+
+| Risk | Mitigation |
+|---|---|
+| `content_id` treated as the pack id | §3.5–§3.6; picker and preference key off `pack_id`; `content_id` is equality/integrity only |
+| Catalog yank / republished older semver | no auto-downgrade (§3.6); Advanced confirms |
+| Authors omit `id` / `version` (`hd-legacy`) | fallbacks in §3.3/§3.4; keyed by origin repo or issue; picker shows date + hash prefix |
+| Two issues, same product, different `pack_id` fallbacks (non-GitHub hosts) | `content_id` still collapses byte-duplicates; remaining cases open the picker (safe default); documented non-goal until `id` is common |
+| Inflated `version` wins the slot | accepted trade-off (§3.6 rule 1) **within one origin**; triage warns; no auto-downgrade protects installs |
+| Third party claims an existing `pack_id` (`id` or `owner/repo` spoof) with a high `version` | origin binding (§3.3): different origin never occupies the slot; `pack:needs-review` for a human |
+| Hashing local HD trees stalls the ROM load | `content_id` of local containers cached by path+size+mtime, computed off the load path (§3.3 rule 4) |
+| Overlay unusable from the couch | overlay shortcut bindable to a controller button; overlay/picker navigable by D-pad (§6) |
+| Recipe identity without dep bytes | composite in §3.2; computed at install time from the primary bytes, stored, not re-derived |
+| `scripts/` and Core hashers drift | parity fixture in P.1, same pattern as ADR-0138 §39 |
+| Local-pack identity ambiguous | `local:<container>` rule (§3.3 rule 4); `content_id` merges local ↔ catalog |
+| Player chrome accidentally ships a second UI stack | P.4 acceptance: no new debugger/settings rewrite; hide and overlay only |
+| Esc collides with existing shortcuts | configurable `EmulatorShortcut`; P.4 resolves in shortcut config |
+| Scope collision with F6.4b | P.6 waits; P.3–P.5 work on local packs |
+
+### 11. Open questions
+
+None for P.0 — the four questions this section held (tree-hash
+canonicalisation; MEP `id` field now; duplicate-submit policy; silent
+`local:` → catalog `pack_id` migration) were closed by ADR-0139/0140/0141
+on 2026-08-28 (hash: ADR-0139; `id` as MEP v1.4 SHOULD, comment + close
+the newer duplicate issue, silent migration: ADR-0140). New questions go
+here only when a slice surfaces a trade-off §3–§6 do not settle.
+
+### 12. References
+
+- Parent roadmap: Part A (this document)
+- Discovery / precedence: ADR-0040, ADR-0049, ADR-0120, ADR-0121
+- ROM hash: ADR-0039, MEP-v1 §4
+- Catalog / recipe / auto-install: ADR-0138 (§37–§39), MEI-v1 §2.2,
+  MEP-recipe-v1
+- Host allow-list: `scripts/pack_host_allowlist.json`
+- Install stamp: `Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp`
+  (`WriteInstallStamp`)
+- Current pack UI: `UI/ViewModels/EnhancementPacksViewModel.cs`,
+  `UI/Config/EnhancementPackConfig.cs`
+- Current chrome: `UI/Views/MainMenuView.axaml`,
+  `UI/Windows/MainWindow.axaml`, `UI/ViewModels/RecentGamesViewModel.cs`

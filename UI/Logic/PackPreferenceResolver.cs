@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Mesen.Logic
 {
-	//P.3 (PRD-player-shell §5, ADR-0140/0141): resolves, among the discovered
+	//P.3 (PRD Part B §5, ADR-0140/0141): resolves, among the discovered
 	//packs for a loaded ROM, which container is the chosen one, from the
 	//persisted per-ROM preference (a pack_id). Host-free (BCL only - no
 	//Avalonia/EmuApi/IO) so UI.Tests dual-compiles it via UI.Tests.csproj

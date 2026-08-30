@@ -37,7 +37,7 @@
 
 					<c:OptionSection Header="{l:Translate lblMiscSettings}">
 						<CheckBox Content="{l:Translate chkAutoLoadIps}" IsChecked="{Binding Config.AutoLoadPatches}" />
-						<!--P.4 (PRD-player-shell §6): switching Player/Advanced is instant
+						<!--P.4 (PRD Part B §6): switching Player/Advanced is instant
 						and persisted. In Player, AutoHideMenu (below) is ignored - there
 						is no menu bar; it only applies in Advanced.-->
 						<StackPanel Orientation="Horizontal" Margin="0 0 0 5">

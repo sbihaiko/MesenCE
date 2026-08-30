@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """pack_id_rules — dependency-free leaf holding the P.2 identity rules
-(ADR-0140 pack_id resolution + origin binding, PRD-player-shell §3.3, and
+(ADR-0140 pack_id resolution + origin binding, PRD Part B §3.3, and
 the §3.6 one-slot winner). Consumed by the community-pack catalog generator
 (`generate_community_pack_catalog.py`), the MEI entry assembler
 (`mei_catalog_entry.py`) and, through the same import, the validate

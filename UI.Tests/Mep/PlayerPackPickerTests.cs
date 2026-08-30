@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Mesen.Tests.Mep
 {
-	//P.5 (PRD-player-shell §5): the Player picker decision - it opens only for
+	//P.5 (PRD Part B §5): the Player picker decision - it opens only for
 	//2+ competing pack_ids (after the content_id merge) with no effective
 	//stored choice and no sibling-folder pack; it stays silent otherwise.
 	public class PlayerPackPickerTests

@@ -3,6 +3,7 @@
   "hosts": [
     {"host": "github.com", "path_contains_any": ["/releases/", "/archive/"], "kind": "direct"},
     {"host": "codeload.github.com", "kind": "direct"},
+    {"host": "release-assets.githubusercontent.com", "kind": "direct"},
     {"host": "raw.githubusercontent.com", "kind": "direct"},
     {"host": "gist.githubusercontent.com", "kind": "direct"},
     {"host": "gist.github.com", "kind": "direct"},

@@ -36,7 +36,7 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	//Container names (folder / zip base name) of packs the user turned off
 	public List<string> DisabledPacks { get; set; } = new();
 
-	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id (ADR-0140 id or
+	//P.3 (PRD Part B §5): per-ROM-sha1 preferred pack_id (ADR-0140 id or
 	//"local:<container>"), keyed by the No-Intro sha1 of the ROM as loaded.
 	//An entry maps to the container the UI resolver picks for that ROM; the
 	//core consults it per load (MepPackManager::FindPreferredPack). An empty

@@ -37,10 +37,17 @@ namespace Mesen.Services
 		//(a pack we just installed is applied through exactly such a power cycle).
 		public static void OnGameLoaded(bool isPowerCycle)
 		{
+			//DIAGNOSTIC (temporary, issue #142/community-pack investigation):
+			//trace every early-return so the mesen.log always shows why the
+			//auto-install did or didn't proceed, instead of pure silence.
+			EmuApi.WriteLogEntry("[CommunityPack] OnGameLoaded: isPowerCycle=" + isPowerCycle +
+				" AutoInstallCommunityPacks=" + ConfigManager.Config.EnhancementPacks.AutoInstallCommunityPacks);
 			if(isPowerCycle || !ConfigManager.Config.EnhancementPacks.AutoInstallCommunityPacks) {
+				EmuApi.WriteLogEntry("[CommunityPack] skipped: isPowerCycle or AutoInstallCommunityPacks off");
 				return;
 			}
 			if(Interlocked.CompareExchange(ref _running, 1, 0) != 0) {
+				EmuApi.WriteLogEntry("[CommunityPack] skipped: a previous load's install is still in flight");
 				return; //a previous load's install is still in flight
 			}
 			_ = Task.Run(RunAsync);
@@ -52,20 +59,27 @@ namespace Mesen.Services
 				//§38: the very first automatic download is gated behind an explicit Yes/No prompt,
 				//before the catalog itself is contacted (that GET is already a network access).
 				bool allowed = await Dispatcher.UIThread.InvokeAsync(EnhancementPacksWindow.EnsureCommunityPackAutoInstallConsent);
+				EmuApi.WriteLogEntry("[CommunityPack] consent check: allowed=" + allowed +
+					" ConsentGiven=" + ConfigManager.Config.EnhancementPacks.CommunityPackAutoInstallConsentGiven);
 				if(!allowed) {
+					EmuApi.WriteLogEntry("[CommunityPack] skipped: consent not given / dialog pending");
 					return;
 				}
 				string romSha1 = EmuApi.GetMepRomSha1();
+				EmuApi.WriteLogEntry("[CommunityPack] romSha1=" + romSha1);
 				lock(_attemptedRomSha1) {
 					if(string.IsNullOrWhiteSpace(romSha1) || !_attemptedRomSha1.Add(romSha1)) {
+						EmuApi.WriteLogEntry("[CommunityPack] skipped: no hash, or already attempted this session");
 						return; //no hash, or already attempted this session
 					}
 				}
 
 				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
 				if(fetched == null) {
+					EmuApi.WriteLogEntry("[CommunityPack] no match/fetch result (see [CommunityPackFetch] lines above for the stage that returned null)");
 					return; //no catalog, no match, host not allowed or hash mismatch - all silent (§41/§42)
 				}
+				EmuApi.WriteLogEntry("[CommunityPack] fetched entry: pack_id=" + fetched.Entry.PackId + " primaryPath=" + fetched.PrimaryPackPath);
 
 				//P.6 §5: remember the matched entry's community 👍 count so the
 				//Player picker sorts its competing packs by it (votes 0 when the
@@ -78,8 +92,11 @@ namespace Mesen.Services
 
 				CommunityPackInstallOutcome outcome = CommunityPackInstallCoordinator.Install(
 					fetched.Entry, fetched.PrimaryPackPath, fetched.ResolvedDepPaths);
+				EmuApi.WriteLogEntry("[CommunityPack] Install() outcome: Status=" + outcome.Status +
+					" ContainerName=" + outcome.ContainerName + " Message=" + outcome.Message);
 				Surface(outcome);
 			} catch(Exception ex) {
+				EmuApi.WriteLogEntry("[CommunityPack] RunAsync threw: " + ex);
 				Notify("Community pack auto-install failed: " + ex.Message);
 			} finally {
 				Interlocked.Exchange(ref _running, 0);

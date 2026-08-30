@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Framework-free checks for the P.2 collision logic
-(scripts/mep_identity_check.py, PRD-player-shell §3.3).
+(scripts/mep_identity_check.py, PRD Part B §3.3).
 
 Covers `collision()` only — the pure decision (duplicate content_id / foreign
 origin on an existing pack_id / none); the live `gh` reads and writes of the

@@ -58,7 +58,7 @@ can be exercised by real xunit tests without Avalonia or the native
   empty for a stamp-less container) are optional — an 8-column row from an
   older core still parses. The `Sections` field is passed through raw — the
   `","` → `", "` display formatting stays in the ViewModel, not in this parser.
-- `PackPreferenceResolver` (P.3, PRD-player-shell §5, ADR-0140/0141) is the
+- `PackPreferenceResolver` (P.3, PRD Part B §5, ADR-0140/0141) is the
   host-free per-ROM choice resolver: `DerivePackId` (a candidate's
   `.mep-install.json` pack_id, else the `local:<container>` rule-4 fallback)
   and `Resolve` (the §5 content_id merge — a container duplicating another's
@@ -70,7 +70,7 @@ can be exercised by real xunit tests without Avalonia or the native
   the same decision per ROM via `MepPackManager::FindPreferredPack` (the
   preference is pushed at config-apply through `SetPreferredMepPack`/
   `ClearPreferredMepPacks`).
-- `UiModeDefaultRule` (P.4, PRD-player-shell §6) is the host-free one-shot
+- `UiModeDefaultRule` (P.4, PRD Part B §6) is the host-free one-shot
   default for `PreferencesConfig.UiMode`: no settings.json at startup (the
   `Configuration.CreateConfig` path) → `Player`; an existing keyless
   settings.json (a pre-Player upgrade) keeps `Advanced` — which is also the
@@ -103,7 +103,7 @@ can be exercised by real xunit tests without Avalonia or the native
   community 👍 first (`CommunityPackInstallService.GetVotes(pack_id)`, from
   the last catalog fetch's MEI `votes`), then name — local-only packs (no
   catalog row, votes 0) fall back to name order.
-- `CommunityCatalogUpdateDecision` (P.6, PRD-player-shell §3.6) is the
+- `CommunityCatalogUpdateDecision` (P.6, PRD Part B §3.6) is the
   host-free verdict for the F6.4b reinstall gate, replacing the old
   source.sha256 trigger (ADR-0138 §37) with the §3.6 content_id rule: an
   installed content_id differing from the catalog slot's → `Updated`

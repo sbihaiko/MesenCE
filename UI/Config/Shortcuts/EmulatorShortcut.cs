@@ -67,7 +67,7 @@ namespace Mesen.Config.Shortcuts
 		SetScale9x,
 		SetScale10x,
 		ToggleFullscreen,
-		//P.4 (PRD-player-shell §6): opens/closes the thin Player-mode overlay
+		//P.4 (PRD Part B §6): opens/closes the thin Player-mode overlay
 		//(Resume, Save/Load slot, Pack, Settings, Advanced GUI, Quit). Default
 		//Esc on keyboard; a controller binding is a config choice. Only acted
 		//on while UiMode == Player (Advanced ignores the press), and in Player

@@ -329,7 +329,7 @@ extern "C"
 		_emu->GetEnhancementPackManager()->SetPackEnabled(containerName ? containerName : "", enabled);
 	}
 
-	//P.3 (PRD-player-shell §5): per-ROM-sha1 preferred pack_id pushed by the UI
+	//P.3 (PRD Part B §5): per-ROM-sha1 preferred pack_id pushed by the UI
 	//at config-apply time; the core consults it per loaded ROM so the choice
 	//overrides the ADR-0040 lexicographic order without touching DisabledPacks.
 	DllExport void __stdcall SetPreferredMepPack(const char* romSha1, const char* packId)

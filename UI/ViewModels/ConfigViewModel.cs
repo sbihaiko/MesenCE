@@ -21,7 +21,7 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial SmsConfigViewModel? Sms { get; set; }
 
 		[ObservableProperty] public partial ConfigWindowTab SelectedIndex { get; set; }
-		//PRD-player-shell §6: Player mode's Settings page shows only the
+		//PRD Part B §6: Player mode's Settings page shows only the
 		//essentials tabs (video / audio / input); the window hides the rest.
 		[ObservableProperty] public partial bool PlayerMode { get; set; }
 		public bool AlwaysOnTop { get; }

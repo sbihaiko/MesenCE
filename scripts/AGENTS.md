@@ -138,7 +138,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `find_fallback_subfolder`'s `safe_rel` guard refuses a `..`-segment
   candidate instead of discovering it as the pack root) that exercise it,
   mirroring `gen_mep_test_pack.py`'s CLI/docstring style.
-  `pack_id_rules.py` (P.2, ADR-0140/0141, PRD-player-shell §3.3/§3.6) is
+  `pack_id_rules.py` (P.2, ADR-0140/0141, PRD Part B §3.3/§3.6) is
   the dependency-free leaf holding the pack-identity rules, consumed by the
   catalog generator, `mei_catalog_entry`, and the validate workflow's
   mep-meta upsert — so the `pack_id` a submission's mep-meta records and

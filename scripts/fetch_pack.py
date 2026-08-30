@@ -35,8 +35,6 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-import zipfile
-from pathlib import Path
 
 DEFAULT_ALLOWLIST = "scripts/pack_host_allowlist.json"
 USER_AGENT = "MesenCE-community-pack-validator/1.0"
@@ -130,47 +128,6 @@ def stream_to_file(resp, out_path, max_bytes):
     return written
 
 
-def unwrap_single_root_zip(out_path):
-    """GitHub's own archive/codeload zips (and some other archival tools)
-    always wrap every entry in one `<repo>-<branch>/`-style top-level
-    directory named after the repo, not the pack. mep_lint.py's pack-root
-    discovery (find_fallback_subfolder / find_fallback_subfolder_by_name,
-    ADR-0120) only recognizes a subfolder that either wraps a textures/
-    synth/ probe, or whose name matches the submitter-declared ROM name --
-    an arbitrary repo-archive folder name matches neither, even though the
-    pack inside is otherwise perfectly valid at that folder's root.
-
-    When (and only when) every entry in the zip shares one common top-level
-    directory, this rewrites the zip with that one path segment stripped --
-    lossless (it only removes a prefix every entry already shared) and
-    restores the exact layout the pack author's own directory tree has, so
-    mep_lint's existing literal-root convention (`src.exists("hires.txt")`
-    etc.) sees it the same way it would see a plain release zip. A zip
-    that already has multiple top-level entries (i.e. not archive-wrapped)
-    is left untouched.
-    """
-    if not zipfile.is_zipfile(out_path):
-        return
-    with zipfile.ZipFile(out_path) as z:
-        names = z.namelist()
-        if not names:
-            return
-        tops = {n.split("/", 1)[0] for n in names}
-        if len(tops) != 1:
-            return
-        root = tops.pop()
-        prefix = root + "/"
-        if not all(n == root or n.startswith(prefix) for n in names):
-            return
-        entries = [(n, z.read(n)) for n in names if n != root and n.startswith(prefix)]
-
-    tmp_path = Path(str(out_path) + ".unwrapped")
-    with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as out:
-        for name, data in entries:
-            out.writestr(name[len(prefix):], data)
-    tmp_path.replace(out_path)
-
-
 def fetch_direct(url, hosts, out_path, max_bytes):
     resp, _ = open_validated(url, hosts)
     return stream_to_file(resp, out_path, max_bytes)
@@ -249,11 +206,6 @@ def main(argv):
     except (ValueError, urllib.error.URLError, OSError) as e:
         print(f"download failed: {e}", file=sys.stderr)
         return 1
-
-    try:
-        unwrap_single_root_zip(out_path)
-    except (zipfile.BadZipFile, OSError) as e:
-        print(f"warning: single-root unwrap skipped ({e})", file=sys.stderr)
 
     print(f"wrote {out_path} ({written} bytes)")
     return 0

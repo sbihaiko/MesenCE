@@ -4,8 +4,10 @@ using Mesen.Logic;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Mesen.Services
 {
@@ -23,20 +25,202 @@ namespace Mesen.Services
 		{
 			EnhancementPackConfig config = ConfigManager.Config.EnhancementPacks;
 			string containerName = GetContainerName(entry);
+			EmuApi.WriteLogEntry("[CommunityPackInstall] containerName=" + containerName);
 			(CommunityPackInstallOutcome? gate, string outFolder) = EvaluateGates(config, entry, containerName);
 			if(gate != null) {
+				EmuApi.WriteLogEntry("[CommunityPackInstall] gated: Status=" + gate.Status + " Message=" + gate.Message);
 				return gate;
 			}
+			EmuApi.WriteLogEntry("[CommunityPackInstall] gates passed, outFolder=" + outFolder);
 
 			(Dictionary<string, string> depPaths, List<CommunityPackDepPrompt> pending) = ResolveDeps(entry, resolvedDepPaths, outFolder);
+
+			if(entry.IsHdLegacy) {
+				//MEI-v1.md §2.3: an hd-legacy entry is a plain HD/texture pack
+				//with no MEP recipe - InstallMepRecipe cannot parse one. Extract
+				//the zip's pack root straight into HdPacks/<rom>/ instead, the
+				//classic loose pack location (ADR-0040 §5 - a loose HD pack
+				//wins over MEP textures).
+				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy entry - installing as a loose HD pack");
+				CommunityPackInstallOutcome outcome = InstallHdLegacy(entry, primaryPackPath, outFolder, containerName);
+				//A legacy install has no recipe deps, but unresolved user_supplied
+				//prompts still get surfaced so the user knows what to drop where.
+				return pending.Count == 0 || outcome.Status != CommunityPackInstallStatus.Installed
+					? outcome
+					: new CommunityPackInstallOutcome(outcome.Status, outcome.ContainerName, outcome.Message, outcome.Withheld, pending);
+			}
+
+			EmuApi.WriteLogEntry("[CommunityPackInstall] calling EmuApi.InstallMepRecipe: recipeLen=" + (entry.Recipe?.GetRawText()?.Length ?? 0) +
+				" primaryPackPath=" + primaryPackPath + " depPaths=" + depPaths.Count + " pendingDeps=" + pending.Count);
 			bool success = EmuApi.InstallMepRecipe(
 				entry.Recipe?.GetRawText() ?? "", primaryPackPath, BuildDepPathsBlob(depPaths),
 				EmuApi.GetRomInfo().GetRomName(), outFolder, out string resultText);
+			EmuApi.WriteLogEntry("[CommunityPackInstall] InstallMepRecipe returned success=" + success + " resultText=" + resultText.Replace("\n", "\\n"));
 
 			return success
 				? CommunityPackInstallOutcome.Installed(containerName, ParseWithheld(resultText), pending)
 				: CommunityPackInstallOutcome.Failed(ParseError(resultText));
 		}
+
+		//Legacy HD pack install (kind: "hd-legacy", no MEP recipe - MEI-v1
+		//§2.3): the classic loose-pack location is HdPacks/<rom>/hires.txt
+		//(FolderUtilities.GetHdPackFolder()), which HdTilePack::LoadForRom and
+		//the NES HdPackLoader read and which takes precedence over MEP textures
+		//(ADR-0040 §5). We extract the zip's pack root (the folder holding
+		//hires.txt) flattened to the loaded ROM's file name, and stamp the MEP
+		//container so the P.6 update decision sees the install on the next load.
+		private static CommunityPackInstallOutcome InstallHdLegacy(
+			CommunityPackCatalogEntry entry, string primaryPackPath, string outFolder, string containerName)
+		{
+			string romName = EmuApi.GetRomInfo().GetRomName();
+			if(string.IsNullOrWhiteSpace(romName)) {
+				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy install failed: no loaded ROM name");
+				return CommunityPackInstallOutcome.Failed("no loaded ROM name for legacy HD pack install");
+			}
+
+			string targetFolder = Path.Combine(ConfigManager.HomeFolder, "HdPacks", romName);
+			//Reinstall (content_id changed, see EvaluateGates) clears the old
+			//pack first; a fresh install leaves whatever else is in the folder.
+			string stampPath = Path.Combine(outFolder, ".mep-install.json");
+			if(File.Exists(stampPath) && Directory.Exists(targetFolder)) {
+				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy reinstall - clearing " + targetFolder);
+				ClearFolderForReinstall(targetFolder);
+			}
+
+			if(!TryExtractLegacyPack(primaryPackPath, targetFolder, romName, out string error)) {
+				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy extract failed: " + error);
+				return CommunityPackInstallOutcome.Failed(error);
+			}
+
+			Directory.CreateDirectory(outFolder);
+			File.WriteAllText(stampPath, BuildLegacyInstallStamp(entry, entry.Sha256));
+			EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy installed: " + targetFolder);
+			return CommunityPackInstallOutcome.Installed(containerName, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
+		}
+
+		//Finds the pack root (the folder that holds hires.txt) inside a legacy
+		//HD pack zip and extracts its contents into targetFolder, preserving
+		//relative paths. Files outside the pack root (banner art, READMEs, ...)
+		//are skipped - the classic loader only reads what hires.txt references.
+		//A wrapper zip holding exactly one root-level nested zip (the
+		//"UnZipMeFirst"-style release) is unwrapped in-memory first - both
+		//cases mirror MepRecipeOps::DiscoverPrimaryRoot. The root discovery +
+		//zip-slip normalization are the host-free LegacyHdPackInstall
+		//(UI/Logic, unit-tested); only the I/O is here.
+		private static bool TryExtractLegacyPack(string zipPath, string targetFolder, string romName, out string error)
+		{
+			error = "";
+			try {
+				Directory.CreateDirectory(targetFolder);
+				using ZipArchive outer = ZipFile.OpenRead(zipPath);
+				Dictionary<string, ZipArchiveEntry>? byNorm = BuildNormMap(outer, out error);
+				if(byNorm == null || byNorm.Count == 0) {
+					if(byNorm != null) {
+						error = "zip is empty";
+					}
+					return false;
+				}
+
+				string? rootPrefix = LegacyHdPackInstall.FindPackRoot(byNorm.Keys, romName);
+				if(rootPrefix == null) {
+					//Wrapper: exactly one root-level nested zip holds the pack.
+					string? nested = LegacyHdPackInstall.FindNestedZip(byNorm.Keys);
+					if(nested == null || !byNorm.TryGetValue(nested, out ZipArchiveEntry? nestedEntry)) {
+						error = "not a legacy HD pack (no hires.txt)";
+						return false;
+					}
+					using MemoryStream nestedStream = new(ReadEntryBytes(nestedEntry));
+					using ZipArchive inner = new(nestedStream, ZipArchiveMode.Read);
+					Dictionary<string, ZipArchiveEntry>? innerMap = BuildNormMap(inner, out error);
+					if(innerMap == null || innerMap.Count == 0) {
+						if(innerMap != null) {
+							error = "zip is empty";
+						}
+						return false;
+					}
+					rootPrefix = LegacyHdPackInstall.FindPackRoot(innerMap.Keys, romName);
+					if(rootPrefix == null) {
+						error = "not a legacy HD pack (no hires.txt)";
+						return false;
+					}
+					byNorm = innerMap;
+				}
+
+				ExtractUnderRoot(byNorm, rootPrefix, targetFolder);
+				return true;
+			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException) {
+				error = "cannot extract legacy HD pack: " + ex.Message;
+				return false;
+			}
+		}
+
+		//Normalizes every file entry of a zip into a norm-path -> entry map;
+		//null (with error) when any entry fails the zip-slip gate.
+		private static Dictionary<string, ZipArchiveEntry>? BuildNormMap(ZipArchive zip, out string error)
+		{
+			error = "";
+			Dictionary<string, ZipArchiveEntry> byNorm = new(StringComparer.Ordinal);
+			foreach(ZipArchiveEntry zipEntry in zip.Entries) {
+				if(string.IsNullOrEmpty(zipEntry.Name)) {
+					continue; //directory entry
+				}
+				string? norm = LegacyHdPackInstall.NormalizeZipPath(zipEntry.FullName);
+				if(norm == null) {
+					error = "zip entry escapes the pack root: '" + zipEntry.FullName + "'";
+					return null;
+				}
+				byNorm[norm] = zipEntry;
+			}
+			return byNorm;
+		}
+
+		private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
+		{
+			using Stream src = entry.Open();
+			using MemoryStream ms = new();
+			src.CopyTo(ms);
+			return ms.ToArray();
+		}
+
+		private static void ExtractUnderRoot(Dictionary<string, ZipArchiveEntry> byNorm, string rootPrefix, string targetFolder)
+		{
+			foreach(KeyValuePair<string, ZipArchiveEntry> pair in byNorm) {
+				if(!pair.Key.StartsWith(rootPrefix, StringComparison.Ordinal)) {
+					continue; //outside the pack root (banner art, README, ...)
+				}
+				string rel = pair.Key.Substring(rootPrefix.Length);
+				if(string.IsNullOrEmpty(rel)) {
+					continue;
+				}
+				string dest = Path.Combine(targetFolder, rel.Replace('/', Path.DirectorySeparatorChar));
+				Directory.CreateDirectory(Path.GetDirectoryName(dest) ?? targetFolder);
+				using Stream src = pair.Value.Open();
+				using FileStream outStream = new(dest, FileMode.Create, FileAccess.Write);
+				src.CopyTo(outStream);
+			}
+		}
+
+		//Minimal .mep-install.json for a legacy pack (no recipe_hash/deps): the
+		//fields CommunityCatalogUpdateDecision.ReadStampFields reads (content_id
+		//+ source.sha256) plus pack_id/installed_at for inspection.
+		private static string BuildLegacyInstallStamp(CommunityPackCatalogEntry entry, string primarySha256)
+		{
+			StringBuilder sb = new();
+			sb.Append("{\n");
+			if(!string.IsNullOrWhiteSpace(entry.PackId)) {
+				sb.Append("  \"pack_id\": \"").Append(JsonEscape(entry.PackId)).Append("\",\n");
+			}
+			if(!string.IsNullOrWhiteSpace(entry.ContentId)) {
+				sb.Append("  \"content_id\": \"").Append(JsonEscape(entry.ContentId)).Append("\",\n");
+			}
+			sb.Append("  \"source\": { \"sha256\": \"").Append(primarySha256).Append("\" },\n");
+			sb.Append("  \"installed_at\": \"").Append(DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")).Append("\"\n");
+			sb.Append("}\n");
+			return sb.ToString();
+		}
+
+		private static string JsonEscape(string value) =>
+			value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
 		//Clarification 38 consent + 43(c) DisabledPacks gate, then the 43(a)/(b)
 		//reinstall verdict: Reinstall means our own prior install, safe to clear.
@@ -56,7 +240,7 @@ namespace Mesen.Services
 			}
 
 			string outFolder = ResolveOutFolder(containerName);
-			//P.6 (PRD-player-shell §3.6, amends ADR-0138 §37): the update trigger
+			//P.6 (PRD Part B §3.6, amends ADR-0138 §37): the update trigger
 			//is the installed content_id vs the slot's, not source.sha256 - a
 			//different content_id reinstalls (unless the installed semver is
 			//newer, no auto-downgrade); an unchanged content_id never reinstalls
@@ -66,6 +250,8 @@ namespace Mesen.Services
 			InstallStampFields? stamp = CommunityCatalogUpdateDecision.ReadStampFields(ReadInstallStamp(outFolder));
 			CommunityCatalogUpdateVerdict verdict = CommunityCatalogUpdateDecision.Decide(
 				entry.ContentId, entry.Version, entry.Sha256, entry.IsHdLegacy, stamp, GetInstalledVersion(containerName));
+			EmuApi.WriteLogEntry("[CommunityPackInstall] update verdict=" + verdict + " installStampExists=" + (stamp != null) +
+				" entryContentId=" + entry.ContentId + " entrySha256=" + entry.Sha256);
 
 			switch(verdict) {
 				case CommunityCatalogUpdateVerdict.UpToDate:

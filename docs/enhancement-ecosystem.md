@@ -1,9 +1,8 @@
 # MesenCE Community Enhancement Ecosystem
 
-*Status: draft / roadmap — pack/core PRD at
-[docs/roadmap/PRD-mesence-enhancement-ecosystem.md](roadmap/PRD-mesence-enhancement-ecosystem.md);
-player GUI at
-[docs/roadmap/PRD-player-shell.md](roadmap/PRD-player-shell.md).*
+*Status: draft / roadmap — the consolidated PRD (Part A: pack/core; Part B:
+player GUI) at
+[docs/roadmap/PRD-mesence-enhancement-ecosystem.md](roadmap/PRD-mesence-enhancement-ecosystem.md).*
 
 Enhanced Audio is step one of a larger plan: turning MesenCE into a platform for
 **extracting, authoring and consuming community enhancement packs** — textures, music

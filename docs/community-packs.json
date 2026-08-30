@@ -1,326 +1,326 @@
 {
-  "maintainer": "sbihaiko",
-  "mei": "1.1.0",
-  "name": "MesenCE community packs",
-  "packs": [
-    {
-      "content_id": "bdd9f689b22d769bd0eefb844aef8a68f272fbff219f3820f260d1e1079f2a60",
-      "game": "Urban_Champion",
-      "issue": 136,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:bps"
-      ],
-      "license": "unknown",
-      "name": "Urban_Champion \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:urban-champion",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:32:11Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "cb1688c4d124b66a4dcec5701c183cf62c11606087f0463aa0ef8b95f3d2cbdd",
-      "game": "Dr_Mario",
-      "issue": 130,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:bps"
-      ],
-      "license": "unknown",
-      "name": "Dr_Mario \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:dr-mario",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:33:31Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "d9c583eaccdc0c48a8a48a6db1a27921a50dbfc65a237c946b9f5453e83ed145",
-      "game": "Bio_Miracle_Bokutte_Upa",
-      "issue": 129,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Bio_Miracle_Bokutte_Upa \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:bio-miracle-bokutte-upa",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:33:56Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "a91abcda4e65dd498413cd8084e939d50c909404654a27de4c98aba49b8df5a9",
-      "game": "Super_Mario_Bros-2",
-      "issue": 134,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:bps"
-      ],
-      "license": "unknown",
-      "name": "Super_Mario_Bros-2 \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:super-mario-bros-2",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:34:22Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "0cd71c55884c92dbd764aef3b6fbc7ae18020dad6fb02ce47e5cd731ab3ddbf8",
-      "game": "Duck_Hunt",
-      "issue": 131,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:bps"
-      ],
-      "license": "unknown",
-      "name": "Duck_Hunt \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:duck-hunt",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:34:25Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "6f0ece4bb8660c3ce05c7b1baf998296dcbc172e6b5e14fcbbfdc7d95ea70b10",
-      "game": "Ice_Climber_(VS)",
-      "issue": 133,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:bps"
-      ],
-      "license": "unknown",
-      "name": "Ice_Climber_(VS) \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:ice-climber-vs",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:34:59Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "5381f048e3990f4fff642eb35d61ca9ba064b457fe3855f5771821b2115c51ef",
-      "game": "1942",
-      "issue": 128,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "1942 \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:1942",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:37:03Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "e5c1360a853ead350ed99c6baba2357ec1d47a86556b6cb981b6e19850d86488",
-      "game": "Super_Mario_Bros",
-      "issue": 135,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Super_Mario_Bros \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:super-mario-bros",
-      "rom": {
-        "crc32": "7C26958E",
-        "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7"
-      },
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:37:08Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "1d4184aaaea725c3aa9a5101b76c8e433508b48cbad561f39003dabb1db84d3e",
-      "game": "Ice_Climber",
-      "issue": 132,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Ice_Climber \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:ice-climber",
-      "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:38:12Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "4c2be30070bfe2dc74c5ab185e45ee4bb1d8a667d8252ec187471174325d4812",
-      "game": "Pac-Man (Namco, US, 1993)",
-      "issue": 140,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
-      "pack_id": "pepcodes/hdnes-graphics-pac:pac-man-namco-us-1993",
-      "rom": {},
-      "sha256": "0d4e9d794149f8ea889ad962b4baea218812d9bd5bf49dc7575078a867e47a96",
-      "system": "nes",
-      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
-      "validated_at": "2026-08-29T21:58:49Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "68a21dce48c865df7083fbcfb28637aec6f5f27768afd4fb6925701499df8f39",
-      "game": "Zelda II: The Adventure of Link (USA)",
-      "issue": 141,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Zelda II: The Adventure of Link (USA) \u2014 community submission",
-      "pack_id": "modernretrodesign/zii-mesen:zelda-ii-the-adventure-of-link-usa",
-      "rom": {},
-      "sha256": "779ec4b37de3b307dd3968b296b9bf199ed58f5413d4a4e9018e2ce096b2b1e9",
-      "system": "nes",
-      "url": "https://github.com/ModernRetroDesign/ZII-mesen/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T22:00:28Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "ab971a624bd30c5599a7d90c201bd4f08ff5d0d54b2d4fbb0fbb8b4cb9062354",
-      "game": "Mega Man (USA)",
-      "issue": 138,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Mega Man (USA) \u2014 community submission",
-      "pack_id": "axlrocks/megaman-super:mega-man-usa",
-      "rom": {
-        "crc32": "6EE4BB0A",
-        "sha1": "6047E52929DFE8ED4708D325766CCB8D3D583C7D"
-      },
-      "sha256": "666bdeae79a721cc6c9ff38e4613c144e0b971f271dd13a7b39780eb6fe557bc",
-      "system": "nes",
-      "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T22:00:34Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "a2d644ff4994c8c5bc7e40eebfe754744c3fdcbc0dc87798e91d726b673f6dc7",
-      "game": "Contra (USA)",
-      "issue": 137,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Contra (USA) \u2014 community submission",
-      "pack_id": "tastichacks/contra80s:contra-usa",
-      "rom": {
-        "crc32": "F6035030",
-        "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF"
-      },
-      "sha256": "12f29dd1ee6d768b46b5757821895b331a3496085879bbc00707367c4bc34f77",
-      "system": "nes",
-      "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
-      "validated_at": "2026-08-29T22:02:05Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "57af4f124c149893fdb65f77a4a7583953dfda8e5da65029a86176d52561f9b8",
-      "game": "The Legend of Zelda (USA)",
-      "issue": 139,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "The Legend of Zelda (USA) \u2014 community submission",
-      "pack_id": "issue-139",
-      "rom": {
-        "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2"
-      },
-      "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
-      "system": "nes",
-      "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
-      "validated_at": "2026-08-29T22:05:33Z",
-      "verdict": "accepted",
-      "votes": 1
-    }
-  ],
-  "updated": "2026-08-30"
+ "maintainer": "sbihaiko",
+ "mei": "1.1.0",
+ "name": "MesenCE community packs",
+ "packs": [
+  {
+   "content_id": "bdd9f689b22d769bd0eefb844aef8a68f272fbff219f3820f260d1e1079f2a60",
+   "game": "Urban_Champion",
+   "issue": 136,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:bps"
+   ],
+   "license": "unknown",
+   "name": "Urban_Champion \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:urban-champion",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:32:11Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "cb1688c4d124b66a4dcec5701c183cf62c11606087f0463aa0ef8b95f3d2cbdd",
+   "game": "Dr_Mario",
+   "issue": 130,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:bps"
+   ],
+   "license": "unknown",
+   "name": "Dr_Mario \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:dr-mario",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:33:31Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "d9c583eaccdc0c48a8a48a6db1a27921a50dbfc65a237c946b9f5453e83ed145",
+   "game": "Bio_Miracle_Bokutte_Upa",
+   "issue": 129,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "Bio_Miracle_Bokutte_Upa \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:bio-miracle-bokutte-upa",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:33:56Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "a91abcda4e65dd498413cd8084e939d50c909404654a27de4c98aba49b8df5a9",
+   "game": "Super_Mario_Bros-2",
+   "issue": 134,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:bps"
+   ],
+   "license": "unknown",
+   "name": "Super_Mario_Bros-2 \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:super-mario-bros-2",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:34:22Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "0cd71c55884c92dbd764aef3b6fbc7ae18020dad6fb02ce47e5cd731ab3ddbf8",
+   "game": "Duck_Hunt",
+   "issue": 131,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:bps"
+   ],
+   "license": "unknown",
+   "name": "Duck_Hunt \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:duck-hunt",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:34:25Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "6f0ece4bb8660c3ce05c7b1baf998296dcbc172e6b5e14fcbbfdc7d95ea70b10",
+   "game": "Ice_Climber_(VS)",
+   "issue": 133,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:bps"
+   ],
+   "license": "unknown",
+   "name": "Ice_Climber_(VS) \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:ice-climber-vs",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:34:59Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "5381f048e3990f4fff642eb35d61ca9ba064b457fe3855f5771821b2115c51ef",
+   "game": "1942",
+   "issue": 128,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "1942 \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:1942",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:37:03Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "e5c1360a853ead350ed99c6baba2357ec1d47a86556b6cb981b6e19850d86488",
+   "game": "Super_Mario_Bros",
+   "issue": 135,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:audio",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "Super_Mario_Bros \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:super-mario-bros",
+   "rom": {
+    "crc32": "7C26958E",
+    "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7"
+   },
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:37:08Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "1d4184aaaea725c3aa9a5101b76c8e433508b48cbad561f39003dabb1db84d3e",
+   "game": "Ice_Climber",
+   "issue": 132,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures"
+   ],
+   "license": "unknown",
+   "name": "Ice_Climber \u2014 community submission",
+   "pack_id": "liquidzgit/hdnes:ice-climber",
+   "rom": {},
+   "sha256": "854236a6590e35177ff91c81e088209698fa29fbf59f41fd2241519b0c345ba8",
+   "system": "nes",
+   "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T21:38:12Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "4c2be30070bfe2dc74c5ab185e45ee4bb1d8a667d8252ec187471174325d4812",
+   "game": "Pac-Man (Namco, US, 1993)",
+   "issue": 140,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures"
+   ],
+   "license": "unknown",
+   "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
+   "pack_id": "pepcodes/hdnes-graphics-pac:pac-man-namco-us-1993",
+   "rom": {},
+   "sha256": "7e0f669e1cf577364b27ef57b648649b11f5dc7d03ece5f4f8a994255490d84a",
+   "system": "nes",
+   "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
+   "validated_at": "2026-08-29T21:58:49Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "68a21dce48c865df7083fbcfb28637aec6f5f27768afd4fb6925701499df8f39",
+   "game": "Zelda II: The Adventure of Link (USA)",
+   "issue": 141,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures",
+    "assets:audio",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "Zelda II: The Adventure of Link (USA) \u2014 community submission",
+   "pack_id": "modernretrodesign/zii-mesen:zelda-ii-the-adventure-of-link-usa",
+   "rom": {},
+   "sha256": "ab039204596f552ea46d46529ec257fd92e34c62e666c01988351ad0235c12fa",
+   "system": "nes",
+   "url": "https://github.com/ModernRetroDesign/ZII-mesen/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T22:00:28Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "ab971a624bd30c5599a7d90c201bd4f08ff5d0d54b2d4fbb0fbb8b4cb9062354",
+   "game": "Mega Man (USA)",
+   "issue": 138,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures",
+    "assets:audio",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "Mega Man (USA) \u2014 community submission",
+   "pack_id": "axlrocks/megaman-super:mega-man-usa",
+   "rom": {
+    "crc32": "6EE4BB0A",
+    "sha1": "6047E52929DFE8ED4708D325766CCB8D3D583C7D"
+   },
+   "sha256": "20c890e626225e4def0219a964d0979896c842d492fd7f2bdf98a287a0a07f56",
+   "system": "nes",
+   "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
+   "validated_at": "2026-08-29T22:00:34Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "a2d644ff4994c8c5bc7e40eebfe754744c3fdcbc0dc87798e91d726b673f6dc7",
+   "game": "Contra (USA)",
+   "issue": 137,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures"
+   ],
+   "license": "unknown",
+   "name": "Contra (USA) \u2014 community submission",
+   "pack_id": "tastichacks/contra80s:contra-usa",
+   "rom": {
+    "crc32": "F6035030",
+    "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF"
+   },
+   "sha256": "b174830de2f9a59a766d532b9ee1d1e6d6f5d341e92c2e3e7ebc908dd945ff9e",
+   "system": "nes",
+   "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
+   "validated_at": "2026-08-29T22:02:05Z",
+   "verdict": "accepted",
+   "votes": 1
+  },
+  {
+   "content_id": "57af4f124c149893fdb65f77a4a7583953dfda8e5da65029a86176d52561f9b8",
+   "game": "The Legend of Zelda (USA)",
+   "issue": 139,
+   "kind": "hd-legacy",
+   "labels": [
+    "pack:valid",
+    "console:nes",
+    "assets:textures",
+    "patch:ips"
+   ],
+   "license": "unknown",
+   "name": "The Legend of Zelda (USA) \u2014 community submission",
+   "pack_id": "issue-139",
+   "rom": {
+    "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2"
+   },
+   "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
+   "system": "nes",
+   "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
+   "validated_at": "2026-08-29T22:05:33Z",
+   "verdict": "accepted",
+   "votes": 1
+  }
+ ],
+ "updated": "2026-08-30"
 }

@@ -54,7 +54,7 @@ namespace Mesen.Config
 
 		[ObservableProperty] public partial bool AutoHideMenu { get; set; } = false;
 
-		//P.4 (PRD-player-shell §6): Player vs Advanced chrome. Defaults to
+		//P.4 (PRD Part B §6): Player vs Advanced chrome. Defaults to
 		//Advanced - the upgrade-safe value when an existing settings.json has
 		//no UiMode key yet (the key is always written on first save, so this
 		//initializer only ever matters once). A fresh unzip (no settings.json)
@@ -128,7 +128,7 @@ namespace Mesen.Config
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.PowerCycle, KeyCombination = new KeyCombination() { Key1 = ctrl, Key2 = InputApi.GetKeyCode("T") } });
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.ReloadRom, KeyCombination = new KeyCombination() { Key1 = ctrl, Key2 = shift, Key3 = InputApi.GetKeyCode("R") } });
 			AddShortcut(new ShortcutKeyInfo { Shortcut = EmulatorShortcut.Pause, KeyCombination = new KeyCombination() { Key1 = InputApi.GetKeyCode("Esc") } });
-			//P.4 (PRD-player-shell §6): the overlay shortcut defaults to the
+			//P.4 (PRD Part B §6): the overlay shortcut defaults to the
 			//same Esc as Pause; in Player mode UiModeShortcutPrecedence gives
 			//the overlay ownership of that key (the Pause binding is suppressed
 			//on apply), so Esc opens the overlay instead of pausing. Binding it
@@ -230,7 +230,7 @@ namespace Mesen.Config
 		{
 			UpdateFonts();
 
-			//P.4 (PRD-player-shell §6): in Player mode the overlay shortcut owns
+			//P.4 (PRD Part B §6): in Player mode the overlay shortcut owns
 			//its key(s) - any Pause/other binding on the same combination is
 			//suppressed here, so the core never fires pause+overlay together
 			//(it matches every pressed shortcut; identical-key shortcuts are
@@ -277,7 +277,7 @@ namespace Mesen.Config
 			});
 		}
 
-		//P.4 (PRD-player-shell §6): the identity of one KeyCombination for
+		//P.4 (PRD Part B §6): the identity of one KeyCombination for
 		//UiModeShortcutPrecedence - the ordered scan codes. Two shortcuts on
 		//the identical combination share the same signature.
 		private static string ShortcutSignature(KeyCombination combo)

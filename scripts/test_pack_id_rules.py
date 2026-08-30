@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Framework-free checks for scripts/pack_id_rules.py (P.2, ADR-0140/0141,
-PRD-player-shell §3.3/§3.6).
+PRD Part B §3.3/§3.6).
 
 Covers: the SLUG constraint, github_origin extraction (github.com +
 codeload.github.com, owner/repo lowercased, other hosts None), the pack_id

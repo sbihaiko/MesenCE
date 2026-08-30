@@ -2,7 +2,7 @@
 """mep_content_id — ADR-0139 `content_id`: canonical hash of the resolved pack
 tree, or of the primary tree + recipe + declared deps when a recipe exists.
 
-Normative reference for P.1 (PRD-player-shell §3.2). Two implementations must
+Normative reference for P.1 (PRD Part B §3.2). Two implementations must
 agree on this value: `scripts/` (CI, this module — normative) and the Core
 (`MepPackManager` for local containers, `MepRecipeInstaller` at install time).
 The parity fixture under `docs/specs/golden/` is run by both sides.

@@ -1,6 +1,6 @@
 namespace Mesen.Logic;
 
-//PRD-player-shell §6: in Player mode the Settings page shows only the
+//PRD Part B §6: in Player mode the Settings page shows only the
 //essentials tabs — video / audio / input — and hides the emulation, per-console
 //and preferences tabs (the overlay's "Advanced GUI" button is the escape hatch
 //to the full page). This is the host-free decision the ConfigWindow applies:

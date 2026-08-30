@@ -26,7 +26,7 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial bool HasPacks { get; set; }
 		[ObservableProperty] public partial string SiblingFolder { get; set; } = "";
 		[ObservableProperty] public partial bool HasSiblingFolder { get; set; }
-		//P.3 (PRD-player-shell §5): the container the per-ROM preference picks,
+		//P.3 (PRD Part B §5): the container the per-ROM preference picks,
 		//resolved via PackPreferenceResolver; "" when no preference/stale.
 		[ObservableProperty] public partial string PreferredContainer { get; set; } = "";
 		[ObservableProperty] public partial bool HasPreferredContainer { get; set; }

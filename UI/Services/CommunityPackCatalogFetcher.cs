@@ -38,34 +38,30 @@ namespace Mesen.Services
 		{
 			string romSha1 = EmuApi.GetMepRomSha1();
 			if(string.IsNullOrWhiteSpace(romSha1)) {
+				EmuApi.WriteLogEntry("[CommunityPackFetch] no ROM sha1 available");
 				return null;
 			}
 
 			IReadOnlyList<CommunityPackHostEntry> allowedHosts = LoadAllowlist();
+			EmuApi.WriteLogEntry("[CommunityPackFetch] allow-listed hosts: " + allowedHosts.Count +
+				" (" + string.Join(", ", allowedHosts.Select(h => h.Host)) + ")");
 			CommunityPackCatalog? catalog = await LoadCatalogAsync(allowedHosts);
-			CommunityPackCatalogEntry? entry = catalog == null ? null : FindMatchingEntry(catalog, romSha1);
+			EmuApi.WriteLogEntry("[CommunityPackFetch] catalog loaded: " + (catalog == null ? "null" : catalog.Packs?.Length + " packs"));
+			CommunityPackCatalogEntry? entry = catalog == null ? null : CommunityPackCatalogMatcher.FindMatchingEntry(catalog, romSha1);
+			EmuApi.WriteLogEntry("[CommunityPackFetch] matching entry for romSha1=" + romSha1 + ": " +
+				(entry == null ? "none" : entry.PackId + " url=" + entry.Url + " sha256=" + entry.Sha256));
 			if(entry == null) {
 				return null;
 			}
 
 			string? primaryPath = await DownloadAndVerifyAsync(entry.Url, entry.Sha256, allowedHosts);
+			EmuApi.WriteLogEntry("[CommunityPackFetch] primary download+verify: " + (primaryPath ?? "FAILED (see [CommunityPackDownload] lines above)"));
 			if(primaryPath == null) {
 				return null;
 			}
 
 			Dictionary<string, string> depPaths = await DownloadDepsAsync(entry, allowedHosts);
 			return new CommunityPackFetchResult(entry, primaryPath, depPaths);
-		}
-
-		private static CommunityPackCatalogEntry? FindMatchingEntry(CommunityPackCatalog catalog, string romSha1)
-		{
-			foreach(CommunityPackCatalogEntry entry in catalog.Packs) {
-				if(!string.IsNullOrWhiteSpace(entry.Rom?.Sha1) &&
-					string.Equals(entry.Rom!.Sha1, romSha1, StringComparison.OrdinalIgnoreCase)) {
-					return entry;
-				}
-			}
-			return null;
 		}
 
 		//Downloads deps with a URL+sha256 that aren't `user_supplied`; the rest are left for CommunityPackInstallCoordinator/CommunityPackDepResolver to resolve instead (§4).
@@ -107,16 +103,20 @@ namespace Mesen.Services
 
 				CommunityCatalogFetchOutcome outcome = await FetchCatalogOutcomeAsync(cacheUsable ? cachedETag : null, allowedHosts);
 				CommunityCatalogCacheResult resolved = CommunityCatalogCacheDecision.Resolve(outcome, cachedETag, cachedBody);
+				EmuApi.WriteLogEntry("[CommunityPackFetch] catalog HTTP status=" + outcome.StatusCode + " cacheUsable=" + cacheUsable +
+					" resolvedBodyLen=" + (resolved.Body?.Length ?? 0));
 				CommunityPackCatalog? catalog = string.IsNullOrWhiteSpace(resolved.Body) ? null :
 					(CommunityPackCatalog?)JsonSerializer.Deserialize(resolved.Body, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
 				if(catalog?.Packs == null) {
+					EmuApi.WriteLogEntry("[CommunityPackFetch] catalog parse failed or empty (Packs==null)");
 					return null;
 				}
-				if(resolved.ShouldWriteCache) {
+				if(resolved.ShouldWriteCache && resolved.Body != null) {
 					await WriteCatalogCacheAsync(resolved.Body, outcome.ETag);
 				}
 				return catalog;
-			} catch(Exception) {
+			} catch(Exception ex) {
+				EmuApi.WriteLogEntry("[CommunityPackFetch] LoadCatalogAsync threw: " + ex);
 				return null;
 			}
 		}
@@ -148,21 +148,36 @@ namespace Mesen.Services
 			string url, string expectedSha256, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
 			if(string.IsNullOrWhiteSpace(url) || !IsSha256Hex(expectedSha256)) {
+				EmuApi.WriteLogEntry("[CommunityPackDownload] invalid url or sha256: url=" + url + " sha256=" + expectedSha256);
 				return null;
 			}
 			try {
 				Directory.CreateDirectory(DownloadsFolder);
 				string destPath = Path.Combine(DownloadsFolder, expectedSha256.ToLowerInvariant());
-				if(File.Exists(destPath) && string.Equals(ComputeSha256(File.ReadAllBytes(destPath)), expectedSha256, StringComparison.OrdinalIgnoreCase)) {
-					return destPath;
+				if(File.Exists(destPath)) {
+					string cachedSha = ComputeSha256(File.ReadAllBytes(destPath));
+					if(string.Equals(cachedSha, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+						EmuApi.WriteLogEntry("[CommunityPackDownload] cache hit: " + destPath);
+						return destPath;
+					}
+					EmuApi.WriteLogEntry("[CommunityPackDownload] cache file present but sha256 mismatch (cached=" + cachedSha + " expected=" + expectedSha256 + ") - re-downloading");
 				}
+				EmuApi.WriteLogEntry("[CommunityPackDownload] downloading url=" + url);
 				CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(url, allowedHosts, CommunityPackDownloader.MaxArtifactBytes);
-				if(response?.Body == null || !string.Equals(ComputeSha256(response.Body), expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+				if(response?.Body == null) {
+					EmuApi.WriteLogEntry("[CommunityPackDownload] GetAsync returned null body (host not allowed, redirect rejected, size cap, or network error)");
+					return null;
+				}
+				string actualSha256 = ComputeSha256(response.Body);
+				if(!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+					EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 MISMATCH: expected=" + expectedSha256 + " actual=" + actualSha256 + " bytes=" + response.Body.Length);
 					return null;
 				}
 				await File.WriteAllBytesAsync(destPath, response.Body);
+				EmuApi.WriteLogEntry("[CommunityPackDownload] downloaded+verified, wrote " + destPath);
 				return destPath;
-			} catch(Exception) {
+			} catch(Exception ex) {
+				EmuApi.WriteLogEntry("[CommunityPackDownload] threw: " + ex);
 				return null;
 			}
 		}
