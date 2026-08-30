@@ -21,6 +21,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Mega Man (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/138) |
 | Contra (USA) | NES | TasticHacks | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/137) |
 | The Legend of Zelda (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/139) |
+| Castlevania (USA) | NES | ? | 2026-08-30 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/143) |
 
 Packs are ranked by community 👍 votes. Try a pack, and if you like it, give
 it a 👍 — your vote helps others discover the community’s favorites. Every
