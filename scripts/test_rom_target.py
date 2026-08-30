@@ -100,7 +100,7 @@ def check_catalog_games_resolve():
     # current pack has no verified dump yet, so its entry MUST keep `rom: {}`
     # rather than carry a guessed hash (see rom_target.py).
     expected = {"Super_Mario_Bros", "Mega Man (USA)", "Contra (USA)",
-                "The Legend of Zelda (USA)"}
+                "The Legend of Zelda (USA)", "Castlevania (USA)"}
     if resolved != expected:
         fail(f"resolved set mismatch: got {sorted(resolved)}, expected {sorted(expected)}")
         return

@@ -64,6 +64,10 @@ NO_INTRO_TARGETS = {
         "source": "pack-declared <supportedRom>/<patch> sha1 (Zelda Remastered v1.3, issue #139)",
         "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
     },
+    "castlevania usa": {
+        "source": "Mesen CheatDb.Nes.json 'Castlevania (USA)' sha1 (same value GetMepRomSha1 returns; Rev A is 3DCB69A8... and does not match this pack)",
+        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD",
+    },
 }
 
 
