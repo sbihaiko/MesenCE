@@ -8,27 +8,34 @@ hand, but the auto-install path silently never fires. This module closes that
 gap for NES packs: a deterministic, versioned map from the normalized catalog
 game name to the hash of the ROM it targets.
 
-Source of the hashes: **a real No-Intro dump of the target game**, verified
-against the Mesen game database. The hash the client matches on is
-`EmuApi.GetMepRomSha1()` == `MepPackManager::ComputeNoIntroSha1` — the SHA1
-of exactly the PRG+CHR the iNES header declares (ADR-0044), NOT the whole
-file with its 16-byte header. A no-intro dat file (e.g. libretro's
-`Nintendo - Nintendo Entertainment System.dat`) hashes the *whole file*, so
-those sha1/crc32 values are wrong for this matcher by construction. The only
-trustworthy source is a dump whose PRG+CHR crc32 the Mesen database
-(`UI/Dependencies/MesenNesDB.txt`) recognizes — proof the dump IS the
-No-Intro entry the core knows. Each entry below was computed from such a
-dump and its crc32 double-checked against the database.
+Source of the hashes — two legitimate sources:
+  1. **A real No-Intro dump of the target game**, verified against the Mesen
+     game database. The hash the client matches on is
+     `EmuApi.GetMepRomSha1()` == `MepPackManager::ComputeNoIntroSha1` — the
+     SHA1 of exactly the PRG+CHR the iNES header declares (ADR-0044), NOT the
+     whole file with its 16-byte header. A no-intro dat file (e.g. libretro's
+     `Nintendo - Nintendo Entertainment System.dat`) hashes the *whole file*,
+     so those sha1/crc32 values are wrong for this matcher by construction.
+     The trustworthy dump is one whose PRG+CHR crc32 the Mesen database
+     (`UI/Dependencies/MesenNesDB.txt`) recognizes — proof the dump IS the
+     No-Intro entry the core knows. Those entries carry both sha1 and crc32.
+  2. **The sha1 the pack itself declares** — the pack's `<supportedRom>` /
+     `<patch>` hash, which is exactly what the patch matcher compares against
+     `ComputeNoIntroSha1`. When no verified dump is at hand but the pack
+     declares its target hash (as Zelda Remastered v1.3 does), the declared
+     sha1 is a trustworthy `rom.sha1` on its own (sha1-only, no crc32).
 
 Adding a game: obtain a clean No-Intro dump of the target, compute
 SHA1/CRC32 of the PRG+CHR the header declares (16-byte offset, 512-byte
 trainer when flags6 bit 2), confirm the crc32 is present in
 `UI/Dependencies/MesenNesDB.txt`, and add it here with the dump it came
-from. Games not listed keep `rom: {}` (listable/installable, not
-hash-matchable) until a verified dump exists.
+from — or, when no dump exists but the pack declares its target hash, record
+that declared sha1 (sha1-only) with a `source` note. Games not listed keep
+`rom: {}` (listable/installable, not hash-matchable) until then.
 
-Usage: `resolve_rom_target(game)` returns `{"sha1": ..., "crc32": ...}` or
-None. `normalize_game_name` is the shared normalization the keys below use.
+Usage: `resolve_rom_target(game)` returns `{"sha1", "crc32"}` (crc32
+optional) or None. `normalize_game_name` is the shared normalization the
+keys below use.
 """
 import re
 
@@ -53,6 +60,10 @@ NO_INTRO_TARGETS = {
         "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF",
         "crc32": "F6035030",
     },
+    "the legend of zelda usa": {
+        "source": "pack-declared <supportedRom>/<patch> sha1 (Zelda Remastered v1.3, issue #139)",
+        "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
+    },
 }
 
 
@@ -72,16 +83,22 @@ def normalize_game_name(game):
 
 
 def resolve_rom_target(game):
-    """Returns {"sha1", "crc32"} for a catalog game the verified No-Intro
-    map knows, or None when it does not resolve (the entry then keeps its
-    empty `rom` object and stays manually installable)."""
+    """Returns {"sha1", "crc32"} — crc32 only when known — for a catalog game
+    the map knows, or None when it does not resolve (the entry then keeps its
+    empty `rom` object and stays manually installable). A sha1-only entry is
+    valid (MEI-v1 §2.3): it matches auto-install by sha1 alone. Defensive:
+    never emit a malformed hash into the catalog — validate_mei would reject
+    the whole entry otherwise."""
     target = NO_INTRO_TARGETS.get(normalize_game_name(game))
     if target is None:
         return None
-    # Defensive: never emit a malformed hash into the catalog — validate_mei
-    # would reject the whole entry otherwise.
     sha1 = target["sha1"].strip().upper()
-    crc32 = target["crc32"].strip().upper()
-    if not SHA1_UPPER.match(sha1) or not CRC32_UPPER.match(crc32):
+    if not SHA1_UPPER.match(sha1):
         return None
-    return {"sha1": sha1, "crc32": crc32}
+    crc32 = (target.get("crc32") or "").strip().upper()
+    if crc32 and not CRC32_UPPER.match(crc32):
+        return None
+    rom = {"sha1": sha1}
+    if crc32:
+        rom["crc32"] = crc32
+    return rom

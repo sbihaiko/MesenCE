@@ -311,7 +311,9 @@
       "license": "unknown",
       "name": "The Legend of Zelda (USA) \u2014 community submission",
       "pack_id": "issue-139",
-      "rom": {},
+      "rom": {
+        "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2"
+      },
       "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
       "system": "nes",
       "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",

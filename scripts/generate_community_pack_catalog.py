@@ -108,7 +108,7 @@ def _render(c):
         target = rom_target.resolve_rom_target(form["game"])
         if target:
             rom_sha1 = target["sha1"]
-            rom_crc32 = target["crc32"]
+            rom_crc32 = target.get("crc32")
     entry, mismatch = build_pack_entry(issue, form["game"].strip(), system, form["license"],
         c["pack_url"], c["pack_hash"], rom_sha1, status, c["mep_meta"], votes=c["votes"],
         crc32=rom_crc32)

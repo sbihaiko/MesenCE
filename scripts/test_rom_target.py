@@ -56,17 +56,20 @@ def _load_validate_specs():
 def check_targets_wellformed():
     for key, target in rom_target.NO_INTRO_TARGETS.items():
         sha1 = target["sha1"]
-        crc32 = target["crc32"]
         if not rom_target.SHA1_UPPER.match(sha1):
             fail(f"target {key!r}: sha1 not 40-UPPERCASE-hex: {sha1!r}")
             return
-        if not rom_target.CRC32_UPPER.match(crc32):
+        crc32 = target.get("crc32")
+        if crc32 is not None and not rom_target.CRC32_UPPER.match(crc32):
             fail(f"target {key!r}: crc32 not 8-UPPERCASE-hex: {crc32!r}")
             return
-        if not target.get("source_dump"):
-            fail(f"target {key!r}: missing source_dump")
+        # Every entry names its source: a verified dump (source_dump) or a
+        # pack-declared target hash (source). Never an unbacked guess.
+        if not target.get("source_dump") and not target.get("source"):
+            fail(f"target {key!r}: missing source_dump or source")
             return
-    ok(f"{len(rom_target.NO_INTRO_TARGETS)} mini-map entries carry valid sha1/crc32/source_dump")
+    ok(f"{len(rom_target.NO_INTRO_TARGETS)} mini-map entries carry a valid sha1 "
+       f"(crc32 optional) and a named source")
 
 
 def check_keys_stable_and_distinct():
@@ -90,12 +93,14 @@ def check_catalog_games_resolve():
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     resolved = {p.get("game") for p in catalog["packs"]
                 if rom_target.resolve_rom_target(p.get("game"))}
-    # Exactly the three games with a verified No-Intro dump may resolve. A
-    # hash in the map is only trustworthy when computed from a dump whose
-    # PRG+CHR crc32 the Mesen game database recognizes (see rom_target.py);
-    # every other current pack has no verified dump yet, so its entry MUST
-    # keep `rom: {}` rather than carry a guessed hash.
-    expected = {"Super_Mario_Bros", "Mega Man (USA)", "Contra (USA)"}
+    # Exactly the four games with a usable target hash may resolve. Three are
+    # backed by a dump whose PRG+CHR crc32 the Mesen game database recognizes;
+    # Zelda is backed by the sha1 the pack itself declares (<supportedRom>/
+    # <patch>), which is what the patch matcher compares against. Every other
+    # current pack has no verified dump yet, so its entry MUST keep `rom: {}`
+    # rather than carry a guessed hash (see rom_target.py).
+    expected = {"Super_Mario_Bros", "Mega Man (USA)", "Contra (USA)",
+                "The Legend of Zelda (USA)"}
     if resolved != expected:
         fail(f"resolved set mismatch: got {sorted(resolved)}, expected {sorted(expected)}")
         return
@@ -105,12 +110,25 @@ def check_catalog_games_resolve():
             fail(f"expected {game!r} to resolve")
             return
     ok(f"{len(resolved)} of {len(catalog['packs'])} catalog games resolve "
-       f"({sorted(resolved)}); the rest keep rom {{}} until a verified No-Intro dump exists")
+       f"({sorted(resolved)}); the rest keep rom {{}} until a verified target hash exists")
 
 
 def check_build_pack_entry_integration():
     vs = _load_validate_specs()
     import mei_catalog_entry as entry_mod
+
+    def _validate(entry):
+        catalog = {"mei": "1.1.0", "name": "t", "maintainer": "t",
+                   "updated": "2026-01-01", "packs": [entry]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(catalog, handle)
+            path = Path(handle.name)
+        vs._failures.clear()
+        vs.validate_mei(path)
+        mei_failures = list(vs._failures)
+        path.unlink()
+        return mei_failures
+
     # A resolved game with no board sha1 -> the generator feeds the target's
     # sha1 + crc32 into build_pack_entry, which emits rom {sha1, crc32}.
     target = rom_target.resolve_rom_target("Contra (USA)")
@@ -126,28 +144,37 @@ def check_build_pack_entry_integration():
     if rom.get("sha1") != target["sha1"] or rom.get("crc32") != target["crc32"]:
         fail(f"build_pack_entry did not emit resolved sha1+crc32: {rom!r}")
         return
-    catalog = {"mei": "1.1.0", "name": "t", "maintainer": "t",
-               "updated": "2026-01-01", "packs": [entry]}
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(catalog, handle)
-        path = Path(handle.name)
-    vs._failures.clear()
-    vs.validate_mei(path)
-    mei_failures = list(vs._failures)
-    path.unlink()
+    mei_failures = _validate(entry)
     if mei_failures:
         fail(f"resolved rom {rom!r} failed validate_mei: {mei_failures}")
         return
-    # An unresolved game (e.g. the bad-dump Zelda or the VS. System Ice
-    # Climber) keeps the empty `rom` object.
-    entry2, _ = entry_mod.build_pack_entry(
+    # A sha1-only target (Zelda: the pack-declared hash, no crc32) still emits
+    # a valid rom {sha1} — MEI-v1 §2.3 makes crc32 optional.
+    zelda = rom_target.resolve_rom_target("The Legend of Zelda (USA)")
+    if not zelda or "crc32" in zelda:
+        fail(f"Zelda should resolve sha1-only: {zelda!r}")
+        return
+    entry_zelda, _ = entry_mod.build_pack_entry(
         issue_number=139, game="The Legend of Zelda (USA)", system="nes", license_="unknown",
         pack_url="https://example.org/z.zip", pack_hash="b" * 64,
+        rom_sha1=zelda["sha1"], status="Aceito parcial (HD Mesen)", mep_meta={}, votes=1)
+    if entry_zelda.get("rom") != {"sha1": zelda["sha1"]}:
+        fail(f"Zelda should emit rom {{{{'sha1'}}}}: {entry_zelda.get('rom')!r}")
+        return
+    mei_failures = _validate(entry_zelda)
+    if mei_failures:
+        fail(f"Zelda sha1-only rom failed validate_mei: {mei_failures}")
+        return
+    # An unresolved game (the VS. System Ice Climber — absent from the NES
+    # dat) keeps the empty `rom` object.
+    entry2, _ = entry_mod.build_pack_entry(
+        issue_number=133, game="Ice_Climber_(VS)", system="nes", license_="unknown",
+        pack_url="https://example.org/i.zip", pack_hash="c" * 64,
         rom_sha1=None, status="Aceito parcial (HD Mesen)", mep_meta={}, votes=1)
     if entry2.get("rom") != {}:
         fail(f"unresolved game should keep rom={{}}: {entry2.get('rom')!r}")
         return
-    ok("build_pack_entry emits rom {sha1,crc32} for a resolved target, keeps rom {} otherwise (validate_mei clean)")
+    ok("build_pack_entry emits rom {sha1,crc32}/{sha1} for resolved targets, keeps rom {} otherwise (validate_mei clean)")
 
 
 def main():
