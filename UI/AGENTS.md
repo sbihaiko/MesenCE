@@ -179,7 +179,9 @@ can be exercised by real xunit tests without Avalonia or the native
   takes the fetcher's already-verified output (matched catalog entry,
   primary artifact path, dep-id → path map) and is the only call site of
   `EmuApi.InstallMepRecipe` for this feature. An `hd-legacy` wrapper zip
-  (one root-level nested zip, e.g. Zelda Remastered) is unwrapped by
+  (one root-level nested zip, e.g. Zelda Remastered, or a GitHub-repo
+  archive with one pack zip in the matching game folder, e.g. LiQuiDz
+  `HDnes-main/1942/1942audio.zip`) is unwrapped by
   `LegacyHdPackInstall.ExtractToFolder` while the inner `ZipArchive` is
   still open — disposing it first throws `ObjectDisposedException` on
   `ZipArchiveEntry.Open`. After a successful auto-install

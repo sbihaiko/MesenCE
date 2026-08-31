@@ -273,27 +273,34 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 
 	_hdData.reset(new HdPackData());
 	bool loaded = false;
+	unique_ptr<HdPackData> looseAudioOnly;
 
 	//1) Loose HdPacks/<rom>/ pack (MEP-v1 §5.1) - unless the ROM's sibling
 	//folder provides *human-authored* textures, which comes first (ADR-0049).
 	//An auto-only sibling (the F5 bootstrap's generic output, written before
 	//any pack was installed) is only a base layer: it must not shadow a real
-	//loose pack installed later (issue #142).
+	//loose pack installed later (issue #142). An audio-only hires.txt (0 tiles,
+	//LiQuiDz-style <bgm> pack) is not a texture pack: keep its tracks/patches
+	//and still load auto/sibling tiles, otherwise HdVideoFilter runs on
+	//DefaultNesPpu output and the screen goes black.
 	bool siblingHasHumanTextures = mep->IsSectionFromSibling(MepSectionType::Textures) && !mepTextures.empty();
 	if(siblingHasHumanTextures) {
 		if(HdPackLoader::HasLoosePack(romFile)) {
 			MessageManager::Log("[MEP] sibling folder beside the ROM overrides the loose HdPacks/ pack");
 		}
 	} else {
-		loaded = HdPackLoader::LoadHdNesPack(romFile, *_hdData.get());
-		if(loaded) {
-			//Unambiguous positive signal for the loose NES pack: the classic
-			//HdPacks/<rom>/ path logs nothing on success, so an installed pack
-			//was indistinguishable from "no pack at all" in the log. Mirror the
-			//GB/SMS layer's success log so an install can be proven headlessly.
-			MessageManager::Log("[MEP] textures: loaded loose NES HD pack from HdPacks/" + FolderUtilities::GetFilename(romFile.GetFileName(), false) + "/hires.txt (" + std::to_string(_hdData->Tiles.size()) + " tiles, scale " + std::to_string(_hdData->Scale) + ")");
-			if(anyMepTextures) {
-				MessageManager::Log("[MEP] loose HD pack found for this ROM - it takes precedence over the pack's textures section");
+		unique_ptr<HdPackData> loose(new HdPackData());
+		if(HdPackLoader::LoadHdNesPack(romFile, *loose)) {
+			if(loose->HasVideoContent()) {
+				_hdData.reset(loose.release());
+				loaded = true;
+				MessageManager::Log("[MEP] textures: loaded loose NES HD pack from HdPacks/" + FolderUtilities::GetFilename(romFile.GetFileName(), false) + "/hires.txt (" + std::to_string(_hdData->Tiles.size()) + " tiles, scale " + std::to_string(_hdData->Scale) + ")");
+				if(anyMepTextures) {
+					MessageManager::Log("[MEP] loose HD pack found for this ROM - it takes precedence over the pack's textures section");
+				}
+			} else {
+				MessageManager::Log("[MEP] loose HdPacks pack is audio-only (" + std::to_string(loose->BgmFilesById.size()) + " BGM / " + std::to_string(loose->SfxFilesById.size()) + " SFX) - not used as textures");
+				looseAudioOnly = std::move(loose);
 			}
 		}
 	}
@@ -350,6 +357,23 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		}
 		MessageManager::Log(string("[MEP] ") + label + ": " + std::to_string(_hdData->BgmFilesById.size()) + " BGM / " + std::to_string(_hdData->SfxFilesById.size()) + " SFX tracks after '" + folder + "'");
 	};
+	if(looseAudioOnly) {
+		if(loaded) {
+			for(auto& bgm : looseAudioOnly->BgmFilesById) {
+				_hdData->BgmFilesById[bgm.first] = bgm.second;
+			}
+			for(auto& sfx : looseAudioOnly->SfxFilesById) {
+				_hdData->SfxFilesById[sfx.first] = sfx.second;
+			}
+			for(auto& patch : looseAudioOnly->PatchesByHash) {
+				_hdData->PatchesByHash.emplace(patch.first, patch.second);
+			}
+		} else {
+			_hdData.reset(looseAudioOnly.release());
+			loaded = true;
+		}
+	}
+
 	if(!autoAudio.empty()) {
 		mergeAudio(autoAudio, "audio auto layer");
 	}
@@ -703,7 +727,7 @@ BaseVideoFilter* NesConsole::GetVideoFilter(bool getDefaultFilter)
 {
 	if(getDefaultFilter || GetRomFormat() == RomFormat::Nsf) {
 		return new NesDefaultVideoFilter(_emu);
-	} else if(_hdData && !_hdPackBuilder) {
+	} else if(_hdData && _hdData->HasVideoContent() && !_hdPackBuilder) {
 		return new HdVideoFilter(this, _emu, _hdData.get());
 	} else {
 		VideoFilterType filterType = _emu->GetSettings()->GetVideoConfig().VideoFilter;

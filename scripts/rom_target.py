@@ -46,6 +46,13 @@ CRC32_UPPER = re.compile(r"^[0-9A-F]{8}$")
 # key: `normalize_game_name(<catalog game>)`; value: hashes of the target
 # ROM. `source_dump` names the No-Intro dump the hashes were computed from.
 NO_INTRO_TARGETS = {
+    "1942": {
+        "source": "MesenCE GetMepRomSha1 of 1942 (1985) (Capcom) (issue #128)",
+        "sha1": "7F57EACE7CADA7C36412A50F2299231B304527A8",
+        "alt_sha1": [
+            "D608F769333B13DA9C67F07599E405944893A950",  # CheatDb 1942 (Japan, USA)
+        ],
+    },
     "super mario bros": {
         "source_dump": "Super Mario Bros. 1 (1985) (Nintendo).nes",
         "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",

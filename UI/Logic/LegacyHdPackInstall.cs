@@ -69,6 +69,32 @@ namespace Mesen.Logic
 			return candidate;
 		}
 
+		//A GitHub-repo archive (LiQuiDz HDnes) has no root-level zip and no
+		//hires.txt: each game lives in a folder that holds one nested pack zip
+		//(HDnes-main/1942/1942audio.zip). Prefer the unique .zip whose parent
+		//folder is the same game as the loaded ROM (SameGame, trailing tags
+		//stripped). Ambiguous (two zips in that folder) or no match -> null.
+		public static string? FindGameFolderZip(IEnumerable<string> normalizedEntries, string romName)
+		{
+			if(string.IsNullOrWhiteSpace(romName)) {
+				return null;
+			}
+			List<string> matches = new();
+			foreach(string entry in normalizedEntries) {
+				if(!entry.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || !entry.Contains('/')) {
+					continue;
+				}
+				string leaf = LeafFolder(ParentPrefix(entry));
+				if(leaf.Length == 0) {
+					continue;
+				}
+				if(CommunityPackCatalogMatcher.SameGame(leaf, romName)) {
+					matches.Add(entry);
+				}
+			}
+			return matches.Count == 1 ? matches[0] : null;
+		}
+
 		//The pack root = the parent prefix of every hires.txt entry. Prefers
 		//the prefix whose leaf folder name equals the loaded ROM name (the
 		//artist's per-ROM folder, as FindRomNameAnchor looks for); otherwise
@@ -146,7 +172,7 @@ namespace Mesen.Logic
 				return true;
 			}
 
-			string? nested = FindNestedZip(byNorm.Keys);
+			string? nested = FindNestedZip(byNorm.Keys) ?? FindGameFolderZip(byNorm.Keys, romName);
 			if(nested == null || !byNorm.TryGetValue(nested, out ZipArchiveEntry? nestedEntry)) {
 				error = "not a legacy HD pack (no hires.txt)";
 				return false;

@@ -103,7 +103,9 @@ namespace Mesen.Services
 		//relative paths. Files outside the pack root (banner art, READMEs, ...)
 		//are skipped - the classic loader only reads what hires.txt references.
 		//A wrapper zip holding exactly one root-level nested zip (the
-		//"UnZipMeFirst"-style release, e.g. Zelda Remastered) is unwrapped
+		//"UnZipMeFirst"-style release, e.g. Zelda Remastered), or a GitHub
+		//repo archive with one pack zip in the matching game folder
+		//(LiQuiDz HDnes: HDnes-main/1942/1942audio.zip), is unwrapped
 		//in-memory and extracted while that inner ZipArchive is still open
 		//(ZipArchiveEntry.Open throws ObjectDisposedException after Dispose).
 		//Root discovery + zip-slip + extract live in host-free

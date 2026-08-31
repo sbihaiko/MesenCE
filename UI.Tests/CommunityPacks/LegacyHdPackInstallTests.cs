@@ -137,6 +137,39 @@ namespace Mesen.Tests.CommunityPacks
 		}
 
 		[Fact]
+		public void FindGameFolderZip_LiQuiDzRepoLayout_FindsTheGameZip()
+		{
+			string[] entries = {
+				"HDnes-main/README.md",
+				"HDnes-main/1942/1942audio.zip",
+				"HDnes-main/1942/readme.md",
+				"HDnes-main/Super_Mario_Bros/super.mario.audio.zip",
+			};
+
+			Assert.Equal("HDnes-main/1942/1942audio.zip",
+				LegacyHdPackInstall.FindGameFolderZip(entries, "1942 (1985) (Capcom)"));
+		}
+
+		[Fact]
+		public void FindGameFolderZip_MultipleZipsInGameFolder_ReturnsNull()
+		{
+			string[] entries = {
+				"HDnes-main/Duck_Hunt/DuckHunt-Audio.zip",
+				"HDnes-main/Duck_Hunt/DuckHuntHDV1.1.zip",
+			};
+
+			Assert.Null(LegacyHdPackInstall.FindGameFolderZip(entries, "Duck Hunt (U)"));
+		}
+
+		[Fact]
+		public void FindGameFolderZip_UnrelatedFolder_ReturnsNull()
+		{
+			Assert.Null(LegacyHdPackInstall.FindGameFolderZip(
+				new[] { "HDnes-main/Super_Mario_Bros/super.mario.audio.zip" },
+				"1942 (1985) (Capcom)"));
+		}
+
+		[Fact]
 		public void FindNestedZip_ExtensionIsCaseInsensitive()
 		{
 			Assert.Equal("PACK.ZIP", LegacyHdPackInstall.FindNestedZip(new[] { "PACK.ZIP", "readme.txt" }));
@@ -242,6 +275,41 @@ namespace Mesen.Tests.CommunityPacks
 				Assert.True(File.Exists(Path.Combine(dest, "hires.txt")));
 				Assert.True(File.Exists(Path.Combine(dest, "Ash1.png")));
 				Assert.False(File.Exists(Path.Combine(dest, "changelog.txt")));
+			} finally {
+				Directory.Delete(dest, true);
+			}
+		}
+
+		[Fact]
+		public void ExtractToFolder_GameFolderNestedZip_WritesInnerPackRoot()
+		{
+			byte[] innerBytes;
+			using(MemoryStream innerMs = new()) {
+				using(ZipArchive inner = new(innerMs, ZipArchiveMode.Create, true)) {
+					CreateEntry(inner, "hires.txt", "<bgm>0,1,track.ogg");
+					CreateEntry(inner, "1942HDMUSIC.ips", "PATCH");
+				}
+				innerBytes = innerMs.ToArray();
+			}
+
+			using MemoryStream outerMs = new();
+			using(ZipArchive outer = new(outerMs, ZipArchiveMode.Create, true)) {
+				ZipArchiveEntry nested = outer.CreateEntry("HDnes-main/1942/1942audio.zip");
+				using(Stream stream = nested.Open()) {
+					stream.Write(innerBytes, 0, innerBytes.Length);
+				}
+				CreateEntry(outer, "HDnes-main/1942/readme.md", "notes");
+				CreateEntry(outer, "HDnes-main/README.md", "repo");
+			}
+			outerMs.Position = 0;
+
+			string dest = NewTempDir();
+			try {
+				using ZipArchive zip = new(outerMs, ZipArchiveMode.Read);
+				Assert.True(LegacyHdPackInstall.ExtractToFolder(zip, dest, "1942 (1985) (Capcom)", out string error), error);
+				Assert.True(File.Exists(Path.Combine(dest, "hires.txt")));
+				Assert.True(File.Exists(Path.Combine(dest, "1942HDMUSIC.ips")));
+				Assert.False(File.Exists(Path.Combine(dest, "readme.md")));
 			} finally {
 				Directory.Delete(dest, true);
 			}

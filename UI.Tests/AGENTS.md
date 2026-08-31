@@ -58,7 +58,8 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
   matching and the same-game identity fallback (`SameGame`); keep the
   `rom: {}` never-auto-matches case when touching the matcher.
 - `CommunityPacks/LegacyHdPackInstallTests` covers nested-wrapper extract
-  (`ExtractToFolder` must write while the inner zip is still open).
+  (`ExtractToFolder` must write while the inner zip is still open) and
+  LiQuiDz-style per-game folder zips (`FindGameFolderZip`).
 - Never add a `PackageReference` to Avalonia, or a `ProjectReference` to
   `UI/UI.csproj` — that reintroduces the native/SDL2 dependency this project
   is built to avoid.

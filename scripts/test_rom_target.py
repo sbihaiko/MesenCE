@@ -97,6 +97,7 @@ def check_catalog_games_resolve():
     # from a loaded No-Intro dump). Everything else MUST keep `rom: {}` rather
     # than carry a guessed hash (see rom_target.py).
     expected = {
+        "1942",
         "Super_Mario_Bros",
         "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin)",
         "Mega Man (USA)",

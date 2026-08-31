@@ -149,7 +149,12 @@
       "license": "unknown",
       "name": "1942 \u2014 community submission",
       "pack_id": "liquidzgit/hdnes:1942",
-      "rom": {},
+      "rom": {
+        "sha1": "7F57EACE7CADA7C36412A50F2299231B304527A8",
+        "sha1s": [
+          "D608F769333B13DA9C67F07599E405944893A950"
+        ]
+      },
       "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
       "system": "nes",
       "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
