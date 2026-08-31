@@ -74,6 +74,18 @@ def check_apply_verdict_external_label_branch(text):
         fail("apply-verdict step does not inspect the assembled recipe's sources.deps for assets:external")
 
 
+def check_apply_verdict_does_not_dump_full_lint(text):
+    # Issue #148: concatenating mep_lint_output.txt into the issue comment
+    # exceeded GitHub's 65536-character addComment limit (11k warnings).
+    block = _apply_verdict_block(text)
+    if block is None:
+        return
+    if "cat mep_lint_output.txt" in block:
+        fail("apply-verdict must not cat the full mep_lint_output.txt into the issue comment")
+    if "--lint-excerpt" not in block:
+        fail("apply-verdict must attach a --lint-excerpt, not the raw lint log")
+
+
 def check_apply_verdict_exposes_outputs(text):
     # T5: the effective (post-downgrade) verdict and the labels actually
     # applied to the issue are exposed as apply-verdict's own step

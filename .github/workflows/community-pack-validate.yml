@@ -329,12 +329,20 @@ jobs:
         run: |
           set -euo pipefail
           {
+            echo "Pack failed \`scripts/mep_lint.py\`."
             echo ""
             echo "Pack SHA-256: \`$PACK_SHA256\` — pin this against the pack link; a link that starts serving a different file changes this hash, and this verdict is stale until \`/revalidate\` runs again."
             echo ""
-            echo "See also: [MIGRATION.md](https://github.com/${REPO}/blob/main/MIGRATION.md) for the general MEP folder-convention transformation rule. A specific before/after analysis for this pack, if someone works one out, belongs as a comment on this issue — not a repo change."
-          } >> mep_lint_output.txt
-          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file mep_lint_output.txt
+            echo "See also: [MIGRATION.md](https://github.com/${REPO}/blob/main/MIGRATION.md) for the general MEP folder-convention transformation rule."
+            echo ""
+            echo "<details><summary>Lint summary</summary>"
+            echo ""
+            echo '```'
+            python3 scripts/classify_pack_brief.py --lint-excerpt mep_lint_output.txt
+            echo '```'
+            echo "</details>"
+          } > lint_fail_comment.txt
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file lint_fail_comment.txt
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
@@ -806,19 +814,33 @@ jobs:
             DOWNGRADED=true
           fi
           jq -r '.comment' < "$RUNNER_TEMP/mep_classify_clean.json" > verdict_comment.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("verdict_comment.txt")
+          t = p.read_text(encoding="utf-8", errors="replace")
+          if len(t) > 8000:
+              p.write_text(t[:8000] + "\n\n… comment truncated\n", encoding="utf-8")
+          PY
           {
             echo ""
             echo "---"
             echo ""
-            echo "<details><summary>Lint report (<code>scripts/mep_lint.py</code>)</summary>"
+            echo "<details><summary>Lint summary (<code>scripts/mep_lint.py</code>)</summary>"
             echo ""
             echo '```'
-            cat mep_lint_output.txt
+            python3 scripts/classify_pack_brief.py --lint-excerpt mep_lint_output.txt
             echo '```'
             echo "</details>"
             echo ""
             echo "Pack SHA-256: \`$PACK_SHA256\` — pin this against the pack link; a link that starts serving a different file changes this hash, and this verdict is stale until \`/revalidate\` runs again."
           } >> verdict_comment.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("verdict_comment.txt")
+          t = p.read_text(encoding="utf-8", errors="replace")
+          if len(t) > 60000:
+              p.write_text(t[:60000] + "\n\n… truncated (GitHub comment limit)\n", encoding="utf-8")
+          PY
           if [ "$DOWNGRADED" = "true" ]; then
             {
               echo ""

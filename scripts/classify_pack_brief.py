@@ -8,6 +8,7 @@ as {{PACK_BRIEF}} so classify never opens pack_download.bin or hires.txt.
 
 Usage:
   python3 scripts/classify_pack_brief.py <folder-or-zip> [mep_lint_output.txt]
+  python3 scripts/classify_pack_brief.py --lint-excerpt <mep_lint_output.txt>
 """
 from __future__ import annotations
 
@@ -210,10 +211,24 @@ def build_brief(pack_path: Path, lint_path: Path | None) -> str:
     return brief
 
 
+def cap_text(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 24] + "\n\n… truncated\n"
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__)
         return 2
+    if argv[1] == "--lint-excerpt":
+        if len(argv) < 3:
+            print(__doc__)
+            return 2
+        path = Path(argv[2])
+        text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        sys.stdout.write(_lint_summary(text) + "\n")
+        return 0
     pack = Path(argv[1])
     lint = Path(argv[2]) if len(argv) > 2 else None
     if not pack.exists():

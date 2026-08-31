@@ -43,6 +43,8 @@ def _tiny_zip(path: Path):
 
 
 def main():
+    import subprocess
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         zpath = tmp / "pack.zip"
@@ -55,23 +57,36 @@ def main():
             encoding="utf-8",
         )
         brief = classify_pack_brief.build_brief(zpath, lint)
-    if "hires.txt" not in brief:
-        fail("brief missing hires.txt member")
-    if "<img>=1" not in brief or "<bgm>=1" not in brief or "<sfx>=1" not in brief:
-        fail(f"brief missing tag counts:\n{brief}")
-    if "magic=ips" not in brief:
-        fail("brief missing IPS magic")
-    if "Test Author" not in brief:
-        fail("brief missing credits excerpt")
-    if "bundled patch: game.ips" not in brief:
-        fail("brief missing lint bundled-patch line")
-    if "does not exist" not in brief:
-        fail("brief missing missing-file warning")
-    if "0 error(s), 1 warning(s)" not in brief:
-        fail("brief missing lint summary")
-    if len(brief) > classify_pack_brief.MAX_BRIEF:
-        fail("brief exceeds MAX_BRIEF")
-    ok("classify_pack_brief.py emits a bounded inventory")
+        if "hires.txt" not in brief:
+            fail("brief missing hires.txt member")
+        if "<img>=1" not in brief or "<bgm>=1" not in brief or "<sfx>=1" not in brief:
+            fail(f"brief missing tag counts:\n{brief}")
+        if "magic=ips" not in brief:
+            fail("brief missing IPS magic")
+        if "Test Author" not in brief:
+            fail("brief missing credits excerpt")
+        if "bundled patch: game.ips" not in brief:
+            fail("brief missing lint bundled-patch line")
+        if "does not exist" not in brief:
+            fail("brief missing missing-file warning")
+        if "0 error(s), 1 warning(s)" not in brief:
+            fail("brief missing lint summary")
+        if len(brief) > classify_pack_brief.MAX_BRIEF:
+            fail("brief exceeds MAX_BRIEF")
+        ok("classify_pack_brief.py emits a bounded inventory")
+
+        excerpt = subprocess.check_output(
+            [sys.executable, str(ROOT / "scripts" / "classify_pack_brief.py"),
+             "--lint-excerpt", str(lint)],
+            text=True,
+        )
+        if "0 error(s), 1 warning(s)" not in excerpt:
+            fail("lint excerpt missing summary")
+        if "does not exist" not in excerpt:
+            fail("lint excerpt missing missing-file warning")
+        if excerpt.count("\n") > 80:
+            fail("lint excerpt still too large")
+        ok("classify_pack_brief.py --lint-excerpt stays small")
     return 0
 
 

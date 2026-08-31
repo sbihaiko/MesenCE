@@ -328,7 +328,8 @@ run_game() {
         echo ""
         echo "Pack SHA-256: \`$PACK_SHA256\` — pin this against the pack link; a link that starts serving a different file changes this hash, and this verdict is stale until \`/revalidate\` runs again."
       } >> "$WORK/mep_lint_output.txt"
-      gh issue comment "$ISSUE" --repo "$REPO" --body-file "$WORK/mep_lint_output.txt"
+      python3 scripts/classify_pack_brief.py --lint-excerpt "$WORK/mep_lint_output.txt" > "$WORK/lint_fail_comment.txt"
+      gh issue comment "$ISSUE" --repo "$REPO" --body-file "$WORK/lint_fail_comment.txt"
       gh issue edit "$ISSUE" --repo "$REPO" --add-label pack:invalid
       ITEM_ID=$(gh project item-add "$PROJECT_NUMBER" --owner "$OWNER" --url "https://github.com/$REPO/issues/$ISSUE" --format json -q '.id')
       gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
@@ -489,10 +490,10 @@ PY
     echo ""
     echo "---"
     echo ""
-    echo "<details><summary>Lint report (<code>scripts/mep_lint.py</code>)</summary>"
+    echo "<details><summary>Lint summary (<code>scripts/mep_lint.py</code>)</summary>"
     echo ""
     echo '```'
-    cat "$WORK/mep_lint_output.txt"
+    python3 scripts/classify_pack_brief.py --lint-excerpt "$WORK/mep_lint_output.txt"
     echo '```'
     echo "</details>"
     echo ""
