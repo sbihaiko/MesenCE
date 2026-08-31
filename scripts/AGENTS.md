@@ -66,7 +66,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
-- `validate-specs.py`, `mep_lint.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
+- `validate-specs.py`, `mep_lint.py`, `classify_pack_brief.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
   `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `gen_mep_recipe_fixture.py`, `make_gb_test_rom.py`, `validate_hdpack_dump.py` -
@@ -447,8 +447,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   (AC-2, AC-6 validate-side of the community-pack triage task): parses the
   reusable workflow's `workflow_call` inputs, the exact Project/Status/
   option/Pack-Hash ids, the host allow-list, the 300MB cap, the always-write
-  `sha256` step, the unmodified `mep_lint.py` call, the Claude Code Action
-  tool restriction + data-not-instruction prompt clause, the secret-name
+  `sha256` step, the unmodified `mep_lint.py` call, `classify_pack_brief.py`
+  as `{{PACK_BRIEF}}` with `--disallowedTools Bash,Read`, the
+  data-not-instruction prompt clause, the secret-name
   comment, and — by literal `uses:`/string match against this workflow's
   own text only, never by opening `community-pack-catalog.yml` — that it
   dispatches that catalog workflow gated on an "Aceito*" Status, and

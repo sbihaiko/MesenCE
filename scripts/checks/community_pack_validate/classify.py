@@ -164,6 +164,11 @@ def check_prepare_classify_prompt_renders_md(text):
             "prepare-classify-prompt step must render both "
             "{{ISSUE_NUMBER}} and {{EXTERNAL_ASSETS_SUFFIX}} placeholders"
         )
+    if "classify_pack_brief.py" not in prepare or "{{PACK_BRIEF}}" not in prepare:
+        fail(
+            "prepare-classify-prompt step must run scripts/classify_pack_brief.py "
+            "and render {{PACK_BRIEF}}"
+        )
 
 
 def check_prompt_file_markers(text):
@@ -188,6 +193,13 @@ def check_prompt_file_markers(text):
         fail(
             ".github/ai/validate-classify.md PROMPT block must contain "
             "{{ISSUE_NUMBER}} and {{EXTERNAL_ASSETS_SUFFIX}} placeholders"
+        )
+    if "{{PACK_BRIEF}}" not in prompt:
+        fail(".github/ai/validate-classify.md PROMPT block must contain {{PACK_BRIEF}}")
+    if "Do not open `pack_download.bin`" not in prompt and "Do not open pack_download.bin" not in prompt:
+        fail(
+            ".github/ai/validate-classify.md PROMPT must forbid opening "
+            "pack_download.bin (issue #148 classify timeout)"
         )
     if SCHEMA_MARKER in prompt:
         fail(".github/ai/validate-classify.md PROMPT block leaks the SCHEMA marker")

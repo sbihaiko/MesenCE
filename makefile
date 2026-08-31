@@ -273,6 +273,7 @@ doc-checks: check-manifest
 	python3 scripts/test_mep_meta_parser.py
 	python3 scripts/test_mep_recipe_fence.py
 	python3 scripts/test_pack_id_rules.py
+	python3 scripts/test_classify_pack_brief.py
 	python3 scripts/test_mep_build.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.

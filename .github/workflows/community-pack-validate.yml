@@ -283,12 +283,10 @@ jobs:
           set -euo pipefail
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$ROM_MD5_FIELD_ID" --text "${{ steps.rom-hashes.outputs.md5 }}" >/dev/null
-      # `shell: bash` is required (not just the default, unspecified shell)
-      # so this multi-line-equivalent pipeline actually runs under `bash -eo
-      # pipefail`: the unspecified/default shell on Linux runners is `bash -e
-      # {0}` WITHOUT `-o pipefail`, so `mep_lint.py | tee ...` would report
-      # `tee`'s exit code (always 0) instead of mep_lint's, and the "Reject
-      # on lint failure" step below could never fire.
+      # Redirect lint to a file (do not tee 10k+ warnings into the Actions
+      # log — issue #148 Metroid HD wrote 11k lines and bloated the log).
+      # Capture the process exit explicitly: `set -e` plus a failing
+      # assignment would abort before we can print the summary.
       - name: Lint pack structure (mep_lint.py, with the submitter's declared ROM name)
         id: lint
         if: steps.download.outcome == 'success'
@@ -298,7 +296,13 @@ jobs:
           GAME: ${{ steps.rename-title.outputs.game }}
         run: |
           set -euo pipefail
-          python3 scripts/mep_lint.py pack_download.bin "$GAME" --quiet 2>&1 | tee mep_lint_output.txt
+          set +e
+          python3 scripts/mep_lint.py pack_download.bin "$GAME" --quiet > mep_lint_output.txt 2>&1
+          LINT_RC=$?
+          set -e
+          grep -E '^(error|info) ' mep_lint_output.txt || true
+          tail -n 1 mep_lint_output.txt
+          exit "$LINT_RC"
       # ADR-0139/P.1: the tree content_id of the discovered pack root (same
       # discovery as the lint step above, via mep_lint --content-id). Printed
       # alone so the upsert step below can record it in mep-meta. A pack
@@ -526,6 +530,9 @@ jobs:
       # every other verdict path in this file (see "Reject on lint failure"
       # above) — Claude gets zero write-capable tools at all, which is
       # strictly safer than the tool-restriction approach this replaces.
+      # Read is also disallowed: the rendered prompt already contains the
+      # bounded {{PACK_BRIEF}} (scripts/classify_pack_brief.py). Opening
+      # pack_download.bin / hires.txt hung issue #148 until timeout-minutes.
       # Cap the LLM classify step so a hung Claude Code Action cannot hold
       # the runner for the job's 6-hour default (F6.0). 15 minutes is well
       # above a successful classify (typically 1–3 min) and well below the
@@ -564,16 +571,25 @@ jobs:
           # scripts/validate_pack_local.sh renders - so the CI step and the
           # local harness can never drift. Mirror that script's extraction
           # exactly (rsplit on the LAST marker: the markers also appear in
-          # prose) and render the two placeholders; the rendered prompt embeds
-          # $SUFFIX in place of {{EXTERNAL_ASSETS_SUFFIX}}.
+          # prose) and render {{ISSUE_NUMBER}}, {{EXTERNAL_ASSETS_SUFFIX}},
+          # and {{PACK_BRIEF}} (scripts/classify_pack_brief.py).
           python3 - "$ISSUE_NUMBER" "$SUFFIX" "$GITHUB_OUTPUT" <<'PYEOF'
+          import subprocess
           import sys
 
           issue, suffix, out = sys.argv[1:4]
+          brief = subprocess.check_output(
+              [sys.executable, "scripts/classify_pack_brief.py", "pack_download.bin", "mep_lint_output.txt"],
+              text=True,
+          )
           text = open(".github/ai/validate-classify.md", encoding="utf-8").read()
           prompt = text.rsplit("<!-- PROMPT -->", 1)[1].rsplit("<!-- SCHEMA -->", 1)[0].strip()
           schema = text.rsplit("<!-- SCHEMA -->", 1)[1].strip()
-          prompt = prompt.replace("{{ISSUE_NUMBER}}", issue).replace("{{EXTERNAL_ASSETS_SUFFIX}}", suffix)
+          prompt = (
+              prompt.replace("{{ISSUE_NUMBER}}", issue)
+              .replace("{{EXTERNAL_ASSETS_SUFFIX}}", suffix)
+              .replace("{{PACK_BRIEF}}", brief)
+          )
           with open(out, "a", encoding="utf-8") as f:
               f.write("classify_prompt<<__PROMPT_EOF__\n" + prompt + "\n__PROMPT_EOF__\n")
               f.write("classify_schema<<__SCHEMA_EOF__\n" + schema + "\n__SCHEMA_EOF__\n")
@@ -595,7 +611,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-haiku-4-5
-            --disallowedTools Bash
+            --disallowedTools Bash,Read
             --json-schema '${{ steps.prepare-classify-prompt.outputs.classify_schema }}'
           prompt: |
             ${{ steps.prepare-classify-prompt.outputs.classify_prompt }}

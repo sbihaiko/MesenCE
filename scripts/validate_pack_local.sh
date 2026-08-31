@@ -353,18 +353,32 @@ run_game() {
     SUFFIX=""
   fi
 
-  python3 - "$PROMPT_FILE" "$ISSUE" "$SUFFIX" "$WORK" <<'PY'
+  python3 - "$PROMPT_FILE" "$ISSUE" "$SUFFIX" "$WORK" "$ROOT" <<'PY'
 import os
-import re
+import subprocess
 import sys
 
-path, issue, suffix, work = sys.argv[1:5]
+path, issue, suffix, work, root = sys.argv[1:6]
+brief = subprocess.check_output(
+    [
+        sys.executable,
+        os.path.join(root, "scripts/classify_pack_brief.py"),
+        os.path.join(work, "pack_download.bin"),
+        os.path.join(work, "mep_lint_output.txt"),
+    ],
+    text=True,
+    cwd=root,
+)
 text = open(path, encoding="utf-8").read()
 # rsplit: the markers also appear in prose (the "<!-- SCHEMA -->" mention in
 # the doc header), so split on the LAST occurrence — the real delimiters.
 prompt = text.rsplit("<!-- PROMPT -->", 1)[1].rsplit("<!-- SCHEMA -->", 1)[0].strip()
 schema = text.rsplit("<!-- SCHEMA -->", 1)[1].strip()
-prompt = prompt.replace("{{ISSUE_NUMBER}}", issue).replace("{{EXTERNAL_ASSETS_SUFFIX}}", suffix)
+prompt = (
+    prompt.replace("{{ISSUE_NUMBER}}", issue)
+    .replace("{{EXTERNAL_ASSETS_SUFFIX}}", suffix)
+    .replace("{{PACK_BRIEF}}", brief)
+)
 with open(os.path.join(work, "classify_prompt.md"), "w", encoding="utf-8") as f:
     f.write(prompt + "\n")
 with open(os.path.join(work, "classify_schema.json"), "w", encoding="utf-8") as f:
@@ -377,24 +391,21 @@ PY
   if [ "$LLM" = "claude" ]; then
     MODEL="${MODEL:-claude-sonnet-4-5}"
     echo ":: running claude headless (--llm claude, model $MODEL)..."
-    # Run with cwd=$WORK so the prompt's relative paths (pack_download.bin,
-    # mep_lint_output.txt) resolve to this issue's isolated work dir — safe for
-    # parallel invocations; docs/ is symlinked so the spec references resolve.
-    # The prompt goes via stdin (an argv prompt + multi-MB lint output would hit
-    # "Argument list too long"). --output-format text keeps classify_raw.json to
-    # just the model's JSON (the default json emits the whole JSONL transcript,
-    # ~3MB). --mcp-config {} drops the MCP servers from the system prompt, which
-    # otherwise inflate every call to ~119k input tokens.
+    # Evidence is already in classify_prompt.md as PACK BRIEF — do not
+    # allow Read of pack_download.bin / hires.txt (issue #148 timeout).
+    # The prompt goes via stdin. --output-format text keeps classify_raw.json
+    # to just the model's JSON. --mcp-config {} drops MCP servers from the
+    # system prompt (~119k input tokens otherwise).
     ( cd "$WORK" && ln -sfn "$ROOT/docs" docs && claude -p \
       --output-format text --json-schema "$SCHEMA" \
-      --mcp-config '{"mcpServers":{}}' --allowedTools "Read,Glob,Grep" \
+      --mcp-config '{"mcpServers":{}}' --disallowedTools "Bash,Read" \
       --model "$MODEL" < classify_prompt.md > classify_raw.json )
   elif [ -f "$WORK/classify_raw.json" ]; then
     echo ":: using existing $WORK/classify_raw.json"
   else
     echo ":: --llm session — classify prompt rendered to:"
     echo "   $WORK/classify_prompt.md"
-    echo "   Read it (plus $WORK/mep_lint_output.txt and $WORK/pack_download.bin),"
+    echo "   Read it (the PACK BRIEF is already inlined; do not open the zip),"
     echo "   produce the JSON per the schema in $WORK/classify_schema.json,"
     echo "   save it to $WORK/classify_raw.json, then re-run this script."
     return 0

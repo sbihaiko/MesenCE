@@ -82,9 +82,12 @@ what CI actually runs; this doc records why they're split the way they are.
   and during the download, always records the pack's `sha256` to Pack
   Hash, calls `scripts/mep_lint.py` unmodified, and — only on lint
   success — classifies the pack via `anthropics/claude-code-action`
-  restricted to comment/label/Project-move tools (no `Bash`), with the
-  pack's own file names/`pack.json`/issue text framed as data, never
-  instructions, in the prompt. The classify step carries
+  with `--disallowedTools Bash,Read`. Pack evidence is a bounded
+  `{{PACK_BRIEF}}` from `scripts/classify_pack_brief.py` (member list,
+  tag counts, header/README excerpts, patch magic, lint summary);
+  classify must not open `pack_download.bin` or `hires.txt` (issue #148
+  timed out on a 26 MiB manifest). File names/`pack.json`/issue text stay
+  framed as data, never instructions. The classify step carries
   `timeout-minutes: 15` (F6.0) so a hung Claude Code Action cannot hold
   the runner for the job's 6-hour default. Dispatches
   `workflows/community-pack-catalog.yml` by name (never opens it) when the

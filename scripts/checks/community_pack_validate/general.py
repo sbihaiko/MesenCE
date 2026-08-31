@@ -120,6 +120,8 @@ def check_claude_action(text):
         fail("anthropics/claude-code-action not used")
     if "disallowed_tools" not in text or "Bash" not in text:
         fail("Claude Code Action step does not explicitly disallow Bash")
+    if "--disallowedTools Bash,Read" not in text:
+        fail("Classify pack must --disallowedTools Bash,Read (issue #148)")
     if not _has_data_not_instruction_clause(text):
         fail("prompt lacks an explicit data-not-instruction clause")
 

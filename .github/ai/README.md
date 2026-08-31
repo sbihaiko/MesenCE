@@ -37,8 +37,9 @@ Only the classify step is an LLM prompt.
 
 1. downloads the pack (`fetch_pack.py`, allow-list + 300MB cap),
 2. lints it (`mep_lint.py`),
-3. renders `validate-classify.md` (fills `{{ISSUE_NUMBER}}` and
-   `{{EXTERNAL_ASSETS_SUFFIX}}` from the issue body),
+3. renders `validate-classify.md` (fills `{{ISSUE_NUMBER}}`,
+   `{{EXTERNAL_ASSETS_SUFFIX}}`, and `{{PACK_BRIEF}}` from
+   `scripts/classify_pack_brief.py`),
 4. runs Claude on the rendered prompt (headless, or supervised in
    `--llm session` mode),
 5. assembles/validates the recipe when external assets are declared,
@@ -46,8 +47,9 @@ Only the classify step is an LLM prompt.
    Status/Category/Pack Hash, and the `<!-- mep-meta -->` comment.
 
 **CI** — `community-pack-validate.yml`, "Prepare classify prompt" fills the
-same two placeholders and "Classify pack (Claude Code Action)" runs the
-rendered prompt. The deterministic steps are the same scripts.
+same three placeholders and "Classify pack (Claude Code Action)" runs the
+rendered prompt (`--disallowedTools Bash,Read`). The deterministic steps
+are the same scripts.
 
 ## Rendering contract
 
