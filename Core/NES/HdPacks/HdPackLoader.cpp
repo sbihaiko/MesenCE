@@ -1032,6 +1032,12 @@ vector<HdPackCondition*> HdPackLoader::ParseConditionString(string conditionStri
 bool HdPackLoader::ParseBooleanValue(string value)
 {
 	value = StringUtilities::Trim(value);
+	if(value.empty()) {
+		//An empty boolean field (e.g. a trailing comma in <tile>/<condition>
+		//tags) means "unset" - default it to false rather than erroring.
+		//Several community packs leave the flag blank.
+		return false;
+	}
 	string upper = StringUtilities::ToUpper(value);
 	if(upper == "Y" || upper == "YES" || upper == "TRUE" || upper == "1") {
 		return true;
