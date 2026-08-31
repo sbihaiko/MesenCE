@@ -371,6 +371,26 @@
       "validated_at": "2026-08-31T00:13:13Z",
       "verdict": "accepted",
       "votes": 1
+    },
+    {
+      "content_id": "553cfe6be090565c85a424fd156b3f223bc5fa71de721a8ae8783b5f20c3957b",
+      "game": "Ninja Gaiden (USA)",
+      "issue": 145,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Ninja Gaiden (USA) \u2014 community submission",
+      "pack_id": "issue-145",
+      "rom": {},
+      "sha256": "04d1678ff3c0a60cb8a2d972cd44b7d7347e1bc2f307c4a826a304730b2bb668",
+      "system": "nes",
+      "url": "https://drive.google.com/uc?export=download&id=1W5F3omSYMBNOkjouMjdXrVlG0FM5bcMx",
+      "validated_at": "2026-08-31T00:16:44Z",
+      "verdict": "accepted",
+      "votes": 1
     }
   ],
   "updated": "2026-08-31"
