@@ -20,8 +20,10 @@ namespace Mesen.Services
 	{
 		private const string MessageTitle = "Enhancement Packs";
 		private static int _running = 0;
-		//§51 per-session idempotency key: one attempt per ROM sha1 per process, decided before any
-		//network call; the .mep-install.json stamp (§43) remains the cross-session gate.
+		//§51 per-session idempotency key: one successful-or-in-flight attempt
+		//per ROM sha1 per process, decided before any network call. A failed
+		//fetch/install or a thrown extract is removed so the next load retries.
+		//The .mep-install.json stamp (§43) remains the cross-session gate.
 		private static readonly HashSet<string> _attemptedRomSha1 = new(StringComparer.OrdinalIgnoreCase);
 		//P.6: community 👍 counts from the last catalog fetch (MEI `votes`), keyed
 		//by pack_id - the Player picker sorts by them (§5). Read-only for the
@@ -55,6 +57,7 @@ namespace Mesen.Services
 
 		private static async Task RunAsync()
 		{
+			string romSha1 = "";
 			try {
 				//§38: the very first automatic download is gated behind an explicit Yes/No prompt,
 				//before the catalog itself is contacted (that GET is already a network access).
@@ -65,7 +68,7 @@ namespace Mesen.Services
 					EmuApi.WriteLogEntry("[CommunityPack] skipped: consent not given / dialog pending");
 					return;
 				}
-				string romSha1 = EmuApi.GetMepRomSha1();
+				romSha1 = EmuApi.GetMepRomSha1();
 				EmuApi.WriteLogEntry("[CommunityPack] romSha1=" + romSha1);
 				lock(_attemptedRomSha1) {
 					if(string.IsNullOrWhiteSpace(romSha1)) {
@@ -83,9 +86,7 @@ namespace Mesen.Services
 					//No catalog row for this dump (or a failed download): allow a
 					//later load this session to retry, so a catalog update is
 					//picked up without restarting the process.
-					lock(_attemptedRomSha1) {
-						_attemptedRomSha1.Remove(romSha1);
-					}
+					ClearAttempt(romSha1);
 					EmuApi.WriteLogEntry("[CommunityPack] no match/fetch result (see [CommunityPackFetch] lines above for the stage that returned null)");
 					return; //no catalog, no match, host not allowed or hash mismatch - all silent (§41/§42)
 				}
@@ -104,12 +105,26 @@ namespace Mesen.Services
 					fetched.Entry, fetched.PrimaryPackPath, fetched.ResolvedDepPaths);
 				EmuApi.WriteLogEntry("[CommunityPack] Install() outcome: Status=" + outcome.Status +
 					" ContainerName=" + outcome.ContainerName + " Message=" + outcome.Message);
+				if(outcome.Status == CommunityPackInstallStatus.Failed) {
+					ClearAttempt(romSha1);
+				}
 				Surface(outcome, romSha1);
 			} catch(Exception ex) {
+				ClearAttempt(romSha1);
 				EmuApi.WriteLogEntry("[CommunityPack] RunAsync threw: " + ex);
 				Notify("Community pack auto-install failed: " + ex.Message);
 			} finally {
 				Interlocked.Exchange(ref _running, 0);
+			}
+		}
+
+		private static void ClearAttempt(string romSha1)
+		{
+			if(string.IsNullOrWhiteSpace(romSha1)) {
+				return;
+			}
+			lock(_attemptedRomSha1) {
+				_attemptedRomSha1.Remove(romSha1);
 			}
 		}
 

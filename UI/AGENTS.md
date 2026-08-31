@@ -178,12 +178,18 @@ can be exercised by real xunit tests without Avalonia or the native
   `UI/Logic/`. `CommunityPackInstallCoordinator.Install()` is the seam: it
   takes the fetcher's already-verified output (matched catalog entry,
   primary artifact path, dep-id → path map) and is the only call site of
-  `EmuApi.InstallMepRecipe` for this feature. After a successful
-  auto-install (`CommunityPackInstallStatus.Installed`),
+  `EmuApi.InstallMepRecipe` for this feature. An `hd-legacy` wrapper zip
+  (one root-level nested zip, e.g. Zelda Remastered) is unwrapped by
+  `LegacyHdPackInstall.ExtractToFolder` while the inner `ZipArchive` is
+  still open — disposing it first throws `ObjectDisposedException` on
+  `ZipArchiveEntry.Open`. After a successful auto-install
+  (`CommunityPackInstallStatus.Installed`),
   `CommunityPackInstallService` power-cycles (`LoadRomHelper.PowerCycle`)
   when the same ROM is still loaded, so `HdPacks/<rom>/` applies without a
   second manual load; `OnGameLoaded` already skips power cycles, so this
   does not re-fetch. A ROM switch during the download does not power-cycle.
+  A failed or thrown auto-install clears the per-session ROM sha1 attempt
+  so the next load retries.
   `CommunityPackDownloader` follows only 301/302/303/307/308
   (`CommunityPackHttpStatus.IsFollowableRedirect`); HTTP 304 is a terminal
   catalog-cache status for `CommunityCatalogCacheDecision`, never a

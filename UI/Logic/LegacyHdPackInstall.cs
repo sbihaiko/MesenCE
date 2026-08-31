@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Text;
 
 namespace Mesen.Logic
@@ -11,8 +13,8 @@ namespace Mesen.Logic
 	//accidental host dependency breaks `dotnet test`. Mirrors the core's rules:
 	//MepPack::NormalizeRelativePath (spec §6) and the rom-name-anchored root
 	//discovery of MepPack::FindFallbackSubfolder / MepRecipeOps::DiscoverPrimaryRoot
-	//(ADR-0120). The UI/Services coordinator supplies the zip entry list and
-	//does the actual I/O.
+	//(ADR-0120). The UI/Services coordinator opens the zip file;
+	//ExtractToFolder unwraps a nested zip (if any) and writes the pack root.
 	public static class LegacyHdPackInstall
 	{
 		//Mirror of MepPack::NormalizeRelativePath (zip-slip): reject absolute
@@ -120,6 +122,97 @@ namespace Mesen.Logic
 			string trimmed = prefix.TrimEnd('/');
 			int idx = trimmed.LastIndexOf('/');
 			return idx < 0 ? trimmed : trimmed.Substring(idx + 1);
+		}
+
+		//Test-facing / reusable (ADR-0125): extract the pack root of an already-
+		//open zip into targetFolder. A wrapper with one root-level nested zip
+		//(Zelda Remastered's Drive release) is unwrapped in memory and written
+		//while that inner ZipArchive is still open — ZipArchiveEntry.Open throws
+		//ObjectDisposedException after Dispose. Returns false (with error) when
+		//the zip is empty, zip-slip, or has no hires.txt.
+		public static bool ExtractToFolder(ZipArchive zip, string targetFolder, string romName, out string error)
+		{
+			Dictionary<string, ZipArchiveEntry>? byNorm = BuildNormMap(zip, out error);
+			if(byNorm == null || byNorm.Count == 0) {
+				if(byNorm != null) {
+					error = "zip is empty";
+				}
+				return false;
+			}
+
+			string? rootPrefix = FindPackRoot(byNorm.Keys, romName);
+			if(rootPrefix != null) {
+				WriteUnderRoot(byNorm, rootPrefix, targetFolder);
+				return true;
+			}
+
+			string? nested = FindNestedZip(byNorm.Keys);
+			if(nested == null || !byNorm.TryGetValue(nested, out ZipArchiveEntry? nestedEntry)) {
+				error = "not a legacy HD pack (no hires.txt)";
+				return false;
+			}
+
+			byte[] nestedBytes = ReadEntryBytes(nestedEntry);
+			using MemoryStream nestedStream = new MemoryStream(nestedBytes);
+			using ZipArchive inner = new ZipArchive(nestedStream, ZipArchiveMode.Read);
+			Dictionary<string, ZipArchiveEntry>? innerMap = BuildNormMap(inner, out error);
+			if(innerMap == null || innerMap.Count == 0) {
+				if(innerMap != null) {
+					error = "zip is empty";
+				}
+				return false;
+			}
+			rootPrefix = FindPackRoot(innerMap.Keys, romName);
+			if(rootPrefix == null) {
+				error = "not a legacy HD pack (no hires.txt)";
+				return false;
+			}
+			WriteUnderRoot(innerMap, rootPrefix, targetFolder);
+			return true;
+		}
+
+		private static Dictionary<string, ZipArchiveEntry>? BuildNormMap(ZipArchive zip, out string error)
+		{
+			error = "";
+			Dictionary<string, ZipArchiveEntry> byNorm = new(StringComparer.Ordinal);
+			foreach(ZipArchiveEntry zipEntry in zip.Entries) {
+				if(string.IsNullOrEmpty(zipEntry.Name)) {
+					continue;
+				}
+				string? norm = NormalizeZipPath(zipEntry.FullName);
+				if(norm == null) {
+					error = "zip entry escapes the pack root: '" + zipEntry.FullName + "'";
+					return null;
+				}
+				byNorm[norm] = zipEntry;
+			}
+			return byNorm;
+		}
+
+		private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
+		{
+			using Stream src = entry.Open();
+			using MemoryStream ms = new MemoryStream();
+			src.CopyTo(ms);
+			return ms.ToArray();
+		}
+
+		private static void WriteUnderRoot(Dictionary<string, ZipArchiveEntry> byNorm, string rootPrefix, string targetFolder)
+		{
+			foreach(KeyValuePair<string, ZipArchiveEntry> pair in byNorm) {
+				if(!pair.Key.StartsWith(rootPrefix, StringComparison.Ordinal)) {
+					continue;
+				}
+				string rel = pair.Key.Substring(rootPrefix.Length);
+				if(string.IsNullOrEmpty(rel)) {
+					continue;
+				}
+				string dest = Path.Combine(targetFolder, rel.Replace('/', Path.DirectorySeparatorChar));
+				Directory.CreateDirectory(Path.GetDirectoryName(dest) ?? targetFolder);
+				using Stream src = pair.Value.Open();
+				using FileStream outStream = new FileStream(dest, FileMode.Create, FileAccess.Write);
+				src.CopyTo(outStream);
+			}
 		}
 	}
 }

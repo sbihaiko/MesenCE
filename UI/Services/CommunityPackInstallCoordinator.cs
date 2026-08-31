@@ -103,100 +103,21 @@ namespace Mesen.Services
 		//relative paths. Files outside the pack root (banner art, READMEs, ...)
 		//are skipped - the classic loader only reads what hires.txt references.
 		//A wrapper zip holding exactly one root-level nested zip (the
-		//"UnZipMeFirst"-style release) is unwrapped in-memory first - both
-		//cases mirror MepRecipeOps::DiscoverPrimaryRoot. The root discovery +
-		//zip-slip normalization are the host-free LegacyHdPackInstall
-		//(UI/Logic, unit-tested); only the I/O is here.
+		//"UnZipMeFirst"-style release, e.g. Zelda Remastered) is unwrapped
+		//in-memory and extracted while that inner ZipArchive is still open
+		//(ZipArchiveEntry.Open throws ObjectDisposedException after Dispose).
+		//Root discovery + zip-slip + extract live in host-free
+		//LegacyHdPackInstall (UI/Logic, unit-tested); this opens the file.
 		private static bool TryExtractLegacyPack(string zipPath, string targetFolder, string romName, out string error)
 		{
 			error = "";
 			try {
 				Directory.CreateDirectory(targetFolder);
 				using ZipArchive outer = ZipFile.OpenRead(zipPath);
-				Dictionary<string, ZipArchiveEntry>? byNorm = BuildNormMap(outer, out error);
-				if(byNorm == null || byNorm.Count == 0) {
-					if(byNorm != null) {
-						error = "zip is empty";
-					}
-					return false;
-				}
-
-				string? rootPrefix = LegacyHdPackInstall.FindPackRoot(byNorm.Keys, romName);
-				if(rootPrefix == null) {
-					//Wrapper: exactly one root-level nested zip holds the pack.
-					string? nested = LegacyHdPackInstall.FindNestedZip(byNorm.Keys);
-					if(nested == null || !byNorm.TryGetValue(nested, out ZipArchiveEntry? nestedEntry)) {
-						error = "not a legacy HD pack (no hires.txt)";
-						return false;
-					}
-					using MemoryStream nestedStream = new(ReadEntryBytes(nestedEntry));
-					using ZipArchive inner = new(nestedStream, ZipArchiveMode.Read);
-					Dictionary<string, ZipArchiveEntry>? innerMap = BuildNormMap(inner, out error);
-					if(innerMap == null || innerMap.Count == 0) {
-						if(innerMap != null) {
-							error = "zip is empty";
-						}
-						return false;
-					}
-					rootPrefix = LegacyHdPackInstall.FindPackRoot(innerMap.Keys, romName);
-					if(rootPrefix == null) {
-						error = "not a legacy HD pack (no hires.txt)";
-						return false;
-					}
-					byNorm = innerMap;
-				}
-
-				ExtractUnderRoot(byNorm, rootPrefix, targetFolder);
-				return true;
-			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException) {
+				return LegacyHdPackInstall.ExtractToFolder(outer, targetFolder, romName, out error);
+			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException or ObjectDisposedException) {
 				error = "cannot extract legacy HD pack: " + ex.Message;
 				return false;
-			}
-		}
-
-		//Normalizes every file entry of a zip into a norm-path -> entry map;
-		//null (with error) when any entry fails the zip-slip gate.
-		private static Dictionary<string, ZipArchiveEntry>? BuildNormMap(ZipArchive zip, out string error)
-		{
-			error = "";
-			Dictionary<string, ZipArchiveEntry> byNorm = new(StringComparer.Ordinal);
-			foreach(ZipArchiveEntry zipEntry in zip.Entries) {
-				if(string.IsNullOrEmpty(zipEntry.Name)) {
-					continue; //directory entry
-				}
-				string? norm = LegacyHdPackInstall.NormalizeZipPath(zipEntry.FullName);
-				if(norm == null) {
-					error = "zip entry escapes the pack root: '" + zipEntry.FullName + "'";
-					return null;
-				}
-				byNorm[norm] = zipEntry;
-			}
-			return byNorm;
-		}
-
-		private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
-		{
-			using Stream src = entry.Open();
-			using MemoryStream ms = new();
-			src.CopyTo(ms);
-			return ms.ToArray();
-		}
-
-		private static void ExtractUnderRoot(Dictionary<string, ZipArchiveEntry> byNorm, string rootPrefix, string targetFolder)
-		{
-			foreach(KeyValuePair<string, ZipArchiveEntry> pair in byNorm) {
-				if(!pair.Key.StartsWith(rootPrefix, StringComparison.Ordinal)) {
-					continue; //outside the pack root (banner art, README, ...)
-				}
-				string rel = pair.Key.Substring(rootPrefix.Length);
-				if(string.IsNullOrEmpty(rel)) {
-					continue;
-				}
-				string dest = Path.Combine(targetFolder, rel.Replace('/', Path.DirectorySeparatorChar));
-				Directory.CreateDirectory(Path.GetDirectoryName(dest) ?? targetFolder);
-				using Stream src = pair.Value.Open();
-				using FileStream outStream = new(dest, FileMode.Create, FileAccess.Write);
-				src.CopyTo(outStream);
 			}
 		}
 

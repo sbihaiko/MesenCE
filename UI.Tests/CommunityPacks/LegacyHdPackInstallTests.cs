@@ -9,11 +9,12 @@ using Xunit;
 namespace Mesen.Tests.CommunityPacks
 {
 	//Coverage for the host-free hd-legacy install helpers (MEI-v1 §2.3): the
-	//zip-slip normalization mirrors MepPack::NormalizeRelativePath, and the
+	//zip-slip normalization mirrors MepPack::NormalizeRelativePath, the
 	//pack-root discovery mirrors FindFallbackSubfolder/DiscoverPrimaryRoot
-	//(ADR-0120). These are the exact rules that decide where a community
-	//legacy HD pack's hires.txt lands, so the classic HdPacks/<rom>/ loader
-	//picks it up (ADR-0040 §5).
+	//(ADR-0120), and ExtractToFolder unwraps a single nested zip while that
+	//inner archive is still open. These are the exact rules that decide
+	//where a community legacy HD pack's hires.txt lands, so the classic
+	//HdPacks/<rom>/ loader picks it up (ADR-0040 §5).
 	public class LegacyHdPackInstallTests
 	{
 		// --- NormalizeZipPath -------------------------------------------------
@@ -184,6 +185,92 @@ namespace Mesen.Tests.CommunityPacks
 				.ToList();
 
 			Assert.Equal(new[] { "Ash1.png", "hires.txt" }, rels);
+		}
+
+		[Fact]
+		public void ExtractToFolder_NestedWrapperZip_WritesPackRoot()
+		{
+			//Zelda Remastered's Drive zip is a wrapper: one root-level nested
+			//zip holds hires.txt. Extract must run while that inner archive is
+			//still open (ObjectDisposedException otherwise).
+			byte[] innerBytes;
+			using(MemoryStream innerMs = new()) {
+				using(ZipArchive inner = new(innerMs, ZipArchiveMode.Create, true)) {
+					CreateEntry(inner, "hires.txt", "<scale>4</scale>");
+					CreateEntry(inner, "Link.png", "png");
+				}
+				innerBytes = innerMs.ToArray();
+			}
+
+			using MemoryStream outerMs = new();
+			using(ZipArchive outer = new(outerMs, ZipArchiveMode.Create, true)) {
+				ZipArchiveEntry nested = outer.CreateEntry("ZeldaRemastered.zip");
+				using(Stream stream = nested.Open()) {
+					stream.Write(innerBytes, 0, innerBytes.Length);
+				}
+				CreateEntry(outer, "readme.txt", "wrapper");
+			}
+			outerMs.Position = 0;
+
+			string dest = NewTempDir();
+			try {
+				using ZipArchive zip = new(outerMs, ZipArchiveMode.Read);
+				Assert.True(LegacyHdPackInstall.ExtractToFolder(zip, dest, "Legend of Zelda, The (USA)", out string error), error);
+				Assert.True(File.Exists(Path.Combine(dest, "hires.txt")));
+				Assert.True(File.Exists(Path.Combine(dest, "Link.png")));
+				Assert.False(File.Exists(Path.Combine(dest, "readme.txt")));
+			} finally {
+				Directory.Delete(dest, true);
+			}
+		}
+
+		[Fact]
+		public void ExtractToFolder_FlatPackRoot_WritesOnlyUnderRoot()
+		{
+			using MemoryStream ms = new();
+			using(ZipArchive zip = new(ms, ZipArchiveMode.Create, true)) {
+				CreateEntry(zip, "Contra80s-v1.1/Contra (U) [!]/hires.txt", "def");
+				CreateEntry(zip, "Contra80s-v1.1/Contra (U) [!]/Ash1.png", "png");
+				CreateEntry(zip, "Contra80s-v1.1/changelog.txt", "out");
+			}
+			ms.Position = 0;
+
+			string dest = NewTempDir();
+			try {
+				using ZipArchive zip = new(ms, ZipArchiveMode.Read);
+				Assert.True(LegacyHdPackInstall.ExtractToFolder(zip, dest, "Contra (USA)", out string error), error);
+				Assert.True(File.Exists(Path.Combine(dest, "hires.txt")));
+				Assert.True(File.Exists(Path.Combine(dest, "Ash1.png")));
+				Assert.False(File.Exists(Path.Combine(dest, "changelog.txt")));
+			} finally {
+				Directory.Delete(dest, true);
+			}
+		}
+
+		[Fact]
+		public void ExtractToFolder_NoHiresTxt_ReturnsFalse()
+		{
+			using MemoryStream ms = new();
+			using(ZipArchive zip = new(ms, ZipArchiveMode.Create, true)) {
+				CreateEntry(zip, "readme.txt", "no pack");
+			}
+			ms.Position = 0;
+
+			string dest = NewTempDir();
+			try {
+				using ZipArchive zip = new(ms, ZipArchiveMode.Read);
+				Assert.False(LegacyHdPackInstall.ExtractToFolder(zip, dest, "Zelda", out string error));
+				Assert.Contains("hires.txt", error, StringComparison.Ordinal);
+			} finally {
+				Directory.Delete(dest, true);
+			}
+		}
+
+		private static string NewTempDir()
+		{
+			string dest = Path.Combine(Path.GetTempPath(), "mesen-legacy-hd-" + Guid.NewGuid().ToString("N"));
+			Directory.CreateDirectory(dest);
+			return dest;
 		}
 
 		private static void CreateEntry(ZipArchive zip, string name, string content)

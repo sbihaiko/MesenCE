@@ -57,6 +57,8 @@ AOT/publish flow (see `.github/AGENTS.md` for the CI split).
 - `CommunityPacks/CommunityPackCatalogMatcherTests` covers SHA1/`sha1s`
   matching and the same-game identity fallback (`SameGame`); keep the
   `rom: {}` never-auto-matches case when touching the matcher.
+- `CommunityPacks/LegacyHdPackInstallTests` covers nested-wrapper extract
+  (`ExtractToFolder` must write while the inner zip is still open).
 - Never add a `PackageReference` to Avalonia, or a `ProjectReference` to
   `UI/UI.csproj` — that reintroduces the native/SDL2 dependency this project
   is built to avoid.
