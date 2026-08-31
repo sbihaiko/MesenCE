@@ -80,6 +80,9 @@ NO_INTRO_TARGETS = {
     "ninja gaiden usa": {
         "source": "Mesen CheatDb.Nes.json 'Ninja Gaiden (USA)' sha1 (issue #145)",
         "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
+        "alt_sha1": [
+            "15F245161179AB1959B7DC20E82ADD024D23AA3D",  # MesenCE GetMepRomSha1 Ninja Gaiden (1989) (Tecmo) (No-Intro)
+        ],
     },
     "metroid usa": {
         "source": "MesenCE GetMepRomSha1 of Metroid (USA) (issue #148)",

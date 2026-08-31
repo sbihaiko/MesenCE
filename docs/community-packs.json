@@ -216,7 +216,10 @@
       "name": "Ninja Gaiden (USA) \u2014 community submission",
       "pack_id": "issue-145",
       "rom": {
-        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85"
+        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
+        "sha1s": [
+          "15F245161179AB1959B7DC20E82ADD024D23AA3D"
+        ]
       },
       "sha256": "04d1678ff3c0a60cb8a2d972cd44b7d7347e1bc2f307c4a826a304730b2bb668",
       "system": "nes",
