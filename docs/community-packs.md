@@ -25,6 +25,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Donkey Kong (JU) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/144) |
 | Ninja Gaiden (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/145) |
 | Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/147) |
+| Metroid (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/148) |
 
 Packs are ranked by community 👍 votes. Try a pack, and if you like it, give
 it a 👍 — your vote helps others discover the community’s favorites. Every
