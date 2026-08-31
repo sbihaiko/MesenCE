@@ -56,7 +56,12 @@ namespace Mesen
 				//Could not find configuration file, show wizard
 				DependencyHelper.ExtractNativeDependencies(ConfigManager.HomeFolder);
 				App.ShowConfigWindow = true;
-				BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
+				try {
+					BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
+				} catch(Exception ex) {
+					LogStartupException(ex);
+					throw;
+				}
 				if(File.Exists(ConfigManager.GetConfigFile())) {
 					//Configuration done, restart process
 					Process.Start(Program.ExePath);
@@ -78,10 +83,35 @@ namespace Mesen
 			instance.Init(args);
 			if(instance.FirstInstance) {
 				Program.CommandLineArgs = (string[])args.Clone();
-				BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
+				try {
+					BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
+				} catch(Exception ex) {
+					LogStartupException(ex);
+					throw;
+				}
 			}
 
 			return 0;
+		}
+
+		private static void LogStartupException(Exception ex)
+		{
+			try {
+				string message = $"[Startup] Unhandled exception in Program.Main - application aborted.\n{ex}";
+				try {
+					Console.Error.WriteLine(message);
+				} catch {
+					//Console may not be attached (GUI app) - ignore.
+				}
+				//Write directly to the log file: at this early point in startup the
+				//core MessageManager may not be initialized, so this is the only
+				//reliable place a boot-time exception can be recorded for diagnosis.
+				string logPath = Path.Combine(ConfigManager.HomeFolder, "mesen.log");
+				File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n\n");
+			} catch {
+				//Nothing more we can do this early in startup; swallowing here keeps
+				//a logging failure from masking the real boot-time exception.
+			}
 		}
 
 		private static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
