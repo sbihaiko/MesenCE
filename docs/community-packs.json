@@ -391,6 +391,26 @@
       "validated_at": "2026-08-31T00:16:44Z",
       "verdict": "accepted",
       "votes": 1
+    },
+    {
+      "content_id": "369fb4b8917cd87f8a825611fe38c5ff18b1f546b2399d7f768e820718669148",
+      "game": "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin)",
+      "issue": 147,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) \u2014 community submission",
+      "pack_id": "issue-147",
+      "rom": {},
+      "sha256": "d72fa67fe8d956bf2aeb1bd11f9abf0002137e94469a70ab05aec0f78e897335",
+      "system": "nes",
+      "url": "https://www.mediafire.com/file/fl3rk77d6nuv7fl/Super_Mario_Bros._%28JU%29_%28PRG0%29_%5B%21%5D_Paper_Version.zip/file",
+      "validated_at": "2026-08-31T00:35:38Z",
+      "verdict": "accepted",
+      "votes": 1
     }
   ],
   "updated": "2026-08-31"
