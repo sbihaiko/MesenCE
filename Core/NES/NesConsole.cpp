@@ -414,7 +414,16 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		MessageManager::DisplayMessage("HDPack", "ROM patch skipped: it replaces the game's music with the pack's OGG tracks, which are turned off - the game's own music plays instead");
 		MessageManager::Log("[HDPack] <patch> skipped: the pack's <bgm> patch would mute the game while 'Audio (OGG)' is off (turn the audio layer on to use the pack's music)");
 	} else if(!_hdData->PatchesByHash.empty()) {
-		auto result = _hdData->PatchesByHash.find(romFile.GetSha1Hash());
+		//HDNes <patch> lines are keyed by a 40-hex ROM sha1. Community packs
+		//typically store the No-Intro PRG+CHR hash (ADR-0044); VirtualFile::
+		//GetSha1Hash is the whole file including the 16-byte iNES header.
+		//Try both so a pack written for either convention still applies.
+		string wholeFileSha1 = romFile.GetSha1Hash();
+		string noIntroSha1 = MepPackManager::ComputeNoIntroSha1(romFile);
+		auto result = _hdData->PatchesByHash.find(wholeFileSha1);
+		if(result == _hdData->PatchesByHash.end() && noIntroSha1 != wholeFileSha1) {
+			result = _hdData->PatchesByHash.find(noIntroSha1);
+		}
 		if(result != _hdData->PatchesByHash.end()) {
 			VirtualFile patchFile = result->second;
 			romFile.ApplyPatch(patchFile);
@@ -427,7 +436,9 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 			WarnAboutSilentPatchedMusic();
 			MessageManager::Log("[HDPack] <patch> hash mismatch - applied '" + _hdData->PatchesByHash.begin()->second + "' anyway (ApplyPatchOnHashMismatch)");
 		} else {
-			MessageManager::Log("[HDPack] <patch> skipped: no entry for this ROM's sha1 " + romFile.GetSha1Hash() + " (enable 'apply patches on hash mismatch' to force it)");
+			MessageManager::Log("[HDPack] <patch> skipped: no entry for this ROM's sha1 " + wholeFileSha1 +
+				(noIntroSha1 != wholeFileSha1 ? (" / no-intro " + noIntroSha1) : "") +
+				" (enable 'apply patches on hash mismatch' to force it)");
 		}
 	}
 

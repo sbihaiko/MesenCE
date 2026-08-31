@@ -22,7 +22,10 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/media/`,
   for the contract.
 - `community-pack-intake-handoff.md` — agent brief to submit researched
   HD/MEP packs through the Issue Form pipeline (allow-listed ZIP only;
-  do not hand-edit the generated catalog). Not a player-facing guide.
+  do not hand-edit pack rows into the generated catalog). Extra ROM
+  hashes for auto-install belong in `scripts/rom_target.py`;
+  `community-packs.json`'s `rom.sha1`/`rom.sha1s` must match that map.
+  Not a player-facing guide.
 - `hd-pack-authoring.md` - human-facing guide for community HD/MEP pack
   submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
   summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.

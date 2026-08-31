@@ -173,7 +173,11 @@
       "pack_id": "liquidzgit/hdnes:super-mario-bros",
       "rom": {
         "crc32": "7C26958E",
-        "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7"
+        "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",
+        "sha1s": [
+          "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7",
+          "FEFA1097449A3A11EBF8C6199E905996C5DC8FBD"
+        ]
       },
       "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
       "system": "nes",
@@ -216,7 +220,12 @@
       "license": "unknown",
       "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
       "pack_id": "pepcodes/hdnes-graphics-pac:pac-man-namco-us-1993",
-      "rom": {},
+      "rom": {
+        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
+        "sha1s": [
+          "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08"
+        ]
+      },
       "sha256": "0d4e9d794149f8ea889ad962b4baea218812d9bd5bf49dc7575078a867e47a96",
       "system": "nes",
       "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
@@ -364,7 +373,12 @@
       "license": "unknown",
       "name": "Donkey Kong (JU) \u2014 community submission",
       "pack_id": "issue-144",
-      "rom": {},
+      "rom": {
+        "sha1": "D222DBBA5BD3716BBF62CA91167C6A9D15C60065",
+        "sha1s": [
+          "2C4B1D653194DF0996D54D9DE9188B270D0337D9"
+        ]
+      },
       "sha256": "dc3f61d6b1dd1418398add4b8dca0f8eb660cb3443d5f5b3646451f042d763fd",
       "system": "nes",
       "url": "https://www.mediafire.com/file/5xgz6dr0tyiqm6g/Donkey_Kong_%28JU%29_HD_Pack.zip/file",
@@ -384,7 +398,9 @@
       "license": "unknown",
       "name": "Ninja Gaiden (USA) \u2014 community submission",
       "pack_id": "issue-145",
-      "rom": {},
+      "rom": {
+        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85"
+      },
       "sha256": "04d1678ff3c0a60cb8a2d972cd44b7d7347e1bc2f307c4a826a304730b2bb668",
       "system": "nes",
       "url": "https://drive.google.com/uc?export=download&id=1W5F3omSYMBNOkjouMjdXrVlG0FM5bcMx",
@@ -404,7 +420,13 @@
       "license": "unknown",
       "name": "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) \u2014 community submission",
       "pack_id": "issue-147",
-      "rom": {},
+      "rom": {
+        "sha1": "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7",
+        "sha1s": [
+          "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",
+          "FEFA1097449A3A11EBF8C6199E905996C5DC8FBD"
+        ]
+      },
       "sha256": "d72fa67fe8d956bf2aeb1bd11f9abf0002137e94469a70ab05aec0f78e897335",
       "system": "nes",
       "url": "https://www.mediafire.com/file/fl3rk77d6nuv7fl/Super_Mario_Bros._%28JU%29_%28PRG0%29_%5B%21%5D_Paper_Version.zip/file",

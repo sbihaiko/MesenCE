@@ -32,12 +32,18 @@ private:
 	string _hdPackFolder;
 	unordered_map<string, HdPackCondition*> _conditionsByName;
 	unordered_map<string, HdPackBitmapInfo*> _backgroundsByName;
+	unordered_map<string, string> _packFilesByLower;
+	bool _packFilesIndexed = false;
 
 	HdPackLoader();
 
 	bool InitializeLoader(VirtualFile& romPath, HdPackData* data);
 	bool LoadFile(string filename, vector<uint8_t>& fileData);
 	bool CheckFile(string filename);
+	bool CheckFileExact(const string& filename);
+	void TrimTokens(vector<string>& tokens);
+	void IndexPackFiles();
+	string ResolvePackRelativePath(string filename);
 
 	bool LoadPack();
 	void InitializeHdPack();

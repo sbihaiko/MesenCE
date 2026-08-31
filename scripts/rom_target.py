@@ -50,6 +50,36 @@ NO_INTRO_TARGETS = {
         "source_dump": "Super Mario Bros. 1 (1985) (Nintendo).nes",
         "sha1": "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",
         "crc32": "7C26958E",
+        "alt_sha1": [
+            "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7",  # GetMepRomSha1 Super Mario Bros. (JU) (PRG0)
+            "FEFA1097449A3A11EBF8C6199E905996C5DC8FBD",  # CheatDb Super Mario Bros. (World)
+        ],
+    },
+    "super mario bros ju prg0 [!] paper version paper mario bros reskin": {
+        "source": "MesenCE GetMepRomSha1 of Super Mario Bros. (JU) (PRG0) [!] (issue #147 paper reskin)",
+        "sha1": "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7",
+        "alt_sha1": [
+            "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",  # Super Mario Bros. 1 (1985) (Nintendo)
+            "FEFA1097449A3A11EBF8C6199E905996C5DC8FBD",  # CheatDb Super Mario Bros. (World)
+        ],
+    },
+    "donkey kong ju": {
+        "source": "MesenCE GetMepRomSha1 of Donkey Kong (JU) (issue #144)",
+        "sha1": "D222DBBA5BD3716BBF62CA91167C6A9D15C60065",
+        "alt_sha1": [
+            "2C4B1D653194DF0996D54D9DE9188B270D0337D9",  # CheatDb Donkey Kong (World) (Rev A)
+        ],
+    },
+    "ninja gaiden usa": {
+        "source": "Mesen CheatDb.Nes.json 'Ninja Gaiden (USA)' sha1 (issue #145)",
+        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
+    },
+    "pac man namco us 1993": {
+        "source": "MesenCE GetMepRomSha1 of Pac-Man (U) [!] (issue #140)",
+        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
+        "alt_sha1": [
+            "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08",  # CheatDb Pac-Man (USA) (Namco)
+        ],
     },
     "mega man usa": {
         "source_dump": "Mega Man (1987) (Capcom).nes",

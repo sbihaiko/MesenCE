@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <algorithm>
+#include <filesystem>
 #include <unordered_map>
 #include "NES/HdPacks/HdPackLoader.h"
 #include "NES/HdPacks/HdPackConditions.h"
@@ -149,23 +150,74 @@ bool HdPackLoader::LoadHdNesPack(VirtualFile& romFile, HdPackData& outData)
 	return false;
 }
 
-bool HdPackLoader::CheckFile(string filename)
+void HdPackLoader::TrimTokens(vector<string>& tokens)
+{
+	for(string& token : tokens) {
+		token = StringUtilities::Trim(token);
+	}
+}
+
+bool HdPackLoader::CheckFileExact(const string& filename)
 {
 	if(_loadFromZip) {
 		return _reader.CheckFile(filename);
-	} else {
-		ifstream file(FolderUtilities::CombinePath(_hdPackFolder, filename), ios::in | ios::binary);
-		if(file.good()) {
-			return true;
-		}
 	}
+	ifstream file(FolderUtilities::CombinePath(_hdPackFolder, filename), ios::in | ios::binary);
+	return file.good();
+}
 
-	return false;
+void HdPackLoader::IndexPackFiles()
+{
+	if(_packFilesIndexed) {
+		return;
+	}
+	_packFilesIndexed = true;
+	if(_loadFromZip) {
+		for(const string& entry : _reader.GetFileList()) {
+			_packFilesByLower[StringUtilities::ToLower(entry)] = entry;
+		}
+		return;
+	}
+	if(_hdPackFolder.empty()) {
+		return;
+	}
+	vector<string> files = FolderUtilities::GetFilesInFolder(_hdPackFolder, {}, true, 12);
+	std::filesystem::path root = std::filesystem::u8path(_hdPackFolder);
+	for(const string& full : files) {
+		string rel = std::filesystem::u8path(full).lexically_relative(root).generic_u8string();
+		if(rel.empty() || rel == ".") {
+			continue;
+		}
+		_packFilesByLower[StringUtilities::ToLower(rel)] = rel;
+	}
+}
+
+string HdPackLoader::ResolvePackRelativePath(string filename)
+{
+	filename = StringUtilities::Trim(filename);
+	if(filename.empty() || CheckFileExact(filename)) {
+		return filename;
+	}
+	IndexPackFiles();
+	auto result = _packFilesByLower.find(StringUtilities::ToLower(filename));
+	if(result != _packFilesByLower.end()) {
+		if(result->second != filename) {
+			MessageManager::Log("[HDPack] resolved '" + filename + "' as '" + result->second + "'");
+		}
+		return result->second;
+	}
+	return filename;
+}
+
+bool HdPackLoader::CheckFile(string filename)
+{
+	return CheckFileExact(ResolvePackRelativePath(filename));
 }
 
 bool HdPackLoader::LoadFile(string filename, vector<uint8_t>& fileData)
 {
 	fileData.clear();
+	filename = ResolvePackRelativePath(filename);
 
 	if(_loadFromZip) {
 		if(_reader.ExtractFile(filename, fileData)) {
@@ -244,30 +296,37 @@ bool HdPackLoader::LoadPack()
 			vector<string> tokens;
 			if(lineContent.substr(0, 6) == "<tile>") {
 				tokens = StringUtilities::Split(lineContent.substr(6), ',');
+				TrimTokens(tokens);
 				ProcessTileTag(tokens, conditions);
 			} else if(lineContent.substr(0, 12) == "<background>") {
 				tokens = StringUtilities::Split(lineContent.substr(12), ',');
+				TrimTokens(tokens);
 				ProcessBackgroundTag(tokens, conditions);
 			} else if(lineContent.substr(0, 11) == "<condition>") {
 				tokens = StringUtilities::Split(lineContent.substr(11), ',');
+				TrimTokens(tokens);
 				ProcessConditionTag(tokens, false);
 				ProcessConditionTag(tokens, true);
 			} else if(lineContent.substr(0, 5) == "<img>") {
-				lineContent = lineContent.substr(5);
+				lineContent = StringUtilities::Trim(lineContent.substr(5));
 				if(!ProcessImgTag(lineContent)) {
 					return false;
 				}
 			} else if(lineContent.substr(0, 10) == "<addition>") {
 				tokens = StringUtilities::Split(lineContent.substr(10), ',');
+				TrimTokens(tokens);
 				ProcessAdditionTag(tokens);
 			} else if(lineContent.substr(0, 10) == "<fallback>") {
 				tokens = StringUtilities::Split(lineContent.substr(10), ',');
+				TrimTokens(tokens);
 				ProcessFallbackTag(tokens);
 			} else if(lineContent.substr(0, 5) == "<bgm>") {
 				tokens = StringUtilities::Split(lineContent.substr(5), ',');
+				TrimTokens(tokens);
 				ProcessBgmTag(tokens);
 			} else if(lineContent.substr(0, 5) == "<sfx>") {
 				tokens = StringUtilities::Split(lineContent.substr(5), ',');
+				TrimTokens(tokens);
 				ProcessSfxTag(tokens);
 			} else if(lineContent.substr(0, 5) == "<ver>") {
 				_data->Version = stoi(lineContent.substr(5));
@@ -284,12 +343,15 @@ bool HdPackLoader::LoadPack()
 				}
 			} else if(lineContent.substr(0, 10) == "<overscan>") {
 				tokens = StringUtilities::Split(lineContent.substr(10), ',');
+				TrimTokens(tokens);
 				ProcessOverscanTag(tokens);
 			} else if(lineContent.substr(0, 7) == "<patch>") {
 				tokens = StringUtilities::Split(lineContent.substr(7), ',');
+				TrimTokens(tokens);
 				ProcessPatchTag(tokens);
 			} else if(lineContent.substr(0, 9) == "<options>") {
 				tokens = StringUtilities::Split(lineContent.substr(9), ',');
+				TrimTokens(tokens);
 				ProcessOptionTag(tokens);
 			}
 		}
@@ -742,9 +804,13 @@ void HdPackLoader::ProcessBackgroundTag(vector<string>& tokens, vector<HdPackCon
 			switch(condition->GetConditionType()) {
 				case HdPackConditionType::TileAtPos:
 				case HdPackConditionType::SpriteAtPos:
+				case HdPackConditionType::TileNearby:
+				case HdPackConditionType::SpriteNearby:
 				case HdPackConditionType::MemoryCheck:
 				case HdPackConditionType::MemoryCheckConstant:
 				case HdPackConditionType::FrameRange:
+				case HdPackConditionType::PositionCheckX:
+				case HdPackConditionType::PositionCheckY:
 					backgroundInfo.Conditions.push_back(condition);
 					break;
 
@@ -888,11 +954,25 @@ vector<HdPackCondition*> HdPackLoader::ParseConditionString(string conditionStri
 	conditions.reserve(3);
 
 	auto processCondition = [&] {
-		auto result = _conditionsByName.find(conditionName.ToString());
+		string name = StringUtilities::Trim(conditionName.ToString());
+		if(name.empty()) {
+			conditionName.Reset();
+			return;
+		}
+		auto result = _conditionsByName.find(name);
+		if(result == _conditionsByName.end()) {
+			string lower = StringUtilities::ToLower(name);
+			for(auto& entry : _conditionsByName) {
+				if(StringUtilities::ToLower(entry.first) == lower) {
+					result = _conditionsByName.find(entry.first);
+					break;
+				}
+			}
+		}
 		if(result != _conditionsByName.end()) {
 			conditions.push_back(result->second);
 		} else {
-			logError("Condition not found: " + string(conditionName.ToString()));
+			logError("Condition not found: " + name);
 		}
 		conditionName.Reset();
 	};
@@ -915,10 +995,16 @@ vector<HdPackCondition*> HdPackLoader::ParseConditionString(string conditionStri
 
 bool HdPackLoader::ParseBooleanValue(string value)
 {
-	if(value != "Y" && value != "N") {
-		logError("Invalid boolean value: " + value);
+	value = StringUtilities::Trim(value);
+	string upper = StringUtilities::ToUpper(value);
+	if(upper == "Y" || upper == "YES" || upper == "TRUE" || upper == "1") {
+		return true;
 	}
-	return value == "Y";
+	if(upper == "N" || upper == "NO" || upper == "FALSE" || upper == "0") {
+		return false;
+	}
+	logError("Invalid boolean value: " + value);
+	return false;
 }
 
 void HdPackLoader::LoadCustomPalette()

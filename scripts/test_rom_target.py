@@ -93,14 +93,20 @@ def check_catalog_games_resolve():
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     resolved = {p.get("game") for p in catalog["packs"]
                 if rom_target.resolve_rom_target(p.get("game"))}
-    # Exactly the four games with a usable target hash may resolve. Three are
-    # backed by a dump whose PRG+CHR crc32 the Mesen game database recognizes;
-    # Zelda is backed by the sha1 the pack itself declares (<supportedRom>/
-    # <patch>), which is what the patch matcher compares against. Every other
-    # current pack has no verified dump yet, so its entry MUST keep `rom: {}`
-    # rather than carry a guessed hash (see rom_target.py).
-    expected = {"Super_Mario_Bros", "Mega Man (USA)", "Contra (USA)",
-                "The Legend of Zelda (USA)", "Castlevania (USA)"}
+    # Games with a usable target hash (verified dump, CheatDb, or GetMepRomSha1
+    # from a loaded No-Intro dump). Everything else MUST keep `rom: {}` rather
+    # than carry a guessed hash (see rom_target.py).
+    expected = {
+        "Super_Mario_Bros",
+        "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin)",
+        "Mega Man (USA)",
+        "Contra (USA)",
+        "The Legend of Zelda (USA)",
+        "Castlevania (USA)",
+        "Donkey Kong (JU)",
+        "Ninja Gaiden (USA)",
+        "Pac-Man (Namco, US, 1993)",
+    }
     if resolved != expected:
         fail(f"resolved set mismatch: got {sorted(resolved)}, expected {sorted(expected)}")
         return
@@ -119,6 +125,14 @@ def check_catalog_games_resolve():
         if extra not in zelda_alts:
             fail(f"Zelda (USA) should also match CheatDb dumps via alt_sha1: {zelda_alts!r}")
             return
+    smb = rom_target.resolve_rom_target("Super_Mario_Bros")
+    if not smb or "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7" not in (smb.get("alt_sha1") or []):
+        fail(f"Super Mario Bros should also match JU PRG0 via alt_sha1: {smb!r}")
+        return
+    dk = rom_target.resolve_rom_target("Donkey Kong (JU)")
+    if not dk or dk.get("sha1") != "D222DBBA5BD3716BBF62CA91167C6A9D15C60065":
+        fail(f"Donkey Kong (JU) should resolve the loaded dump sha1: {dk!r}")
+        return
     ok(f"{len(resolved)} of {len(catalog['packs'])} catalog games resolve "
        f"({sorted(resolved)}); the rest keep rom {{}} until a verified target hash exists")
 

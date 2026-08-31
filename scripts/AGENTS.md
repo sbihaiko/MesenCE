@@ -66,12 +66,21 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
+- `rom_target.py` — versioned map from catalog game name to No-Intro /
+  CheatDb / `GetMepRomSha1` hashes (`sha1` + optional `alt_sha1`/`crc32`).
+  Extra ROM revisions go here so auto-install can match; the catalog
+  generator copies them into `rom.sha1`/`rom.sha1s`. Checked by
+  `python3 scripts/test_rom_target.py`.
 - `validate-specs.py`, `mep_lint.py`, `classify_pack_brief.py`, `mep_recipe.py`, `mep_recipe_assemble.py`,
   `mep_compare.py`, `mep_render_audio.py`,
   `gen_hdpack_test_roms.py`, `gen_mep_test_pack.py`, `gen_mep_fallback_test_pack.py`,
   `gen_mep_recipe_fixture.py`, `make_gb_test_rom.py`, `validate_hdpack_dump.py` -
   Python spec/golden/pack validators and test-ROM/test-pack generators; no
-  emulator dependency.
+  emulator dependency. `mep_lint.py`'s `HDPACK_BOOL` and `BG_ALLOWED_KINDS`
+  must stay in lockstep with `HdPackLoader::ParseBooleanValue` (trimmed
+  Y/N plus yes/no/true/false/0/1) and `ProcessBackgroundTag` (Nearby and
+  PositionCheckX/Y are valid on `<background>`; hmirror/vmirror/bgpriority/
+  originPosition still are not).
   `mei_rules.py` (F6.3b, ADR-0138 §28/§29) is the dependency-free leaf
   holding the MEI v1.1 constraint set: `SYSTEMS`/`SHA1_UPPER`/`CRC32_UPPER`/
   `MD5_UPPER`/`SHA256_HEX`/`SEMVER`/`MEI_KINDS`, the kind-conditional

@@ -108,18 +108,23 @@ NES_TAGS = {"ver", "scale", "system", "supportedRom", "img", "tile", "background
 GBSMS_TAGS = {"ver", "scale", "system", "img", "tile", "supportedRom"}
 COND_TYPES = {"tileAtPosition", "tileNearby", "spriteAtPosition", "spriteNearby", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange", "positionCheckX", "positionCheckY", "originPositionCheckX", "originPositionCheckY"}
 GLOBAL_CONDS = {"hmirror", "vmirror", "bgpriority", "sppalette0", "sppalette1", "sppalette2", "sppalette3"}
-# HdPackLoader::ProcessBackgroundTag (Core/NES/HdPacks/HdPackLoader.cpp) only
-# pushes a <background>'s HdPackCondition into BackgroundInfo.Conditions when
-# its GetConditionType() is one of TileAtPos/SpriteAtPos/MemoryCheck/
-# MemoryCheckConstant/FrameRange; anything else logs "Invalid condition type
-# for background" and drops that <background> entry (same non-fatal
-# checkConstraint()+return path as a missing PNG file). tileNearby/
-# spriteNearby and every GLOBAL_CONDS name (hmirror/vmirror/bgpriority/
-# sppaletteN, each its own distinct condition type) are valid in <tile> but
-# not <background> — confirmed live against Contra80s-v1.1 (a `tileNearby`
-# condition named 'norris8' loads fine in <tile> at line 413 but is rejected
-# at lines 417/420 when reused in <background>).
-BG_ALLOWED_KINDS = {"tileAtPosition", "spriteAtPosition", "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant", "ppuMemoryCheckConstant", "frameRange"}
+# HdPackLoader::ProcessBackgroundTag (Core/NES/HdPacks/HdPackLoader.cpp)
+# attaches a <background> condition when its type is TileAtPos/SpriteAtPos/
+# TileNearby/SpriteNearby/MemoryCheck/MemoryCheckConstant/FrameRange/
+# PositionCheckX/Y (Nearby is evaluated at (0,0) so it matches the pack's
+# stored tile offset, same as TileAtPos). Anything else logs "Invalid
+# condition type for background" and drops only that condition — the
+# <background> entry itself still loads. GLOBAL_CONDS names (hmirror/
+# vmirror/bgpriority/sppaletteN) stay tile-only: they dereference the
+# per-tile pointer, which is null when a background is chosen.
+BG_ALLOWED_KINDS = {
+    "tileAtPosition", "spriteAtPosition", "tileNearby", "spriteNearby",
+    "memoryCheck", "ppuMemoryCheck", "memoryCheckConstant",
+    "ppuMemoryCheckConstant", "frameRange", "positionCheckX", "positionCheckY",
+}
+HDPACK_BOOL_TRUE = {"Y", "YES", "TRUE", "1"}
+HDPACK_BOOL_FALSE = {"N", "NO", "FALSE", "0"}
+HDPACK_BOOL = HDPACK_BOOL_TRUE | HDPACK_BOOL_FALSE
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 HEX40 = re.compile(r"^[0-9A-Fa-f]{40}$")
 
@@ -747,7 +752,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
         # when parsing a pack definition line (both must agree, or a pack
         # that loads fine could still fail lint, or vice versa).
         params = params.replace("\\", "/")
-        tokens = params.split(",") if params else []
+        tokens = [t.strip() for t in params.split(",")] if params else []
         if tag not in NES_TAGS:
             rep.warning(where, f"unknown tag <{tag}>")
             continue
@@ -757,7 +762,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 rep.warning(where, f"condition '{base}' not found — dropped from this entry's condition list, file parse continues (HdPackLoader::ParseConditionString)")
             elif tag == "background" and (base in GLOBAL_CONDS or cond_kinds.get(base) not in BG_ALLOWED_KINDS):
                 kind_label = cond_kinds.get(base, base)
-                rep.warning(where, f"condition '{base}' ({kind_label}) is not valid in <background> — HdPackLoader::ProcessBackgroundTag silently drops this entry (logs 'Invalid condition type for background' and falls back to the original NES graphics for it, no crash)")
+                rep.warning(where, f"condition '{base}' ({kind_label}) is not valid in <background> — HdPackLoader::ProcessBackgroundTag drops this condition (logs 'Invalid condition type for background'); the background entry still loads")
         if tag == "ver":
             version = int(tokens[0]) if tokens and tokens[0].isdigit() else 0
             if version < 100:
@@ -833,7 +838,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                         rep.warning(where, f"<background> priority out of 0..39: {prio} — entry is dropped, not registered (HdPackLoader::ProcessBackgroundTag checkConstraint)")
                 except ValueError:
                     rep.error(where, f"<background> priority is not an integer: {tokens[4]!r}")
-            elif len(tokens) > 4 and tokens[4] not in ("Y", "N"):
+            elif len(tokens) > 4 and tokens[4].upper() not in HDPACK_BOOL:
                 rep.warning(where, f"<background> field 5 (priority flag, pre-106 format) should be Y/N: {tokens[4]!r} — treated as N (HdPackLoader::ParseBooleanValue)")
             if len(tokens) > 7 and tokens[7] not in ("Alpha", "Add", "Subtract"):
                 rep.warning(where, f"<background> unknown blend mode {tokens[7]!r} — falls back to Alpha (HdPackLoader::ProcessBackgroundTag)")
@@ -921,7 +926,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                     rep.warning(where, f"<patch> {patch_file} only exists as '{real.split('/')[-1]}' — loads on macOS/Windows, fails on Linux (HdPackLoader::ProcessPatchTag)")
                 else:
                     rep.warning(where, f"<patch> file does not exist: {patch_file} — patch not applied, load continues (HdPackLoader::ProcessPatchTag)")
-            rep.info(where, "<patch> matches by the whole ROM file's sha1; other revisions load the pack without the patch (ADR-0044)")
+            rep.info(where, "<patch> matches by the whole-file sha1 or the No-Intro PRG+CHR sha1 (ADR-0044); other revisions load the pack without the patch")
     if version == 0:
         rep.error(rel, "<ver> missing")
     for name, lines in sorted(missing.items(), key=lambda kv: -len(kv[1])):
@@ -957,7 +962,7 @@ def lint_gbsms_hires(src: Source, rel: str, rep: Report):
         _, tag, params = parsed
         # See the matching normalization in lint_nes_hires above.
         params = params.replace("\\", "/")
-        tokens = params.split(",") if params else []
+        tokens = [t.strip() for t in params.split(",")] if params else []
         if tag not in GBSMS_TAGS:
             rep.warning(where, f"unknown tag for GB/SMS: <{tag}>")
             continue
@@ -993,9 +998,10 @@ def lint_gbsms_hires(src: Source, rel: str, rep: Report):
                 rep.error(where, f"<tile> references nonexistent <img> #{idx}")
             elif imgs[idx] and (x + 8 * scale > imgs[idx][0] or y + 8 * scale > imgs[idx][1]):
                 rep.error(where, f"<tile> at ({x},{y}) is outside image #{idx}")
-            if tokens[6] not in ("Y", "N"):
+            default_flag = tokens[6].upper()
+            if default_flag not in HDPACK_BOOL:
                 rep.error(where, f"<tile> defaultTile must be Y/N: {tokens[6]}")
-            key = (tokens[1].upper(), tokens[2].upper() if tokens[6] == "N" else "*")
+            key = (tokens[1].upper(), tokens[2].upper() if default_flag in HDPACK_BOOL_FALSE else "*")
             if key in keys:
                 rep.warning(where, f"<tile> duplicate key (first at line {keys[key]}); the last one wins")
             else:
