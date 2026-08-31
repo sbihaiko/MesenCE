@@ -144,6 +144,22 @@ namespace
 		return MepPack::FindFallbackSubfolder(normalizedEntries, romName);
 	}
 
+	//ADR-0145: true when the file at "path" is a BPS patch (magic "BPS1").
+	//BPS is the only patch format that self-validates the applied output
+	//(embedded source+output CRC32, rejected on mismatch), so it is the only
+	//one safe to attempt optimistically on a SHA1 mismatch. Format is decided
+	//by content, not extension, matching VirtualFile::ApplyPatch's sniffing.
+	bool IsBpsPatchFile(const string& path)
+	{
+		ifstream in(path, std::ios::in | std::ios::binary);
+		if(!in) {
+			return false;
+		}
+		char magic[4];
+		in.read(magic, 4);
+		return in.gcount() == 4 && memcmp(magic, "BPS1", 4) == 0;
+	}
+
 	//Combines the discovered fallback prefix into outFolder (ADR-0120, no
 	//other output changes) and (re)writes the cache stamp
 	void FinalizePreparedZip(const string& fallbackPrefix, const string& stampPath, const string& stamp, string& outFolder)
@@ -327,6 +343,9 @@ void MepPackManager::Clear()
 	_packs.clear();
 	_rejected.clear();
 	_packIdentityByContainer.clear();
+	_optimisticContainers.clear();
+	_texturesContainer.clear();
+	_texturesIsOptimistic = false;
 }
 
 string MepPackManager::GetSiblingFolder(VirtualFile& romFile)
@@ -452,6 +471,18 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 		ReadInstallIdentity(pack);
 	}
 
+	//ADR-0145: snapshot the winning textures pack for the renderer's health
+	//signal. Taken here on the emulation thread (after ScanAndMatch and
+	//ReadInstallIdentity, so the resolution matches what the consoles see when
+	//they call GetSectionPath during LoadRom) - the decode thread's
+	//HandleLowTextureMatchRate must never read _packs directly.
+	_texturesContainer.clear();
+	_texturesIsOptimistic = false;
+	if(const MepPack* texturesPack = GetPackForSection(MepSectionType::Textures)) {
+		_texturesContainer = texturesPack->ContainerName;
+		_texturesIsOptimistic = IsOptimistic(*texturesPack);
+	}
+
 	if(!_packs.empty()) {
 		for(const MepPack& pack : _packs) {
 			string sections;
@@ -462,7 +493,8 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 			}
 			string origin = pack.Origin == MepPackOrigin::Sibling ? "sibling folder" : pack.FromZip ? "zip" :
 																																	"folder";
-			Log("pack '" + pack.Name + "' v" + pack.Version + (pack.Synthetic ? " [folder convention]" : "") + " matches ROM sha1 " + _romSha1 + " (" + origin + " '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
+			string matchNote = IsOptimistic(pack) ? " does not match ROM sha1 " + _romSha1 + " (optimistic, ADR-0145 - textures/BPS may still apply)" : " matches ROM sha1 " + _romSha1;
+			Log("pack '" + pack.Name + "' v" + pack.Version + (pack.Synthetic ? " [folder convention]" : "") + matchNote + " (" + origin + " '" + pack.ContainerName + "', sections: " + sections + (IsPackEnabled(pack.ContainerName) ? ")" : ") - disabled by user"));
 		}
 	}
 }
@@ -591,7 +623,13 @@ void MepPackManager::ScanAndMatch()
 	string cacheRoot = FolderUtilities::CombinePath(packsFolder, CacheFolderName);
 
 	std::error_code ec;
-	vector<std::pair<string, MepPack>> candidates; //lower-cased name -> pack
+	struct Candidate
+	{
+		string key; //lower-cased container name (precedence key, ADR-0040)
+		MepPack pack;
+		bool exactSha1Match;
+	};
+	vector<Candidate> candidates;
 	for(fs::directory_iterator it(fs::u8path(packsFolder), ec), end; !ec && it != end; it.increment(ec)) {
 		const fs::directory_entry& entry = *it;
 		string name = entry.path().filename().u8string();
@@ -627,7 +665,9 @@ void MepPackManager::ScanAndMatch()
 				//has to look there for the recovery to ever be reachable.
 				string rootLeaf = FolderUtilities::GetFilename(rootFolder, true);
 				if(StringUtilities::ToLower(rootLeaf) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, pack)) {
-					candidates.emplace_back(StringUtilities::ToLower(name), std::move(pack));
+					//ADR-0145: a name-matched convention pack is a definite
+					//match (its target *is* the current ROM), never optimistic
+					candidates.push_back({ StringUtilities::ToLower(name), std::move(pack), true });
 				} else if(fromZip) {
 					_rejected.push_back(name + ": " + error);
 					Log("rejected '" + name + "': " + error);
@@ -639,23 +679,33 @@ void MepPackManager::ScanAndMatch()
 			continue;
 		}
 
-		if(!pack.MatchesSha1(_romSha1)) {
-			continue;
+		//ADR-0145: no mandatory exact SHA1 match. A pack that matches stays
+		//ahead; one that does not is kept as an *optimistic* candidate so its
+		//textures (and self-validating BPS patches) can still apply to a
+		//near-matching ROM (same game, different dump/revision). The bg-tile
+		//match-rate health signal auto-disables a wrong-game pack.
+		bool exactMatch = pack.MatchesSha1(_romSha1);
+		if(!exactMatch) {
+			_optimisticContainers.insert(StringUtilities::ToLower(name));
 		}
-		candidates.emplace_back(StringUtilities::ToLower(name), std::move(pack));
+		candidates.push_back({ StringUtilities::ToLower(name), std::move(pack), exactMatch });
 	}
 
-	//Deterministic precedence: case-insensitive lexicographic container name
-	//(ADR-0040); ties (same lower-cased name) fall back to the exact name
-	std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
-		if(a.first != b.first) {
-			return a.first < b.first;
+	//Deterministic precedence: exact SHA1 matches first (ADR-0145), then
+	//case-insensitive lexicographic container name (ADR-0040); ties (same
+	//lower-cased name) fall back to the exact name
+	std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+		if(a.exactSha1Match != b.exactSha1Match) {
+			return a.exactSha1Match; //exact matches win over optimistic ones
 		}
-		return a.second.ContainerName < b.second.ContainerName;
+		if(a.key != b.key) {
+			return a.key < b.key;
+		}
+		return a.pack.ContainerName < b.pack.ContainerName;
 	});
 
 	for(auto& candidate : candidates) {
-		_packs.push_back(std::move(candidate.second));
+		_packs.push_back(std::move(candidate.pack));
 	}
 }
 
@@ -672,6 +722,41 @@ void MepPackManager::SetPackEnabled(const string& containerName, bool enabled)
 bool MepPackManager::IsPackEnabled(const string& containerName) const
 {
 	return _disabledContainers.find(StringUtilities::ToLower(containerName)) == _disabledContainers.end();
+}
+
+bool MepPackManager::IsOptimistic(const MepPack& pack) const
+{
+	return _optimisticContainers.find(StringUtilities::ToLower(pack.ContainerName)) != _optimisticContainers.end();
+}
+
+const MepPatch* MepPackManager::FindFirstBpsPatch(const MepPack& pack) const
+{
+	for(const MepPatch& patch : pack.Patches) {
+		string path = FolderUtilities::CombinePath(pack.RootFolder, patch.File);
+		if(IsBpsPatchFile(path)) {
+			return &patch;
+		}
+	}
+	return nullptr;
+}
+
+void MepPackManager::HandleLowTextureMatchRate()
+{
+	//ADR-0145: the HD renderer reports a sustained low bg-tile match rate.
+	//Only act when the winning textures pack was applied *optimistically*
+	//(SHA1 mismatch): a low rate there is a wrong-game signal, and disabling
+	//it makes the next load stop trying it. An exact-match pack with low
+	//coverage is legitimate (partial packs) and must NOT be auto-disabled.
+	//Uses the load-time snapshot - this runs on the decode thread, so it must
+	//not touch _packs/_optimisticContainers (those are written on the
+	//emulation thread by LoadForRom). The snapshot already reflects the winning
+	//textures pack as resolved enabled at load time.
+	if(_texturesContainer.empty() || !_texturesIsOptimistic) {
+		return;
+	}
+	SetPackEnabled(_texturesContainer, false);
+	MessageManager::DisplayMessage("MEP", "Textures auto-disabled: the pack does not match this game's tiles (applied without an exact SHA1 match)");
+	Log("textures pack '" + _texturesContainer + "' auto-disabled: bg-tile match rate stayed low (optimistic SHA1-mismatch apply, ADR-0145) - re-enable from the pack list if this is a false positive");
 }
 
 void MepPackManager::SetPreferredMepPack(const string& romSha1, const string& packId)
@@ -705,6 +790,11 @@ const MepPack* MepPackManager::FindPreferredPack(MepSectionType type) const
 	}
 	for(const MepPack& pack : _packs) {
 		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName) && EffectivePackId(pack) == it->second) {
+			//ADR-0145: an optimistic pack may serve Textures, but Audio/Synth
+			//still require an exact match (out of the ADR's scope)
+			if(type != MepSectionType::Textures && IsOptimistic(pack)) {
+				continue;
+			}
 			return &pack;
 		}
 	}
@@ -734,6 +824,13 @@ const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 	const MepPack* autoOnlyFallback = nullptr;
 	for(const MepPack& pack : _packs) {
 		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName)) {
+			//ADR-0145: Textures may come from an optimistic (SHA1-mismatched)
+			//pack - the renderer falls through per-tile and the health signal
+			//auto-disables a wrong-game pack. Audio/Synth stay gated on an
+			//exact match (out of the ADR's scope: offsets/timing per-ROM).
+			if(type != MepSectionType::Textures && IsOptimistic(pack)) {
+				continue;
+			}
 			if(pack.Sections[(int)type].HasHuman) {
 				return &pack;
 			}
@@ -812,12 +909,22 @@ bool MepPackManager::ApplyPatches(VirtualFile& romFile)
 		}
 		const MepPatch* patch = pack.FindPatch(_romSha1);
 		if(!patch) {
-			if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
+			//ADR-0145: relax the exact-match gate by format. A self-validating
+			//BPS patch (embedded source+output CRC32, refuses bad applies) is
+			//safe to attempt on a SHA1 mismatch - a near-matching ROM (same
+			//game, different dump/revision) can take it. IPS/UPS have no such
+			//validation and stay gated on an exact match, unless the user has
+			//explicitly opted into the ApplyPatchOnHashMismatch override.
+			const MepPatch* bpsPatch = FindFirstBpsPatch(pack);
+			if(bpsPatch) {
+				patch = bpsPatch;
+				Log("pack '" + pack.Name + "': no patch for sha1 " + _romSha1 + " - attempting self-validating BPS patch '" + patch->File + "' optimistically (ADR-0145)");
+			} else if(_emu->GetSettings()->GetEnhancementPackConfig().ApplyPatchOnHashMismatch) {
 				patch = &pack.Patches[0];
 				MessageManager::DisplayMessage("MEP", "Applying patch made for another ROM revision (hash override enabled)");
 				Log("pack '" + pack.Name + "': no patch for sha1 " + _romSha1 + " - applying '" + patch->File + "' anyway (ApplyPatchOnHashMismatch)");
 			} else {
-				Log("pack '" + pack.Name + "': patch skipped - none of its " + std::to_string(pack.Patches.size()) + " patches[] entries matches sha1 " + _romSha1);
+				Log("pack '" + pack.Name + "': patch skipped - none of its " + std::to_string(pack.Patches.size()) + " patches[] entries matches sha1 " + _romSha1 + " and no self-validating BPS patch to fall back to");
 				continue;
 			}
 		}

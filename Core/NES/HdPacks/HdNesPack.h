@@ -65,6 +65,28 @@ private:
 	bool _useCachedTile = false;
 	int32_t _scrollX = 0;
 
+	//Diagnostic counters (issue: community pack visually indistinguishable from
+	//original tiles in gameplay - measure how often GetMatchingTile actually
+	//finds a tile vs falls through to the original NES tile, logged periodically).
+	//ADR-0145: the match rate is also a runtime health signal - sustained low
+	//coverage on an *optimistic* textures pack (applied without an exact SHA1
+	//match) means the pack is probably for a different game; the MEP manager
+	//warns and auto-disables it.
+	uint64_t _debugBgTileLookups = 0;
+	uint64_t _debugBgTileMatches = 0;
+	uint64_t _debugFrameCount = 0;
+	//Consecutive ~60-frame windows with a match rate below
+	//kHealthSignalMinMatchRate; when this reaches kHealthSignalWindowLimit the
+	//health signal fires once and is latched until the pack is reloaded
+	uint32_t _lowMatchRateWindows = 0;
+	bool _healthSignalFired = false;
+	//ADR-0145 health-signal thresholds: <25% bg-tile match for 5 consecutive
+	//one-second windows (~5s) is treated as "this textures pack is not for this
+	//game" - long enough to ride out a menu/loading screen, short enough to
+	//notice a wrong-game pack quickly
+	static constexpr int kHealthSignalMinMatchRate = 25;
+	static constexpr uint32_t kHealthSignalWindowLimit = 5;
+
 	unordered_map<HdTileKey, vector<HdPackAdditionalSpriteInfo>> _additionalTilesByKey;
 
 	template<HdPackBlendMode blendMode>

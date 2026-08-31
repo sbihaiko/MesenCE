@@ -8,6 +8,8 @@
 #include "NES/NesDefaultVideoFilter.h"
 #include "Shared/MessageManager.h"
 #include "Shared/EmuSettings.h"
+#include "Shared/Emulator.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/PNGHelper.h"
 
@@ -552,6 +554,10 @@ void HdNesPack<scale>::GetPixels(uint32_t x, uint32_t y, HdPpuPixelInfo& pixelIn
 	bool renderOriginalTiles = ((_hdData->OptionFlags & (int)HdPackOptions::DontRenderOriginalTiles) == 0);
 	if(pixelInfo.Tile.TileIndex != HdPpuTileInfo::NoTile) {
 		hdPackTileInfo = GetCachedMatchingTile(x, y, &pixelInfo.Tile);
+		_debugBgTileLookups++;
+		if(hdPackTileInfo) {
+			_debugBgTileMatches++;
+		}
 	}
 
 	int lowestBgSprite = 999;
@@ -632,6 +638,42 @@ void HdNesPack<scale>::Process(HdScreenInfo* hdScreenInfo, uint32_t* outputBuffe
 		}
 
 		ProcessGrayscaleAndEmphasis(hdScreenInfo->ScreenTiles[i * 256], outputBuffer + lineStartIndex, screenWidth);
+	}
+
+	//Diagnostic: log the background tile match ratio once per second (~60
+	//frames) so a community pack's actual runtime coverage can be measured
+	//without a debugger - "no visible difference" reports need this to tell
+	//"tiles aren't matching" apart from "tiles match but look the same".
+	//ADR-0145: the same ratio is a health signal for optimistic packs - when
+	//it stays below a floor for a sustained window, ask the MEP manager to
+	//auto-disable a textures pack that was applied without an exact SHA1 match
+	//(it is likely for a different game; exact-match packs are left alone).
+	_debugFrameCount++;
+	if(_debugFrameCount % 60 == 0 && _debugBgTileLookups > 0) {
+		int matchRatePct = (int)((_debugBgTileMatches * 100) / _debugBgTileLookups);
+		MessageManager::Log(
+			"[HDPack-Debug] bg tile match rate: " + std::to_string(_debugBgTileMatches) + "/" + std::to_string(_debugBgTileLookups) +
+			" (" + std::to_string(matchRatePct) + "%) over last ~60 frames"
+		);
+
+		if(!_healthSignalFired) {
+			if(matchRatePct < kHealthSignalMinMatchRate) {
+				_lowMatchRateWindows++;
+				if(_lowMatchRateWindows >= kHealthSignalWindowLimit) {
+					//Only the renderer knows the real coverage; the manager
+					//decides whether the active textures pack is optimistic.
+					if(Emulator* emulator = _console ? _console->GetEmulator() : nullptr) {
+						emulator->GetEnhancementPackManager()->HandleLowTextureMatchRate();
+					}
+					_healthSignalFired = true; //one shot per HD pack load
+				}
+			} else {
+				_lowMatchRateWindows = 0;
+			}
+		}
+
+		_debugBgTileLookups = 0;
+		_debugBgTileMatches = 0;
 	}
 }
 

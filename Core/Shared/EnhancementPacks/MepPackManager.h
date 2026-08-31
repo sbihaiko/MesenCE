@@ -29,6 +29,13 @@ private:
 	//Containers disabled by the user (UI/config), lower-cased; independent of
 	//the current scan so it can be pushed at any time
 	unordered_set<string> _disabledContainers;
+	//ADR-0145: containers whose pack.json targets did not match the loaded
+	//ROM's No-Intro SHA1 (lower-cased). They stay in _packs as *optimistic*
+	//candidates: textures apply (HdNesPack falls through per-tile, no
+	//corruption) and BPS patches may attempt (self-validating); IPS patches
+	//and audio/synth still require an exact match. Kept here, not on MepPack,
+	//because the Makefile does not track header dependencies (ABI-safe).
+	unordered_set<string> _optimisticContainers;
 	//P.3 (PRD Part B §5): per-ROM-sha1 preferred pack_id pushed by the
 	//UI from EnhancementPackConfig. Keyed by the No-Intro sha1 of the ROM as
 	//loaded, so the right choice applies per ROM; "" or a missing key means no
@@ -45,6 +52,13 @@ private:
 	string _romFolder; //folder holding the ROM (or its archive)
 	vector<MepPack> _packs; //matching packs, precedence order (first wins)
 	vector<string> _rejected; //"<container>: <reason>" for the UI/log
+	//ADR-0145: snapshot of the winning textures pack, taken on the emulation
+	//thread at load time. The HD renderer's health signal runs on the decode
+	//thread, so it must NOT read _packs/_optimisticContainers directly - it
+	//reads this snapshot instead (written once per load, before the render
+	//thread can fire) and asks to auto-disable when match rate stays low.
+	string _texturesContainer;
+	bool _texturesIsOptimistic = false;
 	bool _bootstrapping = false;
 	string _bootstrapSaveFolder; //owns the char* handed to HdPackBuilderOptions
 
@@ -66,6 +80,13 @@ private:
 	//preferred one for the loaded ROM, or nullptr when there is no preference
 	//or no matching pack
 	const MepPack* FindPreferredPack(MepSectionType type) const;
+	//ADR-0145: true when the pack was kept as an optimistic candidate (no
+	//target matched the loaded ROM's No-Intro SHA1)
+	bool IsOptimistic(const MepPack& pack) const;
+	//ADR-0145: the first patch in "pack" whose file is a self-validating BPS
+	//patch (magic "BPS1"), nullptr when none - the only patch format safe to
+	//apply optimistically on a SHA1 mismatch
+	const MepPatch* FindFirstBpsPatch(const MepPack& pack) const;
 	//Extracts a zip to the cache; rejects zips with neither a root pack.json
 	//nor a name matching the ROM, unless MepPack::FindFallbackSubfolder
 	//(ADR-0120, last-priority) locates an unambiguous ROM-named subfolder
@@ -139,7 +160,17 @@ public:
 	//when nothing applies. P.3: a pack whose effective pack_id equals the
 	//preferred one for the loaded ROM's sha1 wins even when lexicographically
 	//later (PRD §5 - the preference overrides the ADR-0040 default order).
+	//ADR-0145: Textures may come from an optimistic (SHA1-mismatched) pack -
+	//the renderer falls through per-tile and a low match-rate health signal
+	//auto-disables it; Audio/Synth still require an exact match (out of scope).
 	const MepPack* GetPackForSection(MepSectionType type) const;
+
+	//ADR-0145: runtime health signal from the HD renderer. When the bg-tile
+	//match rate stays low on an *optimistic* textures pack (applied without an
+	//exact SHA1 match), warns the user and auto-disables that container so the
+	//next load stops trying it. No-op when the active textures pack is an exact
+	//match (low coverage there is legitimate, not a wrong-game signal).
+	void HandleLowTextureMatchRate();
 
 	//One line per matching pack, tab-separated:
 	//container\tname\tversion\tauthor\tlicense\tsections(comma)\tenabled(0/1)\tfromZip(0/1)\tpackId\tcontentId
