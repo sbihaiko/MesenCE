@@ -351,7 +351,27 @@
       "validated_at": "2026-08-30T20:59:57Z",
       "verdict": "accepted",
       "votes": 1
+    },
+    {
+      "content_id": "608e3172049aa33613b858092bf5c3f967d6a008343231b26bfa9a039bd955cc",
+      "game": "Donkey Kong (JU)",
+      "issue": 144,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Donkey Kong (JU) \u2014 community submission",
+      "pack_id": "issue-144",
+      "rom": {},
+      "sha256": "dc3f61d6b1dd1418398add4b8dca0f8eb660cb3443d5f5b3646451f042d763fd",
+      "system": "nes",
+      "url": "https://www.mediafire.com/file/5xgz6dr0tyiqm6g/Donkey_Kong_%28JU%29_HD_Pack.zip/file",
+      "validated_at": "2026-08-31T00:13:13Z",
+      "verdict": "accepted",
+      "votes": 1
     }
   ],
-  "updated": "2026-08-30"
+  "updated": "2026-08-31"
 }
