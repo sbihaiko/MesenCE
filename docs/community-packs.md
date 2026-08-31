@@ -13,7 +13,6 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Super_Mario_Bros-2 | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/134) |
 | Duck_Hunt | NES | LiQuiDz | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/131) |
 | Ice_Climber_(VS) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/133) |
-| 1942 | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/128) |
 | Super_Mario_Bros | NES | Cubear | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/135) |
 | Ice_Climber | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/132) |
 | Pac-Man (Namco, US, 1993) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/140) |

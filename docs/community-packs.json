@@ -136,33 +136,6 @@
       "votes": 1
     },
     {
-      "content_id": "5381f048e3990f4fff642eb35d61ca9ba064b457fe3855f5771821b2115c51ef",
-      "game": "1942",
-      "issue": 128,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "1942 \u2014 community submission",
-      "pack_id": "liquidzgit/hdnes:1942",
-      "rom": {
-        "sha1": "7F57EACE7CADA7C36412A50F2299231B304527A8",
-        "sha1s": [
-          "D608F769333B13DA9C67F07599E405944893A950"
-        ]
-      },
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
-      "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T21:37:03Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
       "content_id": "e5c1360a853ead350ed99c6baba2357ec1d47a86556b6cb981b6e19850d86488",
       "game": "Super_Mario_Bros",
       "issue": 135,
