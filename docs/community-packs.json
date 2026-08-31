@@ -426,7 +426,9 @@
       "license": "unknown",
       "name": "Metroid (USA) \u2014 community submission",
       "pack_id": "issue-148",
-      "rom": {},
+      "rom": {
+        "sha1": "FDBFC7871962F72A1EF57E5A7E456164FB93430B"
+      },
       "sha256": "2421f9378b82d3bdfb67d490b00718a266fda75e8afa9c775075a9bb74df68a1",
       "system": "nes",
       "url": "https://www.mediafire.com/file/c2ve8zcek72w21e/Metroid_HD.zip/file",

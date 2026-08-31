@@ -81,6 +81,10 @@ NO_INTRO_TARGETS = {
         "source": "Mesen CheatDb.Nes.json 'Ninja Gaiden (USA)' sha1 (issue #145)",
         "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
     },
+    "metroid usa": {
+        "source": "MesenCE GetMepRomSha1 of Metroid (USA) (issue #148)",
+        "sha1": "FDBFC7871962F72A1EF57E5A7E456164FB93430B",
+    },
     "pac man namco us 1993": {
         "source": "MesenCE GetMepRomSha1 of Pac-Man (U) [!] (issue #140)",
         "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
