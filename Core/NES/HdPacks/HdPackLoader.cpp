@@ -888,6 +888,34 @@ void HdPackLoader::ProcessFallbackTag(vector<string>& tokens)
 	_data->FallbackTiles.push_back({ HexUtilities::FromHex(tokens[0]), HexUtilities::FromHex(tokens[1]) });
 }
 
+static bool IsAllDigits(const string& value)
+{
+	if(value.empty()) {
+		return false;
+	}
+	for(char c : value) {
+		if(c < '0' || c > '9') {
+			return false;
+		}
+	}
+	return true;
+}
+
+//<bgm>/<sfx> filenames may contain commas ("Boss 1, Mid Boss A.ogg"). Tokens
+//are album, track, then the filename split on every comma; join them back
+//with ", " (TrimTokens already stripped per-field whitespace).
+static string JoinAudioFilename(const vector<string>& tokens, size_t from, size_t toExclusive)
+{
+	string name;
+	for(size_t i = from; i < toExclusive && i < tokens.size(); i++) {
+		if(i > from) {
+			name += ", ";
+		}
+		name += tokens[i];
+	}
+	return StringUtilities::Trim(name);
+}
+
 int HdPackLoader::ProcessSoundTrack(string albumString, string trackString, string filename)
 {
 	int album = std::stoi(albumString);
@@ -913,19 +941,25 @@ int HdPackLoader::ProcessSoundTrack(string albumString, string trackString, stri
 void HdPackLoader::ProcessBgmTag(vector<string>& tokens)
 {
 	checkConstraint(tokens.size() >= 3, "BGM tag should contain at least 3 parameters");
-	checkConstraintEx(tokens.size() < 5, "BGM tag contains too many parameters");
 
-	int trackId = ProcessSoundTrack(tokens[0], tokens[1], tokens[2]);
+	size_t fileEnd = tokens.size();
+	uint32_t loopPosition = 0;
+	if(tokens.size() > 3 && IsAllDigits(tokens.back())) {
+		loopPosition = (uint32_t)std::stoul(tokens.back());
+		fileEnd = tokens.size() - 1;
+	}
+	string filename = JoinAudioFilename(tokens, 2, fileEnd);
+	checkConstraint(!filename.empty(), "BGM tag is missing the audio filename");
+
+	int trackId = ProcessSoundTrack(tokens[0], tokens[1], filename);
 	if(trackId >= 0) {
 		BgmTrackInfo track = {};
-		if(tokens.size() > 3) {
-			track.LoopPosition = (uint32_t)std::stoul(tokens[3]);
-		}
+		track.LoopPosition = loopPosition;
 
 		if(_loadFromZip) {
-			track.Filename = VirtualFile(_hdPackFolder, tokens[2]);
+			track.Filename = VirtualFile(_hdPackFolder, filename);
 		} else {
-			track.Filename = FolderUtilities::CombinePath(_hdPackFolder, tokens[2]);
+			track.Filename = FolderUtilities::CombinePath(_hdPackFolder, filename);
 		}
 		_data->BgmFilesById[trackId] = track;
 	}
@@ -934,15 +968,17 @@ void HdPackLoader::ProcessBgmTag(vector<string>& tokens)
 void HdPackLoader::ProcessSfxTag(vector<string>& tokens)
 {
 	checkConstraint(tokens.size() >= 3, "SFX tag should contain at least 3 parameters");
-	checkConstraintEx(tokens.size() < 4, "SFX tag contains too many parameters");
 
-	int trackId = ProcessSoundTrack(tokens[0], tokens[1], tokens[2]);
+	string filename = JoinAudioFilename(tokens, 2, tokens.size());
+	checkConstraint(!filename.empty(), "SFX tag is missing the audio filename");
+
+	int trackId = ProcessSoundTrack(tokens[0], tokens[1], filename);
 	if(trackId >= 0) {
 		if(_loadFromZip) {
-			VirtualFile file(_hdPackFolder, tokens[2]);
+			VirtualFile file(_hdPackFolder, filename);
 			_data->SfxFilesById[trackId] = file;
 		} else {
-			_data->SfxFilesById[trackId] = FolderUtilities::CombinePath(_hdPackFolder, tokens[2]);
+			_data->SfxFilesById[trackId] = FolderUtilities::CombinePath(_hdPackFolder, filename);
 		}
 	}
 }

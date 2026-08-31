@@ -423,6 +423,26 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 		return;
 	}
 
+	//NEA audio packs (LiQuiDz 1942, etc.) ship a single .ips/.bps next to
+	//hires.txt but omit the <patch> line. If nothing was declared, register
+	//that file for this ROM so the existing apply path below can use it.
+	if(_hdData->PatchesByHash.empty()) {
+		string looseFolder = FolderUtilities::CombinePath(FolderUtilities::GetHdPackFolder(), FolderUtilities::GetFilename(romFile.GetFileName(), false));
+		vector<string> undeclared = FolderUtilities::GetFilesInFolder(looseFolder, { ".ips", ".bps" }, false);
+		if(undeclared.size() == 1) {
+			string path = undeclared[0];
+			string wholeFileSha1 = romFile.GetSha1Hash();
+			string noIntroSha1 = MepPackManager::ComputeNoIntroSha1(romFile);
+			_hdData->PatchesByHash[wholeFileSha1] = path;
+			if(noIntroSha1 != wholeFileSha1) {
+				_hdData->PatchesByHash[noIntroSha1] = path;
+			}
+			MessageManager::Log("[HDPack] undeclared patch '" + FolderUtilities::GetFilename(path, true) + "' registered for this ROM (hires.txt has no <patch> line)");
+		} else if(undeclared.size() > 1) {
+			MessageManager::Log("[HDPack] " + std::to_string(undeclared.size()) + " undeclared .ips/.bps next to hires.txt - not applied (add a <patch> line)");
+		}
+	}
+
 	//<patch> lines are keyed by the whole-file sha1 of the ROM they were made
 	//for; ADR-0044 adds an explicit override for other revisions
 	EnhancementPackConfig& mepCfg = _emu->GetSettings()->GetEnhancementPackConfig();
