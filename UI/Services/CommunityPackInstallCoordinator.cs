@@ -175,17 +175,13 @@ namespace Mesen.Services
 		private static string JsonEscape(string value) =>
 			value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-		//Clarification 38 consent + 43(c) DisabledPacks gate, then the 43(a)/(b)
+		//AutoInstallCommunityPacks master switch (ADR-0146) + 43(c) DisabledPacks gate, then the 43(a)/(b)
 		//reinstall verdict: Reinstall means our own prior install, safe to clear.
 		private static (CommunityPackInstallOutcome? Gate, string OutFolder) EvaluateGates(
 			EnhancementPackConfig config, CommunityPackCatalogEntry entry, string containerName)
 		{
-			CommunityPackConsentDecision consent = CommunityPackConsentState.Evaluate(
-				config.AutoInstallCommunityPacks, config.CommunityPackAutoInstallConsentGiven);
-			if(consent.MustShowConsentDialog) {
-				return (CommunityPackInstallOutcome.NeedsConsent(), "");
-			}
-			if(!consent.CanDownloadNow) {
+			//ADR-0146: no consent dialog - the master switch alone decides.
+			if(!config.AutoInstallCommunityPacks) {
 				return (CommunityPackInstallOutcome.Skipped("AutoInstallCommunityPacks is off"), "");
 			}
 			if(config.DisabledPacks.Contains(containerName, StringComparer.OrdinalIgnoreCase)) {
@@ -414,14 +410,13 @@ namespace Mesen.Services
 		}
 	}
 
-	public enum CommunityPackInstallStatus { NeedsConsent, Skipped, Installed, Failed, UpdateAvailable }
+	public enum CommunityPackInstallStatus { Skipped, Installed, Failed, UpdateAvailable }
 
 	//Verdict-carrying result of Install(); the caller decides how to surface each case.
 	public sealed record CommunityPackInstallOutcome(
 		CommunityPackInstallStatus Status, string ContainerName, string Message,
 		IReadOnlyList<string> Withheld, IReadOnlyList<CommunityPackDepPrompt> PendingDeps)
 	{
-		public static CommunityPackInstallOutcome NeedsConsent() => new(CommunityPackInstallStatus.NeedsConsent, "", "", Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
 		public static CommunityPackInstallOutcome Skipped(string reason) => new(CommunityPackInstallStatus.Skipped, "", reason, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
 		public static CommunityPackInstallOutcome Failed(string error) => new(CommunityPackInstallStatus.Failed, "", error, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());
 		public static CommunityPackInstallOutcome UpdateAvailable(string message) => new(CommunityPackInstallStatus.UpdateAvailable, "", message, Array.Empty<string>(), Array.Empty<CommunityPackDepPrompt>());

@@ -15,7 +15,7 @@ namespace Mesen.Services
 	//ROM-load entry point of F6.4b-2 (ADR-0138 §4/§37/§38): the thin orchestrator that ties
 	//CommunityPackCatalogFetcher (network) and CommunityPackInstallCoordinator (gates + interop)
 	//together once per loaded ROM, and surfaces the outcome through the emulator's own message
-	//API. Runs off the UI thread; only the first-run consent dialog is marshalled onto it.
+	//API. Runs off the UI thread (ADR-0146: no first-run consent dialog).
 	//Fail-soft by contract: an auto-install must never break a game load, so every failure path
 	//degrades to a one-line message (or silence for the routine "nothing to do" cases).
 	public static class CommunityPackInstallService
@@ -88,15 +88,8 @@ namespace Mesen.Services
 		{
 			string romSha1 = "";
 			try {
-				//§38: the very first automatic download is gated behind an explicit Yes/No prompt,
-				//before the catalog itself is contacted (that GET is already a network access).
-				bool allowed = await Dispatcher.UIThread.InvokeAsync(EnhancementPacksWindow.EnsureCommunityPackAutoInstallConsent);
-				EmuApi.WriteLogEntry("[CommunityPack] consent check: allowed=" + allowed +
-					" ConsentGiven=" + ConfigManager.Config.EnhancementPacks.CommunityPackAutoInstallConsentGiven);
-				if(!allowed) {
-					EmuApi.WriteLogEntry("[CommunityPack] skipped: consent not given / dialog pending");
-					return;
-				}
+				//ADR-0146: no first-run consent prompt - AutoInstallCommunityPacks (checked above)
+				//is the single master switch before the catalog is contacted.
 				romSha1 = EmuApi.GetMepRomSha1();
 				EmuApi.WriteLogEntry("[CommunityPack] romSha1=" + romSha1);
 				lock(_attemptedRomSha1) {
@@ -181,8 +174,7 @@ namespace Mesen.Services
 					break;
 
 				case CommunityPackInstallStatus.Skipped:
-				case CommunityPackInstallStatus.NeedsConsent:
-					//Routine: up to date, disabled by user, consent declined - nothing to say.
+					//Routine: up to date, disabled by user - nothing to say.
 					break;
 			}
 		}

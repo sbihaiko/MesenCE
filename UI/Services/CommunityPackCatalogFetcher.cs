@@ -21,7 +21,7 @@ namespace Mesen.Services
 	//CommunityPackInstallCoordinator, T2): FetchMatchingPackAsync returns exactly a matched
 	//Mesen.Logic catalog-entry DTO plus the verified primary path and a dep-id -> verified path
 	//map for deps downloaded directly - never resolves a `user_supplied` dep (§4), never gates
-	//on CommunityPackReinstallDecision/CommunityPackConsentState (§43/§38), never calls
+	//on CommunityPackReinstallDecision or the AutoInstallCommunityPacks switch (§43/ADR-0146), never calls
 	//EmuApi.InstallMepRecipe (the coordinator owns everything downstream). §41 (PRIORITY 1):
 	//allow-list loaded ONLY via Assembly.GetExecutingAssembly().GetManifestResourceStream, never
 	//the on-disk file-path overload or a repo-relative path (verify_fetcher_no_filesystem_allowlist_load.sh).
