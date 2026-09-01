@@ -2,6 +2,7 @@
   "mep": "1.0.0",
   "name": "F1 Test Tone — pack de exemplo canônico",
   "version": "1.0.0",
+  "id": "f1-test-tone-golden",
   "author": "MesenCE",
   "license": "CC0-1.0",
   "targets": [

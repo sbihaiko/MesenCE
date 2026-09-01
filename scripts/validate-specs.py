@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1.1, MEP-recipe v1 specs and the hires-gbsms draft,
+of the ESP v1, MEP v1, MEI v1.2, MEP-recipe v1 specs and the hires-gbsms draft,
 and enforces the wire format of shared cross-language test fixtures
 (path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
@@ -123,6 +123,14 @@ def validate_mei(path):
         rom = dict(p.get("rom", {}))
         rom.setdefault("system", p.get("system"))
         validate_rom_id(rom, f"{where}.rom", require_sha1=False)
+        # MEI v1.2 §2.4: `rom.sha1s` is an additive list of 40-UPPERCASE-hex alternates, never repeating `rom.sha1`.
+        if "sha1s" in rom:
+            sha1s = rom["sha1s"]
+            check(isinstance(sha1s, list) and len(sha1s) > 0, f"{where}.rom: sha1s must be a non-empty list")
+            for k, alt in enumerate(sha1s if isinstance(sha1s, list) else []):
+                check(isinstance(alt, str) and bool(SHA1_UPPER.match(alt)), f"{where}.rom.sha1s[{k}]: must be 40 UPPERCASE hex digits")
+                check(alt != rom.get("sha1"), f"{where}.rom.sha1s[{k}]: repeats rom.sha1")
+            check(len(set(sha1s)) == len(sha1s) if isinstance(sha1s, list) else True, f"{where}.rom: sha1s has duplicates")
         check("license" not in p or (isinstance(p["license"], str) and p["license"]), f"{where}: license must be a non-empty string when present")
         for j, dep in enumerate(p.get("deps", [])):
             check("license" not in dep or (isinstance(dep["license"], str) and dep["license"]), f"{where}.deps[{j}]: license must be a non-empty string when present")
@@ -198,7 +206,7 @@ def main():
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
-    print("validate-specs: all golden files conform (ESP, MEP, MEI v1.1, MEP-recipe, hires-gbsms draft, path-cases format); "
+    print("validate-specs: all golden files conform (ESP, MEP, MEI v1.2, MEP-recipe, hires-gbsms draft, path-cases format); "
           "mep-nes/pack.json structurally validated; mep + mep-nes lint-checked; MEI catalog validated (golden always, docs/community-packs.json when present)")
 
 if __name__ == "__main__":

@@ -140,7 +140,10 @@ clauses of ADR-0138 §38/§51/§54. The single master switch is the
 `AutoInstallCommunityPacks` setting (default `true`); a per-pack manual
 disable still overrides. An auto-installed accepted pack wins over any local
 bootstrap auto-only pack (ADR-0049, ADR-0050), so accepted community art is
-never masked by a vanilla upscale pack.
+never masked by a vanilla upscale pack. "Accepted" means a live row in
+`docs/community-packs.json` — a closed issue or a bare `pack:valid` label is
+not one — and the de-listing rules (self-contained, verifiable artifact;
+stale shared-zip sha256) are ADR-0148.
 
 ### How it works
 

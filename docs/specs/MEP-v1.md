@@ -1,6 +1,6 @@
 # MEP v1 — MesenCE Enhancement Pack
 
-**Status:** v1.3 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer; 1.2 adds optional `targets[].md5`; 1.3 clarifies §2.1 rule 9 bare-basename discovery (ADR-0121) and §6 "as code" wording for recipes (ADR-0138) — all optional and backward-compatible) ·
+**Status:** v1.4 (stable; 1.1 adds `patches[]`, the folder-form/sibling-folder and the `auto/` layer; 1.2 adds optional `targets[].md5`; 1.3 clarifies §2.1 rule 9 bare-basename discovery (ADR-0121) and §6 "as code" wording for recipes (ADR-0138); 1.4 adds the optional root `id` slug — the pack's product identity, `pack_id` (ADR-0140) — all optional and backward-compatible) ·
 **License of this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mep/pack.json`](golden/mep/pack.json) ·
@@ -111,9 +111,10 @@ pack's author.
 
 ```json
 {
-  "mep": "1.0.0",
+  "mep": "1.4.0",
   "name": "After Burner — Studio FM tuning",
   "version": "1.2.0",
+  "id": "after-burner-studio-fm",
   "author": "exemplo",
   "license": "CC0-1.0",
   "targets": [
@@ -134,6 +135,7 @@ pack's author.
 | `mep` | MUST | targeted MEP spec version (semver). Hosts MUST refuse an unknown major and MAY accept a newer minor, ignoring what they don't recognize |
 | `name` | MUST | human-readable name of the pack |
 | `version` | MUST | pack version, semver |
+| `id` | SHOULD (v1.4) | the pack's **product identity** (`pack_id`, ADR-0140 source (1)): a lowercase slug matching `^[a-z0-9][a-z0-9-]{2,63}$` (the same regex as `scripts/pack_id_rules.py` `SLUG`), unique in the official catalog and **stable across revisions** — `version` identifies the revision, `id` identifies the product, so two pack versions with the same `id` compete for the same catalog slot instead of being listed as competing packs. When absent, hosts and the catalog pipeline MUST NOT refuse the pack; they derive a `pack_id` from the catalog fallbacks instead — `owner/repo` × game for github.com origins (ADR-0140 source (2) as amended by ADR-0143), `issue-<n>` of the accepted submission (source (3)), or `local:<container-name>` for local drops (source (4)). Hosts SHOULD lowercase the value before comparing and MUST ignore a non-matching value as if absent (never fail the load on it); validators (`scripts/mep_lint.py`) accordingly report a missing or malformed `id` as a **warning**, never an error. Added in v1.4 as an optional field, so v1.0–v1.3 packs remain valid unchanged; because unknown fields are ignored (§3.2), `id` MAY appear in a pack declaring any 1.x `mep` value (the golden packs under `docs/specs/golden/mep*/` declare `1.0.0` and carry an `id`) |
 | `author` | SHOULD | author(s) |
 | `license` | SHOULD | SPDX identifier for the pack's content (e.g. `CC0-1.0`, `CC-BY-4.0`). Optional since v1.1 (2026-08-28): when absent, hosts MUST treat the pack as `NOASSERTION` (licence not declared), MUST NOT refuse it for that reason alone, and SHOULD surface "not declared" wherever they show pack metadata |
 | `targets` | MUST, ≥1 | ROMs the pack applies to (see §4) |

@@ -10,8 +10,8 @@ validation via `python3 scripts/validate-specs.py` (repo root).
 | Spec | File | Status | What it defines |
 |---|---|---|---|
 | **ESP v1** | [`ESP-v1.md`](ESP-v1.md) | stable | grammar and fields of the Enhanced Audio preset (`EnhancedAudioPresets.cfg`) |
-| **MEP v1.3** | [`MEP-v1.md`](MEP-v1.md) | stable | pack envelope (`pack.json` + No-Intro hash + textures/audio/synth sections); 1.1: `patches[]`, folder-form/sibling-folder without `pack.json`, `auto/` layer; 1.3: §2.1 rule 9 bare-basename discovery, §6 recipes-as-data |
-| **MEI v1** | [`MEI-v1.md`](MEI-v1.md) | stable | federated pack-discovery manifest + trust model |
+| **MEP v1.4** | [`MEP-v1.md`](MEP-v1.md) | stable | pack envelope (`pack.json` + No-Intro hash + textures/audio/synth sections); 1.1: `patches[]`, folder-form/sibling-folder without `pack.json`, `auto/` layer; 1.3: §2.1 rule 9 bare-basename discovery, §6 recipes-as-data; 1.4: optional root `id` slug (`pack_id`, ADR-0140) |
+| **MEI v1.2** | [`MEI-v1.md`](MEI-v1.md) | stable | federated pack-discovery manifest + trust model; 1.1: `kind`, optional `rom.sha1`, `deps[]`, `recipe`; 1.2: additive `rom.sha1s[]` (§2.4) |
 | **MEP Recipe v1** | [`MEP-recipe-v1.md`](MEP-recipe-v1.md) | stable | declarative re-packaging of split-distribution packs (`copy`/`glob`/`rename`/`rewrite-paths`) |
 | **hires.txt GB/SMS** | [`hires-gbsms-v1-draft.md`](hires-gbsms-v1-draft.md) | **draft** | backward-compatible extension of the HDNes format for GB/SMS (pending community review — ADR-0004) |
 

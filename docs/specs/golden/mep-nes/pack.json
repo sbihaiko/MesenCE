@@ -2,6 +2,7 @@
   "mep": "1.0.0",
   "name": "MEP NES Golden — palettes-per-shape fixture",
   "version": "1.0.0",
+  "id": "mep-nes-golden-palettes-per-shape",
   "author": "MesenCE",
   "license": "CC0-1.0",
   "targets": [

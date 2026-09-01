@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mei_catalog_entry — MEI v1.1 `packs[]` entry assembly for the community
+"""mei_catalog_entry — MEI v1.2 `packs[]` entry assembly for the community
 pack catalog (ADR-0138 §26/§27/§28, split off `generate_community_pack_
 catalog.py` per §35's 200-line-per-file guardrail). Depends only on the
 stdlib-only leaf `mei_rules` (never on `community_pack_markdown` or the
@@ -19,7 +19,7 @@ from __future__ import annotations
 import mei_rules
 import pack_id_rules
 
-MEI_VERSION = "1.1.0"
+MEI_VERSION = "1.2.0"
 CATALOG_NAME = "MesenCE community packs"
 MAINTAINER = "sbihaiko"
 
@@ -143,7 +143,7 @@ def pack_version_fields(recipe):
 
 
 def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0, crc32=None):
-    """Assembles one MEI v1.1 packs[] entry (§26/§27). `kind` from
+    """Assembles one MEI v1.2 packs[] entry (§26/§27). `kind` from
     `mei_rules.resolve_kind` (§29); `votes` the community 👍 count (P.2,
     additive MAY). `crc32` is the legacy `rom.crc32` fallback for `hd-legacy`
     targets resolved from the game name (rom_target); a declared `rom_sha1`
@@ -184,7 +184,7 @@ def mei_entry_preconditions_ok(pack_url, pack_hash, system):
 
 
 def build_catalog(entries, updated):
-    """Wraps entries into the top-level MEI v1.1 catalog document (§26),
+    """Wraps entries into the top-level MEI v1.2 catalog document (§26),
     self-checking each via `mei_entry_conforms` first (§28).
     """
     packs = [e for e in entries if mei_entry_conforms(e, e.get("kind"))]

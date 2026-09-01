@@ -57,6 +57,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import mep_content_id  # ADR-0139 tree content_id of the discovered pack root
+import pack_id_rules  # ADR-0140 source (1): SLUG shape of the MEP root `id`
 
 SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg"}
 PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg"}
@@ -178,6 +179,11 @@ class Source:
 class Report:
     def __init__(self):
         self.items = []
+        # Lower-cased paths of the ROM patches the manifest actually wires
+        # (`<patch>` tags, pack.json `patches[]`), filled while linting so
+        # scan_bundled_patches can tell a wired patch from one that merely
+        # rides along in the archive (ADR-0148 amending ADR-0144).
+        self.wired_patches = set()
 
     def add(self, level, where, msg):
         self.items.append((level, where, msg))
@@ -633,6 +639,24 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
         rep.warning(where, "'license' not declared (hosts read it as NOASSERTION)")
     elif not isinstance(root["license"], str) or not root["license"]:
         rep.error(where, "'license' must be a non-empty string when present")
+    # MEP-v1 §3.1 (v1.4): `id` is SHOULD — the pack's product identity
+    # (pack_id, ADR-0140 source (1)). Hosts MUST never fail a load on it: a
+    # non-matching value is ignored as if absent and the catalog derives a
+    # pack_id from the fallbacks (owner/repo x game, issue-n,
+    # local:<container>). So every `id` finding is a warning, never an error
+    # (a lint error would flip the CI verdict to `invalid`, contradicting the
+    # spec). The check mirrors pack_id_rules.mep_id_from_meta: strip +
+    # lowercase, then match SLUG.
+    if "id" not in root:
+        rep.warning(where, "'id' not declared (a catalog fallback pack_id — owner/repo x game, issue-n or local:<container> — will be used; ADR-0140)")
+    elif not isinstance(root["id"], str):
+        rep.warning(where, "'id' must be a string; ignored (a catalog fallback pack_id will be used; MEP-v1 §3.1)")
+    else:
+        folded = root["id"].strip().lower()
+        if not pack_id_rules.SLUG.match(folded):
+            rep.warning(where, f"'id' {root['id']!r} is not a slug [a-z0-9][a-z0-9-]{{2,63}}; ignored (a catalog fallback pack_id will be used; MEP-v1 §3.1)")
+        elif folded != root["id"]:
+            rep.warning(where, f"'id' {root['id']!r} should be written lowercase (hosts compare it as {folded!r}; MEP-v1 §3.1)")
     if isinstance(root.get("mep"), str):
         if not SEMVER.match(root["mep"]):
             rep.error(where, f"'mep' is not semver: {root['mep']}")
@@ -664,6 +688,7 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
                 if not isinstance(p, dict) or not isinstance(p.get("file"), str):
                     rep.error(where, f"patches[{i}] needs 'file'")
                     continue
+                rep.wired_patches.add((root_prefix + p["file"]).lower())
                 # MEI v1.1 §2.3: patch ROM sha1 MAY be absent (an un-hashed
                 # patch is applied on user override with a warning).
                 p_sha1 = p.get("sha1")
@@ -915,6 +940,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                 rep.error(where, "<patch> needs file,sha1")
                 continue
             patch_file, patch_sha1 = m.group(1).strip(), m.group(2)
+            rep.wired_patches.add((folder + patch_file).lower())
             if not src.exists(folder + patch_file):
                 real = src.exists_icase(folder + patch_file)
                 if real:
@@ -1088,19 +1114,26 @@ def scan_bundled_patches(src: Source, rep: Report):
     src). The classifier's ADR-0144 audio exception hinges on "the zip
     bundles a .ips/.bps ROM patch that IS present" — and it cannot see
     inside a nested zip from a byte-read of the outer archive, so the
-    linter, which DOES recurse into nested zips, is the authority. An
-    unreferenced patch (no <patch> tag) is exactly the LiQuiDz repo shape:
-    hires.txt declares .ogg tracks that the patch's install-time
-    extract-audio flow (ADR-0135) generates, and the patch simply rides
-    along in the zip. Reported at `info` level but printed even under
-    --quiet (see main), so the classifier always sees it."""
+    linter, which DOES recurse into nested zips, is the authority. Since
+    ADR-0148 (amending ADR-0144) presence alone is not enough: the patch
+    must also be wired — referenced by a `<patch>` line or a pack.json
+    `patches[]` entry — or the host never applies it and the extract-audio
+    flow (ADR-0135) never runs. An unreferenced patch riding along in the
+    zip is exactly the LiQuiDz repo shape that made #128 (1942) contribute
+    nothing, so each line says which case it is. Reported at `info` level
+    but printed even under --quiet (see main), so the classifier always
+    sees it."""
     seen = set()
+    wired_bases = {w.rsplit("/", 1)[-1] for w in rep.wired_patches}
     for name in sorted(src.names):
         lower = name.lower()
         if not lower.endswith((".ips", ".bps")) or lower in seen:
             continue
         seen.add(lower)
-        rep.info("pack", f"bundled patch: {name} (present)")
+        if lower in rep.wired_patches or lower.rsplit("/", 1)[-1] in wired_bases:
+            rep.info("pack", f"bundled patch: {name} (present, wired — applied on load)")
+        else:
+            rep.info("pack", f"bundled patch: {name} (present, NOT wired — no <patch> line / patches[] entry, never applied; ADR-0148)")
 
 
 def main(argv):

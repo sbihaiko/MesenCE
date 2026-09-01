@@ -318,7 +318,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   later in the comment is never mistaken for the first).
   `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27; split per
   F6.3b/§35 into three files, none over 200 lines) writes
-  `docs/community-packs.json` (an MEI v1.1 catalog, `mei: "1.1.0"`) next to
+  `docs/community-packs.json` (an MEI v1.2 catalog, `mei: "1.2.0"`, the v1.2
+  addition being the additive `rom.sha1s[]`, MEI-v1 §2.4) next to
   `docs/community-packs.md` in the same run, and adds an "External assets"
   column to the Markdown table (`yes` when the entry has `deps`) alongside
   the six pre-existing columns. The generator itself is now a thin
@@ -641,6 +642,14 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `./scripts/checks/verify_status_kind_parity.sh` (AC-6, F6.3b) - the
   Status->kind pairing is defined exactly once, in
   `mei_rules.STATUS_TO_KIND`; see `checks/` above.
+- `python3 scripts/checks/verify_adr_refs.py` (PRD slice D1, 2026-09-01) -
+  every `ADR-NNNN` cited in `.dev-squad/adr/`, `docs/`, `.github/`,
+  `CLAUDE.md` and any `AGENTS.md` resolves to `.dev-squad/adr/NNNN-*.md`;
+  the ADR-0035 retired ids and the 2026-08-27 consolidated ids
+  (0045/0046/0048, 0053-0119) are tolerated only with former/retired/
+  consolidated/superseded/deleted context on the line (or, for the
+  latter, inside an ADR with a `- Consolidates:` header). Wired into
+  `make doc-checks`; PASS/FAIL, exit 1 listing `file:line` on drift.
 - `python3 scripts/test_mep_compare_auto_palettes.py` - `mep_compare.py`'s
   `auto` stats include `palettes_per_shape`; PASS/FAIL per check, exit 0
   only if all pass.

@@ -1,6 +1,6 @@
 {
-  "mei": "1.1.0",
-  "name": "Índice de exemplo canônico (golden da spec MEI v1.1)",
+  "mei": "1.2.0",
+  "name": "Índice de exemplo canônico (golden da spec MEI v1.2)",
   "maintainer": "MesenCE",
   "updated": "2026-08-24",
   "packs": [
@@ -11,7 +11,8 @@
       "system": "gb",
       "rom": {
         "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B",
-        "crc32": "6C648F63"
+        "crc32": "6C648F63",
+        "sha1s": ["7B1F0E2C3D4A5B6C7D8E9F0A1B2C3D4E5F6A7B8C"]
       },
       "mep": "1.0.0",
       "license": "CC0-1.0",
