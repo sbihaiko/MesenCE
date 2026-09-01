@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace Mesen.Services
 {
-	//Network-facing half of F6.4b-2 (ADR-0138 §37/§38/§41/§42/§46): fetches the MEI v1.1 catalog,
+	//Network-facing half of F6.4b-2 (ADR-0138 §37/§38/§41/§42/§46): fetches the MEI v1.3 catalog,
 	//matches the loaded ROM by No-Intro sha1 (EmuApi.GetMepRomSha1) then, if that misses, by
 	//game identity (GetRomName vs entry.game) for entries that already carry a sha1, downloads+verifies the
 	//matched entry's primary artifact and its directly-downloadable deps. Only class in UI/

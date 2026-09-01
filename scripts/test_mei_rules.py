@@ -3,8 +3,9 @@
 
 Covers: the constants exposed by the leaf (SYSTEMS/MEI_KINDS/hash regexes/
 SEMVER), required_mei_pack_fields' kind-conditional required-field list,
-mei_entry_conforms' pass/fail behavior per kind, and resolve_kind's
-mep-meta-first / Status-fallback / None-when-unmapped precedence (§29).
+mei_entry_conforms' pass/fail behavior per kind, resolve_kind's
+mep-meta-first / Status-fallback / None-when-unmapped precedence (§29), and
+the MEI v1.3 §2.5 pack_id/content_id/votes shapes (mei_identity_field_errors).
 
 Usage: python3 scripts/test_mei_rules.py
 """
@@ -146,6 +147,45 @@ def check_status_to_kind_matches_resolve_kind_fallback():
     ok("resolve_kind's Status fallback matches STATUS_TO_KIND for every mapped Status")
 
 
+def check_identity_fields_accept_real_shapes():
+    good = [
+        {},
+        {"pack_id": "contra80s", "content_id": "a" * 64, "votes": 0},
+        {"pack_id": "liquidzgit/hdnes:ice-climber", "votes": 12},
+        {"pack_id": "owner/some_repo.name"},
+        {"pack_id": "issue-139"},
+    ]
+    for entry in good:
+        errors = mei_rules.mei_identity_field_errors(entry)
+        if errors:
+            fail(f"conformant identity fields rejected: {entry!r} -> {errors!r}")
+            return
+    ok("mei_identity_field_errors accepts absent fields, slug / owner/repo:game / issue-N ids, lowercase hex content_id, int votes")
+
+
+def check_identity_fields_reject_bad_shapes():
+    bad = [
+        {"pack_id": ""},
+        {"pack_id": "Contra80s"},
+        {"pack_id": "ab"},
+        {"pack_id": "local:my-pack"},
+        {"pack_id": 42},
+        {"content_id": ""},
+        {"content_id": "A" * 64},
+        {"content_id": "a" * 63},
+        {"content_id": None},
+        {"votes": -1},
+        {"votes": "1"},
+        {"votes": 1.0},
+        {"votes": True},
+    ]
+    for entry in bad:
+        if not mei_rules.mei_identity_field_errors(entry):
+            fail(f"malformed identity field accepted: {entry!r}")
+            return
+    ok("mei_identity_field_errors rejects empty/uppercase/short/local: ids, non-lowercase-64-hex content_id, negative/non-int/bool votes")
+
+
 def main():
     check_constants_shape()
     check_required_fields_hd_legacy_omits_version_mep()
@@ -157,6 +197,8 @@ def main():
     check_resolve_kind_falls_back_to_status()
     check_resolve_kind_returns_none_when_unmapped()
     check_status_to_kind_matches_resolve_kind_fallback()
+    check_identity_fields_accept_real_shapes()
+    check_identity_fields_reject_bad_shapes()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1

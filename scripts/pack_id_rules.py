@@ -113,17 +113,24 @@ def resolve_pack_id(pack_url, mep_meta, issue_number, game=None):
 
 
 def apply_mei_identity(entry, pack_url, issue_number, mep_meta, votes):
-    """Additive MEI MAY fields (P.2, ADR-0140): `pack_id` (resolved id ->
-    owner/repo -> issue-n), `content_id` (ADR-0139 tree/composite hash) and
-    `votes` (community 👍 count, non-normative like `issue`). Each omitted
-    when unknown/absent — never emitted empty. Unknown-field ignore is
-    already required by MEI v1.1, so adding these needs no schema bump."""
+    """Additive MEI MAY fields (P.2, ADR-0140; MEI v1.3 §2.5): `pack_id`
+    (resolved id -> owner/repo[:game] -> issue-n), `content_id` (ADR-0139
+    tree/composite hash) and `votes` (community 👍 count, non-normative like
+    `issue`). Each omitted when unknown/absent — never emitted empty. A
+    v1.2 client ignores them (unknown-field rule); their shapes are the
+    `mei_rules.PACK_ID` / `CONTENT_ID_HEX` / int >= 0 that
+    `validate-specs.py` checks over the golden and the catalog — the
+    assembler (`mei_catalog_entry.build_pack_entry`) drops any field this
+    leaf stamped that fails `mei_rules.mei_identity_field_errors`, so the
+    catalog never carries what the validator rejects."""
     pack_id, _ = resolve_pack_id(pack_url, mep_meta, issue_number)
     if pack_id:
         entry["pack_id"] = pack_id
     content_id = (mep_meta or {}).get("content_id")
-    if content_id:
-        entry["content_id"] = content_id
+    if isinstance(content_id, str) and content_id:
+        # MEI v1.3 §2.5: producers MUST emit lowercase hex; the shape gate
+        # (`mei_identity_field_errors`) runs in the assembler, not here.
+        entry["content_id"] = content_id.lower()
     if isinstance(votes, int) and votes >= 0:
         entry["votes"] = votes
 

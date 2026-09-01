@@ -1,6 +1,6 @@
-# MEI v1.2 — MesenCE Enhancement Index
+# MEI v1.3 — MesenCE Enhancement Index
 
-**Status:** v1.2 (stable) — 1.1: `kind`, optional `rom.sha1`, `deps[]`, `recipe`; 1.2: additive `rom.sha1s[]` (§2.4) ·
+**Status:** v1.3 (stable) — 1.1: `kind`, optional `rom.sha1`, `deps[]`, `recipe`; 1.2: additive `rom.sha1s[]` (§2.4); 1.3: additive `pack_id`, `content_id`, `votes` (§2.5) ·
 **License for this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mei/manifest.json`](golden/mei/manifest.json) ·
@@ -24,7 +24,7 @@ content circulates outside the index, in its own hubs.
 
 ```json
 {
-  "mei": "1.2.0",
+  "mei": "1.3.0",
   "name": "Índice oficial MesenCE",
   "maintainer": "sbihaiko",
   "updated": "2026-08-24",
@@ -43,7 +43,10 @@ content circulates outside the index, in its own hubs.
       "license": "CC0-1.0",
       "url": "https://example.org/packs/after-burner-studio-1.2.0.zip",
       "size": 18342,
-      "sha256": "a3f1c2… (64 lowercase hex chars of the .zip artifact)"
+      "sha256": "a3f1c2… (64 lowercase hex chars of the .zip artifact)",
+      "pack_id": "after-burner-studio",
+      "content_id": "1d4184aaaea725c3aa9a5101b76c8e433508b48cbad561f39003dabb1db84d3f",
+      "votes": 3
     },
     {
       "kind": "hd-legacy",
@@ -76,7 +79,9 @@ The second entry above is a `kind: "hd-legacy"` example: no `version`/`mep`
 third-party audio replacement the client must download and confirm
 separately (§2.3). The first entry's `rom.sha1s` lists an additional No-Intro
 hash (another revision of the same game) that the same pack also matches
-(§2.4, v1.2).
+(§2.4, v1.2). That first entry also carries the v1.3 identity fields:
+`pack_id` (its declared MEP `id`), `content_id` (the ADR-0139 hash of the loaded tree — not the
+`sha256` of the wrapper) and `votes` (community 👍 count) (§2.5).
 
 ### 2.1 Index fields
 
@@ -104,6 +109,9 @@ hash (another revision of the same game) that the same pack also matches
 | `sha256` | MUST | SHA-256 of the artifact, 64 hex (case-insensitive on read; producers SHOULD write lowercase) |
 | `deps` | MAY (v1.1) | list of third-party artifacts the pack references; see §2.3 |
 | `recipe` | MAY (v1.1) | MEP-recipe-v1 document assembled for `deps`; see §2.3 |
+| `pack_id` | MAY (v1.3) | product identity of the pack across revisions (ADR-0140/0143): lowercase slug, `owner/repo[:game-slug]` or `issue-N`; see §2.5 |
+| `content_id` | MAY (v1.3) | ADR-0139 canonical hash of the pack's loaded tree, 64 **lowercase** hex; the client's update trigger (ADR-0141); see §2.5 |
+| `votes` | MAY (v1.3) | non-negative integer, community 👍 count of the submission; non-normative like `issue` — a sort key, never an install decision; see §2.5 |
 | `issue`, `verdict`, `validated_at`, `labels`, `recipe_hash`, `recipe_ok` | MAY (v1.1) | producer provenance: issue number (integer), triage verdict string, ISO-8601 validation date, list of label strings, SHA-256 hex of the `recipe` document, boolean recipe dry-run result. Non-normative — clients MUST ignore them for install decisions and MAY display them |
 
 Unknown fields MUST be ignored.
@@ -185,8 +193,8 @@ alternates:
   i.e. never for hash-gated content (ADR-0044).
 - Clients unaware of the field ignore it (§2.2) and keep matching on
   `rom.sha1` alone; a v1.1 document stays valid under v1.2 rules. The
-  field is recognised by its shape, not by the declared `mei` minor: a
-  v1.2-aware client SHOULD honour `sha1s` in a document that still declares
+  field is recognized by its shape, not by the declared `mei` minor: a
+  v1.2-aware client SHOULD honor `sha1s` in a document that still declares
   `"mei": "1.1.x"` (the reference client and verifiers do not gate on the
   declared minor). Producers emitting `sha1s` SHOULD nevertheless declare
   `"mei": "1.2.0"`, per the header's versioning rule (new optional field = minor).
@@ -196,6 +204,82 @@ The reference producer (`scripts/generate_community_pack_catalog.py`, via
 for the resolved title; the reference client
 (`UI/Logic/CommunityPackCatalogMatcher.cs`) and the headless verifier
 (`scripts/verify_community_install_from_zero.py`) consume it as above.
+
+### 2.5 `pack_id`, `content_id` and `votes` (v1.3)
+
+`sha256` identifies a download wrapper, not a pack: two zips of one tree are
+two `sha256`s, and one zip carrying several revisions (`/revalidate`) is one
+`sha256` with different contents over time. v1.3 adds three **additive**
+per-pack fields so a client can tell "a revision of the pack I have" from "a
+competing pack" without re-hashing anything (PRD Part B §3.2–§3.6):
+
+- `pack_id` (when present) is a non-empty lowercase string naming the
+  **product** — every revision of one pack shares it. Its shape is one of
+  the ADR-0140 catalog sources, first match wins: the pack's declared MEP
+  `id` slug (`[a-z0-9][a-z0-9-]{2,63}`, MEP-v1 §3.1); else, for
+  github.com/codeload/raw pack URLs, the origin `owner/repo` lowercased,
+  suffixed `:game-slug` when the game is known (ADR-0143: one slot per
+  game, e.g. `liquidzgit/hdnes:ice-climber`); else `issue-N` of the
+  accepted submission. The client-only `local:<container>` fallback
+  (ADR-0140 source 4) is never written to an index. An index MUST list at
+  most one live entry per `pack_id` (the PRD Part B §3.6 slot ADR-0141
+  implements; history stays out of the index) — a producer rule the
+  reference generator enforces (`select_catalog_rows`); §5's per-entry
+  shape checks do not cover it.
+- `content_id` (when present) is the ADR-0139 canonical hash of the pack
+  tree the host actually loads (excluding, per ADR-0139: wrapper metadata,
+  any path with a `__MACOSX` or `screenshots` segment, `.DS_Store`, any
+  basename starting with `README`, and the `pack.json` `version` key;
+  recipe composite when a `recipe` is present): exactly **64 lowercase hex digits**, the hasher's
+  `sha256().hexdigest()`. Same loaded files ⇒ same `content_id`;
+  wrapper-only repack ⇒ same `content_id`; any loaded-file change ⇒ new
+  `content_id`. Unlike `sha256` it is not case-insensitive on write —
+  producers MUST emit lowercase (the reference client compares it
+  case-insensitively, but other clients need not).
+- `votes` (when present) is a JSON integer ≥ 0: the community 👍 count of
+  the submission issue at generation time. It is non-normative, like
+  `issue`: a client MAY use it to **order** competing packs (most-👍 first,
+  PRD Part B §5 — the reference Player picker sorts by `votes` descending,
+  then name) and MUST NOT use it to auto-pick, install or reject anything.
+  A non-integer (string, float, boolean) is a malformed document.
+- Producers emit each field only when known and never empty: no `pack_id`
+  when no source resolves, no `content_id` when the validator did not
+  record one, no `votes` when the count is unavailable. Since every
+  accepted community submission has an issue number, the reference catalog
+  carries all three on every row.
+- Client rules. `pack_id` groups revisions: a per-ROM preference is stored
+  as a `pack_id` (ADR-0140), and two entries with different `pack_id`s for
+  one ROM are competing packs the player may be asked to choose between,
+  whereas one `pack_id` is never offered as a 1.0-vs-1.2 choice
+  (ADR-0141). `content_id` — not `sha256` — is the **update trigger**: a
+  client that installed an entry reinstalls when the slot's `content_id`
+  differs from the one it recorded, treats a `sha256`-only change as a
+  wrapper-only repack (no reinstall), and does not downgrade when its
+  installed semver is higher (ADR-0141). An installed local container whose
+  `content_id` equals an entry's is the same pack and adopts that entry's
+  `pack_id` (PRD Part B §5 merge). An entry lacking these fields is still
+  listable and installable; a client then falls back to `sha256`/container
+  identity as in v1.2.
+- Clients unaware of the fields ignore them (§2.2); a v1.2 document stays
+  valid under v1.3 rules. The fields are recognized by their shape, not by
+  the declared `mei` minor: a v1.3-aware client SHOULD honor them in a
+  document that still declares `"mei": "1.2.x"` (the reference client does
+  not gate on the minor). Producers emitting them SHOULD nevertheless
+  declare `"mei": "1.3.0"`, per the header's versioning rule (new optional
+  field = minor).
+
+The reference producer is `scripts/pack_id_rules.py`
+(`resolve_pack_id`, `apply_mei_identity`, called from
+`scripts/mei_catalog_entry.py`), reading `content_id` from the submission's
+mep-meta as written by `scripts/mep_content_id.py` (golden
+[`golden/mep-content-id.json`](golden/mep-content-id.json)); the shapes live
+in `scripts/mei_rules.py` (`PACK_ID`, `CONTENT_ID_HEX`,
+`mei_identity_field_errors`). Reference consumers:
+`UI/Logic/CommunityPackCatalog.cs` (deserialization, each field nullable),
+`UI/Logic/CommunityCatalogUpdateDecision.cs` (`content_id` trigger),
+`UI/Logic/PackPreferenceResolver.cs` (`pack_id` preference and `content_id`
+merge) and the Player picker in `UI/ViewModels/MainWindowViewModel.cs`
+(`votes` ordering).
 
 ## 3. Trust model (normative — ADR-0006)
 
@@ -225,7 +309,11 @@ data to the index's maintainer beyond the GET request itself.
 
 [`golden/mei/manifest.json`](golden/mei/manifest.json) — validated by
 `scripts/validate-specs.py` (required fields, semver, HTTPS, hash formats,
-the v1.1 `kind`-aware relaxations of §2.3, and the v1.2 `rom.sha1s[]` shape
-of §2.4). The same rules are run over
+the v1.1 `kind`-aware relaxations of §2.3, the v1.2 `rom.sha1s[]` shape
+of §2.4, and the v1.3 §2.5 shapes — `pack_id` slug/`owner/repo[:game]`/
+`issue-N`, `content_id` 64 lowercase hex, `votes` non-negative integer,
+none of them empty or mistyped — via `scripts/mei_rules.py`
+`mei_identity_field_errors`, unit-tested by `scripts/test_mei_rules.py`).
+The same rules are run over
 the generated `docs/community-packs.json` catalog when it exists in the
 repo (`validate_mei_catalog()`).

@@ -305,6 +305,26 @@ def check_mei_identity_fields():
     if "content_id" in entry3 or "version" in entry3 or entry3.get("votes") != 0:
         fail(f"absent content_id/version must be omitted; votes=0 kept: {entry3!r}")
         return
+    # §2.5 producer gate: an uppercase mep-meta content_id is emitted
+    # lowercase; a malformed one (wrong length) is omitted, never emitted.
+    meta4 = dict(meta); meta4["content_id"] = "C" * 64
+    entry4, _ = mei_catalog_entry.build_pack_entry(
+        issue_number=42, game="Contra", system="nes", license_="CC0",
+        pack_url="https://github.com/User/Repo/releases/download/v1/c.zip",
+        pack_hash="a" * 64, rom_sha1="A" * 40, status="Aceito (MEP completo)",
+        mep_meta=meta4, votes=1)
+    if entry4.get("content_id") != "c" * 64:
+        fail(f"content_id must be emitted lowercase, got {entry4.get('content_id')!r}")
+        return
+    meta5 = dict(meta); meta5["content_id"] = "not-a-hash"
+    entry5, _ = mei_catalog_entry.build_pack_entry(
+        issue_number=42, game="Contra", system="nes", license_="CC0",
+        pack_url="https://github.com/User/Repo/releases/download/v1/c.zip",
+        pack_hash="a" * 64, rom_sha1="A" * 40, status="Aceito (MEP completo)",
+        mep_meta=meta5, votes=1)
+    if "content_id" in entry5:
+        fail(f"malformed content_id must be omitted by the producer gate: {entry5!r}")
+        return
     ok("build_pack_entry carries pack_id/content_id/votes as additive MAY fields")
 
 

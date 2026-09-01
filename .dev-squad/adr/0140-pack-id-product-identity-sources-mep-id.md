@@ -18,7 +18,7 @@ Implementation state (verified 2026-09-01):
 - Client: `.mep-install.json` carries `pack_id` (`MepRecipeInstaller.cpp:389`); the §5 `content_id` merge lets a local container adopt a catalog candidate (`PackPreferenceResolver.cs:64-80`).
 - Current catalog rows: 5 `owner/repo:<game>` ids and 6 `issue-N` ids (`docs/community-packs.json`), i.e. source (3) is the common case for non-GitHub hosts as predicted.
 - Source (2) was narrowed by ADR-0143 (2026-08-29): `owner/repo` became `owner/repo:<game-slug>`; the bare `owner/repo` remains only when no game identity is known (`pack_id_rules.py:104-110`).
-Not implemented: closing the newer duplicate issue (`mep_identity_check.py` only comments — the duplicate is "still accepted", :12); the silent `local:` → catalog `pack_id` preference migration (no rewrite of the stored `RomPackPreference` exists; only the read-time merge above); MEI-v1 (`docs/specs/MEI-v1.md`) does not yet document the additive `pack_id`/`content_id`/`votes` fields the generator emits.
+Not implemented: closing the newer duplicate issue (`mep_identity_check.py` only comments — the duplicate is "still accepted", :12); the silent `local:` → catalog `pack_id` preference migration (no rewrite of the stored `RomPackPreference` exists; only the read-time merge above). Since 2026-09-01 (PRD slice D13) MEI-v1 §2.5 (`docs/specs/MEI-v1.md`, v1.3) documents the additive `pack_id`/`content_id`/`votes` fields the generator emits.
 
 ## Alternatives
 

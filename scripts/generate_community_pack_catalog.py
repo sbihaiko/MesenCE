@@ -117,7 +117,7 @@ def _render(c):
         if extras:
             # MEI v1.2 §2.4: additive exact-match alternates (No-Intro revisions/
             # alt dumps of the resolved title), never repeating rom.sha1.
-            # The document declares MEI 1.2.0 (mei_catalog_entry.MEI_VERSION).
+            # The document declares MEI 1.3.0 (mei_catalog_entry.MEI_VERSION).
             entry.setdefault("rom", {})["sha1s"] = extras
     if mismatch:
         _warn(f"issue #{issue}: mep-meta source_sha256 disagrees with Pack Hash; omitting deps/recipe.")

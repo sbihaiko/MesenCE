@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1.2, MEP-recipe v1 specs and the hires-gbsms draft,
+of the ESP v1, MEP v1, MEI v1.3, MEP-recipe v1 specs and the hires-gbsms draft,
 and enforces the wire format of shared cross-language test fixtures
 (path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
@@ -16,6 +16,7 @@ from mei_rules import (
     SHA1_UPPER,
     SHA256_HEX,
     SYSTEMS,
+    mei_identity_field_errors,
     required_mei_pack_fields,
 )
 
@@ -132,6 +133,9 @@ def validate_mei(path):
                 check(alt != rom.get("sha1"), f"{where}.rom.sha1s[{k}]: repeats rom.sha1")
             check(len(set(sha1s)) == len(sha1s) if isinstance(sha1s, list) else True, f"{where}.rom: sha1s has duplicates")
         check("license" not in p or (isinstance(p["license"], str) and p["license"]), f"{where}: license must be a non-empty string when present")
+        # MEI v1.3 §2.5: additive `pack_id` (lowercase slug / owner/repo[:game] / issue-N), `content_id` (64 lowercase hex, ADR-0139) and `votes` (int >= 0) — never empty, never the wrong type.
+        for msg in mei_identity_field_errors(p):
+            check(False, f"{where}: {msg}")
         for j, dep in enumerate(p.get("deps", [])):
             check("license" not in dep or (isinstance(dep["license"], str) and dep["license"]), f"{where}.deps[{j}]: license must be a non-empty string when present")
 
@@ -206,7 +210,7 @@ def main():
         for f in _failures:
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
-    print("validate-specs: all golden files conform (ESP, MEP, MEI v1.2, MEP-recipe, hires-gbsms draft, path-cases format); "
+    print("validate-specs: all golden files conform (ESP, MEP, MEI v1.3, MEP-recipe, hires-gbsms draft, path-cases format); "
           "mep-nes/pack.json structurally validated; mep + mep-nes lint-checked; MEI catalog validated (golden always, docs/community-packs.json when present)")
 
 if __name__ == "__main__":

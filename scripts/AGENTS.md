@@ -180,8 +180,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   slot rules, determinism, and `apply_mei_identity`'s additive MEI MAY
   fields). `apply_mei_identity` (called by `mei_catalog_entry.
   build_pack_entry`) stamps an entry with `pack_id`/`content_id`/`votes`,
-  each omitted when unknown — unknown-field ignore is already MEI v1.1
-  required, so no schema bump.
+  each omitted when unknown (a shape that fails `mei_rules.
+  mei_identity_field_errors` is dropped, never emitted); documented as
+  MEI v1.3 §2.5 (PRD slice D13), so `MEI_VERSION` is `1.3.0`.
   `mei_catalog_fetch.py` (P.2, ADR-0138 §35) is the gh-backed read half of
   the catalog generator: every live `gh` call (`fetch_accepted_items`,
   `fetch_issue_details`, `fetch_mep_meta` through `mep_meta_parser.
@@ -318,8 +319,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   later in the comment is never mistaken for the first).
   `generate_community_pack_catalog.py` (F6.3, ADR-0138 §26/§27; split per
   F6.3b/§35 into three files, none over 200 lines) writes
-  `docs/community-packs.json` (an MEI v1.2 catalog, `mei: "1.2.0"`, the v1.2
-  addition being the additive `rom.sha1s[]`, MEI-v1 §2.4) next to
+  `docs/community-packs.json` (an MEI v1.3 catalog, `mei: "1.3.0"`: v1.2
+  added the additive `rom.sha1s[]`, MEI-v1 §2.4; v1.3 documents the
+  additive `pack_id`/`content_id`/`votes`, MEI-v1 §2.5) next to
   `docs/community-packs.md` in the same run, and adds an "External assets"
   column to the Markdown table (`yes` when the entry has `deps`) alongside
   the six pre-existing columns. The generator itself is now a thin

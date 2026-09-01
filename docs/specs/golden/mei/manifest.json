@@ -1,6 +1,6 @@
 {
-  "mei": "1.2.0",
-  "name": "Índice de exemplo canônico (golden da spec MEI v1.2)",
+  "mei": "1.3.0",
+  "name": "Índice de exemplo canônico (golden da spec MEI v1.3)",
   "maintainer": "MesenCE",
   "updated": "2026-08-24",
   "packs": [
@@ -18,7 +18,10 @@
       "license": "CC0-1.0",
       "url": "https://example.org/packs/f1-test-tone-1.0.0.zip",
       "size": 4096,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pack_id": "f1-test-tone-golden",
+      "content_id": "1d4184aaaea725c3aa9a5101b76c8e433508b48cbad561f39003dabb1db84d3f",
+      "votes": 3
     },
     {
       "kind": "hd-legacy",
@@ -80,7 +83,9 @@
       },
       "verdict": "Aceito parcial (HD Mesen)",
       "validated_at": "2026-08-24",
-      "labels": ["community-pack", "pack:valid", "assets:audio"]
+      "labels": ["community-pack", "pack:valid", "assets:audio"],
+      "pack_id": "issue-1",
+      "votes": 1
     }
   ]
 }

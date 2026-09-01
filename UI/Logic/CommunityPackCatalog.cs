@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace Mesen.Logic
 {
-	//Host-free MEI v1.1 catalog DTOs (F6.4b, ADR-0138 §4/§37/§38) - the shape
+	//Host-free MEI v1.3 catalog DTOs (F6.4b, ADR-0138 §4/§37/§38) - the shape
 	//of docs/community-packs.json exactly as emitted by
 	//scripts/mei_catalog_entry.py::build_catalog/build_pack_entry, which in
 	//turn implements docs/specs/MEI-v1.md §2. BCL only, per the UI/Logic/
