@@ -408,7 +408,32 @@ namespace
 		std::filesystem::remove_all(dir, ec);
 	}
 
-	//--- Bloco E: MepRecipeInstaller/MepRecipeOps/SHA256 (ADR-0138 §4/§37) ---
+	void TestDetectConventionLayoutMepHumanLayer()
+{
+	//ADR-0147: the sibling may root the human layer at mep/ (a sibling of
+	//auto/, not a child). The human probe lives under mep/; the machine layer
+	//stays under auto/ - both resolved as siblings, so the human section
+	//path is mep/<convention> and the machine layer is auto/<convention>.
+	std::filesystem::path dir = MakeTempPackDir("mep_human_layer");
+	std::error_code ec;
+	std::filesystem::create_directories(dir / "mep" / "textures", ec);
+	std::filesystem::create_directories(dir / "auto" / "textures", ec);
+	WriteTestFile(dir / "mep" / "textures" / "hires.txt", "<ver>106\n");
+	WriteTestFile(dir / "auto" / "textures" / "hires.txt", "<ver>106\n");
+
+	MepPack pack;
+	pack.RootFolder = dir.string();
+	bool any = pack.DetectConventionLayout("mep");
+
+	Check(any, "BlocoD: DetectConventionLayout finds a mep/ human layer");
+	Check(pack.HasSection(MepSectionType::Textures), "BlocoD: mep/textures/hires.txt is recognized as the textures section");
+	Check(pack.GetSectionPath(MepSectionType::Textures) == (dir / "mep" / "textures").string(), "BlocoD: textures human path resolves to mep/textures", pack.GetSectionPath(MepSectionType::Textures));
+	Check(pack.GetSectionAutoPath(MepSectionType::Textures) == (dir / "auto" / "textures").string(), "BlocoD: textures machine layer resolves to auto/textures, a sibling of mep/", pack.GetSectionAutoPath(MepSectionType::Textures));
+
+	std::filesystem::remove_all(dir, ec);
+}
+
+//--- Bloco E: MepRecipeInstaller/MepRecipeOps/SHA256 (ADR-0138 §4/§37) ---
 	//Golden fixture: docs/specs/golden/mep-recipe/fixture/ (real bytes, real
 	//sha256 hashes - unlike the format-only docs/specs/golden/mep-recipe/
 	//recipe.json). scripts/gen_mep_recipe_fixture.py + its own
@@ -823,6 +848,32 @@ namespace
 			}
 		}
 	}
+
+	void TestMepContentIdComputeFolder()
+	{
+		//ADR-0147: ComputeFolder must be stable against the host's own install
+		//metadata (.mep-install.json / .bootstrap), so a reinstall does not look
+		//like a user edit, while a real content change does.
+		std::filesystem::path dir = std::filesystem::temp_directory_path() / "mep_contentid_folder_test";
+		std::error_code ec;
+		std::filesystem::remove_all(dir, ec);
+		std::filesystem::create_directories(dir / "textures", ec);
+		std::ofstream(dir / "textures" / "hires.txt", std::ios::out | std::ios::binary) << "<ver>106\n";
+		std::ofstream(dir / ".mep-install.json", std::ios::out | std::ios::binary) << "{\"installed_at\":\"A\"}\n";
+
+		std::string base = MepContentId::ComputeFolder(dir.string());
+		Check(!base.empty(), "BlocoG: ComputeFolder hashes a real directory tree");
+
+		//Reinstall rewrites .mep-install.json (installed_at changes) - must NOT change the baseline
+		std::ofstream(dir / ".mep-install.json", std::ios::out | std::ios::binary) << "{\"installed_at\":\"B\"}\n";
+		Check(MepContentId::ComputeFolder(dir.string()) == base, "BlocoG: .mep-install.json is excluded from the baseline (a reinstall is not an edit)");
+
+		//A real content edit DOES change the baseline
+		std::ofstream(dir / "textures" / "hires.txt", std::ios::out | std::ios::binary) << "<ver>106\n<img>different.png\n";
+		Check(MepContentId::ComputeFolder(dir.string()) != base, "BlocoG: editing textures changes the baseline (an edit is detected)");
+
+		std::filesystem::remove_all(dir, ec);
+	}
 }
 
 //--- Bloco H: FingerprintStore loop field round-trip (ADR-0134 Option A) ------
@@ -905,6 +956,7 @@ int main()
 	TestDetectConventionLayoutBareRootHiresTxt();
 	TestDetectConventionLayoutConventionWinsOverBareRoot();
 	TestDetectConventionLayoutNoHiresTxtAtAll();
+	TestDetectConventionLayoutMepHumanLayer();
 
 	TestSha256KnownAnswer();
 	TestFullDepsInstallMatchesPythonReference();
@@ -920,6 +972,7 @@ int main()
 	TestArpeggioKeysDetection();
 
 	TestContentIdGoldenParity();
+	TestMepContentIdComputeFolder();
 
 	TestFingerprintLoopLoad();
 	TestFingerprintLoopAbsent();

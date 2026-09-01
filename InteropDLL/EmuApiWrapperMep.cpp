@@ -1,4 +1,5 @@
 #include "Common.h"
+#include "Core/Shared/EnhancementPacks/MepContentId.h"
 #include "Core/Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Utilities/StringUtilities.h"
 
@@ -67,5 +68,16 @@ extern "C"
 		StringUtilities::CopyToBuffer(resultText, outResult, maxResultLength);
 
 		return success;
+	}
+
+	//ADR-0147: hex content_id of a real directory tree (MepContentId::
+	//ComputeFolder), used by the UI to detect local edits to an installed mep/
+	//pack by comparing against the baseline recorded at install time. Throws
+	//no exception; an unreadable folder (or one that computes to "") returns
+	//an empty buffer.
+	DllExport void __stdcall GetMepContentId(const char* folder, char* outBuffer, uint32_t maxLength)
+	{
+		string result = MepContentId::ComputeFolder(folder ? folder : "");
+		StringUtilities::CopyToBuffer(result, outBuffer, maxLength);
 	}
 }

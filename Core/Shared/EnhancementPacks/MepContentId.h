@@ -41,4 +41,13 @@ public:
 	//declared dep digests (dep-id -> hex sha256).
 	static string ComputeRecipe(const string& primaryTreeHash, const string& recipeHash,
 		const unordered_map<string, string>& depHashes);
+
+	//Hex tree content_id over a real directory tree: enumerates folder
+	//recursively (relative '/' paths, byte-wise UTF-8), dropping the host's own
+	//install/host metadata (.mep-install.json / .bootstrap) so the baseline is
+	//stable against reinstalls, and returns ComputeTree(entries). "" when the
+	//folder cannot be read or computes to "". Used (ADR-0147) to detect local
+	//edits to an installed mep/ pack by comparing against the baseline recorded
+	//at install time.
+	static string ComputeFolder(const string& folder);
 };

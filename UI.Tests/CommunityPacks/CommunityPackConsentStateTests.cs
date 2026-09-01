@@ -3,18 +3,20 @@ using Xunit;
 
 namespace Mesen.Tests.CommunityPacks
 {
-	// ADR-0138 §38 (F6.4b): coverage for the first-run consent gate extracted
-	// into UI/Logic/CommunityPackConsentState.cs.
+	// ADR-0138 §38 (F6.4b) originally required a first-run consent gate before
+	// automatic community-pack download. ADR-0146 supersedes it: accepted
+	// catalog packs auto-load whenever possible, so consent is inert. Coverage
+	// still lives here (UI/Logic/CommunityPackConsentState.cs).
 	public class CommunityPackConsentStateTests
 	{
 		[Fact]
-		public void Evaluate_ToggleOn_NoConsentYet_RequiresDialogAndBlocksDownload()
+		public void Evaluate_ToggleOn_NoConsent_AllowsDownloadWithNoDialog()
 		{
 			CommunityPackConsentDecision decision = CommunityPackConsentState.Evaluate(
 				autoInstallEnabled: true, consentGiven: false);
 
-			Assert.False(decision.CanDownloadNow);
-			Assert.True(decision.MustShowConsentDialog);
+			Assert.True(decision.CanDownloadNow);
+			Assert.False(decision.MustShowConsentDialog);
 		}
 
 		[Fact]

@@ -127,6 +127,21 @@ tracking above: they're filed via a GitHub Issue Form and tracked on a
 different board, "MesenCE Community Packs":
 https://github.com/users/sbihaiko/projects/3
 
+**Policy — auto-load all registered packs.** Every community pack registered
+as a GitHub issue and accepted onto the "MesenCE Community Packs" board
+(verdict `accepted`, label `pack:valid`, i.e. present as a row in
+`docs/community-packs.json`) MUST be automatically downloaded, installed and
+loaded by the client whenever possible. "Whenever possible" means the pack is
+reachable from an allow-listed host (ADR-0138 §41), matches the loaded ROM
+(No-Intro SHA1 per ADR-0003/ADR-0039, or an optimistic texture/BPS match per
+ADR-0145), and is not disabled by the user. No first-run or per-pack consent
+dialog may block this — see ADR-0146, which supersedes the consent-gate
+clauses of ADR-0138 §38/§51/§54. The single master switch is the
+`AutoInstallCommunityPacks` setting (default `true`); a per-pack manual
+disable still overrides. An auto-installed accepted pack wins over any local
+bootstrap auto-only pack (ADR-0049, ADR-0050), so accepted community art is
+never masked by a vanilla upscale pack.
+
 ### How it works
 
 - A contributor opens an issue using the

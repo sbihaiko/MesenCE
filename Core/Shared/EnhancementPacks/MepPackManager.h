@@ -68,6 +68,12 @@ private:
 	//Folder-convention pack (no pack.json): sections detected from the fixed
 	//layout, target = the current ROM. False when the folder has no layer.
 	bool LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack);
+	//ADR-0147: true when the sibling holds mep/ as the human pack layer
+	//(a section probe under mep/, or a mep/pack.json exists)
+	bool HasSiblingMepPack(const string& sibling) const;
+	//ADR-0147: the sibling pack whose human layer is rooted at mep/ and whose
+	//machine layer is the sibling auto/ folder (siblings, not children)
+	bool LoadMepSiblingPack(const string& sibling, MepPack& outPack);
 	static string SystemFromExtension(const string& lowerExt);
 	//Reads .mep-install.json at the pack root into _packIdentityByContainer
 	//(P.3; a missing/malformed stamp leaves the entry with empty fields)

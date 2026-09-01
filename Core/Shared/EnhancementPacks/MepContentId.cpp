@@ -3,6 +3,9 @@
 #include "Utilities/sha256.h"
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 //ADR-0139 path segments / basenames excluded from the tree hash - the
 //artefacts it names as "outside the discovered root" (mirror of
@@ -278,4 +281,45 @@ string MepContentId::ComputeRecipe(const string& primaryTreeHash, const string& 
 		lines += "\n" + dep.second;
 	}
 	return SHA256::GetHash((uint8_t*)lines.data(), lines.size());
+}
+
+string MepContentId::ComputeFolder(const string& folder)
+{
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	if(folder.empty() || !fs::is_directory(fs::u8path(folder), ec)) {
+		return "";
+	}
+	vector<Entry> entries;
+	for(fs::recursive_directory_iterator it(fs::u8path(folder), ec), end; it != end; it.increment(ec)) {
+		if(ec) {
+			return "";
+		}
+		const fs::directory_entry& de = *it;
+		if(!de.is_regular_file(ec)) {
+			continue;
+		}
+		string abs = de.path().string();
+		string rel = abs.substr(folder.size() + 1);
+		for(char& c : rel) {
+			if(c == '\\') {
+				c = '/';
+			}
+		}
+		string base = Basename(rel);
+		//Install/host metadata is not part of the editable pack content; keep
+		//the baseline stable across reinstalls (installed_at changes each time).
+		if(base == ".mep-install.json" || base == ".bootstrap") {
+			continue;
+		}
+		std::ifstream in(abs, std::ios::binary);
+		if(!in) {
+			continue;
+		}
+		Entry entry;
+		entry.Path = rel;
+		entry.Data.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		entries.push_back(std::move(entry));
+	}
+	return ComputeTree(entries);
 }

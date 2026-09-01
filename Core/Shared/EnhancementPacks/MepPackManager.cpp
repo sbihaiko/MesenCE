@@ -401,6 +401,49 @@ bool MepPackManager::LoadConventionPack(const string& rootFolder, const string& 
 	return true;
 }
 
+bool MepPackManager::HasSiblingMepPack(const string& sibling) const
+{
+	std::error_code ec;
+	if(!fs::is_directory(fs::u8path(FolderUtilities::CombinePath(sibling, "mep")), ec)) {
+		return false;
+	}
+	MepPack layout;
+	layout.RootFolder = sibling;
+	if(layout.DetectConventionLayout("mep")) {
+		for(int i = 0; i < 3; i++) {
+			if(layout.Sections[i].HasHuman) {
+				return true;
+			}
+		}
+	}
+	//A mep/pack.json alone also makes mep/ the human layer (metadata +
+	//identity, even before the convention probes are populated)
+	return (bool)std::ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(sibling, "mep"), "pack.json"));
+}
+
+bool MepPackManager::LoadMepSiblingPack(const string& sibling, MepPack& outPack)
+{
+	outPack = MepPack();
+	outPack.RootFolder = sibling;
+	outPack.ContainerName = _romName;
+	outPack.Origin = MepPackOrigin::Sibling;
+	outPack.FromZip = false;
+	if(!outPack.DetectConventionLayout("mep")) {
+		return false;
+	}
+	outPack.Synthetic = true;
+	outPack.SpecVersion = "1.1.0";
+	outPack.Name = _romName;
+	outPack.Version = "0.0.0";
+	outPack.License = "unspecified";
+	MepTarget target;
+	target.System = SystemFromExtension(_romExtension);
+	target.Sha1 = _romSha1;
+	target.Name = _romName;
+	outPack.Targets.push_back(target);
+	return true;
+}
+
 void MepPackManager::ScanSiblingFolder()
 {
 	if(_romFolder.empty() || _romName.empty()) {
@@ -415,7 +458,15 @@ void MepPackManager::ScanSiblingFolder()
 	MepPack pack;
 	string error;
 	string json;
-	if(ReadTextFile(FolderUtilities::CombinePath(sibling, "pack.json"), json)) {
+	//ADR-0147: the sibling may root the human layer at mep/ (a sibling of
+	//auto/, not a child). Detect mep/ first; a pack.json there is read for
+	//metadata, and legacy (mep/-less) siblings keep the root layout.
+	bool hasMep = HasSiblingMepPack(sibling);
+	string humanPrefix = hasMep ? "mep" : "";
+	string packJsonPath = hasMep
+		? FolderUtilities::CombinePath(FolderUtilities::CombinePath(sibling, "mep"), "pack.json")
+		: FolderUtilities::CombinePath(sibling, "pack.json");
+	if(ReadTextFile(packJsonPath, json)) {
 		//Explicit metadata beside the ROM: parsed for name/author/license/
 		//patches, but location is identity - targets are not required to match
 		if(!MepPack::Parse(json, pack, error)) {
@@ -426,18 +477,38 @@ void MepPackManager::ScanSiblingFolder()
 		pack.RootFolder = sibling;
 		pack.ContainerName = _romName;
 		pack.Origin = MepPackOrigin::Sibling;
-		//auto/ layers still come from the convention
+		//auto/ (and, under mep/, the human) layers still come from the
+		//convention; the pack.json-declared sections are relative to the pack
+		//root, so under mep/ they are re-rooted with the 'mep/' prefix
 		MepPack layout;
 		layout.RootFolder = sibling;
-		if(layout.DetectConventionLayout()) {
+		if(layout.DetectConventionLayout(humanPrefix)) {
 			for(int i = 0; i < 3; i++) {
-				if(!layout.Sections[i].AutoPath.empty()) {
-					pack.Sections[i].Present = true;
-					pack.Sections[i].AutoPath = layout.Sections[i].AutoPath;
+				MepSection& ps = pack.Sections[i];
+				const MepSection& ls = layout.Sections[i];
+				//machine layer always comes from the convention (auto/...)
+				if(!ls.AutoPath.empty()) {
+					ps.Present = true;
+					ps.AutoPath = ls.AutoPath;
+				}
+				if(humanPrefix.empty()) {
+					//legacy: keep the pack.json-declared sections as-is
+					continue;
+				}
+				//mep/ layout: a section the pack.json did not declare takes the
+				//convention human layer; one it did declare is re-rooted to mep/
+				if(ps.Path.empty()) {
+					if(ls.HasHuman) {
+						ps.Present = true;
+						ps.HasHuman = true;
+						ps.Path = ls.Path; //e.g. "mep/textures"
+					}
+				} else if(ps.Path.front() != '/') {
+					ps.Path = "mep/" + ps.Path;
 				}
 			}
 		}
-	} else if(!LoadConventionPack(sibling, _romName, MepPackOrigin::Sibling, pack)) {
+	} else if(hasMep ? !LoadMepSiblingPack(sibling, pack) : !LoadConventionPack(sibling, _romName, MepPackOrigin::Sibling, pack)) {
 		Log("sibling folder '" + sibling + "' has no textures/, audio/ or synth/ layer - ignored");
 		return;
 	}

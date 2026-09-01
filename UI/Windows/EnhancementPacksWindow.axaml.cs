@@ -3,6 +3,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Mesen.Config;
 using Mesen.Logic;
+using Mesen.Services;
 using Mesen.Utilities;
 using Mesen.ViewModels;
 using System;
@@ -64,6 +65,23 @@ namespace Mesen.Windows
 				LoadRomHelper.PowerCycle();
 			}
 			_model.Refresh();
+		}
+
+		//ADR-0147: explicit user action - discard local edits to the installed
+		//catalog pack and re-materialize it from the original (Restore). The
+		//editor edits <Game>/mep/, this restores it fresh from the catalog zip.
+		private async void Restore_OnClick(object sender, RoutedEventArgs e)
+		{
+			(bool ok, string error) = await CommunityPackInstallService.RestoreInstalledPack();
+			if(!ok) {
+				await MesenMsgBox.Show(this, error, MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
+			_model.Refresh();
+			if(await MesenMsgBox.Show(this, "InstallMepPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+				_model.ApplyChanges();
+				LoadRomHelper.PowerCycle();
+			}
 		}
 
 		//ADR-0138 §38: gates the very first automatic community-pack download

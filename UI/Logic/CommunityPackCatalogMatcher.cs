@@ -9,9 +9,11 @@ namespace Mesen.Logic
 	//(MEP-v1 §4), case-insensitive, including additive `rom.sha1s` (nearby
 	//revisions). When the dump hash is not listed, a second pass matches
 	//the ROM's display name against the entry's `game` (same core-title
-	//token multiset after stripping trailing region/dump tags) — only for
-	//entries that already carry a sha1. Entries without a sha1 (`rom: {}` -
-	//MEI-v1 §2.3) stay listable but never auto-match. IPS/patches stay
+	//token multiset after stripping trailing region/dump tags) for EVERY
+	//entry, hash-bearing or hash-less (ADR-0146): a pack whose `rom: {}` is
+	//empty (MEI-v1 §2.3) also auto-matches optimistically, so a registered
+	//pack with no recorded hash still installs by identity. The optimistic
+	//application is self-healing (ADR-0145 health signal). IPS/patches stay
 	//hash-gated (ADR-0044). BCL only, dual-compiled into UI.Tests.
 	public static class CommunityPackCatalogMatcher
 	{
@@ -32,8 +34,17 @@ namespace Mesen.Logic
 			if(string.IsNullOrWhiteSpace(romName)) {
 				return null;
 			}
+			//Same-game optimistic fallback (ADR-0146, ADR-0145): matches by
+			//title token equality regardless of whether the entry carries a
+			//sha1. Entries with a sha1 that did not match (different dump/revision)
+			//and entries with an empty `rom` (`rom: {}`, MEI-v1 §2.3) both fall
+			//here, so a hash-less registered pack still auto-installs. The
+			//optimistic application is self-healing — a mismatched pack's tiles
+			//falls through to the original (HdNesPack) and the health signal
+			//(ADR-0145) disables it when the match rate stays low. IPS/patches
+			//stay hash-gated (ADR-0044).
 			foreach(CommunityPackCatalogEntry entry in catalog.Packs) {
-				if(HasTargetHash(entry.Rom) && SameGame(entry.Game, romName)) {
+				if(SameGame(entry.Game, romName)) {
 					return entry;
 				}
 			}
@@ -83,25 +94,6 @@ namespace Mesen.Logic
 				}
 			}
 			return true;
-		}
-
-		private static bool HasTargetHash(CommunityPackRom? rom)
-		{
-			if(rom == null) {
-				return false;
-			}
-			if(!string.IsNullOrWhiteSpace(rom.Sha1)) {
-				return true;
-			}
-			if(rom.Sha1s == null) {
-				return false;
-			}
-			foreach(string extra in rom.Sha1s) {
-				if(!string.IsNullOrWhiteSpace(extra)) {
-					return true;
-				}
-			}
-			return false;
 		}
 
 		private static string[] GameTokens(string? name)

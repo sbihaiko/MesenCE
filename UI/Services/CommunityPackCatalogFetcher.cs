@@ -158,9 +158,19 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPackDownload] invalid url or sha256: url=" + url + " sha256=" + expectedSha256);
 				return null;
 			}
+			bool mutableRepoArchive = IsMutableRepoArchiveUrl(url);
 			try {
 				Directory.CreateDirectory(DownloadsFolder);
 				string destPath = Path.Combine(DownloadsFolder, expectedSha256.ToLowerInvariant());
+				//ADR-0146: a whole-repo `archive/refs/heads/<branch>.zip` (or its
+				//codeload twin) is mutable, so the catalog's declared hash is a
+				//validation-time snapshot, not a guarantee. Reuse whatever was last
+				//fetched for it rather than re-verifying against the now-stale declared
+				//hash — avoids a re-download on every load.
+				if(mutableRepoArchive && File.Exists(destPath)) {
+					EmuApi.WriteLogEntry("[CommunityPackDownload] cache hit (mutable repo archive): " + destPath);
+					return destPath;
+				}
 				if(File.Exists(destPath)) {
 					string cachedSha = ComputeSha256(File.ReadAllBytes(destPath));
 					if(string.Equals(cachedSha, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
@@ -177,8 +187,16 @@ namespace Mesen.Services
 				}
 				string actualSha256 = ComputeSha256(response.Body);
 				if(!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
-					EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 MISMATCH: expected=" + expectedSha256 + " actual=" + actualSha256 + " bytes=" + response.Body.Length);
-					return null;
+					if(mutableRepoArchive) {
+						//Optimistic install per ADR-0146: the artifact is the repo's current
+						//head, which legitimately differs from the recorded snapshot. Content
+						//still bounded by the host allow-list; a wrong pack self-heals via the
+						//ADR-0145 health signal / tile fall-through.
+						EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 mismatch on mutable repo archive (expected=" + expectedSha256 + " actual=" + actualSha256 + ") - installing optimistically per ADR-0146");
+					} else {
+						EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 MISMATCH: expected=" + expectedSha256 + " actual=" + actualSha256 + " bytes=" + response.Body.Length);
+						return null;
+					}
 				}
 				await File.WriteAllBytesAsync(destPath, response.Body);
 				EmuApi.WriteLogEntry("[CommunityPackDownload] downloaded+verified, wrote " + destPath);
@@ -188,6 +206,17 @@ namespace Mesen.Services
 				return null;
 			}
 		}
+
+		//ADR-0146: a whole-repo `archive/refs/heads/<branch>.zip` (or its codeload
+		//twin `codeload.github.com/<owner>/<repo>/zip/refs/heads/<branch>`) tracks a
+		//moving branch head, so the artifact legitimately changes between loads and
+		//the catalog's declared sha256 is only a validation-time snapshot. Commit
+		//(`archive/<sha>`) and tag (`refs/tags/`) archives are immutable and keep the
+		//strict check. The URL is catalog network data (never a path), so substring
+		//detection is safe here.
+		private static bool IsMutableRepoArchiveUrl(string? url) =>
+			url != null && (url.Contains("/archive/refs/heads/", StringComparison.OrdinalIgnoreCase)
+				|| url.Contains("/zip/refs/heads/", StringComparison.OrdinalIgnoreCase));
 
 		private static bool IsSha256Hex(string? value) =>
 			value != null && value.Length == 64 && value.All(Uri.IsHexDigit);

@@ -100,8 +100,11 @@ public:
 	//RootFolder as a textures section with an empty Path (ADR-0121: the
 	//classic, pre-MEP Mesen HD pack layout, still loadable by the emulator's
 	//separate HdPacks/<rom>/ loader at that shape). Returns true when at
-	//least one layer exists.
-	bool DetectConventionLayout();
+	//least one layer exists. A non-empty humanPrefix (ADR-0147) shifts the
+	//human layer to RootFolder/<humanPrefix>/ (the sibling's mep/ folder) and
+	//prefixes the section Path accordingly; the machine auto/ layer is
+	//unchanged.
+	bool DetectConventionLayout(const string& humanPrefix = "");
 
 	//Section/layer relative paths of the convention
 	static const char* GetConventionPath(MepSectionType type);

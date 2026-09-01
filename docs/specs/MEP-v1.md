@@ -61,6 +61,20 @@ pack's author.
    `patches[]`, and explicit `sections`; its `targets` need not match
    (location is identity). When publishing, tools SHOULD generate the
    `pack.json` from the folder (`mep pack`).
+
+   **Host convention (MesenCE, ADR-0147).** As an extension of the
+   folder-form above, a host MAY split the two layers of the sibling pack
+   into two sibling child folders: `<Game>/mep/` for the human/pack layer
+   (a complete MEP pack with `pack.json`) and `<Game>/auto/` for the
+   machine/recorder layer. When `<Game>/mep/` is a pack directory,
+   resolution is **per entry** with the human layer (`mep/`) winning over the
+   machine layer (`auto/`); entries present only in `auto/` are added after the
+   human layer (the reference behaviour of §5.1). A `pack.json` living at
+   `<Game>/mep/pack.json` is read for metadata, `patches[]`, and explicit
+   `sections`, with location still being identity. The ADR-0050 exception is
+   unchanged: `<background>` entries from the machine layer are added only
+   when the human layer defines no `textures/`. A sibling that does **not**
+   use `mep/` keeps the legacy layout (human layer at the pack root).
 9. **Subfolder fallback (v1.1, last priority in the chain; v1.3 names the
    legacy-basename signal).** When a `.zip` matches **none** of the
    conventions above — no `pack.json` at the root **and** a file name

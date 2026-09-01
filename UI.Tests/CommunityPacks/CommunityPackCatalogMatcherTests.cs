@@ -6,8 +6,9 @@ namespace Mesen.Tests.CommunityPacks
 {
 	//Coverage for the catalog matcher (F6.4b, ADR-0138 §38/§41): auto-match
 	//is an exact No-Intro sha1 (MEP-v1 §4), case-insensitive, then a same-
-	//game identity fallback for entries that already carry a sha1. An entry
-	//without a sha1 (`rom: {}` - MEI-v1 §2.3) is never auto-matched.
+	//game identity fallback for EVERY entry (hash-bearing or hash-less) per
+	//ADR-0146 — a `rom: {}` entry (MEI-v1 §2.3) also matches by title
+	//identity optimistically.
 	public class CommunityPackCatalogMatcherTests
 	{
 		private const string ZeldaDump = "B6643CE5CD43F14915466407FFA1F89C1CDFE76F";
@@ -49,14 +50,31 @@ namespace Mesen.Tests.CommunityPacks
 		}
 
 		[Fact]
-		public void FindMatchingEntry_EntryWithoutSha1_IsNeverMatched()
+		public void FindMatchingEntry_EntryWithoutSha1_NoRomName_ReturnsNull()
 		{
-			//rom: {} - listable/installable, not hash-matchable (MEI-v1 §2.3).
+			//rom: {} and no display name: nothing to match by identity → null.
 			CommunityPackCatalog catalog = new() {
-				Packs = new[] { Entry("Zelda II", null) },
+				Packs = new[] { Entry("Zelda II: The Adventure of Link (USA)", null) },
 			};
 
 			Assert.Null(CommunityPackCatalogMatcher.FindMatchingEntry(catalog, "979494E7869AC7AB4815FDBD1DC99F893F713FBF"));
+		}
+
+		[Fact]
+		public void FindMatchingEntry_EntryWithoutSha1_MatchesBySameGameName()
+		{
+			//rom: {} - no hash to match (MEI-v1 §2.3), but ADR-0146 lets it
+			//auto-match optimistically by same-game identity when a name is given.
+			CommunityPackCatalog catalog = new() {
+				Packs = new[] { Entry("Zelda II: The Adventure of Link (USA)", null, game: "Zelda II: The Adventure of Link (USA)") },
+			};
+
+			CommunityPackCatalogEntry? match = CommunityPackCatalogMatcher.FindMatchingEntry(
+				catalog, "11333ADB723A5975E0ECCA3AEE8F4747AA8D2D26",
+				"Zelda II - The Adventure of Link (1988) (Nintendo)");
+
+			Assert.NotNull(match);
+			Assert.Equal("Zelda II: The Adventure of Link (USA)", match!.Game);
 		}
 
 		[Fact]
@@ -118,13 +136,17 @@ namespace Mesen.Tests.CommunityPacks
 		}
 
 		[Fact]
-		public void FindMatchingEntry_DifferentDumpSameGame_DoesNotMatchEmptyRom()
+		public void FindMatchingEntry_DifferentDumpSameGame_MatchesEmptyRomOptimistically()
 		{
 			CommunityPackCatalog catalog = new() {
 				Packs = new[] { Entry("The Legend of Zelda (USA)", null, game: "The Legend of Zelda (USA)") },
 			};
 
-			Assert.Null(CommunityPackCatalogMatcher.FindMatchingEntry(catalog, ZeldaDump, "Legend of Zelda, The (USA)"));
+			CommunityPackCatalogEntry? match = CommunityPackCatalogMatcher.FindMatchingEntry(
+				catalog, ZeldaDump, "Legend of Zelda, The (USA)");
+
+			Assert.NotNull(match);
+			Assert.Equal("The Legend of Zelda (USA)", match!.Game);
 		}
 
 		[Fact]

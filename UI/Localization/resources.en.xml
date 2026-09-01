@@ -1002,6 +1002,7 @@
 			<Control ID="colSource">Source</Control>
 			<Control ID="btnInstall">Install .zip...</Control>
 			<Control ID="btnOpenFolder">Open Folder</Control>
+				<Control ID="btnRestore">Restore pack</Control>
 			<Control ID="btnRefresh">Refresh</Control>
 			<Control ID="btnOK">OK</Control>
 			<Control ID="btnCancel">Cancel</Control>

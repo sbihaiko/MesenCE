@@ -5,8 +5,10 @@ using Mesen.Utilities;
 using Mesen.Windows;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Mesen.Logic;
 
 namespace Mesen.Services
 {
@@ -33,6 +35,33 @@ namespace Mesen.Services
 		public static int GetVotes(string packId)
 		{
 			return _catalogVotesByPackId.TryGetValue(packId, out int votes) ? votes : 0;
+		}
+
+		//ADR-0147: explicit user action - discard local edits to the installed
+		//pack and re-materialize it from the catalog original (Restore). Uses the
+		//install registry (outside mep/) to confirm a catalog pack is installed
+		//for the loaded ROM, then re-fetches the artifact and rewrites mep/. A
+		//pack that left the catalog cannot be restored (nothing to fetch from).
+		public static async Task<(bool Ok, string Error)> RestoreInstalledPack()
+		{
+			string romSha1 = EmuApi.GetMepRomSha1();
+			if(string.IsNullOrWhiteSpace(romSha1)) {
+				return (false, "no loaded ROM to restore a pack for");
+			}
+			string cacheRoot = Path.Combine(ConfigManager.EnhancementPackFolder, ".cache");
+			CommunityPackInstallRecord? record = CommunityPackInstallRegistry.Read(cacheRoot, romSha1);
+			if(record == null || string.IsNullOrWhiteSpace(record.SourceSha256)) {
+				return (false, "there is no catalog-installed pack to restore for this ROM");
+			}
+			CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
+			if(fetched == null || fetched.Entry == null) {
+				return (false, "the pack is no longer in the catalog (nothing to restore from)");
+			}
+			if(!CommunityPackInstallCoordinator.Restore(fetched.Entry, fetched.PrimaryPackPath, out string error)) {
+				return (false, error);
+			}
+			EmuApi.WriteLogEntry("[CommunityPack] RestoreInstalledPack: restored " + fetched.Entry.PackId + " to mep/");
+			return (true, "");
 		}
 
 		//Called from MainWindow.OnNotification(GameLoaded); power cycles are not new loads
@@ -143,6 +172,12 @@ namespace Mesen.Services
 
 				case CommunityPackInstallStatus.Failed:
 					Notify("Community pack install failed: " + outcome.Message);
+					break;
+
+				case CommunityPackInstallStatus.UpdateAvailable:
+					//ADR-0147: a catalog update is withheld because the installed mep/
+					//was edited locally - surface it so the user chooses Restore.
+					Notify(outcome.Message);
 					break;
 
 				case CommunityPackInstallStatus.Skipped:

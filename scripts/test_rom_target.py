@@ -91,23 +91,16 @@ def check_catalog_games_resolve():
         fail(f"missing catalog {catalog_path}; cannot cross-check resolution")
         return
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    # AC-3: every catalog game that carries a `rom.sha1` owns a target hash the
+    # mini-map can resolve, so the auto-install can hash-match it (ADR-0138
+    # §2.3). Games kept with an empty `rom` (Ice_Climber - a VS. System variant
+    # absent from the NES dat - and Zelda II, which has no verified dump yet)
+    # are the documented non-resolvable ones and stay manually installable.
+    # Derived (not hardcoded) so a new/removed pack does not rot this contract.
+    expected = {p.get("game") for p in catalog["packs"]
+                if (p.get("rom") or {}).get("sha1")}
     resolved = {p.get("game") for p in catalog["packs"]
                 if rom_target.resolve_rom_target(p.get("game"))}
-    # Games with a usable target hash (verified dump, CheatDb, or GetMepRomSha1
-    # from a loaded No-Intro dump). Everything else MUST keep `rom: {}` rather
-    # than carry a guessed hash (see rom_target.py).
-    expected = {
-        "1942",
-        "Super_Mario_Bros",
-        "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin)",
-        "Mega Man (USA)",
-        "Contra (USA)",
-        "The Legend of Zelda (USA)",
-        "Castlevania (USA)",
-        "Donkey Kong (JU)",
-        "Ninja Gaiden (USA)",
-        "Pac-Man (Namco, US, 1993)",
-    }
     if resolved != expected:
         fail(f"resolved set mismatch: got {sorted(resolved)}, expected {sorted(expected)}")
         return

@@ -104,23 +104,27 @@ const char* MepPack::GetConventionPath(MepSectionType type)
 	return kConventionPaths[(int)type];
 }
 
-bool MepPack::DetectConventionLayout()
+bool MepPack::DetectConventionLayout(const string& humanPrefix)
 {
 	bool any = false;
+	//ADR-0147: MesenCE may root the sibling's human layer at mep/ (a sibling
+	//of auto/, not a child of it). A non-empty humanPrefix shifts the human
+	//probe and the section Path; the machine (auto/) layer is unchanged.
+	string layerRoot = humanPrefix.empty() ? "" : (humanPrefix + "/");
 	for(int i = 0; i < 3; i++) {
 		MepSection& section = Sections[i];
-		string humanProbe = FolderUtilities::CombinePath(RootFolder, kConventionProbe[i]);
+		string humanProbe = FolderUtilities::CombinePath(RootFolder, layerRoot + kConventionProbe[i]);
 		string autoProbe = FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionProbe[i]);
 		bool human = (bool)ifstream(humanProbe);
 		bool automatic = (bool)ifstream(autoProbe);
 		if(i == (int)MepSectionType::Audio) {
 			//audio/ may hold fingerprints.json (ADR-0047) instead of a hires.txt
-			human = human || (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, kConventionPaths[i]), "fingerprints.json"));
+			human = human || (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, layerRoot + kConventionPaths[i]), "fingerprints.json"));
 			automatic = automatic || (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionPaths[i]), "fingerprints.json"));
 		}
 		if(human) {
 			section.HasHuman = true;
-			section.Path = kConventionPaths[i];
+			section.Path = humanPrefix.empty() ? kConventionPaths[i] : (layerRoot + kConventionPaths[i]);
 		}
 		if(automatic) {
 			section.AutoPath = string(AutoFolderName) + "/" + kConventionPaths[i];
@@ -145,11 +149,11 @@ bool MepPack::DetectConventionLayout()
 	//overrides a textures/ layer the loop above already found.
 	MepSection& textures = Sections[(int)MepSectionType::Textures];
 	if(!textures.Present) {
-		string rootHires = FolderUtilities::CombinePath(RootFolder, "hires.txt");
+		string rootHires = FolderUtilities::CombinePath(RootFolder, layerRoot + "hires.txt");
 		if((bool)ifstream(rootHires)) {
 			textures.Present = true;
 			textures.HasHuman = true;
-			textures.Path = "";
+			textures.Path = humanPrefix.empty() ? "" : humanPrefix;
 			any = true;
 		}
 	}

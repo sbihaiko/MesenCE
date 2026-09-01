@@ -140,6 +140,18 @@ namespace Mesen.Interop
 			return success;
 		}
 
+		//ADR-0147: hex content_id of a real directory tree (MepContentId::ComputeFolder),
+		//used to detect local edits to an installed mep/ pack (compare against the
+		//baseline recorded at install time). Empty when the folder is unreadable.
+		[DllImport(DllPath, EntryPoint = "GetMepContentId")]
+		private static extern void GetMepContentIdWrapper([MarshalAs(UnmanagedType.LPUTF8Str)] string folder, IntPtr outBuffer, Int32 maxLength);
+		public static string GetMepContentId(string folder)
+		{
+			return Utf8Utilities.CallStringApi((IntPtr outBuffer, Int32 maxLength) => {
+				GetMepContentIdWrapper(folder, outBuffer, maxLength);
+			}, 100);
+		}
+
 		[DllImport(DllPath)] public static extern void WriteLogEntry([MarshalAs(UnmanagedType.LPUTF8Str)] string message);
 		[DllImport(DllPath)] public static extern void DisplayMessage([MarshalAs(UnmanagedType.LPUTF8Str)] string title, [MarshalAs(UnmanagedType.LPUTF8Str)] string message, [MarshalAs(UnmanagedType.LPUTF8Str)] string? param1 = null);
 
