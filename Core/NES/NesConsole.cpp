@@ -1037,7 +1037,7 @@ static string ResolveExtractAudioToolPath()
 		}
 	}
 
-	//3. ~/Tools (user-level install).
+	//3. <Mesen home>/Tools (the app data folder, e.g. ~/Library/Application Support/MesenCE on macOS - GetHomeFolder() is not $HOME).
 	string homeTools = FolderUtilities::CombinePath(
 		FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "Tools"), "spike_sound_driver");
 	if(std::filesystem::exists(homeTools)) {
@@ -1053,7 +1053,7 @@ void NesConsole::ExtractAudioHdPack(HdPackBuilderOptions options)
 
 	string toolPath = ResolveExtractAudioToolPath();
 	if(toolPath.empty()) {
-		MessageManager::Log("[HDPack] extract-audio: tool not found - build it with `make spike-sound-driver` and set MESEN_EXTRACT_AUDIO_TOOL (or drop the binary next to the Mesen executable / in ~/Tools)");
+		MessageManager::Log("[HDPack] extract-audio: tool not found - build it with `make spike-sound-driver` and set MESEN_EXTRACT_AUDIO_TOOL (or drop the binary next to the Mesen executable / in <Mesen home>/Tools)");
 		MessageManager::DisplayMessage("HdPack", "HdPackExtractAudioToolMissing");
 		return;
 	}

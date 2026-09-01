@@ -115,7 +115,7 @@ Proposed runtime contract for the productised probe:
   (`SettingTypes.h` + `EmulatorShortcut.cs` mirror), the `NesConsole` switch
   case + `ExtractAudioHdPack()` handler (NES-only; GB/SMS switches ignore it
   explicitly), a tool-binary resolver (`MESEN_EXTRACT_AUDIO_TOOL` env →
-  next-to-app → `~/Tools`), the `HdPackBuilderViewModel.ExtractAudio()` action
+  next-to-app → `<Mesen home>/Tools`, the app data folder — not `$HOME`), the `HdPackBuilderViewModel.ExtractAudio()` action
   gated on NES, the `HdPackBuilderWindow` button and localisation strings.
   `MepPackManager` needed no case — it emits shortcuts, it does not receive
   them. Validated: UI `dotnet build` 0/0, a standalone `ProcessUtilities` test
