@@ -144,15 +144,31 @@ allow-listed ZIP.
 | Ninja Gaiden (USA) | [#145](https://github.com/sbihaiko/MesenCE/issues/145) |
 | Paper Mario Bros (SMB1 reskin) | [#147](https://github.com/sbihaiko/MesenCE/issues/147) |
 | Metroid (USA) (MediaFire 2.0 orchestral ZIP) | [#148](https://github.com/sbihaiko/MesenCE/issues/148) |
+| Zelda II | [#141](https://github.com/sbihaiko/MesenCE/issues/141) |
+| Ice Climber, Pac-Man | [#132](https://github.com/sbihaiko/MesenCE/issues/132) [#140](https://github.com/sbihaiko/MesenCE/issues/140) |
+
+## De-listed (closed issue, no row in `docs/community-packs.json`)
+
+These were submitted but are **not** in the catalog: their issues are closed
+and `docs/community-packs.json` has no row for them, because the artifact was
+not self-contained/verifiable (audio-only NEA packs with off-catalog assets,
+or a stale shared-zip sha256) — the de-listing rule is ADR-0148. A fresh
+submission needs a self-contained, allow-listed artifact; do not reopen the
+closed issue.
+
+| Game | Closed issue |
+|---|---|
 | Super Mario Bros | [#135](https://github.com/sbihaiko/MesenCE/issues/135) |
 | Super Mario Bros. 2 | [#134](https://github.com/sbihaiko/MesenCE/issues/134) |
-| Zelda II | [#141](https://github.com/sbihaiko/MesenCE/issues/141) |
 | 1942 | [#128](https://github.com/sbihaiko/MesenCE/issues/128) |
-| Duck Hunt, Ice Climber, Pac-Man, Dr. Mario, Bio Miracle, Urban Champion | [#131](https://github.com/sbihaiko/MesenCE/issues/131) [#132](https://github.com/sbihaiko/MesenCE/issues/132) [#140](https://github.com/sbihaiko/MesenCE/issues/140) [#130](https://github.com/sbihaiko/MesenCE/issues/130) [#129](https://github.com/sbihaiko/MesenCE/issues/129) [#136](https://github.com/sbihaiko/MesenCE/issues/136) |
+| Duck Hunt | [#131](https://github.com/sbihaiko/MesenCE/issues/131) |
+| Dr. Mario | [#130](https://github.com/sbihaiko/MesenCE/issues/130) |
+| Bio Miracle Bokutte Upa | [#129](https://github.com/sbihaiko/MesenCE/issues/129) |
+| Urban Champion | [#136](https://github.com/sbihaiko/MesenCE/issues/136) |
 
-Banter-list URLs for games **already in the catalog** (do not open a second issue; useful if `/revalidate` needs a current file):
+Banter-list URLs (for a game already in the catalog, do not open a second issue — useful if `/revalidate` needs a current file; for a de-listed game, a self-contained artifact here is a candidate for a new submission):
 
-- Duck Hunt Remastered (Drive): `https://drive.google.com/file/d/1j4b0kousFpvSnvywld1_gHT-fUayfoXT/view?usp=sharing`
+- Duck Hunt Remastered (Drive, de-listed #131): `https://drive.google.com/file/d/1j4b0kousFpvSnvywld1_gHT-fUayfoXT/view?usp=sharing`
 - Pac-Man (Ed Peppe): [github.com/PepCodes/HDNes-Graphics-Pac](https://github.com/PepCodes/HDNes-Graphics-Pac)
 
 Contra [RHDN 33075](https://www.romhacking.net/forum/index.php?topic=33075.0) is stage-1-only; do not replace #137 with it unless the human asks.

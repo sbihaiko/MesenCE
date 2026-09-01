@@ -150,11 +150,15 @@ stale shared-zip sha256) are ADR-0148.
 - A contributor opens an issue using the
   `.github/ISSUE_TEMPLATE/community-pack.yml` template, which asks for
   three required fields only — pack link, target game/ROM + region,
-  console. Author/credits, description and the `external_assets`/
+  console (form ids `pack_link`, `rom_target`, `console` — there is no
+  author field). Author/credits, description and the `external_assets`/
   `external_assets_license` pair were removed to keep the form short:
-  authorship is discovered by the classify step from the pack itself and
-  recorded as mep-meta's `author` (the catalog's Author column), and the
-  distribution-rights checkbox had already been dropped in `b62f0bbc`.
+  authorship is discovered by the classify step from the pack itself
+  (`.github/ai/validate-classify.md` schema field `"author":{"type":"string"}`,
+  filled only from the PACK BRIEF, empty when the pack names none) and the
+  validation workflow writes it into the mep-meta comment's `author` key
+  when non-empty (`community-pack-validate.yml`, `meta["author"] = author`);
+  the distribution-rights checkbox had already been dropped in `b62f0bbc`.
   The issue is created with the `community-pack` label already applied.
 - `.github/workflows/community-pack-submitted.yml` triggers the reusable
   `.github/workflows/community-pack-validate.yml` workflow, which:
@@ -202,16 +206,25 @@ stale shared-zip sha256) are ADR-0148.
   an invitation to try a pack and vote — no usage telemetry is collected;
   that ordering replaced the former "Most popular" section, which
   re-listed the same packs).
-  "Author" is the Issue Form's declared "Author/credits" (who made the
-  pack), never the login that opened the issue — whoever submits a pack
-  is not necessarily its author. The validation workflow seeds one 👍 per
-  submission (idempotent, so `/revalidate` never double-counts), so every
-  listed pack starts at 1. A pack's external dependencies are no longer a
-  table column; they live in `docs/community-packs.json`'s `deps`.
+  "Author" is mep-meta's `author` (what the classify step read off the
+  pack itself — `generate_community_pack_catalog.py` maps it onto the
+  legacy `credits` form field), never the login that opened the issue —
+  whoever submits a pack is not necessarily its author; it renders as `?`
+  when the pack names nobody, which as of 2026-09-01 is 10 of the 11
+  catalog rows (`docs/community-packs.json` carries no `author` key at
+  all — the mep-meta comment is its only store). The validation workflow
+  seeds one 👍 per submission (idempotent, so `/revalidate` never
+  double-counts), so every listed pack starts at 1. A pack's external
+  dependencies are no longer a table column; when present, they live in
+  `docs/community-packs.json`'s per-row `deps` (emitted by
+  `scripts/mei_catalog_entry.py` only when mep-meta's
+  `recipe.sources.deps` is non-empty — 0 of the 11 rows have one today).
 - `scripts/ensure_community_pack_labels.sh` ensures (idempotently) the
-  `community-pack`, `pack:valid`, `pack:invalid`, `assets:textures`,
-  `assets:audio`, `patch:ips`, `patch:bps`, `console:nes`, `console:gb`,
-  `console:gbc`, `console:sms` labels exist in the repo.
+  `community-pack`, `pack:valid`, `pack:invalid`, `pack:needs-review`,
+  `pack:split`, `assets:textures`, `assets:audio`, `assets:external`,
+  `patch:ips`, `patch:bps`, `console:nes`, `console:gb`, `console:gbc`,
+  `console:sms` labels exist in the repo (the same 14 labels the repo
+  actually has).
 
 ### Difference from the bug board
 

@@ -17,7 +17,7 @@ ADR-0077 proposed making the golden root overridable (a `MESEN_GOLDEN_ROOT`
 env var or `argv[1]`, or passing the root from the makefile recipe). ADR-0084
 assessed this as a contract choice, not a defect: the precondition is
 documented in the file, the failure is loud and self-explaining,
-`make core-unit-tests` (`makefile:233`) satisfies it by construction because
+`make core-unit-tests` (makefile target `core-unit-tests`) satisfies it by construction because
 make runs recipes from the repo root, and GitHub Actions steps default to the
 checkout root, so the `Run core unit tests` step in
 `.github/workflows/unit-tests.yml` (ADR-0126) does not hit the failure mode

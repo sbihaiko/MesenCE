@@ -11,6 +11,20 @@ pack_id resolution, first match wins: (1) an explicit 'id' field in pack.json �
 
 ## Consequences
 
+Implementation state (verified 2026-09-01):
+- Resolution lives in one leaf module, `scripts/pack_id_rules.py` (`resolve_pack_id` :92-113 — declared `id` → `owner/repo` (with the ADR-0143 game slug) → `issue-{n}`; `pack_origin` :131; `apply_mei_identity` :115), used by the validate workflow (`.github/workflows/community-pack-validate.yml:1043-1049`, writing mep-meta `pack_id`/`pack_origin`), the catalog generator (`scripts/generate_community_pack_catalog.py:84-87`) and the MEI assembler (`scripts/mei_catalog_entry.py:170`). Tests: `scripts/test_pack_id_rules.py` (Makefile:278).
+- Catalog uniqueness: `select_catalog_rows` (`pack_id_rules.py:186`) drops byte-duplicates (same `content_id`) and foreign-origin claims, then keeps the ADR-0141 slot winner; CI posts the notices via `scripts/mep_identity_check.py` (duplicate comment :170-178, `pack:needs-review` label + comment :180-196), step `identity-check` (workflow :942).
+- Source (1): MEP-v1 is v1.4 with `id` as SHOULD (`docs/specs/MEP-v1.md:3`, :138); `mep_lint.py:650-652` warns on a missing/malformed `id`. Source (4): `MepPackManager::EffectivePackId` (`MepPackManager.cpp:604-613`) and `PackPreferenceResolver.DerivePackId` (`UI/Logic/PackPreferenceResolver.cs:51-54`).
+- Client: `.mep-install.json` carries `pack_id` (`MepRecipeInstaller.cpp:389`); the §5 `content_id` merge lets a local container adopt a catalog candidate (`PackPreferenceResolver.cs:64-80`).
+- Current catalog rows: 5 `owner/repo:<game>` ids and 6 `issue-N` ids (`docs/community-packs.json`), i.e. source (3) is the common case for non-GitHub hosts as predicted.
+- Source (2) was narrowed by ADR-0143 (2026-08-29): `owner/repo` became `owner/repo:<game-slug>`; the bare `owner/repo` remains only when no game identity is known (`pack_id_rules.py:104-110`).
+Not implemented: closing the newer duplicate issue (`mep_identity_check.py` only comments — the duplicate is "still accepted", :12); the silent `local:` → catalog `pack_id` preference migration (no rewrite of the stored `RomPackPreference` exists; only the read-time merge above); MEI-v1 (`docs/specs/MEI-v1.md`) does not yet document the additive `pack_id`/`content_id`/`votes` fields the generator emits.
 
 ## Alternatives
 
+- `content_id` as the only identity: rejected — every revision would look like a new pack, breaking the per-ROM preference and the one-slot rule (Context).
+- Container/zip file name as identity (the ADR-0040/0049 key): kept only as the source (4) `local:` fallback — file names are not unique across submitters.
+- Release tag or release-asset filename as the GitHub source: rejected in favor of `owner/repo` (origin), so `/archive/v1.2.zip` and `/releases/download/v1.2/pack.zip` of one repo are one product (PRD Part B §3.3).
+- Product-level deduplication for gist/raw/Drive links: rejected as a documented non-goal — no stable owner exists, so `issue-{n}` is the id.
+- Making `id` a MUST in MEP-v1: rejected — a SHOULD keeps every legacy `hires.txt` pack loadable; hosts never fail a load on it.
+- Letting any origin claim an existing `id` (pure first-match): rejected by the 2026-08-28 origin-binding amendment — `id: contra80s, version: 99.0.0` from a stranger would otherwise take the slot on every client (PRD Part B §3.3).

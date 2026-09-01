@@ -13,6 +13,17 @@ A pack's audio section counts as usable when its hires.txt references .ogg track
 
 ## Consequences
 
+Implementation state (verified 2026-09-01):
+- Classify rule: `.github/ai/validate-classify.md:33` (AUDIO EXCEPTION) — a missing `.ogg` target does not invalidate a patch-bundling audio pack; `assets` gains `ips`/`bps` from the bundled-patch magic (:34); the `patches[]` field is passed through to the assembled `pack.json` (:38).
+- Lint signal: `scripts/mep_lint.py:1112-1136` reports every bundled `.ips`/`.bps` as `bundled patch: <name> (present, wired — …)` or `(present, NOT wired — …)`, kept even in `--quiet` output (:1239-1241) because it is the classifier's authority; tests in `scripts/test_mep_audio_patch_resolution.py` (`6d16c55f`).
+- Loader side unchanged: `HdPackLoader.cpp` `ProcessBgmTag` resolves each `.ogg` ref as written against the pack folder, so the extraction must produce exactly the referenced paths.
+- Amended by ADR-0148 (2026-09-01): presence alone no longer redeems — the patch must be wired (`<patch>` line / `patches[]` entry). Under that tightening the eight LiQuiDz NEA siblings accepted under this ADR were de-listed from `docs/community-packs.json` (ADR-0148 rules 1–2); `mep_lint`, the classify prompt and this ADR's header all carry the amendment.
+Not implemented: the install-time extraction itself — the extract-audio tool (ADR-0135, `NesConsole::ExtractAudioHdPack`, `Core/NES/NesConsole.h:77`) is a separate headless process and is not invoked by `UI/Services/CommunityPackInstallCoordinator.cs` or the legacy install path, so an accepted patch-bundling audio pack is classified as usable but its `.ogg` tracks are not generated automatically on install yet.
 
 ## Alternatives
 
+- Keep MEP-v1 §5 strictly (every referenced file must resolve in the archive): rejected — it marked functional Mesen NEA packs invalid (Context).
+- Require the `.ogg` under a conventional audio directory: rejected — the loader resolves refs as written, so a path constraint would add nothing the patch-presence condition does not already carry.
+- Ship the generated `.ogg` in the catalog artifact: rejected — the tracks are derived from the copyrighted ROM; only the binary patch is redistributable.
+- Redeem missing textures/synth sections by a bundled patch too: rejected — the patch supplies audio only (`validate-classify.md:33`).
+- Count a patch that is merely present (this ADR's original text): superseded by ADR-0148 — an unwired patch is never applied and redeems nothing (#128).

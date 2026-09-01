@@ -15,6 +15,14 @@ validation via `python3 scripts/validate-specs.py` (repo root).
 | **MEP Recipe v1** | [`MEP-recipe-v1.md`](MEP-recipe-v1.md) | stable | declarative re-packaging of split-distribution packs (`copy`/`glob`/`rename`/`rewrite-paths`) |
 | **hires.txt GB/SMS** | [`hires-gbsms-v1-draft.md`](hires-gbsms-v1-draft.md) | **draft** | backward-compatible extension of the HDNes format for GB/SMS (pending community review — ADR-0004) |
 
+Golden fixtures under [`golden/`](golden/) (one folder per spec — `esp/`,
+`mep/`, `mei/`, `mep-recipe/`, `hires-gbsms/`, `textures/` — plus):
+
+| Golden | Path | Checked by | What it pins |
+|---|---|---|---|
+| MEP `content_id` | [`golden/mep-content-id.json`](golden/mep-content-id.json) | `scripts/test_mep_content_id_golden.py` (Python) and `scripts/core_unit_tests.cpp` (C++, `Core/Shared/EnhancementPacks/MepContentId`) | canonical hash of a resolved pack (ADR-0139) — fixtures as inline file entries with expected ids, run by both implementations |
+| MEP NES pack | [`golden/mep-nes/`](golden/mep-nes/) | `scripts/test_mep_compare_auto_palettes.py`, `mep_lint.py` via `validate-specs.py` | NES-shaped `pack.json` + `textures/hires.txt` fixture with several palettes per tile shape (ADR-0136) |
+
 **Reference implementation limitations (MesenCE, MEP v1 host — F3):** the
 `audio` section is applied only to `nes` (OGG via `hires.txt`); GB/SMS await
 the freeze of the hires-gbsms extension, and SNES/MSU-1 is out of scope for

@@ -68,6 +68,12 @@ path (never by run-ahead frames):
   the click-free switch/stop verification on a real pack is recorded as
   manual-pending (listening validation — loop-intro, SFX audibility, no click
   on switch), not a blocker for the acceptance.
+- Implementation state (verified 2026-09-01): `Core/NES/HdPacks/OggMixer.h:19`
+  (`kBgmFadeSamples = 1764`), `OggMixer.cpp:47-56` (`StopBgm` moves `_bgm` into
+  `_bgmFadeOut`), `:117-118` (`Play` does the same on a switch), `:142-164`
+  (fade-in/fade-out ramps gated on `!IsRunAheadFrame()`), `Reset` clears both
+  (`:21-23`). SFX path unchanged. The Context's `OggMixer.cpp:103`/`:44` line
+  numbers are those of the pre-`c36043f5` file.
 
 ## Alternatives
 

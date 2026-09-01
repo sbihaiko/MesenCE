@@ -9,7 +9,7 @@ Phase 4 of the unit-test plan added `scripts/core_unit_tests.cpp`, a
 framework-free C++ harness (ChannelRoleClassifier, `MepPack::NormalizeRelativePath`
 / `MepPack::Parse`, later `FindFallbackSubfolder` and `DetectConventionLayout`
 via ADR-0120/0121), built by the makefile target `core-unit-tests`
-(`makefile:233`). Unlike `roles-probe`, `capture-tool` and `spike-sound-driver`,
+(makefile target `core-unit-tests`). Unlike `roles-probe`, `capture-tool` and `spike-sound-driver`,
 that target has no `core` prerequisite: it compiles
 `scripts/core_unit_tests.cpp`, `Core/Shared/Audio/ChannelRoleClassifier.cpp`,
 `Core/Shared/EnhancementPacks/MepPack.cpp` and three `Utilities/*.cpp` with the

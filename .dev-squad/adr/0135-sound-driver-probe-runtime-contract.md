@@ -8,7 +8,7 @@
 ## Context
 
 ADR-0051 recorded the spike (`scripts/spike_sound_driver.cpp`, `make
-spike-sound-driver`, `makefile:254`): drive the game's own sound driver via
+spike-sound-driver`, makefile target `spike-sound-driver`): drive the game's own sound driver via
 debugger breakpoints and JSR/mailbox discovery to enumerate every music and
 SFX id without gameplay. On 12 ROMs it produced a validated trigger on 5–6
 (Mega Man, Castlevania, Zelda, Punch-Out!!, SMB3, Ninja Gaiden plausible) and
@@ -72,15 +72,16 @@ Proposed runtime contract for the productised probe:
 7. **Shortcut-wiring checklist (from ADR-0093, precedent `ExportRomTilesHdPack`).**
    The feature is complete only when all of these reference the new shortcut,
    and the acceptance criteria verify each:
-   - `Core/Shared/SettingTypes.h` (`EmulatorShortcut` enum, cf. `:1143`)
-   - `UI/Config/Shortcuts/EmulatorShortcut.cs` (C# mirror enum, cf. `:143`)
-   - `Core/NES/NesConsole.{h,cpp}` shortcut switch and handler (cf. `.cpp:916,
-     :923`) — NES only for the probe; GB/SMS switches
-     (`Core/Gameboy/Gameboy.cpp:776`, `Core/SMS/SmsConsole.cpp:386`) must
+   - `Core/Shared/SettingTypes.h` (`EmulatorShortcut` enum, cf. `ExportRomTilesHdPack`)
+   - `UI/Config/Shortcuts/EmulatorShortcut.cs` (C# mirror enum, cf. `ExportRomTilesHdPack`)
+   - `Core/NES/NesConsole.{h,cpp}` shortcut switch and handler (cf.
+     `NesConsole::ProcessNotification`, `NesConsole::ExportRomTilesHdPack`) — NES only for the probe; GB/SMS switches
+     (`Gameboy::ProcessNotification`, `SmsConsole::ProcessNotification`) must
      reject or ignore it explicitly
-   - `Core/Shared/EnhancementPacks/MepPackManager.cpp` (cf. `:307`) if the
+   - `Core/Shared/EnhancementPacks/MepPackManager.cpp` (cf.
+     `MepPackManager::StartBootstrapIfNeeded`) if the
      pack manager dispatches it
-   - `UI/ViewModels/HdPackBuilderViewModel.cs` (cf. `:128`) or the Open Game
+   - `UI/ViewModels/HdPackBuilderViewModel.cs` (cf. `ExportRomTiles`) or the Open Game
      Folder view model that exposes the action
    - localisation resources for the new menu/dialog strings.
 

@@ -13,28 +13,40 @@ just translates the sections relevant to someone preparing a submission.
 
 When the submission issue is opened, a workflow downloads the pack from the
 provided link, runs `scripts/mep_lint.py` on it, and classifies the declared
-content in `pack.json` (the `sections` field, see MEP-v1.md §3). The final
-verdict is one of the three below.
+content in `pack.json` (the `sections` field, see MEP-v1.md §3) or, for a
+plain HD Mesen pack, its `hires.txt`. The verdict is **binary** — `accepted`
+or `invalid` (ADR-0138 Clarification §2) — and is reflected on the
+"MesenCE Community Packs" board through the Status field, whose option names
+are literals: "Novo envio" → "Em validação" → "Aceito parcial (HD Mesen)" /
+"Inválido". ("Aceito (MEP completo)" remains a defined Status option but is
+not an automated target; there is no separate full-MEP verdict.)
 
-### Aceito (MEP completo)
+### Accepted — Status "Aceito parcial (HD Mesen)"
 
-The pack includes, in addition to textures, at least one `synth` or `audio`
-section:
+The pack lints clean and at least one declared section actually resolves
+inside the archive. Every `accepted` submission receives the `pack:valid`
+label; **what** the pack contains is conveyed by additive content-index
+labels, never by the verdict itself:
 
-- **`synth`** (MEP-v1.md §5.3) — a file in **ESP v1** format, applied above
-  the built-in defaults and below the user's local ESP.
-- **`audio`** (MEP-v1.md §5.2) — an audio replacement directory in a format
-  already supported by the target system (OGG for HD pack, or MSU-1 on SNES).
+- `assets:textures` — a **`textures`** section (MEP-v1.md §5.1): a directory
+  pointing to an HD Pack in HDNes `hires.txt` format (or a plain HD Mesen
+  pack, `hires.txt` at the root).
+- `assets:audio` — an **`audio`** section (MEP-v1.md §5.2): OGG replacement
+  tracks in the format already supported by the target system. A **`synth`**
+  section (MEP-v1.md §5.3, an **ESP v1** file applied above the built-in
+  defaults and below the user's local ESP) is validated by the lint but has
+  no label of its own.
+- `patch:ips` / `patch:bps` — the pack ships a ROM patch (`patches[]`).
+- `console:nes` / `console:gb` / `console:gbc` / `console:sms` — the console
+  declared in the form.
+- `assets:external` — a split-distribution pack assembled through an
+  `external_assets` recipe (see "Split-distribution packs" below).
+- `pack:split` — a sibling issue that the triage opened for one game of a
+  multi-game archive (`scripts/validate_pack_local.sh`).
+- `pack:needs-review` — the identity check found the same `pack_id` claimed
+  from a different origin (ADR-0140/0141); a human decides.
 
-### Aceito parcial (HD Mesen)
-
-The pack only declares the **`textures`** section (MEP-v1.md §5.1): a
-directory pointing to an HD Pack in HDNes `hires.txt` format. This is a
-valid and complete submission within the scope of textures, but it does not
-cover audio/synth, so it receives the `pack:partial-hd` label instead of
-`pack:mep-full`.
-
-### Inválido
+### Invalid — Status "Inválido" (`pack:invalid`)
 
 The submission is rejected when:
 

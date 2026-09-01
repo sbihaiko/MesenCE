@@ -17,7 +17,7 @@ same as an open ecosystem:
 | Foundation | Where | What it provides |
 |---|---|---|
 | NES HD Packs (HDNes format) | `Core/NES/HdPacks/` | Tile + OGG audio replacement, per-context conditions, and the **HD Pack Builder** (in-emulator tile recorder) |
-| MSU-1 | `Core/SNES/Coprocessors/MSU1/` | The open SNES streaming-audio standard — existing community packs work today |
+| MSU-1 | not on `main` — `Core/SNES/` is an empty skeleton (no tracked files); see [`docs/roadmap/PRD-mesence-enhancement-ecosystem.md`](roadmap/PRD-mesence-enhancement-ecosystem.md) for the product scope (SNES/MSU-1 is out of scope, ADR-0041) | The open SNES streaming-audio standard, kept here as a design reference only |
 | Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | A live tap that already converts chip register state into note/voice abstractions — most of a MIDI exporter |
 
 ## Principles

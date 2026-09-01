@@ -20,7 +20,10 @@ the ROM. A `pack.json` is **optional** and only adds metadata (name, author,
 license, extra `targets[]`) when the author wants to publish the folder as a
 MEP zip — `mep pack` writes it from the folder.
 
-**The local folder always wins.** Discovery order (revises ADR-0040):
+**The local folder always wins.** *See also ADR-0147 (2026-09-01, `3bc4482d`):
+the sibling layout now splits into `auto/` (recorder) and `mep/` (edited MEP
+pack, where community packs are installed visible by default); the human
+layer moves from the pack root to `mep/`.* Discovery order (revises ADR-0040):
 **sibling folder** `<dir>/<Game>/` → `HdPacks/<Game>/` (legacy) →
 `EnhancementPacks/` containers (folders and zips). An artist working in the
 sibling folder never has to uninstall or disable an installed zip of the same

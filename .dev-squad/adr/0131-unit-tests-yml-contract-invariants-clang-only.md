@@ -19,12 +19,11 @@ contract-vs-reality drifts in `.github/AGENTS.md` Work Guidance
    listed sources" from "full native build", and the job id `ui-tests` is
    narrower than its content (ADR-0086, ADR-0088, ADR-0091).
 2. Compiler coverage. `make core-unit-tests` runs with no flags, so it uses the
-   makefile's `CXX := clang++` default (`makefile:17`; `USE_GCC=true` selects
-   `g++` at line 12). `build.yml`'s Linux matrix exercises both toolchains
+   makefile's `CXX := clang++` default (the `ifeq ($(USE_GCC),true)` block
+   selects `g++`). `build.yml`'s Linux matrix exercises both toolchains
    (`make_flags: "USE_GCC=true"`, `build.yml:83`). ADR-0087 proposed either
    documenting the step as clang-only or adding a `USE_GCC` matrix. ADR-0089
-   showed the matrix premise is wrong: `makefile:142` defines
-   `CORESRC := $(shell find Core -name '*.cpp')`, so
+   showed the matrix premise is wrong: the makefile's `CORESRC := $(shell find Core -name '*.cpp')`, so
    `Core/Shared/Audio/ChannelRoleClassifier.cpp` and
    `Core/Shared/EnhancementPacks/MepPack.cpp` are already compiled by
    `build.yml` under `USE_GCC=true` on x64 and arm64; the only file gated

@@ -10,9 +10,9 @@
 `scripts/AGENTS.md:106-108` describes `check-core-manifest.sh`,
 `check-file-loc.sh`, `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh` and
 `check-f5-4b-doc.sh` as "repo-hygiene shell checks run from `make` or CI".
-Only one of them is: `makefile:214-215` defines `check-manifest:` running
+Only one of them is: the makefile's `check-manifest:` target running
 `./scripts/check-core-manifest.sh`, and the `ui` and `core` targets depend on
-it (`makefile:217`, `:226`). No `.github/workflows/*.yml` invokes any of the
+it (`ui: check-manifest …`, `core: check-manifest …`). No `.github/workflows/*.yml` invokes any of the
 five. Four of five never execute anywhere except by hand (ADR-0111, ADR-0118).
 
 This is pre-existing rot, but the F5.4b run compounded it: it added a fifth

@@ -1,6 +1,6 @@
 # ADR-0138: MEP Recipe v1 — declarative re-packaging of split-distribution packs, issue-held metadata and client auto-install from the web catalog
 
-- Status: accepted (design agreed with the user on 2026-08-27; F6.0 and F6.1 shipped; F6.2–F6.5 remaining — see Consequences; the user runs the implementation outside the autonomous dev-squad task)
+- Status: accepted (design agreed with the user on 2026-08-27; fully shipped — F6.0–F6.4c on 2026-08-28 (F6.4c fixture set `05ef767a`), F6.5 and F6.6 on 2026-08-29 (`22ef1971`), F6.7 auto-load on 2026-09-01 (ADR-0146); see the PRD Part A §4 F6.x rows. Amended in place by ADR-0141 (§37 reinstall trigger), ADR-0146 (§38/§51/§54 consent gate) and ADR-0147 (§4 output location); the user ran the implementation outside the autonomous dev-squad task)
 - Date: 2026-08-27
 - Related: ADR-0040 (central per-ROM pack storage and discovery precedence), ADR-0044 (per-hash `patches[]`, hash gate on patches), ADR-0049 (sibling-folder convention), ADR-0120/ADR-0121 (zip fallback discovery, legacy `hires.txt`), ADR-0039 (No-Intro hash from the ROM file)
 - Spec impact: `docs/specs/MEP-v1.md` §6 (security wording), new `docs/specs/MEP-recipe-v1.md`
@@ -580,8 +580,11 @@ again) are folded and deleted.
     `user_supplied` deps, then an interop call into the F6.4a installer;
     reinstall when `source.sha256` changed; UI notice when the patch is
     withheld. Auto-install default per §4 applies in F6.4b.
+    *Amended by ADR-0141 (2026-08-28): the client reinstall/update trigger
+    is the catalog entry's `content_id`, not `source.sha256` (a re-wrapped
+    container with the same content is not an update; no auto-downgrade).*
 
-38. **`AutoInstallCommunityPacks` default and consent (F6.4a audit).** The
+38. **`AutoInstallCommunityPacks` default and consent (F6.4a audit).** *Superseded by ADR-0146 (2026-09-01; auto-load, no consent dialog) — the first-run consent prompt below is no longer required; the `AutoInstallCommunityPacks` toggle stands.* The
     setting ships `true` in F6.4a as storage only — nothing reads it yet. §4's
     default stands, but F6.4b MUST ship, in the same slice, the settings
     toggle and a first-run consent prompt before the first automatic
@@ -597,7 +600,10 @@ again) are folded and deleted.
     timestamps, `ZIP_STORED`; `test_gen_mep_recipe_fixture.py` proves
     regeneration is byte-identical). Growing that set to the discovery edge
     cases (wrapped subfolder, nested top-level zip, ADR-0120/0121 fallback)
-    is a follow-up (**F6.4c**, after F6.4b). `SHA256::GetHash(path)` returns
+    is a follow-up (**F6.4c**, after F6.4b; shipped 2026-08-28 in `05ef767a`
+    — `docs/specs/golden/mep-recipe/fixture/` now holds `primary.zip`,
+    `wrapped-subfolder.zip`, `nested-zip.zip`, `bare-probe.zip`,
+    `audio-dep.zip` and their `recipe*.json`). `SHA256::GetHash(path)` returns
     `""` on an unopenable file so verification can never pass on a missing
     artifact (fixed 2026-08-28; `sha1` keeps its opportunistic contract).
 40. **Critic false positives on Core code.** F6.4a's T4 stagnated for six
@@ -671,7 +677,7 @@ again) are folded and deleted.
     public CDNs and a client cannot pin DNS the way the runner does. The
     declared `sha256` doubles as the `.cache/downloads/` file name, so it is
     validated as 64 hex chars before touching the filesystem.
-51. **§38 gate ownership and per-session idempotency.**
+51. **§38 gate ownership and per-session idempotency.** *Consent-gate clause superseded by ADR-0146 (2026-09-01; auto-load, no consent dialog); the per-session `HashSet` and the `.mep-install.json` stamp remain.*
     `CommunityPackInstallService` (the ROM-load hook) owns the consent gate:
     it evaluates `CommunityPackConsentState` — showing the first-run dialog
     via `EnhancementPacksWindow.EnsureCommunityPackAutoInstallConsent` — and
@@ -693,7 +699,7 @@ again) are folded and deleted.
     enforces it in both directions: `UI/Logic/*.cs` never references
     `Mesen.Services`/`HttpClient`, and `HttpClient` under `UI/` is confined
     to `UI/Services/*.cs` plus the pre-existing `UpdatePromptViewModel`.
-54. **Consent dialog placement — decided, stop re-raising.** The first-run
+54. **Consent dialog placement — decided, stop re-raising.** *Superseded by ADR-0146 (2026-09-01; auto-load, no consent dialog) — the dialog is removed from the auto-install path.* The first-run
     Yes/No dialog is a public static helper on `EnhancementPacksWindow`
     (the window that owns the related settings and message-box usage),
     called from the Services layer via the UI dispatcher; the decision
@@ -715,8 +721,8 @@ again) are folded and deleted.
 on two *real* critic findings (null dep id, sha256-as-path) — recovered per §40
 and fixed by hand; T5 (`CommunityPackInstallService` + `MainWindow` hook) was
 skipped for depending on T1 and written by hand; the auditor's PRIORITY
-findings became §50–§53 and were implemented in the same commit. Remaining:
-F6.4c, F6.5.
+findings became §50–§53 and were implemented in the same commit. Remaining
+at the time: F6.4c, F6.5 — both since shipped (2026-08-28 and 2026-08-29).
 
 **F6.4b second half (2026-08-28).** Run `2ef26ba839d1` landed the UI/Logic
 decision classes, DTOs and the interop export (T1–T5; T1 recovered per §40 and

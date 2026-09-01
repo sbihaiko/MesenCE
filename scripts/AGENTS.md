@@ -477,6 +477,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   into its `CHECKS` tuple, and stays the sole invocation entry point
   (ADR-0138 Clarification §23, F6.2c — a mechanical split, same contract
   as before).
+- `build_app_macos.sh` - developer-only local macOS `.app` build: runs
+  `make core`, `make core-unit-tests` (skippable with `--skip-tests`) and
+  `make ui DEBUG=0`, then does two things the CI macOS job
+  (`.github/workflows/build.yml`) does not: copies the freshly built
+  `InteropDLL/obj.<rid>/MesenCore.dylib` into the published bundle (the
+  `-t:BundleApp` publish keeps a stale dylib when the C# build is already
+  up to date) and ad-hoc codesigns it (CI signs with the real "Mesen"
+  certificate from secrets, on non-PR builds only). `--desktop` also
+  refreshes `~/Desktop/mesen/Mesen.app` with a timestamped backup. No CI
+  step or other script depends on it; see its header comment for the
+  prerequisites.
 - `check-core-manifest.sh`, `check-file-loc.sh`, `verify-fase0-1-dox.sh`,
   `verify-ui-logic-firewall.sh` - repo-hygiene shell checks. All four are
   now invoked by `make doc-checks` (ADR-0137, roadmap slice H1):

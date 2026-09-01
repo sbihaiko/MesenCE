@@ -157,12 +157,14 @@ commit messages (PRD §4, audit 2026-09-01, slice D4).
   `(present, wired — applied on load)` or `(present, NOT wired — …; ADR-0148)`
   from the `<patch>` lines / `patches[]` entries it linted, and the classify
   step (`.github/ai/validate-classify.md`) applies the ADR-0144 audio
-  exception only to a wired patch. Follow-up, not implemented: the classify
-  step does not yet check that the pack is listable under
-  rule 1. An audio-only pack whose tracks live
-  off-catalog and whose patch is unwired should receive a comment
-  explaining that it is lint-valid but not listable (and what would make it
-  so), instead of landing as an accepted row that never applies.
+  exception only to a wired patch. Also 2026-09-01: the classify
+  step has a LISTABILITY rule that refuses (verdict `invalid`, with a
+  comment naming the fix) a pack that is lint-valid but not listable under
+  rule 1 — pending confirmation on the next real CI run. So an audio-only
+  pack whose tracks live off-catalog and whose patch is unwired now receives
+  a comment explaining that it is lint-valid but not listable (and what
+  would make it so), instead of landing as an accepted row that never
+  applies.
 - Follow-up, not implemented: the catalog generator has no closed-issue or
   "de-listed" awareness beyond board Status; a row-level self-containment
   check (rule 1) does not exist in `generate_community_pack_catalog.py`,

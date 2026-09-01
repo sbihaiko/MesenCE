@@ -142,6 +142,24 @@ load time (the layout is also for this ROM) — this gap is intentional, not
 an oversight, and is why the validators are pre-flight checks, not the
 authority `PrepareZip` is for what actually loads.
 
+Deferral (2026-09-01): the C# half of the §3 follow-up (optional ROM-name
+parameter on `MepZipValidator.Validate`) stays deferred. Re-verified on this
+date: `MepZipValidator.Validate(ZipArchive)` still has exactly one
+production caller, `InstallPack` in
+`UI/ViewModels/EnhancementPacksViewModel.cs:188`, which still opens a
+generic zip file-picker and copies into the shared `PacksFolder` with no ROM
+in scope, so a new parameter would have no caller that can supply a value —
+dead code that only the unit tests would exercise. The Python mirror also
+does more than the C++ exact match: `find_fallback_subfolder_by_name`
+(`scripts/mep_lint.py:323`) falls back to a region/flag-tag-normalised
+comparison via `normalize_rom_core_name`, so a faithful C# port is not a
+contained change, and an exact-only C# variant would introduce a third,
+divergent semantics for the same parameter. Trigger to pick it up: the
+per-ROM install caller named above (a UI action or the community auto-install
+path that knows which ROM it installs for) — implement the parameter in the
+same change as that caller, porting the normalised comparison from
+`mep_lint.py` and covering it in `UI.Tests/Mep/MepZipValidatorTests.cs`.
+
 ### 4. Deferred: a standalone C++ E2E zip-pipeline test harness
 This task deliberately does **not** build a driver/executable that links
 `MepPackManager.cpp` + `ZipReader.cpp` + miniz + `ArchiveReader` to exercise
@@ -158,6 +176,30 @@ rejection against actual archive bytes. A standalone E2E harness for that
 full pipeline is named here as a **separate, not-this-task follow-up** —
 scope was deliberately kept to the pure decision function plus its
 call-site wiring, matching the Scope Boundaries of the originating task.
+
+Deferral (2026-09-01): still deferred. What exists today, re-verified on
+this date: `scripts/core_unit_tests.cpp` exercises only the pure
+`MepPack::FindFallbackSubfolder` with literal fixtures (no zip bytes);
+`scripts/headless_record.cpp` is the C++ headless driver for audio/HD-pack
+recording and MEP log capture, and it loads packs from folders placed in
+the scratch home; `scripts/verify_community_install_from_zero.py` covers the
+community *install* pipeline end-to-end (No-Intro sha1 → catalog match →
+allow-listed download → sha256 check → extraction → headless load), but its
+extraction is done in Python (`extract_legacy_pack`, mirroring the C#
+`LegacyHdPackInstall`) into `HdPacks/<romName>/` as a folder, so the C++
+`PrepareZip` zip path (real extraction, the `.mep-source` stamp cache-reuse
+branch at `MepPackManager.cpp:634`, zip-slip rejection on real archive
+bytes, the §2 subfolder fallback on a real wrapped zip) is not what it
+proves; `scripts/mep_live_validate.py` likewise extracts to an
+`EnhancementPacks/<rom>/` folder first. Only `scripts/gen_mep_test_pack.py`'s
+`zip`/`slip` kinds put a real zip through `PrepareZip`, and that is a manual
+`headless_record ... log` inspection, not an asserting harness. Trigger to
+pick it up: a regression or bug report in `PrepareZip`'s zip path (cache
+reuse, zip-slip, or the wrapped-subfolder fallback) that the pure-function
+tests cannot reproduce, or the real `Contra80s.zip` inspection named under
+Provenance being scheduled — either would justify a `Makefile` target that
+links `MepPackManager.cpp` + `ZipReader.cpp` + miniz and asserts on
+`outFolder`/`error` for `gen_mep_test_pack.py`-generated fixtures.
 
 ## Provenance of the motivating claim (see also AC-8)
 The pack that motivated this fallback is referenced by this repository's own

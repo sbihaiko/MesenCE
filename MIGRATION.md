@@ -1,15 +1,17 @@
 # MEP migration reference (per-pack)
 
-MEP packs are meant to be produced automatically, per pack, by a client-side
-MEP exporter (not built yet — see `docs/specs/MEP-v1.md` for the target
-format). This file records, one pack at a time, the exact before/after
-transformation applied to turn a classic Mesen HD pack into an MEP-compliant
-pack. It's a *reference*, not a one-size-fits-all rule: each entry below
-documents what a specific real pack needed. Until the automatic exporter
-exists, an artist can read the closest entry and apply the same steps by
-hand to their own pack.
+MEP packs are produced automatically, per pack, by the client: a catalog
+pack is installed as the editable sibling folder `<dir>/<Game>/mep/`,
+already MEP-ized (`pack.json` + `textures/` + `audio/` + `synth/`), with a
+Restore action (ADR-0147, which replaces the "client-side MEP exporter"
+plan this file used to describe; see `docs/specs/MEP-v1.md` for the format). This file
+records, one pack at a time, the exact before/after transformation applied
+to turn a classic Mesen HD pack into an MEP-compliant pack. It's a
+*reference*, not a one-size-fits-all rule: each entry below documents what a
+specific real pack needed; an artist packaging by hand can read the closest
+entry and apply the same steps to their own pack.
 
-## The transformation rule (what the exporter will apply)
+## The transformation rule (what the installer applies)
 
 For a pack whose only content is textures, the rule observed so far is
 always the same one structural change: the texture files (`hires.txt` and
@@ -23,7 +25,7 @@ and §5.1 for the normative version of this rule.
 ## Pack: Contra80s (TasticHacks)
 
 Source: <https://github.com/TasticHacks/Contra80s/releases/latest/download/Contra80s.zip>
-(also tracked as `sbihaiko/MesenCE` community-pack submission, issue #4).
+(also tracked as `sbihaiko/MesenCE` community-pack submission, issue #137).
 
 **Before (as published, classic Mesen HD pack layout):**
 ```
@@ -100,5 +102,7 @@ published here:
    [`sbihaiko/MesenCE`](https://github.com/sbihaiko/MesenCE/issues/new/choose).
    The automated triage comments the verdict on the issue.
 
-For what each verdict ("Full MEP" / "Partial (HD Mesen)" / "Invalid")
-means, see `docs/hd-pack-authoring.md`.
+The verdict is binary — `accepted` (Status "Aceito parcial (HD Mesen)",
+label `pack:valid`) or `invalid` (Status "Inválido", label `pack:invalid`);
+content labels (`assets:textures`, `assets:audio`, `patch:ips`/`patch:bps`,
+`console:*`) say what the pack contains. See `docs/hd-pack-authoring.md`.

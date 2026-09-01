@@ -70,10 +70,11 @@ def build_row(issue_number, status, details, form):
     """Builds a Markdown catalog row from the caller-derived issue number/
     Status and the fetched issue details + Issue Form fields.
 
-    "Author" is the Issue Form's "Author/credits" answer (who made the pack),
-    never the GitHub login that opened the issue -- whoever submits a pack is
-    not necessarily its author -- and falls back to "?" when that field is
-    absent. `status` no longer reaches the table (the Category column was
+    "Author" is the pack's own credits as discovered by the classify step and
+    stored in mep-meta `author` (the Issue Form has no author field since
+    b62f0bbc), never the GitHub login that opened the issue -- whoever
+    submits a pack is not necessarily its author -- and falls back to "?"
+    when mep-meta carries none. `status` no longer reaches the table (the Category column was
     dropped) but stays in the signature: it is what an empty row renders for.
     """
     if issue_number is None:
