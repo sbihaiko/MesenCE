@@ -9,9 +9,42 @@
 #include "Shared/Video/DebugStats.h"
 #include "Shared/InputHud.h"
 #include "Shared/MessageManager.h"
+#include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Utilities/Video/IVideoRecorder.h"
 #include "Utilities/Video/AviRecorder.h"
 #include "Utilities/Video/GifRecorder.h"
+#include "Utilities/PNGHelper.h"
+#include "Utilities/JsonReader.h"
+#include "Utilities/FolderUtilities.h"
+
+namespace
+{
+	inline uint32_t BlendOver(uint32_t dst, uint32_t src)
+	{
+		uint32_t sa = (src >> 24) & 0xFF;
+		if(sa == 255) {
+			return src;
+		}
+		if(sa == 0) {
+			return dst;
+		}
+		uint32_t sr = (src >> 16) & 0xFF;
+		uint32_t sg = (src >> 8) & 0xFF;
+		uint32_t sb = src & 0xFF;
+
+		uint32_t da = (dst >> 24) & 0xFF;
+		uint32_t dr = (dst >> 16) & 0xFF;
+		uint32_t dg = (dst >> 8) & 0xFF;
+		uint32_t db = dst & 0xFF;
+
+		uint32_t invA = 255 - sa;
+		uint32_t outR = (sr * sa + dr * invA) / 255;
+		uint32_t outG = (sg * sa + dg * invA) / 255;
+		uint32_t outB = (sb * sa + db * invA) / 255;
+		uint32_t outA = sa + (da * invA) / 255;
+		return (outA << 24) | (outR << 16) | (outG << 8) | outB;
+	}
+}
 
 VideoRenderer::VideoRenderer(Emulator* emu)
 {
@@ -179,6 +212,145 @@ std::pair<FrameInfo, OverscanDimensions> VideoRenderer::GetScriptHudSize()
 	return { scriptHudSize, overscan };
 }
 
+void VideoRenderer::UpdateBorderAsset()
+{
+	MepPackManager* mgr = _emu->GetEnhancementPackManager();
+	string borderFolder = mgr ? mgr->GetSectionPath(MepSectionType::Border) : "";
+	if(borderFolder.empty() && mgr) {
+		borderFolder = mgr->GetSectionAutoPath(MepSectionType::Border);
+	}
+
+	if(borderFolder != _borderPackFolder || !_borderLoaded) {
+		_borderPackFolder = borderFolder;
+		_borderLoaded = true;
+		_borderAvailable = false;
+		_borderPixels.clear();
+		_borderCanvasWidth = 0;
+		_borderCanvasHeight = 0;
+		_borderVpX = 0;
+		_borderVpY = 0;
+		_borderVpWidth = 0;
+		_borderVpHeight = 0;
+		_borderUnderlay = false;
+
+		if(!borderFolder.empty()) {
+			string pngPath = FolderUtilities::CombinePath(borderFolder, "border.png");
+			ifstream pngFile(pngPath, ios::in | ios::binary);
+			if(pngFile) {
+				vector<uint8_t> fileData((std::istreambuf_iterator<char>(pngFile)), std::istreambuf_iterator<char>());
+				uint32_t w = 0, h = 0;
+				if(PNGHelper::ReadPNG(fileData, _borderPixels, w, h) && w > 0 && h > 0) {
+					_borderCanvasWidth = w;
+					_borderCanvasHeight = h;
+					_borderAvailable = true;
+
+					//Check for optional border.json (ADR-0149 §1)
+					string jsonPath = FolderUtilities::CombinePath(borderFolder, "border.json");
+					ifstream jsonFile(jsonPath, ios::in | ios::binary);
+					if(jsonFile) {
+						string jsonText((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
+						JsonReader reader;
+						JsonValue root;
+						if(reader.Parse(jsonText, root) && root.IsObject()) {
+							const JsonValue* vp = root.Get("viewport");
+							if(vp && vp->IsObject()) {
+								const JsonValue* vx = vp->Get("x");
+								const JsonValue* vy = vp->Get("y");
+								const JsonValue* vw = vp->Get("width");
+								const JsonValue* vh = vp->Get("height");
+								if(vx && vx->IsNumber()) _borderVpX = (int32_t)vx->GetNumber();
+								if(vy && vy->IsNumber()) _borderVpY = (int32_t)vy->GetNumber();
+								if(vw && vw->IsNumber()) _borderVpWidth = (uint32_t)vw->GetNumber();
+								if(vh && vh->IsNumber()) _borderVpHeight = (uint32_t)vh->GetNumber();
+							}
+							const JsonValue* u = root.Get("underlay");
+							if(u && u->IsBool()) {
+								_borderUnderlay = u->GetBool();
+							}
+						}
+					}
+
+					//Fallback if viewport was absent or invalid: center inside canvas
+					if(_borderVpWidth == 0 || _borderVpHeight == 0) {
+						//Default 4:3 area inside 16:9 canvas
+						_borderVpHeight = _borderCanvasHeight;
+						_borderVpWidth = (_borderCanvasHeight * 4) / 3;
+						_borderVpX = (_borderCanvasWidth > _borderVpWidth) ? (_borderCanvasWidth - _borderVpWidth) / 2 : 0;
+						_borderVpY = 0;
+					}
+				}
+			}
+		}
+	}
+}
+
+void VideoRenderer::CompositeBorder(RenderedFrame& inFrame, RenderedFrame& outFrame)
+{
+	outFrame = inFrame;
+	bool enableBorder = _emu->GetSettings()->GetEnhancementPackConfig().EnableBorder;
+	if(!enableBorder) {
+		return;
+	}
+
+	UpdateBorderAsset();
+	if(!_borderAvailable || _borderCanvasWidth == 0 || _borderCanvasHeight == 0 || _borderPixels.empty()) {
+		return;
+	}
+
+	uint32_t totalPixels = _borderCanvasWidth * _borderCanvasHeight;
+	if(_compositeBuffer.size() != totalPixels) {
+		_compositeBuffer.resize(totalPixels);
+	}
+
+	uint32_t* dst = _compositeBuffer.data();
+	const uint32_t* border = _borderPixels.data();
+	const uint32_t* src = (const uint32_t*)inFrame.FrameBuffer;
+	uint32_t srcW = inFrame.Width;
+	uint32_t srcH = inFrame.Height;
+
+	if(_borderUnderlay) {
+		//Underlay: copy border first, then draw game on top of viewport
+		memcpy(dst, border, totalPixels * sizeof(uint32_t));
+		for(uint32_t vy = 0; vy < _borderVpHeight; vy++) {
+			int32_t dy = _borderVpY + (int32_t)vy;
+			if(dy < 0 || dy >= (int32_t)_borderCanvasHeight) continue;
+			uint32_t sy = (vy * srcH) / _borderVpHeight;
+			const uint32_t* srcRow = src + sy * srcW;
+			uint32_t* dstRow = dst + dy * _borderCanvasWidth;
+			for(uint32_t vx = 0; vx < _borderVpWidth; vx++) {
+				int32_t dx = _borderVpX + (int32_t)vx;
+				if(dx < 0 || dx >= (int32_t)_borderCanvasWidth) continue;
+				uint32_t sx = (vx * srcW) / _borderVpWidth;
+				dstRow[dx] = srcRow[sx];
+			}
+		}
+	} else {
+		//Overlay (default): clear to black, draw game into viewport, blend border.png on top
+		memset(dst, 0, totalPixels * sizeof(uint32_t));
+		for(uint32_t vy = 0; vy < _borderVpHeight; vy++) {
+			int32_t dy = _borderVpY + (int32_t)vy;
+			if(dy < 0 || dy >= (int32_t)_borderCanvasHeight) continue;
+			uint32_t sy = (vy * srcH) / _borderVpHeight;
+			const uint32_t* srcRow = src + sy * srcW;
+			uint32_t* dstRow = dst + dy * _borderCanvasWidth;
+			for(uint32_t vx = 0; vx < _borderVpWidth; vx++) {
+				int32_t dx = _borderVpX + (int32_t)vx;
+				if(dx < 0 || dx >= (int32_t)_borderCanvasWidth) continue;
+				uint32_t sx = (vx * srcW) / _borderVpWidth;
+				dstRow[dx] = srcRow[sx];
+			}
+		}
+		//Blend border on top (alpha over)
+		for(uint32_t i = 0; i < totalPixels; i++) {
+			dst[i] = BlendOver(dst[i], border[i]);
+		}
+	}
+
+	outFrame.FrameBuffer = (void*)dst;
+	outFrame.Width = _borderCanvasWidth;
+	outFrame.Height = _borderCanvasHeight;
+}
+
 void VideoRenderer::UpdateFrame(RenderedFrame& frame)
 {
 	{
@@ -188,13 +360,16 @@ void VideoRenderer::UpdateFrame(RenderedFrame& frame)
 
 	ProcessAviRecording(frame);
 
+	RenderedFrame effectiveFrame;
+	CompositeBorder(frame, effectiveFrame);
+
 	{
 		auto lock = _frameLock.AcquireSafe();
-		_lastFrame = frame;
+		_lastFrame = effectiveFrame;
 	}
 
 	if(_renderer) {
-		_renderer->UpdateFrame(frame);
+		_renderer->UpdateFrame(effectiveFrame);
 		_needRedraw = true;
 		_waitForRender.Signal();
 	}

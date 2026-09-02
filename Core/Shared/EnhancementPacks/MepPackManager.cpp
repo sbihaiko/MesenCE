@@ -410,7 +410,7 @@ bool MepPackManager::HasSiblingMepPack(const string& sibling) const
 	MepPack layout;
 	layout.RootFolder = sibling;
 	if(layout.DetectConventionLayout("mep")) {
-		for(int i = 0; i < 3; i++) {
+		for(int i = 0; i < kMepSectionCount; i++) {
 			if(layout.Sections[i].HasHuman) {
 				return true;
 			}
@@ -483,7 +483,7 @@ void MepPackManager::ScanSiblingFolder()
 		MepPack layout;
 		layout.RootFolder = sibling;
 		if(layout.DetectConventionLayout(humanPrefix)) {
-			for(int i = 0; i < 3; i++) {
+			for(int i = 0; i < kMepSectionCount; i++) {
 				MepSection& ps = pack.Sections[i];
 				const MepSection& ls = layout.Sections[i];
 				//machine layer always comes from the convention (auto/...)
@@ -557,7 +557,7 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 	if(!_packs.empty()) {
 		for(const MepPack& pack : _packs) {
 			string sections;
-			for(int i = 0; i < 3; i++) {
+			for(int i = 0; i < kMepSectionCount; i++) {
 				if(pack.Sections[i].Present) {
 					sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 				}
@@ -875,8 +875,12 @@ const MepPack* MepPackManager::FindPreferredPack(MepSectionType type) const
 const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 {
 	EnhancementPackConfig& cfg = _emu->GetSettings()->GetEnhancementPackConfig();
-	bool sectionEnabled = cfg.EnableMepPacks && (type == MepSectionType::Textures ? cfg.EnableTextures : type == MepSectionType::Audio ? cfg.EnableAudio :
-																																													 cfg.EnableSynth);
+	bool sectionEnabled = cfg.EnableMepPacks && (
+		type == MepSectionType::Textures ? cfg.EnableTextures :
+		type == MepSectionType::Audio ? cfg.EnableAudio :
+		type == MepSectionType::Border ? cfg.EnableBorder :
+		cfg.EnableSynth
+	);
 	if(!sectionEnabled) {
 		return nullptr;
 	}
@@ -886,17 +890,12 @@ const MepPack* MepPackManager::GetPackForSection(MepSectionType type) const
 	if(const MepPack* preferred = FindPreferredPack(type)) {
 		return preferred;
 	}
-	//Issue #142: a pack whose section is present but auto-only (the F5
-	//bootstrap's generic upscale/fingerprints, written before any pack was
-	//installed) is just a base layer - it must not shadow a human-authored
-	//pack behind it in the precedence order. Auto-only content wins only when
-	//no human content exists anywhere, so a real pack's human layer is never
-	//masked by a stale bootstrap output folder.
+
 	const MepPack* autoOnlyFallback = nullptr;
 	for(const MepPack& pack : _packs) {
-		if(pack.HasSection(type) && IsPackEnabled(pack.ContainerName)) {
-			//ADR-0145: Textures may come from an optimistic (SHA1-mismatched)
-			//pack - the renderer falls through per-tile and the health signal
+		if(IsPackEnabled(pack.ContainerName) && pack.HasSection(type)) {
+			//ADR-0145: an optimistic candidate is only eligible for textures -
+			//HdNesPack falls through per-tile without crashing, and the health signal
 			//auto-disables a wrong-game pack. Audio/Synth stay gated on an
 			//exact match (out of the ADR's scope: offsets/timing per-ROM).
 			if(type != MepSectionType::Textures && IsOptimistic(pack)) {
@@ -918,7 +917,7 @@ string MepPackManager::GetPackListText() const
 	string out;
 	for(const MepPack& pack : _packs) {
 		string sections;
-		for(int i = 0; i < 3; i++) {
+		for(int i = 0; i < kMepSectionCount; i++) {
 			if(pack.Sections[i].Present) {
 				sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
 			}
@@ -934,7 +933,7 @@ string MepPackManager::GetPackListText() const
 		//when applying the §4 sibling-suppresses-picker rule (issue #150).
 		bool isAutoOnly = (pack.Origin == MepPackOrigin::Sibling);
 		if(isAutoOnly) {
-			for(int i = 0; i < 3; i++) {
+			for(int i = 0; i < kMepSectionCount; i++) {
 				if(pack.Sections[i].HasHuman) {
 					isAutoOnly = false;
 					break;

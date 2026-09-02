@@ -22,6 +22,8 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	//MEP recipe catalog. No UI toggle yet - that's F6.4b's job; this just
 	//keeps the by-value marshaled struct in sync with the native side.
 	[ObservableProperty] public partial bool AutoInstallCommunityPacks { get; set; } = true;
+	//ADR-0149 (F8): enhancement pack border layer (border/overlay frame)
+	[ObservableProperty] public partial bool EnableBorder { get; set; } = true;
 	//ADR-0146: the former first-run consent flag (CommunityPackAutoInstallConsentGiven)
 	//was removed; AutoInstallCommunityPacks is the single master switch.
 
@@ -45,7 +47,8 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 			EnablePatches = EnablePatches,
 			ApplyPatchOnHashMismatch = ApplyPatchOnHashMismatch,
 			BootstrapEnhancementFolder = BootstrapEnhancementFolder,
-			AutoInstallCommunityPacks = AutoInstallCommunityPacks
+			AutoInstallCommunityPacks = AutoInstallCommunityPacks,
+			EnableBorder = EnableBorder
 		});
 
 		foreach(string container in DisabledPacks) {
@@ -92,4 +95,5 @@ public struct InteropEnhancementPackConfig
 	[MarshalAs(UnmanagedType.I1)] public bool ApplyPatchOnHashMismatch;
 	[MarshalAs(UnmanagedType.I1)] public bool BootstrapEnhancementFolder;
 	[MarshalAs(UnmanagedType.I1)] public bool AutoInstallCommunityPacks;
+	[MarshalAs(UnmanagedType.I1)] public bool EnableBorder;
 }

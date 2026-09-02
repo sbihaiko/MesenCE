@@ -54,6 +54,23 @@ private:
 	uint32_t _lastScriptHudFrameNumber = 0;
 	bool _needRedraw = true;
 
+	//ADR-0149 (F8): border layer cache & compositing state
+	string _borderPackFolder;
+	bool _borderLoaded = false;
+	bool _borderAvailable = false;
+	uint32_t _borderCanvasWidth = 0;
+	uint32_t _borderCanvasHeight = 0;
+	int32_t _borderVpX = 0;
+	int32_t _borderVpY = 0;
+	uint32_t _borderVpWidth = 0;
+	uint32_t _borderVpHeight = 0;
+	bool _borderUnderlay = false;
+	vector<uint32_t> _borderPixels;
+	vector<uint32_t> _compositeBuffer;
+
+	void UpdateBorderAsset();
+	void CompositeBorder(RenderedFrame& inFrame, RenderedFrame& outFrame);
+
 	RenderedFrame _lastFrame;
 	SimpleLock _frameLock;
 

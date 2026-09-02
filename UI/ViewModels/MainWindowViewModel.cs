@@ -55,6 +55,7 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial bool IsEnhancementsPanelVisible { get; set; }
 		[ObservableProperty] public partial bool IsTexturesEnabled { get; set; }
 		[ObservableProperty] public partial bool IsAudioEnabled { get; set; }
+		[ObservableProperty] public partial bool IsBorderEnabled { get; set; }
 		[ObservableProperty] public partial bool IsWideScrnEnabled { get; set; }
 		[ObservableProperty] public partial bool IsHiResEnabled { get; set; }
 		[ObservableProperty] public partial bool IsOverclockEnabled { get; set; }
@@ -277,6 +278,7 @@ namespace Mesen.ViewModels
 			IsPlayerOverlayVisible = false;
 			IsTexturesEnabled = Config.EnhancementPacks.EnableTextures;
 			IsAudioEnabled = Config.EnhancementPacks.EnableAudio;
+			IsBorderEnabled = Config.EnhancementPacks.EnableBorder;
 			IsWideScrnEnabled = Config.Video.AspectRatio == VideoAspectRatio.Widescreen;
 			IsHiResEnabled = Config.Video.VideoFilter == VideoFilterType.HQ4x;
 			IsOverclockSupported = PlayerEnhancementsToggle.SupportsOverclock(RomInfo.ConsoleType);
@@ -295,7 +297,7 @@ namespace Mesen.ViewModels
 			IsPlayerOverlayVisible = true;
 		}
 
-		//Texture/Audio (§6.1): plain passthrough to the existing MEP layer
+		//Texture/Audio/Border (§6.1, ADR-0149): plain passthrough to the existing MEP layer
 		//switches - applies on the next ROM reload, like the rest of
 		//EnhancementPackConfig.
 		public void ToggleTextures()
@@ -313,6 +315,15 @@ namespace Mesen.ViewModels
 			Config.EnhancementPacks.ApplyConfig();
 			Config.Save();
 			IsAudioEnabled = Config.EnhancementPacks.EnableAudio;
+			LoadRomHelper.ReloadRom();
+		}
+
+		public void ToggleBorder()
+		{
+			Config.EnhancementPacks.EnableBorder = !Config.EnhancementPacks.EnableBorder;
+			Config.EnhancementPacks.ApplyConfig();
+			Config.Save();
+			IsBorderEnabled = Config.EnhancementPacks.EnableBorder;
 			LoadRomHelper.ReloadRom();
 		}
 

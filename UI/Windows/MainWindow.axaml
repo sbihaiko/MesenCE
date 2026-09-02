@@ -130,6 +130,7 @@
 					<TextBlock Text="{l:Translate lblEnhancementsPanelTitle}" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
 					<CheckBox Name="EnhancementsTexturesCheckBox" Content="{l:Translate chkEnhancementsTextures}" IsChecked="{Binding IsTexturesEnabled, Mode=OneWay}" Click="OnToggleTextures" />
 					<CheckBox Content="{l:Translate chkEnhancementsAudio}" IsChecked="{Binding IsAudioEnabled, Mode=OneWay}" Click="OnToggleAudio" />
+					<CheckBox Content="{l:Translate chkEnhancementsBorder}" IsChecked="{Binding IsBorderEnabled, Mode=OneWay}" Click="OnToggleBorder" />
 					<CheckBox Content="{l:Translate chkEnhancementsWideScrn}" IsChecked="{Binding IsWideScrnEnabled, Mode=OneWay}" Click="OnToggleWideScrn" />
 					<CheckBox Content="{l:Translate chkEnhancementsHiRes}" IsChecked="{Binding IsHiResEnabled, Mode=OneWay}" Click="OnToggleHiRes" />
 					<CheckBox Content="{l:Translate chkEnhancementsOverclock}" IsChecked="{Binding IsOverclockEnabled, Mode=OneWay}" IsEnabled="{Binding IsOverclockSupported}" Click="OnToggleOverclock" />

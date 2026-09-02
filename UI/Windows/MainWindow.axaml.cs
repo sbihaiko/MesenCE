@@ -307,6 +307,7 @@ namespace Mesen.Windows
 
 		private void OnToggleTextures(object? sender, RoutedEventArgs e) => _model.ToggleTextures();
 		private void OnToggleAudio(object? sender, RoutedEventArgs e) => _model.ToggleAudio();
+		private void OnToggleBorder(object? sender, RoutedEventArgs e) => _model.ToggleBorder();
 		private void OnToggleWideScrn(object? sender, RoutedEventArgs e) => _model.ToggleWideScrn();
 		private void OnToggleHiRes(object? sender, RoutedEventArgs e) => _model.ToggleHiRes();
 		private void OnToggleOverclock(object? sender, RoutedEventArgs e) => _model.ToggleOverclock();

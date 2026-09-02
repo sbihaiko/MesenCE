@@ -23,6 +23,7 @@
 			<Control ID="lblEnhancementsPanelTitle">Enhancements</Control>
 			<Control ID="chkEnhancementsTextures">Texture pack</Control>
 			<Control ID="chkEnhancementsAudio">Audio pack</Control>
+			<Control ID="chkEnhancementsBorder">Border</Control>
 			<Control ID="chkEnhancementsWideScrn">Widescreen (16:9)</Control>
 			<Control ID="chkEnhancementsHiRes">Hi-res filter</Control>
 			<Control ID="chkEnhancementsOverclock">Reduce slowdown (overclock)</Control>

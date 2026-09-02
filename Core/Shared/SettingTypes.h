@@ -826,6 +826,8 @@ struct EnhancementPackConfig
 	//MEP recipe catalog. Stored only here - consumed by F6.4b's catalog
 	//fetch/prompt flow, no host logic in F6.4a.
 	bool AutoInstallCommunityPacks = true;
+	//ADR-0149 (F8): enhancement pack border layer (border/overlay frame)
+	bool EnableBorder = true;
 };
 
 struct CvConfig

@@ -59,8 +59,8 @@ from pathlib import Path, PurePosixPath
 import mep_content_id  # ADR-0139 tree content_id of the discovered pack root
 import pack_id_rules  # ADR-0140 source (1): SLUG shape of the MEP root `id`
 
-SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg"}
-PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg"}
+SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg", "border": "border"}
+PROBES = {"textures": "textures/hires.txt", "audio": "audio/hires.txt", "synth": "synth/preset.cfg", "border": "border/border.png"}
 AUDIO_ALT_PROBE = "audio/fingerprints.json"
 
 # Structural fallback search limits (ADR-0120): last-priority, name-agnostic
@@ -715,7 +715,12 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
             if rel is None:
                 rep.error(where, f"section '{name}': unsafe path '{sec['path']}'")
                 continue
-            probe = rel if name == "synth" else (f"{rel}/hires.txt" if rel else "hires.txt")
+            if name == "synth":
+                probe = rel
+            elif name == "border":
+                probe = f"{rel}/border.png" if rel else "border.png"
+            else:
+                probe = f"{rel}/hires.txt" if rel else "hires.txt"
             if not src.exists(f"{root_prefix}{probe}"):
                 rep.error(where, f"section '{name}': '{probe}' does not exist")
             # rstrip: when `rel` is "" (path "" == container/fallback root)
@@ -727,7 +732,7 @@ def lint_pack_json(src: Source, rep: Report, root_prefix: str = ""):
             # ever having been validated.
             found[name] = f"{root_prefix}{rel}".rstrip("/")
         if not found:
-            rep.error(where, "'sections' needs textures/audio/synth")
+            rep.error(where, "'sections' needs textures/audio/synth/border")
     return found
 
 
@@ -1227,6 +1232,30 @@ def main(argv):
             if rel not in seen and src.exists(rel):
                 seen.add(rel)
                 lint_esp(src, rel, rep)
+        elif base == "border":
+            border_png = f"{rel}/border.png" if rel else "border.png"
+            if border_png not in seen and src.exists(border_png):
+                seen.add(border_png)
+                try:
+                    data = src.read(border_png)
+                    size = png_size(data)
+                    if size is None:
+                        rep.error(border_png, "invalid or corrupt PNG file")
+                    else:
+                        w, h = size
+                        rep.info(border_png, f"border frame PNG {w}x{h}")
+                except Exception as exc:  # noqa: BLE001
+                    rep.error(border_png, f"cannot read PNG: {exc}")
+            border_json = f"{rel}/border.json" if rel else "border.json"
+            if src.exists(border_json):
+                try:
+                    bj = json.loads(src.text(border_json))
+                    if not isinstance(bj, dict):
+                        rep.error(border_json, "root must be an object")
+                    elif "viewport" in bj and not isinstance(bj["viewport"], dict):
+                        rep.error(border_json, "'viewport' must be an object")
+                except Exception as exc:  # noqa: BLE001
+                    rep.error(border_json, f"invalid JSON: {exc}")
         else:
             hires = f"{rel}/hires.txt" if rel else "hires.txt"
             if hires not in seen and src.exists(hires):

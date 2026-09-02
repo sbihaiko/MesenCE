@@ -17,8 +17,11 @@ enum class MepSectionType : uint8_t
 {
 	Textures = 0,
 	Audio = 1,
-	Synth = 2
+	Synth = 2,
+	Border = 3
 };
+
+constexpr int kMepSectionCount = 4;
 
 struct MepSection
 {
@@ -61,7 +64,7 @@ public:
 	string License;
 	vector<MepTarget> Targets;
 	vector<MepPatch> Patches;
-	MepSection Sections[3];
+	MepSection Sections[kMepSectionCount];
 
 	//Filled by the manager
 	string ContainerName; //folder name or zip base name (precedence key, ADR-0040)

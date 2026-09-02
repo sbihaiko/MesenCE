@@ -95,7 +95,7 @@ def validate_mep(path):
     sections = d.get("sections", {})
     check(len(sections) >= 1, f"{path.name}: sections is empty")
     for name, sec in sections.items():
-        check(name in ("textures", "audio", "synth"), f"{path.name}: unknown section '{name}' (ok if a future version)")
+        check(name in ("textures", "audio", "synth", "border"), f"{path.name}: unknown section '{name}' (ok if a future version)")
         check("path" in sec and safe_relative_path(sec["path"]), f"{path.name}: sections.{name}.path missing or unsafe")
 
 def lint_golden_packs():

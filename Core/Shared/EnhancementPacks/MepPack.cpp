@@ -6,11 +6,11 @@
 
 namespace
 {
-	constexpr const char* kSectionNames[3] = { "textures", "audio", "synth" };
-	//Fixed layout of the folder convention (ADR-0049); textures/audio are
-	//folders holding a hires.txt, synth is the preset file itself
-	constexpr const char* kConventionPaths[3] = { "textures", "audio", "synth/preset.cfg" };
-	constexpr const char* kConventionProbe[3] = { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg" };
+	constexpr const char* kSectionNames[kMepSectionCount] = { "textures", "audio", "synth", "border" };
+	//Fixed layout of the folder convention (ADR-0049, ADR-0149); textures/audio/border are
+	//folders holding content (hires.txt, border.png), synth is the preset file itself
+	constexpr const char* kConventionPaths[kMepSectionCount] = { "textures", "audio", "synth/preset.cfg", "border" };
+	constexpr const char* kConventionProbe[kMepSectionCount] = { "textures/hires.txt", "audio/hires.txt", "synth/preset.cfg", "border/border.png" };
 	//Leaf names of kConventionProbe (+ ADR-0047's audio/fingerprints.json
 	//alt) - what MepPack::FindFallbackSubfolder looks for directly under a
 	//ROM-named subfolder (ADR-0120)
@@ -111,7 +111,7 @@ bool MepPack::DetectConventionLayout(const string& humanPrefix)
 	//of auto/, not a child of it). A non-empty humanPrefix shifts the human
 	//probe and the section Path; the machine (auto/) layer is unchanged.
 	string layerRoot = humanPrefix.empty() ? "" : (humanPrefix + "/");
-	for(int i = 0; i < 3; i++) {
+	for(int i = 0; i < kMepSectionCount; i++) {
 		MepSection& section = Sections[i];
 		string humanProbe = FolderUtilities::CombinePath(RootFolder, layerRoot + kConventionProbe[i]);
 		string autoProbe = FolderUtilities::CombinePath(FolderUtilities::CombinePath(RootFolder, AutoFolderName), kConventionProbe[i]);
@@ -154,6 +154,18 @@ bool MepPack::DetectConventionLayout(const string& humanPrefix)
 			textures.Present = true;
 			textures.HasHuman = true;
 			textures.Path = humanPrefix.empty() ? "" : humanPrefix;
+			any = true;
+		}
+	}
+
+	//Border section fallback: bare border.png directly at RootFolder
+	MepSection& border = Sections[(int)MepSectionType::Border];
+	if(!border.Present) {
+		string rootBorder = FolderUtilities::CombinePath(RootFolder, layerRoot + "border.png");
+		if((bool)ifstream(rootBorder)) {
+			border.Present = true;
+			border.HasHuman = true;
+			border.Path = humanPrefix.empty() ? "" : humanPrefix;
 			any = true;
 		}
 	}
@@ -384,7 +396,7 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 	int knownSections = 0;
 	for(const auto& member : sections->GetObject()) {
 		int index = -1;
-		for(int i = 0; i < 3; i++) {
+		for(int i = 0; i < kMepSectionCount; i++) {
 			if(member.first == kSectionNames[i]) {
 				index = i;
 			}
@@ -417,7 +429,7 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 		knownSections++;
 	}
 	if(knownSections == 0) {
-		error = "'sections' must contain at least one of textures/audio/synth";
+		error = "'sections' must contain at least one of textures/audio/synth/border";
 		return false;
 	}
 
