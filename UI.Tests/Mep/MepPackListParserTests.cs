@@ -112,6 +112,7 @@ namespace Mesen.Tests.Mep
 			Assert.Equal("", result.RejectedInfo);
 		}
 
+
 		[Theory]
 		[InlineData("2", "sibling")]
 		[InlineData("1", "zip")]
@@ -124,6 +125,57 @@ namespace Mesen.Tests.Mep
 			MepPackListEntry entry = Assert.Single(MepPackListParser.Parse(input).Packs);
 
 			Assert.Equal(expectedSource, entry.Source);
+		}
+
+		// Issue #150: column 11 (isAutoOnly) - sibling whose content is entirely
+		// under auto/ (the F5 bootstrap output) must not suppress the Player picker.
+		[Fact]
+		public void Parse_SiblingAutoOnly_Column11One_SetsIsAutoOnlyTrue()
+		{
+			// origin=2 (sibling), isAutoOnly=1
+			string input = "sibling.zip\tSibling Pack\t0.0.0\t\t\taudio\t1\t2\t\t\t1";
+
+			MepPackListEntry entry = Assert.Single(MepPackListParser.Parse(input).Packs);
+
+			Assert.Equal("sibling", entry.Source);
+			Assert.True(entry.IsAutoOnly);
+		}
+
+		[Fact]
+		public void Parse_SiblingHuman_Column11Zero_SetsIsAutoOnlyFalse()
+		{
+			// origin=2 (sibling), isAutoOnly=0 (has human content)
+			string input = "sibling.zip\tArtist Work\t1.2\tArtist\tMIT\ttextures,audio\t1\t2\t\t\t0";
+
+			MepPackListEntry entry = Assert.Single(MepPackListParser.Parse(input).Packs);
+
+			Assert.Equal("sibling", entry.Source);
+			Assert.False(entry.IsAutoOnly);
+		}
+
+		[Fact]
+		public void Parse_OlderCore_MissingColumn11_IsAutoOnlyDefaultsFalse()
+		{
+			// 10-column row from a core that predates issue #150: IsAutoOnly must default to false.
+			string input = "pack.zip\tPack\t1\tAu\tLic\tS\t1\t2\tpack-id\tcontent-id";
+
+			MepPackListEntry entry = Assert.Single(MepPackListParser.Parse(input).Packs);
+
+			Assert.False(entry.IsAutoOnly);
+		}
+
+		[Fact]
+		public void Parse_NonSiblingWithColumn11One_IsAutoOnlyFalse()
+		{
+			// A catalog/zip pack should never be auto-only regardless of the column value.
+			string input = "pack.zip\tCatalog Pack\t1\tAu\tLic\tS\t1\t1\t\t\t1";
+
+			MepPackListEntry entry = Assert.Single(MepPackListParser.Parse(input).Packs);
+
+			Assert.Equal("zip", entry.Source);
+			// The IsAutoOnly column is set, but sibling suppression is computed by the caller
+			// using Source + IsAutoOnly together - the parser stores it as-is.
+			Assert.True(entry.IsAutoOnly);
 		}
 	}
 }

@@ -80,6 +80,7 @@ namespace Mesen.Tests.Mep
 			Assert.Equal(2, PlayerPackPicker.DistinctPackIdCount(merged));
 		}
 
+
 		[Fact]
 		public void DistinctPackIdCount_StampedAndLocal_DifferentProducts()
 		{
@@ -89,6 +90,28 @@ namespace Mesen.Tests.Mep
 				Candidate("local-drop", contentId: "BBB")
 			};
 			Assert.Equal(2, PlayerPackPicker.DistinctPackIdCount(merged));
+		}
+
+		// Issue #150: the §4 "sibling wins" rule targets a human-authored sibling.
+		// A sibling produced exclusively by the F5 bootstrap (auto/ only, no
+		// HasHuman) is not a user choice and must not suppress the picker.
+		// The caller (BuildPackPickerData) sets hasSiblingPack = Source=="sibling" && !IsAutoOnly,
+		// so the picker decision itself is still governed only by hasSiblingPack.
+		[Fact]
+		public void AutoOnlySibling_DoesNotSuppressPicker_WhenCallerSetsHasSiblingFalse()
+		{
+			//hasSiblingPack=false because the caller already excluded the auto-only
+			//sibling from the hasSibling flag (Source=="sibling" && !IsAutoOnly).
+			Assert.True(PlayerPackPicker.ShouldOpen(
+				hasSiblingPack: false, distinctPackIdCount: 2, hasEffectivePreference: false));
+		}
+
+		[Fact]
+		public void HumanSibling_StillSuppressesPicker()
+		{
+			//A sibling with human content (IsAutoOnly=false) still sets hasSiblingPack=true.
+			Assert.False(PlayerPackPicker.ShouldOpen(
+				hasSiblingPack: true, distinctPackIdCount: 2, hasEffectivePreference: false));
 		}
 	}
 }

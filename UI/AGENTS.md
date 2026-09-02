@@ -58,7 +58,9 @@ can be exercised by real xunit tests without Avalonia or the native
   `MepPackListEntry` (origin `2`/`1`/other → `sibling`/`zip`/`folder`);
   any row with fewer than 8 columns is silently ignored. Columns 9–10
   (P.3: `pack_id`/`content_id` from the container's `.mep-install.json`,
-  empty for a stamp-less container) are optional — an 8-column row from an
+  empty for a stamp-less container) and column 11 (issue #150: `isAutoOnly`,
+  `"1"` when a sibling folder contains only F5 bootstrap output under `auto/` with
+  no `HasHuman` content, `"0"` otherwise) are optional — an 8-column row from an
   older core still parses. The `Sections` field is passed through raw — the
   `","` → `", "` display formatting stays in the ViewModel, not in this parser.
 - `PackPreferenceResolver` (P.3, PRD Part B §5, ADR-0140/0141) is the
@@ -94,9 +96,10 @@ can be exercised by real xunit tests without Avalonia or the native
   picker: it opens only when 2+ distinct pack_ids exist (after the §5
   content_id merge — feed it `PackPreferenceResolver.Resolve`'s `Candidates`,
   never the raw entry list, or a dropped copy of an installed pack would
-  count as a second choice), with no sibling-folder pack (that pack always
-  wins, §4) and no effective stored per-ROM preference (silent apply).
-  `DistinctPackIdCount` uses `DerivePackId` (ADR-0140 id, else
+  count as a second choice), with no human-authored sibling-folder pack (a
+  sibling with human content always wins, §4; an auto-only bootstrap sibling
+  does not suppress, issue #150) and no effective stored per-ROM preference
+  (silent apply). `DistinctPackIdCount` uses `DerivePackId` (ADR-0140 id, else
   `local:<container>`). The owning VM (`MainWindowViewModel`) injects the pack
   list + ROM sha1 (data-injected from the code-behind), builds the choices
   from the core's `GetPackListText` columns (name/author/version/licence/

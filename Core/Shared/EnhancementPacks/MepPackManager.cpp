@@ -928,7 +928,20 @@ string MepPackManager::GetPackListText() const
 		if(identityIt != _packIdentityByContainer.end()) {
 			identity = identityIt->second;
 		}
-		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + std::to_string((int)pack.Origin) + "\t" + identity.PackId + "\t" + identity.ContentId + "\n";
+		//Column 11 (isAutoOnly): "1" when the pack is a sibling whose content is
+		//entirely under auto/ (no HasHuman on any section) - the F5 bootstrap's
+		//machine-layer-only output. The UI uses this to skip the auto-only sibling
+		//when applying the §4 sibling-suppresses-picker rule (issue #150).
+		bool isAutoOnly = (pack.Origin == MepPackOrigin::Sibling);
+		if(isAutoOnly) {
+			for(int i = 0; i < 3; i++) {
+				if(pack.Sections[i].HasHuman) {
+					isAutoOnly = false;
+					break;
+				}
+			}
+		}
+		out += pack.ContainerName + "\t" + pack.Name + "\t" + pack.Version + "\t" + pack.Author + "\t" + pack.License + "\t" + sections + "\t" + (IsPackEnabled(pack.ContainerName) ? "1" : "0") + "\t" + std::to_string((int)pack.Origin) + "\t" + identity.PackId + "\t" + identity.ContentId + "\t" + (isAutoOnly ? "1" : "0") + "\n";
 	}
 	for(const string& rejected : _rejected) {
 		out += "!" + rejected + "\n";

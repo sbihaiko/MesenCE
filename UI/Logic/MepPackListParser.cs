@@ -14,6 +14,7 @@ namespace Mesen.Logic
 	{
 		//Container, Name, Version, Author, License, Sections, Enabled, Origin
 		//(columns 9/10 - packId/contentId - are optional, P.3)
+		//(column 11 - isAutoOnly - is optional, added in issue #150)
 		public const int ExpectedColumnCount = 8;
 
 		public static MepPackListResult Parse(string packListOutput)
@@ -57,7 +58,10 @@ namespace Mesen.Logic
 				//P.3: columns 9/10 (pack_id/content_id from .mep-install.json)
 				//are optional - an 8-column row from an older core is still valid.
 				PackId = parts.Length >= 9 ? parts[8] : "",
-				ContentId = parts.Length >= 10 ? parts[9] : ""
+				ContentId = parts.Length >= 10 ? parts[9] : "",
+				//Issue #150: column 11 ("1"=auto-only sibling, "0"=has human content).
+				//Absent from cores that predate this column; default false (conservative).
+				IsAutoOnly = parts.Length >= 11 && parts[10] == "1"
 			};
 		}
 
@@ -93,5 +97,9 @@ namespace Mesen.Logic
 		//("" for a stamp-less container - the resolver derives `local:<container>`)
 		public string PackId { get; init; } = "";
 		public string ContentId { get; init; } = "";
+		//Issue #150: true when this is a sibling-folder pack whose content is
+		//entirely under auto/ (the F5 bootstrap's machine-layer-only output).
+		//An auto-only sibling must not suppress the Player pack picker (§4).
+		public bool IsAutoOnly { get; init; }
 	}
 }
