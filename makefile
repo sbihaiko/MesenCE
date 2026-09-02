@@ -278,6 +278,7 @@ doc-checks: check-manifest
 	python3 scripts/test_pack_id_rules.py
 	python3 scripts/test_classify_pack_brief.py
 	python3 scripts/test_mep_build.py
+	python3 scripts/test_mep_lint_border.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
 	python3 scripts/validate-specs.py
@@ -299,7 +300,7 @@ core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 #Fase 4 of the now-completed unit-test plan (see git history for
 #docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
-#tests for ChannelRoleClassifier + MepPack. No `core` prerequisite - links
+#tests for ChannelRoleClassifier + MepPack + BorderLayout (ADR-0149). No `core` prerequisite - links
 #only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
 #then runs the binary; a failing case exits non-zero.
 core-unit-tests:
@@ -314,6 +315,7 @@ core-unit-tests:
 	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \
 	  Core/Shared/EnhancementPacks/MepContentId.cpp \
 	  Core/Shared/MessageManager.cpp \
+	  Core/Shared/Video/BorderLayout.cpp \
 	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
 	  Utilities/sha256.cpp Utilities/SimpleLock.cpp Utilities/Timer.cpp Utilities/miniz.cpp \
 	  -o scripts/core_unit_tests

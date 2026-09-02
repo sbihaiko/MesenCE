@@ -216,6 +216,54 @@ def safe_rel(path: str):
     return "/".join(parts)
 
 
+def _border_positive_int(value):
+    """True for a JSON integer > 0 (bool is rejected: it is an int in Python)."""
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _border_nonneg_int(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def lint_border_json(bj, where, rep):
+    """ADR-0149 §1 `border.json` schema: `width`/`height` MUST be integers > 0,
+    `viewport` MUST be an object with integer x/y/width/height >= 0,
+    `scale_mode` (optional) is "fit" or "stretch", `underlay` (optional) is a
+    boolean. A viewport that leaves the canvas is only a warning (ADR-0149 §4:
+    the Core clamps it at composite time), as is a `version` other than 1."""
+    if not isinstance(bj, dict):
+        rep.error(where, "root must be an object")
+        return
+    for key in ("width", "height"):
+        if key not in bj:
+            rep.error(where, f"'{key}' is required")
+        elif not _border_positive_int(bj[key]):
+            rep.error(where, f"'{key}' must be an integer > 0")
+    if "version" in bj and bj["version"] != 1:
+        rep.warning(where, f"unknown 'version' {bj['version']!r} (expected 1)")
+    vp = bj.get("viewport")
+    if "viewport" not in bj:
+        rep.error(where, "'viewport' is required")
+    elif not isinstance(vp, dict):
+        rep.error(where, "'viewport' must be an object")
+    else:
+        vp_ok = True
+        for key in ("x", "y", "width", "height"):
+            if key not in vp:
+                rep.error(where, f"'viewport.{key}' is required")
+                vp_ok = False
+            elif not _border_nonneg_int(vp[key]):
+                rep.error(where, f"'viewport.{key}' must be an integer >= 0")
+                vp_ok = False
+        if vp_ok and _border_positive_int(bj.get("width")) and _border_positive_int(bj.get("height")):
+            if vp["x"] + vp["width"] > bj["width"] or vp["y"] + vp["height"] > bj["height"]:
+                rep.warning(where, "'viewport' exceeds the canvas ('width' x 'height'); it will be clamped")
+    if "scale_mode" in bj and bj["scale_mode"] not in ("fit", "stretch"):
+        rep.error(where, "'scale_mode' must be \"fit\" or \"stretch\"")
+    if "underlay" in bj and not isinstance(bj["underlay"], bool):
+        rep.error(where, "'underlay' must be a boolean")
+
+
 def png_size(data: bytes):
     if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
         return None
@@ -1250,12 +1298,10 @@ def main(argv):
             if src.exists(border_json):
                 try:
                     bj = json.loads(src.text(border_json))
-                    if not isinstance(bj, dict):
-                        rep.error(border_json, "root must be an object")
-                    elif "viewport" in bj and not isinstance(bj["viewport"], dict):
-                        rep.error(border_json, "'viewport' must be an object")
                 except Exception as exc:  # noqa: BLE001
                     rep.error(border_json, f"invalid JSON: {exc}")
+                else:
+                    lint_border_json(bj, border_json, rep)
         else:
             hires = f"{rel}/hires.txt" if rel else "hires.txt"
             if hires not in seen and src.exists(hires):

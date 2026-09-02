@@ -667,6 +667,7 @@
     <ClInclude Include="Shared\SystemActionManager.h" />
     <ClInclude Include="Shared\Video\VideoDecoder.h" />
     <ClInclude Include="Shared\Video\VideoRenderer.h" />
+    <ClInclude Include="Shared\Video\BorderLayout.h" />
     <ClInclude Include="Shared\Audio\WaveRecorder.h" />
     <ClInclude Include="Shared\Interfaces\IMouseManager.h" />
   </ItemGroup>
@@ -878,6 +879,7 @@
     </ClCompile>
     <ClCompile Include="Shared\Video\VideoDecoder.cpp" />
     <ClCompile Include="Shared\Video\VideoRenderer.cpp" />
+    <ClCompile Include="Shared\Video\BorderLayout.cpp" />
     <ClCompile Include="Shared\Audio\WaveRecorder.cpp" />
   </ItemGroup>
   <ItemGroup>

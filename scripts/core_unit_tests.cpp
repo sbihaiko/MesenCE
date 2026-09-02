@@ -22,6 +22,7 @@
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/EnhancementPacks/MepContentId.h"
 #include "Shared/MessageManager.h"
+#include "Shared/Video/BorderLayout.h"
 #include "Utilities/Base64.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/JsonReader.h"
@@ -967,6 +968,225 @@ namespace
 		std::string text0 = ReadFileBytes(path);
 		Check(text0.find("loop") == std::string::npos, "BlocoH: Save omits the loop field when zero", text0);
 	}
+	//--- Bloco H: BorderLayout (ADR-0149, Slice F8.3b) -------------------------
+	//Host-free viewport/canvas math extracted from VideoRenderer so the border
+	//layer's layout rules are pinned without linking the Emulator.
+
+	std::string RectStr(const BorderRect& r)
+	{
+		return "(" + std::to_string(r.X) + "," + std::to_string(r.Y) + " " + std::to_string(r.Width) + "x" + std::to_string(r.Height) + ")";
+	}
+
+	void CheckRect(const BorderRect& got, int32_t x, int32_t y, uint32_t w, uint32_t h, const std::string& name)
+	{
+		BorderRect want;
+		want.X = x;
+		want.Y = y;
+		want.Width = w;
+		want.Height = h;
+		Check(got == want, name, "got " + RectStr(got) + " want " + RectStr(want));
+	}
+
+	void TestBorderDefaultHeuristic()
+	{
+		//No border.json: 16:9 canvas gets a 4:3, full-height, centred viewport
+		BorderLayout l = BorderLayout::ForCanvas(1920, 1080);
+		Check(l.ViewportWidth == 1440 && l.ViewportHeight == 1080, "BlocoH: default viewport is 4:3 at full canvas height",
+			std::to_string(l.ViewportWidth) + "x" + std::to_string(l.ViewportHeight));
+		Check(l.ViewportX == 240 && l.ViewportY == 0, "BlocoH: default viewport is horizontally centred",
+			std::to_string(l.ViewportX) + "," + std::to_string(l.ViewportY));
+		Check(l.ScaleMode == BorderScaleMode::Fit && !l.Underlay, "BlocoH: defaults are scale_mode=fit, underlay=false");
+		Check(l.IsViewportInsideCanvas(), "BlocoH: default viewport lies inside the canvas");
+
+		//Canvas narrower than 4:3: viewport is clamped to X=0 (never negative)
+		BorderLayout narrow = BorderLayout::ForCanvas(600, 600);
+		Check(narrow.ViewportX == 0 && narrow.ViewportWidth == 800, "BlocoH: default viewport on narrow canvas starts at X=0 and overflows",
+			std::to_string(narrow.ViewportX) + "/" + std::to_string(narrow.ViewportWidth));
+		Check(!narrow.IsViewportInsideCanvas(), "BlocoH: overflowing default viewport is reported outside the canvas");
+		CheckRect(narrow.ClampedViewport(), 0, 0, 600, 600, "BlocoH: overflowing default viewport clamps to the canvas");
+
+		//Authored viewport wins over the heuristic
+		BorderLayout authored;
+		authored.CanvasWidth = 1920;
+		authored.CanvasHeight = 1080;
+		authored.ViewportX = 100;
+		authored.ViewportY = 50;
+		authored.ViewportWidth = 1000;
+		authored.ViewportHeight = 900;
+		authored.ApplyDefaultViewportIfMissing();
+		CheckRect(authored.ClampedViewport(), 100, 50, 1000, 900, "BlocoH: authored viewport is kept as-is");
+
+		//A viewport with one zero dimension counts as invalid -> heuristic
+		BorderLayout half;
+		half.CanvasWidth = 1920;
+		half.CanvasHeight = 1080;
+		half.ViewportWidth = 500;
+		half.ViewportHeight = 0;
+		half.ApplyDefaultViewportIfMissing();
+		Check(half.ViewportWidth == 1440 && half.ViewportHeight == 1080 && half.ViewportX == 240, "BlocoH: zero-height viewport falls back to the heuristic");
+	}
+
+	void TestBorderParseScaleMode()
+	{
+		BorderScaleMode mode = BorderScaleMode::Fit;
+		Check(BorderLayout::ParseScaleMode("stretch", mode) && mode == BorderScaleMode::Stretch, "BlocoH: scale_mode 'stretch' parses");
+		Check(BorderLayout::ParseScaleMode("fit", mode) && mode == BorderScaleMode::Fit, "BlocoH: scale_mode 'fit' parses");
+		mode = BorderScaleMode::Stretch;
+		Check(!BorderLayout::ParseScaleMode("Fit", mode) && mode == BorderScaleMode::Stretch, "BlocoH: unknown scale_mode is rejected and leaves the value untouched");
+		Check(!BorderLayout::ParseScaleMode("", mode), "BlocoH: empty scale_mode is rejected");
+	}
+
+	void TestBorderFitLetterboxing()
+	{
+		BorderLayout l = BorderLayout::ForCanvas(1920, 1080);
+
+		//Same aspect: fills the output exactly
+		CheckRect(l.CanvasRectOnOutput(1920, 1080), 0, 0, 1920, 1080, "BlocoH: fit on a same-aspect output fills it");
+		CheckRect(l.CanvasRectOnOutput(960, 540), 0, 0, 960, 540, "BlocoH: fit on a half-size output scales down");
+
+		//Wider output (21:9): full height, pillarboxed and centred
+		CheckRect(l.CanvasRectOnOutput(2560, 1080), 320, 0, 1920, 1080, "BlocoH: fit on a wider output pillarboxes");
+		//Taller output (4:3): full width, letterboxed and centred
+		CheckRect(l.CanvasRectOnOutput(1920, 1440), 0, 180, 1920, 1080, "BlocoH: fit on a taller output letterboxes");
+
+		//Game viewport follows the canvas rect
+		CheckRect(l.ViewportRectOnOutput(1920, 1080), 240, 0, 1440, 1080, "BlocoH: viewport on same-aspect output equals the canvas viewport");
+		CheckRect(l.ViewportRectOnOutput(960, 540), 120, 0, 720, 540, "BlocoH: viewport scales with the canvas on a half-size output");
+		CheckRect(l.ViewportRectOnOutput(2560, 1080), 560, 0, 1440, 1080, "BlocoH: viewport is offset by the pillarbox");
+		CheckRect(l.ViewportRectOnOutput(1920, 1440), 240, 180, 1440, 1080, "BlocoH: viewport is offset by the letterbox");
+
+		//Aspect is preserved in fit mode: 4:3 viewport stays 4:3 on every output
+		//(integer rounding: 1600 * 4/3 = 2133.33, so allow a 1px slack)
+		BorderRect vp = l.ViewportRectOnOutput(3840, 1600);
+		int64_t aspectErr = (int64_t)vp.Width * 3 - (int64_t)vp.Height * 4;
+		Check(aspectErr >= -4 && aspectErr <= 4, "BlocoH: fit preserves the 4:3 game aspect on an odd output (within 1px)", RectStr(vp));
+
+		//Degenerate inputs never produce a rect
+		CheckRect(l.CanvasRectOnOutput(0, 1080), 0, 0, 0, 0, "BlocoH: zero-width output yields an empty rect");
+		CheckRect(BorderLayout().CanvasRectOnOutput(1920, 1080), 0, 0, 0, 0, "BlocoH: zero-size canvas yields an empty rect");
+	}
+
+	void TestBorderStretch()
+	{
+		BorderLayout l = BorderLayout::ForCanvas(1920, 1080);
+		l.ScaleMode = BorderScaleMode::Stretch;
+		CheckRect(l.CanvasRectOnOutput(2560, 1080), 0, 0, 2560, 1080, "BlocoH: stretch fills a wider output");
+		CheckRect(l.CanvasRectOnOutput(1920, 1440), 0, 0, 1920, 1440, "BlocoH: stretch fills a taller output");
+		//Viewport is stretched along with the canvas (aspect is NOT preserved)
+		CheckRect(l.ViewportRectOnOutput(2560, 1080), 320, 0, 1920, 1080, "BlocoH: stretch scales the viewport horizontally");
+		CheckRect(l.ViewportRectOnOutput(1920, 1440), 240, 0, 1440, 1440, "BlocoH: stretch scales the viewport vertically");
+	}
+
+	void TestBorderViewportClamping()
+	{
+		BorderLayout l;
+		l.CanvasWidth = 100;
+		l.CanvasHeight = 50;
+
+		//Negative origin: clipped to 0
+		l.ViewportX = -10;
+		l.ViewportY = -5;
+		l.ViewportWidth = 30;
+		l.ViewportHeight = 20;
+		Check(!l.IsViewportInsideCanvas(), "BlocoH: negative viewport origin is outside the canvas");
+		CheckRect(l.ClampedViewport(), 0, 0, 20, 15, "BlocoH: negative viewport origin clamps to the canvas origin");
+
+		//Overflowing far edge: clipped to canvas size
+		l.ViewportX = 90;
+		l.ViewportY = 40;
+		Check(!l.IsViewportInsideCanvas(), "BlocoH: viewport past the far edge is outside the canvas");
+		CheckRect(l.ClampedViewport(), 90, 40, 10, 10, "BlocoH: viewport past the far edge clamps to the canvas size");
+
+		//Fully outside: empty
+		l.ViewportX = 200;
+		l.ViewportY = 0;
+		CheckRect(l.ClampedViewport(), 0, 0, 0, 0, "BlocoH: viewport fully outside the canvas is empty");
+		CheckRect(l.ViewportRectOnOutput(200, 100), 0, 0, 0, 0, "BlocoH: viewport fully outside the canvas maps to nothing on the output");
+
+		//Exactly on the edge is still inside
+		l.ViewportX = 60;
+		l.ViewportY = 30;
+		l.ViewportWidth = 40;
+		l.ViewportHeight = 20;
+		Check(l.IsViewportInsideCanvas(), "BlocoH: viewport touching the far edge is inside the canvas");
+
+		//Drawing never writes outside the canvas buffer: paint a 2x2 game
+		//into a viewport that overhangs every edge and check only the
+		//canvas cells changed (the guard cells around it stay intact)
+		BorderLayout small;
+		small.CanvasWidth = 4;
+		small.CanvasHeight = 4;
+		small.ViewportX = -2;
+		small.ViewportY = -2;
+		small.ViewportWidth = 8;
+		small.ViewportHeight = 8;
+		std::vector<uint32_t> buf(16 + 2, 0xCAFEBABE); //16 canvas cells + 2 guard cells
+		uint32_t game[4] = { 0xFF000001, 0xFF000002, 0xFF000003, 0xFF000004 };
+		BorderDrawGameIntoViewport(buf.data(), small, game, 2, 2);
+		bool guardsIntact = buf[16] == 0xCAFEBABE && buf[17] == 0xCAFEBABE;
+		Check(guardsIntact, "BlocoH: overhanging viewport never writes past the canvas buffer");
+		bool allPainted = true;
+		for(int i = 0; i < 16; i++) {
+			if(buf[i] == 0xCAFEBABE) {
+				allPainted = false;
+			}
+		}
+		Check(allPainted, "BlocoH: overhanging viewport still paints every canvas cell it covers");
+		//Viewport cell (2,2) (canvas 0,0) samples game pixel (2*2/8, 2*2/8) = (0,0)
+		Check(buf[0] == 0xFF000001 && buf[15] == 0xFF000004, "BlocoH: overhanging viewport samples the game with nearest-neighbour",
+			std::to_string(buf[0]) + "/" + std::to_string(buf[15]));
+	}
+
+	void TestBorderBlendOver()
+	{
+		Check(BorderBlendOver(0xFF112233, 0x00FFFFFF) == 0xFF112233, "BlocoH: alpha 0 border leaves the game pixel untouched");
+		Check(BorderBlendOver(0xFF112233, 0xFFAABBCC) == 0xFFAABBCC, "BlocoH: alpha 255 border replaces the game pixel");
+		//50% white over opaque black: (255*128 + 0*127)/255 = 128 per channel, alpha stays 255
+		uint32_t mid = BorderBlendOver(0xFF000000, 0x80FFFFFF);
+		Check(mid == 0xFF808080, "BlocoH: mid alpha blends channels with integer source-over", std::to_string(mid));
+		//50% over a transparent destination: alpha accumulates, colour is scaled
+		uint32_t onClear = BorderBlendOver(0x00000000, 0x80FFFFFF);
+		Check(onClear == 0x80808080, "BlocoH: mid alpha over transparent keeps the border's alpha", std::to_string(onClear));
+		//Alpha 1 barely changes the destination but never overflows a channel
+		uint32_t tiny = BorderBlendOver(0xFFFFFFFF, 0x01000000);
+		Check(tiny == 0xFFFEFEFE, "BlocoH: alpha 1 black over white darkens by one step", std::to_string(tiny));
+	}
+
+	void TestBorderCompositeOrdering()
+	{
+		//2x2 canvas; viewport = right column (x=1, w=1, h=2); 1x1 game frame
+		BorderLayout l;
+		l.CanvasWidth = 2;
+		l.CanvasHeight = 2;
+		l.ViewportX = 1;
+		l.ViewportY = 0;
+		l.ViewportWidth = 1;
+		l.ViewportHeight = 2;
+		//Border: opaque red on the left column, 50% white on the right column
+		uint32_t border[4] = { 0xFFFF0000, 0x80FFFFFF, 0xFFFF0000, 0x80FFFFFF };
+		uint32_t game[1] = { 0xFF000000 };
+		uint32_t dst[4];
+
+		//Overlay (default): border blends over the game inside the viewport
+		l.Underlay = false;
+		BorderCompositeFrame(dst, border, l, game, 1, 1);
+		Check(dst[0] == 0xFFFF0000 && dst[2] == 0xFFFF0000, "BlocoH: overlay keeps the opaque border outside the viewport");
+		Check(dst[1] == 0xFF808080 && dst[3] == 0xFF808080, "BlocoH: overlay blends the translucent border over the game", std::to_string(dst[1]));
+
+		//Underlay: game is copied strictly over the viewport, border untouched elsewhere
+		l.Underlay = true;
+		BorderCompositeFrame(dst, border, l, game, 1, 1);
+		Check(dst[0] == 0xFFFF0000 && dst[2] == 0xFFFF0000, "BlocoH: underlay keeps the border outside the viewport");
+		Check(dst[1] == 0xFF000000 && dst[3] == 0xFF000000, "BlocoH: underlay draws the game verbatim over the viewport (no blend)", std::to_string(dst[1]));
+
+		//Overlay outside the viewport starts from transparent black, so a
+		//translucent border there is NOT lifted by any game pixel
+		l.Underlay = false;
+		uint32_t border2[4] = { 0x80FFFFFF, 0x80FFFFFF, 0x80FFFFFF, 0x80FFFFFF };
+		BorderCompositeFrame(dst, border2, l, game, 1, 1);
+		Check(dst[0] == 0x80808080, "BlocoH: overlay outside the viewport blends over transparent black", std::to_string(dst[0]));
+		Check(dst[1] == 0xFF808080, "BlocoH: overlay inside the viewport blends over the game", std::to_string(dst[1]));
+	}
 }
 
 int main()
@@ -1012,6 +1232,14 @@ int main()
 	TestFingerprintLoopAbsent();
 	TestFingerprintLoopMalformed();
 	TestFingerprintLoopSave();
+
+	TestBorderDefaultHeuristic();
+	TestBorderParseScaleMode();
+	TestBorderFitLetterboxing();
+	TestBorderStretch();
+	TestBorderViewportClamping();
+	TestBorderBlendOver();
+	TestBorderCompositeOrdering();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

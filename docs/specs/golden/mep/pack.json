@@ -17,6 +17,7 @@
   "sections": {
     "textures": { "path": "textures/" },
     "audio": { "path": "audio/" },
-    "synth": { "path": "synth/preset.cfg" }
+    "synth": { "path": "synth/preset.cfg" },
+    "border": { "path": "border/" }
   }
 }

@@ -172,6 +172,72 @@ classify verdict. So declaring `external_assets` is worth doing whenever your
 pack references files you cannot bundle: it is the mechanism that can turn
 an otherwise-`invalid` split pack into an `accepted` one, not a no-op.
 
+## Border (bezel) layer
+
+Since MEP v1.5 (MEP-v1.md §5.4, ADR-0149) a pack can ship a decorative
+frame — bezel, cabinet art, Super Game Boy-style border — drawn around the
+game. It is optional, it is the only thing in its section, and a pack may
+consist of a border alone.
+
+**Files.** Put them in a `border/` folder at the pack root and declare it:
+
+```
+<pack>/
+  pack.json                 "sections": { ..., "border": { "path": "border/" } }
+  border/border.png         required — the frame, 32-bit RGBA; its pixel size is the canvas
+  border/border.json        optional — where the game goes
+```
+
+In the folder-form/sibling-folder layout (no `pack.json`) the same
+`border/border.png` is picked up automatically; a bootstrap or tool may
+write a machine-generated one under `auto/border/border.png`, and the
+human `border/` always wins over `auto/` (the same human > auto rule as
+textures and audio). MesenCE also accepts a bare `border.png` at the pack
+root, but the lint only recognizes the `border/` folder — use the folder.
+
+**`border.json`** (the file is optional; once present, `width`, `height`
+and a full `viewport` are required — see the spec table for exact rules):
+
+```json
+{
+  "version": 1,
+  "width": 1920, "height": 1080,
+  "viewport": { "x": 240, "y": 0, "width": 1440, "height": 1080 },
+  "scale_mode": "fit",
+  "underlay": false
+}
+```
+
+- `width`/`height` document the PNG size (the host always trusts the PNG;
+  keep them equal to it).
+- `viewport` is the rectangle, in canvas pixels, where the game frame is
+  drawn (`x`, `y`, `width`, `height`, all integers >= 0; keep it inside the
+  canvas or the lint warns and the host clips it). The game is scaled to
+  fill it exactly, so give it the game's aspect ratio (4:3 for NES/SMS,
+  10:9 for Game Boy). Leave the PNG fully transparent there, or partially
+  transparent for a soft bezel edge.
+- Without `border.json` (or without a usable `viewport`) the host assumes a
+  16:9 bezel around a 4:3 game: a viewport as tall as the canvas, 4/3 as
+  wide, centred horizontally.
+- `underlay: true` draws the PNG *behind* the game instead of blending it
+  on top (the game covers the whole viewport opaquely).
+- `scale_mode` is `fit` (default) or `stretch`. The current MesenCE build
+  parses it but still hands the canvas to the normal video scaler (your
+  aspect-ratio/integer-scale settings apply), so do not rely on `stretch`
+  yet.
+
+A `border.png` that fails to decode is skipped silently — the game keeps
+running without a frame — so always run `python3 scripts/mep_lint.py
+<pack>` before submitting: it reports a missing `border.png` as an error
+and prints the decoded frame size (`border frame PNG 1920x1080`); it also
+checks every `border.json` field.
+
+**Toggling it in the emulator.** The border is gated by its own switch,
+"Border" in the Player shell's Enhancements quick-toggle panel (next to
+Textures/Audio) and the "Enable pack border" checkbox in *Enhancement
+Packs* (Advanced mode). It defaults to on; turning it off costs nothing and
+restores the plain game frame.
+
 ## Seeding audio for your pack (record → MIDI → OGG)
 
 A pack's `audio/` layer is the pair `audio/fingerprints.json` (which track

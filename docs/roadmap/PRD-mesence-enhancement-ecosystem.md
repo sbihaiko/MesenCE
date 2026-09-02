@@ -433,8 +433,9 @@ per-console border art (a border is a pack asset, not an engine feature).
 |---|---|---|
 | F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **done 2026-09-02** — ADR-0149 accepted (MEP v1.5 border section, border.png + border.json layout, VideoRenderer compositing pipeline, EnableBorder config toggle) |
 | F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | **done 2026-09-02** — shipped in `6dc13f9e`: MEP v1.5 `border` section (`Border = 3`, `kMepSectionCount = 4`), `border/` convention + root `border.png` fallback, `EnableBorder` ABI/config, VideoRenderer overlay/underlay compositing pipeline, PlayerEnhancementsPanel quick-toggle CheckBox, and `mep_lint`/`validate-specs` gates |
+| F8.3 | Normative closure + tests for the border layer (ADR-0149 shipped code before its spec/test record existed) | **done 2026-09-02** — **F8.3a spec:** `docs/specs/MEP-v1.md` bumped to v1.5 (§2.1 fixed layout, §3.1 `sections.border`, new §5.4 `border` — files, `border.json` field table, defaults, decode-failure, `EnableBorder` gate); golden `docs/specs/golden/mep/border/` (32×18 RGBA PNG + `border.json`) declared in its `pack.json`; `validate-specs.py` `validate_mep_border` (PNG decodable, integer canvas matching the PNG, viewport inside canvas, `scale_mode`/`underlay` types); `docs/hd-pack-authoring.md` "Border (bezel) layer"; `docs/specs/README.md` indexed. **F8.3b tests:** `Core/Shared/Video/BorderLayout.{h,cpp}` (host-free layout math — default 4:3 viewport, clamp, fit/stretch rects, source-over blend, `BorderCompositeFrame`) extracted from `VideoRenderer.cpp` behaviour-preservingly (header untouched) and linked into `core-unit-tests` (Bloco H, 47 checks; 183 total) + `Core.vcxproj`; `mep_lint.py` `lint_border_json` per ADR-0149 §1 (errors: `width`/`height` not int > 0, `viewport` keys missing/negative, bad `scale_mode`/`underlay`; warnings: viewport exceeds canvas, `version` ≠ 1) with `scripts/test_mep_lint_border.py` (32 checks) wired into `make doc-checks`. **ADR-vs-code divergences recorded in the spec, not fixed (follow-up F8.4 if wanted):** (1) `scale_mode` parsed but never applied — `stretch` behaves like `fit`; (2) `border.json` `width`/`height` ignored by the Core — canvas = decoded PNG size, viewport in PNG pixels, lint does not cross-check declared vs actual; (3) default heuristic hardcodes 4:3 regardless of `EmuSettings::GetAspectRatio` (GB 10:9); (4) game frame is stretched to the viewport rect, no letterboxing, so authors must size the viewport to the game's aspect; (5) bare root `border.png` is accepted by `MepPack::DetectConventionLayout` but not probed by `mep_lint` | ADR-0149 |
 
-Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149) and F8.2 done.
+Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; F8.4 (apply `scale_mode`, honour the console aspect in the default viewport, letterbox inside the viewport) is optional and unscheduled.
 
 ### 5. Order of execution
 
@@ -451,7 +452,7 @@ Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149) and F8.2 done.
    F6.4b; P.6 after F6.4b. See Part B.
    P.7 (quick-toggle panel + welcome/Continue cards) is independent of
    Phase 8 below — it ships without a Border toggle and adds one later.
-6. **Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance.
+6. ~~**Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance~~ shipped 2026-09-02, F8.3 normative closure + tests the same day.
 
 ### 6. ADR map
 

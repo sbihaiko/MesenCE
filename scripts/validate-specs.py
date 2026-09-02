@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Validates the golden files under docs/specs/ against the normative rules
-of the ESP v1, MEP v1, MEI v1.3, MEP-recipe v1 specs and the hires-gbsms draft,
+of the ESP v1, MEP v1 (incl. the v1.5 border section), MEI v1.3, MEP-recipe v1 specs and the hires-gbsms draft,
 and enforces the wire format of shared cross-language test fixtures
 (path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
 """
-import json, re, subprocess, sys
+import json, re, struct, subprocess, sys
 from pathlib import Path
 
 from mei_rules import (
@@ -97,6 +97,56 @@ def validate_mep(path):
     for name, sec in sections.items():
         check(name in ("textures", "audio", "synth", "border"), f"{path.name}: unknown section '{name}' (ok if a future version)")
         check("path" in sec and safe_relative_path(sec["path"]), f"{path.name}: sections.{name}.path missing or unsafe")
+
+def png_size(path):
+    """(width, height) from the IHDR chunk of a PNG, or None when the file is not a PNG."""
+    data = path.read_bytes()
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return struct.unpack(">II", data[16:24])
+
+def validate_mep_border(root):
+    """MEP-v1 §5.4 (v1.5, ADR-0149): the golden pack declares a `border` section whose folder holds a
+    decodable `border.png` and a `border.json` with integer `width`/`height` > 0 matching the PNG and a
+    `viewport` object that lies within the canvas."""
+    pack = json.loads((root / "pack.json").read_text())
+    section = pack.get("sections", {}).get("border")
+    check(isinstance(section, dict) and "path" in section, f"{root.name}/pack.json: sections.border missing (MEP-v1 §5.4)")
+    if not isinstance(section, dict):
+        return
+    folder = root / section.get("path", "").strip("/") if section.get("path", "").strip("/") else root
+    png = folder / "border.png"
+    check(png.is_file(), f"{root.name}: {png.relative_to(root)} does not exist")
+    size = png_size(png) if png.is_file() else None
+    check(size is not None and size[0] > 0 and size[1] > 0, f"{root.name}: {png.relative_to(root)} is not a decodable PNG")
+    meta_path = folder / "border.json"
+    check(meta_path.is_file(), f"{root.name}: {meta_path.relative_to(root)} does not exist")
+    if not meta_path.is_file():
+        return
+    try:
+        meta = json.loads(meta_path.read_text())
+    except json.JSONDecodeError as exc:
+        check(False, f"{root.name}: border.json invalid JSON: {exc}")
+        return
+    check(isinstance(meta, dict), f"{root.name}: border.json root must be an object")
+    if not isinstance(meta, dict):
+        return
+    w, h = meta.get("width"), meta.get("height")
+    def positive_int(v):
+        return isinstance(v, int) and not isinstance(v, bool) and v > 0
+    check(positive_int(w) and positive_int(h), f"{root.name}: border.json width/height must be integers > 0")
+    if size is not None and positive_int(w) and positive_int(h):
+        check((w, h) == tuple(size), f"{root.name}: border.json width/height {w}x{h} differ from border.png {size[0]}x{size[1]}")
+    vp = meta.get("viewport")
+    check(isinstance(vp, dict), f"{root.name}: border.json 'viewport' must be an object")
+    if isinstance(vp, dict) and positive_int(w) and positive_int(h):
+        x, y, vw, vh = (vp.get(k) for k in ("x", "y", "width", "height"))
+        check(all(isinstance(v, int) and not isinstance(v, bool) for v in (x, y)), f"{root.name}: viewport.x/y must be integers")
+        check(positive_int(vw) and positive_int(vh), f"{root.name}: viewport.width/height must be integers > 0")
+        if all(isinstance(v, int) for v in (x, y, vw, vh)):
+            check(0 <= x and 0 <= y and x + vw <= w and y + vh <= h, f"{root.name}: viewport {x},{y} {vw}x{vh} exceeds the {w}x{h} canvas")
+    check(meta.get("scale_mode", "fit") in ("fit", "stretch"), f"{root.name}: border.json scale_mode must be 'fit' or 'stretch'")
+    check(isinstance(meta.get("underlay", False), bool), f"{root.name}: border.json underlay must be a boolean")
 
 def lint_golden_packs():
     # ADR-0136 tripwire: previously nothing ran mep_lint.py over the goldens.
@@ -201,6 +251,7 @@ def main():
     validate_esp(SPECS / "golden" / "esp" / "EnhancedAudioPresets.cfg")
     validate_mep(SPECS / "golden" / "mep" / "pack.json")
     validate_mep(SPECS / "golden" / "mep-nes" / "pack.json")
+    validate_mep_border(SPECS / "golden" / "mep")
     validate_mei_catalog()
     validate_hires_draft(SPECS / "golden" / "hires-gbsms" / "hires.txt")
     validate_path_cases(SPECS / "golden" / "mep" / "path-cases.txt")
@@ -211,7 +262,8 @@ def main():
             print(f"FAILURE: {f}", file=sys.stderr)
         sys.exit(1)
     print("validate-specs: all golden files conform (ESP, MEP, MEI v1.3, MEP-recipe, hires-gbsms draft, path-cases format); "
-          "mep-nes/pack.json structurally validated; mep + mep-nes lint-checked; MEI catalog validated (golden always, docs/community-packs.json when present)")
+          "mep-nes/pack.json structurally validated; mep border section (MEP v1.5 §5.4: border.png + border.json viewport) validated; "
+          "mep + mep-nes lint-checked; MEI catalog validated (golden always, docs/community-packs.json when present)")
 
 if __name__ == "__main__":
     main()
