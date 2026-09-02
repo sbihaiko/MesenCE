@@ -188,8 +188,8 @@ for l in ${skipped_lines[@]+"${skipped_lines[@]}"}; do
 	echo "  SKIP: $l"
 done
 
-if [[ ${#fail_lines[@]:-0} -eq 0 ]]; then
-	if [[ ${#skipped_lines[@]:-0} -gt 0 ]]; then
+if [[ ${#fail_lines[@]} -eq 0 ]]; then
+	if [[ ${#skipped_lines[@]} -gt 0 ]]; then
 		echo "PASS (${#skipped_lines[@]} user-supplied OGG(s) skipped — not supplied locally)"
 	else
 		echo "PASS: boots with no missing img/tile/background/bgm/sfx targets"
