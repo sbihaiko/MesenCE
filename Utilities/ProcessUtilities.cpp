@@ -78,7 +78,14 @@ string ProcessUtilities::GetExecutableFolder()
 	if(slash != std::wstring::npos) {
 		path.resize(slash + 1);
 	}
-	return std::string(path.begin(), path.end());
+	//Narrow explicitly: the std::string range constructor from wchar_t
+	//iterators triggers C4244 at /W4 /WX (wchar_t->char, possible loss).
+	std::string result;
+	result.reserve(path.size());
+	for(wchar_t ch : path) {
+		result.push_back(static_cast<char>(ch));
+	}
+	return result;
 #elif defined(__APPLE__)
 	uint32_t size = 0;
 	_NSGetExecutablePath(nullptr, &size);
