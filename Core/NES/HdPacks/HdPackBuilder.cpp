@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <filesystem>
 #include <algorithm>
 #include <queue>
 #include "NES/HdPacks/HdPackBuilder.h"

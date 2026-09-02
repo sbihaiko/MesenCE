@@ -1023,6 +1023,9 @@ void NesConsole::ExportRomTilesHdPack(HdPackBuilderOptions options)
 static string ResolveExtractAudioToolPath()
 {
 	//1. Explicit override (dev builds, CI, custom installs).
+	#ifdef _MSC_VER
+	#pragma warning(suppress : 4996)  //getenv is deprecated on MSVC; _dupenv_s is the secure form but getenv is fine here
+	#endif
 	const char* env = getenv("MESEN_EXTRACT_AUDIO_TOOL");
 	if(env && *env) {
 		return env;
