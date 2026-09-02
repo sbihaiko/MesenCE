@@ -432,9 +432,9 @@ per-console border art (a border is a pack asset, not an engine feature).
 | Slice | Deliverable | ADR |
 |---|---|---|
 | F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **done 2026-09-02** — ADR-0149 accepted (MEP v1.5 border section, border.png + border.json layout, VideoRenderer compositing pipeline, EnableBorder config toggle) |
-| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | ADR-0149 |
+| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | **done 2026-09-02** — shipped in `6dc13f9e`: MEP v1.5 `border` section (`Border = 3`, `kMepSectionCount = 4`), `border/` convention + root `border.png` fallback, `EnableBorder` ABI/config, VideoRenderer overlay/underlay compositing pipeline, PlayerEnhancementsPanel quick-toggle CheckBox, and `mep_lint`/`validate-specs` gates |
 
-Status: **active (2026-09-02)** — F8.1 done (ADR-0149); F8.2 implementation pending.
+Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149) and F8.2 done.
 
 ### 5. Order of execution
 
@@ -932,11 +932,9 @@ This keeps the panel from drifting out of sync with Advanced's own
 settings pages (§6 non-goal: do not fork settings state).
 
 A **Border** toggle (a pack-declared decorative frame around the game
-area) is a natural seventh entry here, but it needs a new MEP-v1 field
-and a new Core render path first — that is Core/pack work, not chrome,
-so it is tracked as its own phase in
-Part A, Phase 8 (§4), gated on an ADR. P.7 ships without it; the panel adds the
-seventh row once that phase lands.
+area) is the seventh entry here (implemented in Phase 8 F8.2, commit `6dc13f9e`,
+gated by `EnhancementPackConfig.EnableBorder` and backed by `border.png` + optional
+`border.json`). It lives beside the other enhancement toggles in `PlayerEnhancementsPanel`.
 
 #### 6.2 Welcome card and "Continue" (P.7)
 
