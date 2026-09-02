@@ -208,7 +208,11 @@ namespace Mesen.ViewModels
 			}
 
 			resolution = PackPreferenceResolver.Resolve(candidates, Config.EnhancementPacks.GetRomPackPreference(romSha1));
-			hasSibling = parsed.Packs.Any(e => e.Source == "sibling");
+			//Issue #150: the §4 sibling-suppresses-picker rule targets a human-authored
+			//sibling pack; an auto/-only sibling (the F5 bootstrap's machine layer) is
+			//not a user choice and must not suppress the picker (same human-vs-auto
+			//distinction already applied in core via the isAutoOnly column).
+			hasSibling = parsed.Packs.Any(e => e.Source == "sibling" && !e.IsAutoOnly);
 
 			//P.6 §5: the picker sorts by community 👍 (catalog MEI votes) first,
 			//then by name - local-only packs (votes 0) fall back to name order.
