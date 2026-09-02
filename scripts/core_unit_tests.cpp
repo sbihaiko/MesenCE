@@ -433,6 +433,39 @@ namespace
 	std::filesystem::remove_all(dir, ec);
 }
 
+void TestDetectConventionLayoutBorderSection()
+{
+	//ADR-0149 (Phase 8): border convention layout 'border/border.png' and root fallback 'border.png'
+	std::filesystem::path dir = MakeTempPackDir("border_convention");
+	std::error_code ec;
+	std::filesystem::create_directories(dir / "border", ec);
+	WriteTestFile(dir / "border" / "border.png", "fake_png");
+
+	MepPack pack;
+	pack.RootFolder = dir.string();
+	bool any = pack.DetectConventionLayout();
+
+	Check(any, "BlocoD: DetectConventionLayout finds border section");
+	Check(pack.HasSection(MepSectionType::Border), "BlocoD: border/border.png is recognized as Border section");
+	Check(pack.GetSectionPath(MepSectionType::Border) == (dir / "border").string(), "BlocoD: border section resolves to border/ folder");
+
+	std::filesystem::remove_all(dir, ec);
+
+	//Fallback: bare root border.png
+	std::filesystem::path dirBare = MakeTempPackDir("border_bare_root");
+	WriteTestFile(dirBare / "border.png", "fake_png");
+
+	MepPack packBare;
+	packBare.RootFolder = dirBare.string();
+	bool anyBare = packBare.DetectConventionLayout();
+
+	Check(anyBare, "BlocoD: DetectConventionLayout finds root border.png");
+	Check(packBare.HasSection(MepSectionType::Border), "BlocoD: root border.png recognized as Border section");
+	Check(packBare.GetSectionPath(MepSectionType::Border) == dirBare.string(), "BlocoD: bare root border resolves to root folder");
+
+	std::filesystem::remove_all(dirBare, ec);
+}
+
 //--- Bloco E: MepRecipeInstaller/MepRecipeOps/SHA256 (ADR-0138 §4/§37) ---
 	//Golden fixture: docs/specs/golden/mep-recipe/fixture/ (real bytes, real
 	//sha256 hashes - unlike the format-only docs/specs/golden/mep-recipe/
@@ -957,6 +990,7 @@ int main()
 	TestDetectConventionLayoutConventionWinsOverBareRoot();
 	TestDetectConventionLayoutNoHiresTxtAtAll();
 	TestDetectConventionLayoutMepHumanLayer();
+	TestDetectConventionLayoutBorderSection();
 
 	TestSha256KnownAnswer();
 	TestFullDepsInstallMatchesPythonReference();
