@@ -22,6 +22,15 @@ namespace Mesen.ViewModels
 		[ObservableProperty] public partial GameScreenMode Mode { get; private set; }
 		[ObservableProperty] public partial List<RecentGameInfo> GameEntries { get; private set; } = new List<RecentGameInfo>();
 
+		//P.7 (PRD Part B §6.2): Welcome/Continue cards, Player-home only (never
+		//shown on the Advanced game-selection screen, nor on the Save/Load
+		//state screens that reuse this same ViewModel/DataTemplate - both are
+		//gated on Mode == RecentGames below). Welcome is not gated on having
+		//any entries - recents are necessarily empty the first time it shows.
+		[ObservableProperty] public partial bool ShowWelcomeCard { get; private set; }
+		[ObservableProperty] public partial bool ShowContinueCard { get; private set; }
+		[ObservableProperty] public partial string ContinueLabel { get; private set; } = "";
+
 		public RecentGamesViewModel()
 		{
 			//P.4 (PRD Part B §6): in Player mode the recent-games grid is the
@@ -35,6 +44,8 @@ namespace Mesen.ViewModels
 			if(mode == GameScreenMode.RecentGames && ConfigManager.Config.Preferences.UiMode != UiMode.Player && ConfigManager.Config.Preferences.GameSelectionScreenMode == GameSelectionMode.Disabled) {
 				Visible = false;
 				GameEntries = new List<RecentGameInfo>();
+				ShowWelcomeCard = false;
+				ShowContinueCard = false;
 				return;
 			} else if(mode != GameScreenMode.RecentGames && Mode == mode && Visible) {
 				Visible = false;
@@ -62,7 +73,17 @@ namespace Mesen.ViewModels
 				for(int i = 0; i < files.Count && entries.Count < 72; i++) {
 					entries.Add(new RecentGameInfo() { FileName = files[i], Name = Path.GetFileNameWithoutExtension(files[i]) });
 				}
+
+				//P.7 (§6.2): Player-home only - Advanced's own game-selection
+				//screen (GameSelectionScreenMode) reuses this same ViewModel/mode
+				//but is not the "Player home" these cards belong to.
+				bool isPlayerHome = ConfigManager.Config.Preferences.UiMode == UiMode.Player;
+				ShowWelcomeCard = isPlayerHome && PlayerEnhancementsToggle.ShouldShowWelcomeCard(ConfigManager.Config.PlayerEnhancements.WelcomeCardDismissed);
+				ShowContinueCard = isPlayerHome && PlayerEnhancementsToggle.ShouldShowContinueCard(entries.Count > 0);
+				ContinueLabel = entries.Count > 0 ? ResourceHelper.GetMessage("ContinueCardLabel", entries[0].Name) : "";
 			} else {
+				ShowWelcomeCard = false;
+				ShowContinueCard = false;
 				if(!Visible) {
 					NeedResume = Pause();
 				}

@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Mesen.Config;
@@ -45,6 +45,20 @@ namespace Mesen.ViewModels
 		//again. A sibling-folder pack always suppresses it (§4).
 		[ObservableProperty] public partial bool IsPlayerPackPickerVisible { get; set; }
 		[ObservableProperty] public partial List<PlayerPackChoice> PlayerPackChoices { get; set; } = new();
+
+		//P.7 (PRD Part B §6.1): the Player-mode "Enhancements" quick-toggle
+		//panel. Reached from the overlay, same as Pack/Settings - the overlay
+		//already paused the game, so opening this panel does not pause again.
+		//On/off state is derived from existing config (VideoConfig.AspectRatio/
+		//VideoFilter, the per-console overclock field), refreshed whenever the
+		//panel opens, never a second source of truth.
+		[ObservableProperty] public partial bool IsEnhancementsPanelVisible { get; set; }
+		[ObservableProperty] public partial bool IsTexturesEnabled { get; set; }
+		[ObservableProperty] public partial bool IsAudioEnabled { get; set; }
+		[ObservableProperty] public partial bool IsWideScrnEnabled { get; set; }
+		[ObservableProperty] public partial bool IsHiResEnabled { get; set; }
+		[ObservableProperty] public partial bool IsOverclockEnabled { get; set; }
+		[ObservableProperty] public partial bool IsOverclockSupported { get; set; }
 
 		//P.5 (PRD Part B §6): the currently-applied pack's name/layers for
 		//the overlay chip and the "Applied ..." toast.
@@ -95,6 +109,14 @@ namespace Mesen.ViewModels
 			//session) instead of toggling the overlay.
 			if(IsPlayerPackPickerVisible) {
 				IsPlayerPackPickerVisible = false;
+				return;
+			}
+			//P.7: same precedence for the Enhancements panel - Esc closes it and
+			//returns to the overlay underneath (which OpenEnhancementsPanel hid),
+			//instead of closing the overlay too.
+			if(IsEnhancementsPanelVisible) {
+				IsEnhancementsPanelVisible = false;
+				IsPlayerOverlayVisible = true;
 				return;
 			}
 			if(IsPlayerOverlayVisible) {
@@ -241,6 +263,111 @@ namespace Mesen.ViewModels
 			IsPlayerPackPickerVisible = false;
 		}
 
+		//P.7 (PRD Part B §6.1): the overlay's "Enhancements" item - refreshes
+		//the panel's on/off state from whatever is currently configured (never
+		//stale from a previous ROM/session) and shows it in place of the
+		//overlay (same replace-not-stack behavior as the Pack picker). The
+		//overlay already paused the game to open, so this does not pause again.
+		public void OpenEnhancementsPanel()
+		{
+			IsPlayerOverlayVisible = false;
+			IsTexturesEnabled = Config.EnhancementPacks.EnableTextures;
+			IsAudioEnabled = Config.EnhancementPacks.EnableAudio;
+			IsWideScrnEnabled = Config.Video.AspectRatio == VideoAspectRatio.Widescreen;
+			IsHiResEnabled = Config.Video.VideoFilter == VideoFilterType.HQ4x;
+			IsOverclockSupported = PlayerEnhancementsToggle.SupportsOverclock(RomInfo.ConsoleType);
+			IsOverclockEnabled = RomInfo.ConsoleType switch {
+				ConsoleType.Nes => PlayerEnhancementsToggle.IsNesOverclockOn(Config.Nes.PpuExtraScanlinesBeforeNmi, Config.Nes.PpuExtraScanlinesAfterNmi),
+				ConsoleType.Gameboy => PlayerEnhancementsToggle.IsScanlineOverclockOn(Config.Gameboy.OverclockScanlineCount),
+				ConsoleType.Gba => PlayerEnhancementsToggle.IsScanlineOverclockOn(Config.Gba.OverclockScanlineCount),
+				_ => false
+			};
+			IsEnhancementsPanelVisible = true;
+		}
+
+		public void CloseEnhancementsPanel()
+		{
+			IsEnhancementsPanelVisible = false;
+			IsPlayerOverlayVisible = true;
+		}
+
+		//Texture/Audio (§6.1): plain passthrough to the existing MEP layer
+		//switches - applies on the next ROM reload, like the rest of
+		//EnhancementPackConfig.
+		public void ToggleTextures()
+		{
+			Config.EnhancementPacks.EnableTextures = !Config.EnhancementPacks.EnableTextures;
+			Config.EnhancementPacks.ApplyConfig();
+			Config.Save();
+			IsTexturesEnabled = Config.EnhancementPacks.EnableTextures;
+			LoadRomHelper.ReloadRom();
+		}
+
+		public void ToggleAudio()
+		{
+			Config.EnhancementPacks.EnableAudio = !Config.EnhancementPacks.EnableAudio;
+			Config.EnhancementPacks.ApplyConfig();
+			Config.Save();
+			IsAudioEnabled = Config.EnhancementPacks.EnableAudio;
+			LoadRomHelper.ReloadRom();
+		}
+
+		//WideScrn/HiRes (§6.1): restore-not-clobber via the host-free
+		//PlayerEnhancementsToggle.ToggleEnumPreset - turning on stashes whatever
+		//Advanced had configured (unless it's already the preset), turning off
+		//restores exactly that. Applies immediately (renderer-only, no reload).
+		public void ToggleWideScrn()
+		{
+			(VideoAspectRatio newCurrent, VideoAspectRatio newPrior) = PlayerEnhancementsToggle.ToggleEnumPreset(
+				Config.Video.AspectRatio, Config.PlayerEnhancements.WideScrnPriorAspectRatio, VideoAspectRatio.Widescreen, !IsWideScrnEnabled);
+			Config.Video.AspectRatio = newCurrent;
+			Config.PlayerEnhancements.WideScrnPriorAspectRatio = newPrior;
+			Config.Video.ApplyConfig();
+			Config.Save();
+			IsWideScrnEnabled = newCurrent == VideoAspectRatio.Widescreen;
+		}
+
+		public void ToggleHiRes()
+		{
+			(VideoFilterType newCurrent, VideoFilterType newPrior) = PlayerEnhancementsToggle.ToggleEnumPreset(
+				Config.Video.VideoFilter, Config.PlayerEnhancements.HiResPriorFilter, VideoFilterType.HQ4x, !IsHiResEnabled);
+			Config.Video.VideoFilter = newCurrent;
+			Config.PlayerEnhancements.HiResPriorFilter = newPrior;
+			Config.Video.ApplyConfig();
+			Config.Save();
+			IsHiResEnabled = newCurrent == VideoFilterType.HQ4x;
+		}
+
+		//Overclock (§6.1): plain 0/preset toggle (no restore-not-clobber - see
+		//PlayerEnhancementsToggle's comment), per console; no-op where
+		//unsupported (SMS has no overclock knob). Needs a reset to take effect.
+		public void ToggleOverclock()
+		{
+			bool turningOn = !IsOverclockEnabled;
+			switch(RomInfo.ConsoleType) {
+				case ConsoleType.Nes:
+					Config.Nes.PpuExtraScanlinesBeforeNmi = turningOn ? PlayerEnhancementsToggle.NesOverclockBeforeNmi : 0;
+					Config.Nes.PpuExtraScanlinesAfterNmi = turningOn ? PlayerEnhancementsToggle.NesOverclockAfterNmi : 0;
+					Config.Nes.ApplyConfig();
+					break;
+				case ConsoleType.Gameboy:
+					Config.Gameboy.OverclockScanlineCount = turningOn ? PlayerEnhancementsToggle.ScanlineOverclockPreset : 0;
+					Config.Gameboy.ApplyConfig();
+					break;
+				case ConsoleType.Gba:
+					Config.Gba.OverclockScanlineCount = turningOn ? PlayerEnhancementsToggle.ScanlineOverclockPreset : 0;
+					Config.Gba.ApplyConfig();
+					break;
+				default:
+					//Not supported on this console (SMS) - the panel keeps the
+					//checkbox disabled, but guard here too in case it's ever reached.
+					return;
+			}
+			Config.Save();
+			IsOverclockEnabled = turningOn;
+			LoadRomHelper.PowerCycle();
+		}
+
 		public void Init(MainWindow wnd)
 		{
 			MainMenu.Initialize(wnd);
@@ -266,6 +393,7 @@ namespace Mesen.ViewModels
 				UpdateMenuVisibility();
 				if(Config.Preferences.UiMode != UiMode.Player) {
 					IsPlayerOverlayVisible = false;
+					IsEnhancementsPanelVisible = false;
 				}
 			}));
 

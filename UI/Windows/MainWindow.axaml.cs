@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Mesen.Config;
+using Mesen.Config.Shortcuts;
 using Mesen.Controls;
 using Mesen.Debugger.Utilities;
 using Mesen.Debugger.Windows;
@@ -106,6 +107,8 @@ namespace Mesen.Windows
 					Dispatcher.UIThread.Post(() => this.GetControl<Button>("OverlayResumeButton")?.Focus());
 				} else if(e.PropertyName == nameof(MainWindowViewModel.IsPlayerPackPickerVisible) && _model.IsPlayerPackPickerVisible) {
 					Dispatcher.UIThread.Post(() => this.GetControl<ItemsControl>("PackPickerList")?.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus());
+				} else if(e.PropertyName == nameof(MainWindowViewModel.IsEnhancementsPanelVisible) && _model.IsEnhancementsPanelVisible) {
+					Dispatcher.UIThread.Post(() => this.GetControl<CheckBox>("EnhancementsTexturesCheckBox")?.Focus());
 				}
 			};
 
@@ -295,6 +298,24 @@ namespace Mesen.Windows
 			_model.DismissPlayerPackPicker();
 		}
 
+		private void OnOverlayEnhancements(object? sender, RoutedEventArgs e)
+		{
+			//P.7 (§6.1): replaces the overlay with the quick-toggle panel,
+			//same shape as OnOverlayPack replacing it with the picker.
+			_model.OpenEnhancementsPanel();
+		}
+
+		private void OnToggleTextures(object? sender, RoutedEventArgs e) => _model.ToggleTextures();
+		private void OnToggleAudio(object? sender, RoutedEventArgs e) => _model.ToggleAudio();
+		private void OnToggleWideScrn(object? sender, RoutedEventArgs e) => _model.ToggleWideScrn();
+		private void OnToggleHiRes(object? sender, RoutedEventArgs e) => _model.ToggleHiRes();
+		private void OnToggleOverclock(object? sender, RoutedEventArgs e) => _model.ToggleOverclock();
+
+		private void OnCloseEnhancementsPanel(object? sender, RoutedEventArgs e)
+		{
+			_model.CloseEnhancementsPanel();
+		}
+
 		private void OnOverlaySettings(object? sender, RoutedEventArgs e)
 		{
 			_model.IsPlayerOverlayVisible = false;
@@ -313,6 +334,26 @@ namespace Mesen.Windows
 		{
 			_model.IsPlayerOverlayVisible = false;
 			Close();
+		}
+
+		//P.7 (§6.2): the Welcome card's one CTA doubles as its own dismissal -
+		//it never reappears once clicked, whether or not a ROM is actually
+		//chosen from the dialog. Reuses the existing Open-ROM shortcut/dialog
+		//(ShortcutHandler.OpenFile), not a new file-picker path.
+		private void OnWelcomeCardLoadRom(object? sender, RoutedEventArgs e)
+		{
+			ConfigManager.Config.PlayerEnhancements.WelcomeCardDismissed = true;
+			ConfigManager.Config.Save();
+			EmuApi.ExecuteShortcut(new ExecuteShortcutParams() { Shortcut = EmulatorShortcut.OpenFile });
+		}
+
+		//P.7 (§6.2): resumes the most recent game, same action as clicking its
+		//tile in the recent-games grid.
+		private void OnContinueCard(object? sender, RoutedEventArgs e)
+		{
+			if(_model.RecentGames.GameEntries.Count > 0) {
+				_model.RecentGames.GameEntries[0].Load();
+			}
 		}
 
 		protected override void OnOpened(EventArgs e)

@@ -26,7 +26,25 @@
 			<v:AudioPlayerView />
 		</DataTemplate>
 		<DataTemplate DataType="{x:Type vm:RecentGamesViewModel}">
-			<c:StateGrid IsVisible="{Binding Visible}" Entries="{Binding GameEntries}" Title="{Binding Title}" Mode="{Binding Mode}" />
+			<DockPanel>
+				<!--P.7 (PRD Part B §6.2): Welcome card - shown once, on the very
+				first Player-mode boot (recents necessarily empty); its one CTA
+				("Load ROM") is also what dismisses it for good.-->
+				<Border DockPanel.Dock="Top" Background="#22FFFFFF" Padding="16" Margin="0 0 0 8" IsVisible="{Binding ShowWelcomeCard}">
+					<StackPanel Spacing="8" HorizontalAlignment="Center">
+						<TextBlock Text="{l:Translate lblWelcomeCardTitle}" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center" />
+						<TextBlock Text="{l:Translate lblWelcomeCardBody}" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Center" />
+						<Button Content="{l:Translate btnWelcomeCardLoadRom}" HorizontalAlignment="Center" Click="OnWelcomeCardLoadRom" />
+					</StackPanel>
+				</Border>
+				<!--P.7 (§6.2): Continue card - not first-run gated, simply shown
+				whenever there is a most-recent game to resume; sits alongside the
+				recent-games grid, same as any other home entry.-->
+				<Border DockPanel.Dock="Top" Background="#22FFFFFF" Padding="12" Margin="0 0 0 8" IsVisible="{Binding ShowContinueCard}">
+					<Button HorizontalAlignment="Stretch" Click="OnContinueCard" Content="{Binding ContinueLabel}" />
+				</Border>
+				<c:StateGrid IsVisible="{Binding Visible}" Entries="{Binding GameEntries}" Title="{Binding Title}" Mode="{Binding Mode}" />
+			</DockPanel>
 		</DataTemplate>
 	</Window.DataTemplates>
 	
@@ -82,9 +100,40 @@
 							<TextBlock Text="{Binding CurrentPackName}" FontWeight="Bold" />
 						</StackPanel>
 					</Button>
+					<!--P.7 (§6.1): the quick-toggle panel for Texture/Audio/WideScrn/
+					HiRes/Overclock.-->
+					<Button Content="{l:Translate btnOverlayEnhancements}" HorizontalAlignment="Stretch" Click="OnOverlayEnhancements" />
 					<Button Content="{l:Translate btnOverlaySettings}" HorizontalAlignment="Stretch" Click="OnOverlaySettings" />
 					<Button Content="{l:Translate btnOverlayAdvancedGui}" HorizontalAlignment="Stretch" Click="OnOverlayAdvanced" />
 					<Button Content="{l:Translate btnOverlayQuit}" HorizontalAlignment="Stretch" Click="OnOverlayQuit" />
+				</StackPanel>
+			</Border>
+
+			<!--P.7 (PRD Part B §6.1): the Enhancements quick-toggle panel - a
+			checkbox grid over config that already exists elsewhere
+			(EnhancementPackConfig.EnableTextures/EnableAudio, VideoConfig.
+			AspectRatio/VideoFilter, the per-console overclock field). On/off is
+			derived from that config, not a second stored flag; Click (not
+			IsCheckedChanged) drives the toggle so the checkbox's visual state
+			always reflects what the ViewModel just confirmed was applied.
+			Overclock is disabled (not hidden, so the grid layout never shifts
+			per console) where the loaded console has no overclock knob (SMS).-->
+			<Border
+				Name="PlayerEnhancementsPanel"
+				Background="#DD000000"
+				HorizontalAlignment="Center"
+				VerticalAlignment="Center"
+				Padding="24"
+				IsVisible="{Binding IsEnhancementsPanelVisible}"
+			>
+				<StackPanel Spacing="10" MinWidth="260">
+					<TextBlock Text="{l:Translate lblEnhancementsPanelTitle}" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
+					<CheckBox Name="EnhancementsTexturesCheckBox" Content="{l:Translate chkEnhancementsTextures}" IsChecked="{Binding IsTexturesEnabled, Mode=OneWay}" Click="OnToggleTextures" />
+					<CheckBox Content="{l:Translate chkEnhancementsAudio}" IsChecked="{Binding IsAudioEnabled, Mode=OneWay}" Click="OnToggleAudio" />
+					<CheckBox Content="{l:Translate chkEnhancementsWideScrn}" IsChecked="{Binding IsWideScrnEnabled, Mode=OneWay}" Click="OnToggleWideScrn" />
+					<CheckBox Content="{l:Translate chkEnhancementsHiRes}" IsChecked="{Binding IsHiResEnabled, Mode=OneWay}" Click="OnToggleHiRes" />
+					<CheckBox Content="{l:Translate chkEnhancementsOverclock}" IsChecked="{Binding IsOverclockEnabled, Mode=OneWay}" IsEnabled="{Binding IsOverclockSupported}" Click="OnToggleOverclock" />
+					<Button Content="{l:Translate btnEnhancementsClose}" HorizontalAlignment="Stretch" Click="OnCloseEnhancementsPanel" />
 				</StackPanel>
 			</Border>
 

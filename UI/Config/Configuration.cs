@@ -32,6 +32,7 @@ namespace Mesen.Config
 		[ObservableProperty] public partial GameboyConfig Gameboy { get; set; } = new();
 		[ObservableProperty] public partial SmsConfig Sms { get; set; } = new();
 		[ObservableProperty] public partial EnhancementPackConfig EnhancementPacks { get; set; } = new();
+		[ObservableProperty] public partial PlayerEnhancementsConfig PlayerEnhancements { get; set; } = new();
 		[ObservableProperty] public partial GbaConfig Gba { get; set; } = new();
 		[ObservableProperty] public partial PreferencesConfig Preferences { get; set; } = new();
 		[ObservableProperty] public partial AudioPlayerConfig AudioPlayer { get; set; } = new();

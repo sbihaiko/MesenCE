@@ -14,11 +14,22 @@
 			<Control ID="btnOverlaySaveSlot">Save slot</Control>
 			<Control ID="btnOverlayLoadSlot">Load slot</Control>
 			<Control ID="btnOverlayPack">Pack</Control>
+			<Control ID="btnOverlayEnhancements">Enhancements</Control>
 			<Control ID="btnOverlaySettings">Settings</Control>
 			<Control ID="btnOverlayAdvancedGui">Advanced GUI</Control>
 			<Control ID="btnOverlayQuit">Quit</Control>
 			<Control ID="lblChoosePackForThisGame">Choose a pack for this game</Control>
 			<Control ID="btnPlayWithoutPack">Play without a pack</Control>
+			<Control ID="lblEnhancementsPanelTitle">Enhancements</Control>
+			<Control ID="chkEnhancementsTextures">Texture pack</Control>
+			<Control ID="chkEnhancementsAudio">Audio pack</Control>
+			<Control ID="chkEnhancementsWideScrn">Widescreen (16:9)</Control>
+			<Control ID="chkEnhancementsHiRes">Hi-res filter</Control>
+			<Control ID="chkEnhancementsOverclock">Reduce slowdown (overclock)</Control>
+			<Control ID="btnEnhancementsClose">Close</Control>
+			<Control ID="lblWelcomeCardTitle">Welcome to MesenCE</Control>
+			<Control ID="lblWelcomeCardBody">Load a ROM to get started. Enhancement packs and settings are available from the in-game menu (press Esc).</Control>
+			<Control ID="btnWelcomeCardLoadRom">Load ROM</Control>
 		</Form>
 		<Form ID="AudioConfigView">
 			<Control ID="tpgGeneral">General</Control>
@@ -1853,6 +1864,7 @@
 	</Forms>
 	<Messages>
 		<Message ID="LastSession">Last Session</Message>
+		<Message ID="ContinueCardLabel">Continue: {0}</Message>
 		<Message ID="AutoSave">Auto-save</Message>
 		<Message ID="SlotNumber">Slot #{0}</Message>
 		<Message ID="LoadStateDialog">Load State Menu</Message>
