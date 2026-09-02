@@ -369,6 +369,12 @@
     <ClCompile Include="Patches\IpsPatcher.cpp" />
     <ClCompile Include="Patches\UpsPatcher.cpp" />
     <ClCompile Include="PlatformUtilities.cpp" />
+    <ClCompile Include="ProcessUtilities.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="PNGHelper.cpp" />
     <ClCompile Include="AutoResetEvent.cpp" />
     <ClCompile Include="Scale2x\scale2x.cpp">
