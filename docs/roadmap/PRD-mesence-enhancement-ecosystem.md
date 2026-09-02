@@ -431,11 +431,10 @@ per-console border art (a border is a pack asset, not an engine feature).
 
 | Slice | Deliverable | ADR |
 |---|---|---|
-| F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **not written yet — blocks this phase** |
-| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | F8.1 |
+| F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **done 2026-09-02** — ADR-0149 accepted (MEP v1.5 border section, border.png + border.json layout, VideoRenderer compositing pipeline, EnableBorder config toggle) |
+| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | ADR-0149 |
 
-Status: **proposed (2026-08-30)** — not started; F8.1 (ADR) is the
-critical path.
+Status: **active (2026-09-02)** — F8.1 done (ADR-0149); F8.2 implementation pending.
 
 ### 5. Order of execution
 
@@ -465,6 +464,7 @@ critical path.
 | 0145 | accepted 2026-08-31 | optimistic matching on SHA1 mismatch: textures + BPS auto-apply, IPS/audio/synth stay gated; tile match-rate health monitor auto-disables a wrong optimistic pack |
 | 0146 | accepted 2026-09-01 | auto-load every accepted pack: no first-run consent gate; `AutoInstallCommunityPacks` is the single switch; supersedes the consent clauses of ADR-0138 §38/§51/§54 (F6.7) |
 | ADR-0148 — de-list audio-only NEA packs; a catalog row must be a self-contained, verifiable artifact | accepted (2026-09-01) | records the 2026-08-31 removal; amends ADR-0144 (bundled patch must be wired, not merely present) — slice D4 |
+| ADR-0149 — enhancement pack border layer format and rendering architecture | accepted (2026-09-02) | Phase 8 slice F8.1: MEP v1.5 `border` section, `border.png` + `border.json`, VideoRenderer compositing pipeline, `EnableBorder` toggle |
 | 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
 | 0132 | accepted | F5.4b follow-ups (a)/(b) |
 | 0133, 0134, 0135, 0051 | accepted 2026-08-29 (0134 = Option A: `loop` field in `fingerprints.json`) | unblocked Blocks C/D; Block C shipped 2026-08-29 (items 8/9/10) |
