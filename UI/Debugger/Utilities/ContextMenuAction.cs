@@ -560,17 +560,11 @@ namespace Mesen.Debugger.Utilities
 		[IconFile("Settings")]
 		OpenDebugSettings,
 
-		[IconFile("SpcDebugger")]
 		OpenSpcDebugger,
-		[IconFile("Cx4Debugger")]
 		OpenCx4Debugger,
-		[IconFile("NecDspDebugger")]
 		OpenNecDspDebugger,
-		[IconFile("GsuDebugger")]
 		OpenGsuDebugger,
-		[IconFile("Sa1Debugger")]
 		OpenSa1Debugger,
-		[IconFile("St018Debugger")]
 		OpenSt018Debugger,
 		[IconFile("GameboyDebugger")]
 		OpenGameboyDebugger,
@@ -664,17 +658,14 @@ namespace Mesen.Debugger.Utilities
 		Video,
 		[IconFile("NesIcon")]
 		Nes,
-		[IconFile("SnesIcon")]
 		Snes,
 		[IconFile("GameboyIcon")]
 		Gameboy,
 		[IconFile("GbaIcon")]
 		Gba,
-		[IconFile("PceIcon")]
 		PcEngine,
 		[IconFile("SmsIcon")]
 		Sms,
-		[IconFile("WsIcon")]
 		Ws,
 		[IconFile("Drive")]
 		OtherConsoles,
