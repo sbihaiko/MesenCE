@@ -48,7 +48,7 @@ reason, so the same points are not re-raised.
 |---|---|---|
 | Correct trigger (`content_id`, no auto-downgrade) | `UI/Logic/CommunityCatalogUpdateDecision.cs` — 15 tests, green | Already covered |
 | "Updated …" toast wording | **The PRD item is stale.** `UI/Services/CommunityPackInstallCoordinator.cs` (~line 212) handles the `Updated` verdict by clearing the folder and letting the reinstall proceed; the run then ends in the ordinary toast from `UI/Services/CommunityPackInstallService.cs` (~line 157), `Community pack '<name>' installed`. The locally-edited branch (ADR-0147) returns the `UpdateAvailable` outcome text instead. No separate "Updated" toast was ever implemented | **Close the pending item**: amend the PRD P.6 row to say the update path reuses the install toast (and the `UpdateAvailable` message when a local edit exists). No code change |
-| End-to-end fetch against the real host | Real network round-trip to GitHub / MediaFire / Drive | **On-demand headless script**, never a build-blocking test: run the F6.4b coordinator against a live catalog entry and read the `[CommunityPackInstall] update verdict=…` log line. Rate limits and host outages make it unfit for CI |
+| End-to-end fetch against the real host | Real network round-trip to GitHub / MediaFire / Drive | **Shipped as an on-demand script**, never a build-blocking test: `scripts/catalog_update_live_check.sh <rom>` runs the F6.4b coordinator against a live catalog entry and reads the `[CommunityPackInstall] update verdict=…` log line. Rate limits and host outages make it unfit for CI. Its catalog phase (`--no-launch`) was run live on 2026-09-03 (HTTP 200, `roms/Zelda.nes` → catalog row #139); the client phase needs a logged-in desktop session, which the agent shell does not have |
 
 ## ADR-0142 — crossfade "click-free" check
 
@@ -121,6 +121,12 @@ music switch may never occur. Neither replaces the unit test above.
   `smoke_pack_headless.sh` on the result as the objective "did it load"
   gate. Use a pack whose bundled `.ips`/`.bps` is *wired* (ADR-0148
   amending ADR-0144) so the patch + extraction path is the one exercised.
+  **Written**: `docs/f65-install-acceptance-checklist.md`, against Mega Man
+  (USA) (issue #138 — its five bundled `.ips` were re-linted on 2026-09-03
+  and all report `present, wired`). It also records a gap found while
+  writing it: all 11 catalog rows are `kind: hd-legacy` with no `deps`, so
+  no published row can raise the pending-dependency prompt today; the
+  checklist reaches it through the fetcher's own ETag cache instead.
 - Optional later: extract the coordinator's pure decisions (prompt list,
   hash-match verdict) into `UI/Logic/` and test them; that shrinks the
   manual checklist but does not remove the GUI step.
@@ -133,19 +139,20 @@ music switch may never occur. Neither replaces the unit test above.
 Everything else is an existing test, a new unit test, or an on-demand
 headless script.
 
-## Proposed execution order
+## Execution order and status
 
-1. **P.6**: amend the PRD row (toast pending item is stale). Zero code.
-2. **ADR-0142**: file the block-step bug, amend the ADR, fix the ramp,
-   inject the run-ahead probe, add the `core_unit_tests` case.
-3. **P.7**: `PlayerChrome` helper in `UI/Logic/` consumed by both
-   `MainWindowViewModel` and `MouseManager`, plus tests. HQ4x check via
-   `headless_record` screenshot.
-4. **F6.5**: write the manual checklist; run it once with a wired-patch
-   audio pack; gate the result with `smoke_pack_headless.sh`.
-5. **P.6 real fetch**: on-demand script, log-line check.
-6. **Manual screen pass** for 16:9 and the cards, last.
-7. Separately: an ADR proposing `Avalonia.Headless` for XAML wiring tests.
+Steps 1-5 and 7 were executed on 2026-09-03 (four parallel workstreams);
+step 6 is the only one that still needs a human at a display.
+
+| # | Step | Status |
+|---|---|---|
+| 1 | **P.6**: amend the PRD row (toast pending item is stale). Zero code | **done** - the PRD P.6 row now records that no separate "Updated ..." toast exists nor is needed |
+| 2 | **ADR-0142**: file the block-step bug, amend the ADR, fix the ramp, inject the run-ahead probe, add the `core_unit_tests` case | **done** - bug #151 (filed, fixed, closed); ADR-0142 Consequences amended; per-sample ramp in `Core/NES/HdPacks/OggFadeRamp.h` (16.16 fixed point) behind the new `IOggSource`; `OggMixer`/`OggReader` decoupled from `Emulator` via an injected run-ahead probe; `scripts/core_unit_tests.cpp` Bloco I, 192/192 cases pass, and reverting the ramp fails it (worst jump 1906 vs 6.27 allowed) |
+| 3 | **P.7**: `PlayerChrome` helper in `UI/Logic/` consumed by both `MainWindowViewModel` and `MouseManager`, plus tests. HQ4x check via `headless_record` screenshot | **done** - `UI/Logic/PlayerChrome.cs` (`IsMenuVisible` + `IsCursorInMenuBand`) consumed by both call sites, 8 `UI.Tests` cases, 386 total green; `scripts/headless_record.cpp` gained a `filter=<name>` flag (it never pushed a `VideoConfig`, so no filter was reachable headlessly) and `scripts/check_hq4x_screenshot.sh` measures 256x240 -> 1024x960 with interpolated colours (11 -> 146 distinct) |
+| 4 | **F6.5**: write the manual checklist; run it once with a wired-patch audio pack; gate the result with `smoke_pack_headless.sh` | **checklist written, run pending** - `docs/f65-install-acceptance-checklist.md`. Gap found: all 11 published catalog rows are `kind: "hd-legacy"` with no `deps`/`recipe`, so no live row can raise the pending-dependency prompt; Part B therefore uses a seeded catalog |
+| 5 | **P.6 real fetch**: on-demand script, log-line check | **script written, phase 1 verified live** - `scripts/catalog_update_live_check.sh`; phase 2 needs a logged-in desktop session and reports the headless-shell case instead of passing silently |
+| 6 | **Manual screen pass** for 16:9 and the cards, last | **pending (human)** - the only genuinely pixel-level items left |
+| 7 | Separately: an ADR proposing `Avalonia.Headless` for XAML wiring tests | **done** - ADR-0150, Status `proposed` (deliberately not accepted: an accepted ADR is a work request for the autonomous dev-squad) |
 
 ## Rejected suggestions (and why)
 
