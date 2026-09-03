@@ -5,6 +5,7 @@
 #include "NES/EnhancedSynth.h"
 #include "NES/NesConsole.h"
 #include "NES/NesSoundMixer.h"
+#include "Shared/Audio/ReplacementMuteMask.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
 
@@ -181,15 +182,8 @@ void NesAudioReplacer::OnFrame(const ApuState& apu)
 //double the music. Pushed only when the mask changes (ADR-0133 point 3).
 void NesAudioReplacer::UpdateReplacementMuteMask()
 {
-	uint8_t mask = 0x0F;
-	if(EnhancedSynth* synth = _console->GetEnhancedSynth()) {
-		ChannelRoleClassifier& roles = synth->GetClassifier();
-		for(int i = 0; i < 3; i++) {
-			if(roles.IsSfx(i)) {
-				mask &= ~(uint8_t)(1 << i);
-			}
-		}
-	}
+	EnhancedSynth* synth = _console->GetEnhancedSynth();
+	uint8_t mask = ReplacementMuteMask::Compute(synth ? &synth->GetClassifier() : nullptr);
 	if(mask != _lastMuteMask) {
 		_lastMuteMask = mask;
 		_console->GetSoundMixer()->SetReplacementMuteMask(mask);

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Shared/Video/VideoRenderer.h"
+#include "Shared/Video/AspectRatioMath.h"
 #include "Shared/Video/VideoDecoder.h"
 #include "Shared/Interfaces/IRenderingDevice.h"
 #include "Shared/Emulator.h"
@@ -140,8 +141,9 @@ FrameInfo VideoRenderer::GetEmuHudSize(FrameInfo baseFrameSize)
 		//Adjust the system HUD's width to match the aspect ratio to allow text to be unstretched
 		//(The Lua HUD is not adjusted to allow scripts that need to match positions on the game screen to work correctly.)
 		double aspectRatio = _emu->GetSettings()->GetAspectRatio(_emu->GetRegion(), baseFrameSize);
-		size.Width = (uint32_t)std::round(baseFrameSize.Height * aspectRatio);
-		size.Height = baseFrameSize.Height;
+		AspectRatioMath::Size stretched = AspectRatioMath::ComputeStretchedSize(baseFrameSize.Height, aspectRatio);
+		size.Width = stretched.Width;
+		size.Height = stretched.Height;
 	} else {
 		size.Width = _rendererWidth / 2;
 		size.Height = _rendererHeight / 2;

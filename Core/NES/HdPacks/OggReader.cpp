@@ -3,10 +3,40 @@
 #include "NES/HdPacks/OggFadeRamp.h"
 #include "Utilities/Audio/stb_vorbis.h"
 
+namespace
+{
+	//ADR-0134: the production IOggDecoder - the only place that knows about
+	//stb_vorbis. OggLoopStream drives it and owns the loop rule.
+	class StbVorbisDecoder : public IOggDecoder
+	{
+	private:
+		stb_vorbis* _vorbis = nullptr;
+
+	public:
+		StbVorbisDecoder(stb_vorbis* vorbis) : _vorbis(vorbis) {}
+
+		~StbVorbisDecoder()
+		{
+			if(_vorbis) {
+				stb_vorbis_close(_vorbis);
+			}
+		}
+
+		int GetSampleRate() override { return stb_vorbis_get_info(_vorbis).sample_rate; }
+		uint32_t GetStreamLength() override { return stb_vorbis_stream_length_in_samples(_vorbis); }
+		void Seek(uint32_t sampleOffset) override { stb_vorbis_seek(_vorbis, sampleOffset); }
+		uint32_t GetOffset() override { return stb_vorbis_get_sample_offset(_vorbis); }
+
+		uint32_t ReadFrames(int16_t* buffer, uint32_t frames) override
+		{
+			return (uint32_t)stb_vorbis_get_samples_short_interleaved(_vorbis, 2, buffer, frames * 2);
+		}
+	};
+}
+
 OggReader::OggReader(std::function<bool()> isRunAheadFrame)
 {
 	_isRunAheadFrame = isRunAheadFrame;
-	_done = false;
 	_oggBuffer = new int16_t[10000];
 	_outputBuffer = new int16_t[2000];
 }
@@ -15,10 +45,6 @@ OggReader::~OggReader()
 {
 	delete[] _oggBuffer;
 	delete[] _outputBuffer;
-
-	if(_vorbis) {
-		stb_vorbis_close(_vorbis);
-	}
 }
 
 bool OggReader::Init(string filename, bool loop, uint32_t sampleRate, uint32_t startOffset, uint32_t loopPosition)
@@ -27,18 +53,13 @@ bool OggReader::Init(string filename, bool loop, uint32_t sampleRate, uint32_t s
 	VirtualFile file = filename;
 	_fileData = vector<uint8_t>(100000);
 	if(file.ReadFile(_fileData)) {
-		_vorbis = stb_vorbis_open_memory(_fileData.data(), (int)_fileData.size(), &error, nullptr);
-		if(_vorbis) {
-			_loop = loop;
-			if(loopPosition > 0) {
-				unsigned int sampleCount = stb_vorbis_stream_length_in_samples(_vorbis);
-				_loopPosition = loopPosition < sampleCount ? loopPosition : 0;
-			} else {
-				_loopPosition = 0;
-			}
-			_oggSampleRate = stb_vorbis_get_info(_vorbis).sample_rate;
+		stb_vorbis* vorbis = stb_vorbis_open_memory(_fileData.data(), (int)_fileData.size(), &error, nullptr);
+		if(vorbis) {
+			_decoder.reset(new StbVorbisDecoder(vorbis));
+			_stream.Init(_decoder.get(), loop, loopPosition);
+			_oggSampleRate = _decoder->GetSampleRate();
 			if(startOffset > 0) {
-				stb_vorbis_seek(_vorbis, startOffset);
+				_decoder->Seek(startOffset);
 			}
 			return true;
 		}
@@ -48,7 +69,7 @@ bool OggReader::Init(string filename, bool loop, uint32_t sampleRate, uint32_t s
 
 bool OggReader::IsPlaybackOver()
 {
-	return _done;
+	return _stream.IsDone();
 }
 
 void OggReader::SetSampleRate(int sampleRate)
@@ -60,7 +81,7 @@ void OggReader::SetSampleRate(int sampleRate)
 
 void OggReader::SetLoopFlag(bool loop)
 {
-	_loop = loop;
+	_stream.SetLoopFlag(loop);
 }
 
 void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volumeStart, uint8_t volumeEnd)
@@ -73,15 +94,7 @@ void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volume
 	uint32_t samplesRead = 0;
 	if(samplesNeeded > 0) {
 		uint32_t samplesToLoad = samplesNeeded * _oggSampleRate / _sampleRate + 2;
-		uint32_t samplesLoaded = (uint32_t)stb_vorbis_get_samples_short_interleaved(_vorbis, 2, _oggBuffer, samplesToLoad * 2);
-		if(samplesLoaded < samplesToLoad) {
-			if(_loop) {
-				stb_vorbis_seek(_vorbis, _loopPosition);
-				samplesLoaded += stb_vorbis_get_samples_short_interleaved(_vorbis, 2, _oggBuffer + samplesLoaded * 2, (samplesToLoad - samplesLoaded) * 2);
-			} else {
-				_done = true;
-			}
-		}
+		uint32_t samplesLoaded = _stream.Read(_oggBuffer, samplesToLoad);
 		_resampler.SetSampleRates(_oggSampleRate, _sampleRate);
 		samplesRead = _resampler.Resample<false>(_oggBuffer, samplesLoaded, _outputBuffer, sampleCount);
 	}
@@ -93,5 +106,5 @@ void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volume
 
 uint32_t OggReader::GetOffset()
 {
-	return stb_vorbis_get_sample_offset(_vorbis);
+	return _decoder ? _decoder->GetOffset() : 0;
 }

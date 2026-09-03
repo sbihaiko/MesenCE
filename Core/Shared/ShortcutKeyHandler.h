@@ -33,8 +33,6 @@ private:
 	void CheckMappedKeys();
 
 	bool IsKeyPressed(EmulatorShortcut key);
-	bool IsKeyPressed(KeyCombination comb, bool blockKeyboardKeys);
-	bool IsKeyPressed(uint16_t keyCode, bool mergeCtrlAltShift, bool blockKeyboardKeys);
 
 	bool DetectKeyPress(EmulatorShortcut key);
 	bool DetectKeyRelease(EmulatorShortcut key);

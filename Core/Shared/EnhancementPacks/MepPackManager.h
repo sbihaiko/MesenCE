@@ -97,14 +97,10 @@ private:
 	//nor a name matching the ROM, unless MepPack::FindFallbackSubfolder
 	//(ADR-0120, last-priority) locates an unambiguous ROM-named subfolder
 	//first - "outFolder"/"error" stay this method's only outputs.
+	//(ADR-0120 §4) The steps themselves - stamp/cache reuse, zip-slip
+	//validation, the fallback resolution and the extraction - live in the
+	//header-only MepZipExtract, which the unit tests drive directly.
 	bool PrepareZip(const string& zipPath, const string& cacheRoot, string& outFolder, string& error);
-	//True when the cache at outFolder already matches the zip's stamp and
-	//still has a root pack.json (PrepareZip's early-exit check)
-	static bool IsCacheCurrent(const string& outFolder, const string& stampPath, const string& stamp);
-	//Loads+validates the zip's entries, resolves the ADR-0120 fallback when
-	//needed, extracts and (re)writes the cache stamp; split out of
-	//PrepareZip so each step stays focused
-	bool ExtractZip(const string& zipPath, const string& name, string& outFolder, const string& stampPath, const string& stamp, string& error);
 	static bool ReadTextFile(const string& path, string& out);
 
 public:

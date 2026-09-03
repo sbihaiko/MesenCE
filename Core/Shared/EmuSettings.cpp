@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <random>
 #include "Shared/EmuSettings.h"
+#include "Shared/Video/AspectRatioMath.h"
 #include "Shared/KeyManager.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Emulator.h"
@@ -498,30 +499,24 @@ uint32_t EmuSettings::GetEmulationSpeed()
 
 double EmuSettings::GetAspectRatio(ConsoleRegion region, FrameInfo baseFrameSize)
 {
-	double screenAspectRatio = (double)baseFrameSize.Width / baseFrameSize.Height;
-
-	switch(_video.AspectRatio) {
-		case VideoAspectRatio::NoStretching: return screenAspectRatio;
-
-		//For auto, ntsc and pal, these are PAR ratios, so multiply them with the base screen's aspect ratio to get the expected screen aspect ratio
-		case VideoAspectRatio::Auto:
-			if(_emu->GetConsoleType() == ConsoleType::Gameboy || _emu->GetConsoleType() == ConsoleType::Gba || _emu->GetConsoleType() == ConsoleType::Ws) {
-				//GB/GBA/WS shouldn't use NTSC/PAL aspect ratio when in auto mode
-				return screenAspectRatio;
-			} else if(_emu->GetRomInfo().Format == RomFormat::GameGear) {
-				//GG has a 6:5 PAR
-				return screenAspectRatio * (6.0 / 5.0);
-			}
-			return screenAspectRatio * ((region == ConsoleRegion::Pal || region == ConsoleRegion::Dendy) ? (11.0 / 8.0) : (8.0 / 7.0));
-
-		case VideoAspectRatio::NTSC: return screenAspectRatio * 8.0 / 7.0;
-		case VideoAspectRatio::PAL: return screenAspectRatio * 11.0 / 8.0;
-
-		case VideoAspectRatio::Standard: return 4.0 / 3.0;
-		case VideoAspectRatio::Widescreen: return 16.0 / 9.0;
-		case VideoAspectRatio::Custom: return _video.CustomAspectRatio;
+	//The arithmetic itself lives in AspectRatioMath (host-free, unit-tested);
+	//this resolves the console/ROM-dependent inputs it needs.
+	AspectRatioMath::Inputs in;
+	in.Setting = _video.AspectRatio;
+	in.BaseWidth = baseFrameSize.Width;
+	in.BaseHeight = baseFrameSize.Height;
+	in.Region = region;
+	in.CustomRatio = _video.CustomAspectRatio;
+	if(in.Setting == VideoAspectRatio::Auto) {
+		//Only Auto looks at the console/ROM, and GetRomInfo() is not free -
+		//keep the query on the path that needs it, as before the extraction
+		ConsoleType consoleType = _emu->GetConsoleType();
+		//GB/GBA/WS shouldn't use NTSC/PAL aspect ratio when in auto mode
+		in.SquarePixelInAuto = consoleType == ConsoleType::Gameboy || consoleType == ConsoleType::Gba || consoleType == ConsoleType::Ws;
+		//GG has a 6:5 PAR
+		in.GameGearPar = !in.SquarePixelInAuto && _emu->GetRomInfo().Format == RomFormat::GameGear;
 	}
-	return 0.0;
+	return AspectRatioMath::ComputeAspectRatio(in);
 }
 
 void EmuSettings::SetFlag(EmulationFlags flag)

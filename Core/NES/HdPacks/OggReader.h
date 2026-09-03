@@ -3,14 +3,18 @@
 #include "Utilities/VirtualFile.h"
 #include "Utilities/Audio/HermiteResampler.h"
 #include "NES/HdPacks/IOggSource.h"
+#include "NES/HdPacks/OggLoopStream.h"
 #include <functional>
-
-struct stb_vorbis;
+#include <memory>
 
 class OggReader : public IOggSource
 {
 private:
-	stb_vorbis* _vorbis = nullptr;
+	//ADR-0134: the read/loop rule lives in OggLoopStream, driven by a decoder
+	//interface, so it can be unit-tested without stb_vorbis or VirtualFile.
+	std::unique_ptr<IOggDecoder> _decoder;
+	OggLoopStream _stream;
+
 	int16_t* _outputBuffer = nullptr;
 	int16_t* _oggBuffer = nullptr;
 
@@ -18,11 +22,6 @@ private:
 	//ADR-0142: injected run-ahead probe instead of a concrete Emulator, so the
 	//OGG path can be built without linking the emulator (see IOggSource).
 	std::function<bool()> _isRunAheadFrame;
-
-	bool _loop = false;
-	bool _done = false;
-
-	uint32_t _loopPosition = 0;
 
 	int _sampleRate = 0;
 	int _oggSampleRate = 0;

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <filesystem>
 #include "Shared/EnhancementPacks/MepPackManager.h"
+#include "Shared/EnhancementPacks/MepZipExtract.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
@@ -33,116 +34,39 @@ namespace
 		return false;
 	}
 
-	//Zip mtime+size fingerprint (PrepareZip's cache-staleness check); "ec" is
-	//set (and the result meaningless) when the zip cannot be stat'd
-	string ComputeZipStamp(const fs::path& zip, std::error_code& ec)
+	//ADR-0120 §4: the ZipReader-backed archive the extracted MepZipExtract
+	//pipeline reads through. ZipReader stays on this side of the seam so the
+	//unit-test link does not pull in ArchiveReader/SevenZip.
+	class ZipReaderArchive : public MepZipExtract::IArchive
 	{
-		uintmax_t zipSize = fs::file_size(zip, ec);
-		if(ec) {
-			return "";
-		}
-		auto mtime = fs::last_write_time(zip, ec).time_since_epoch().count();
-		return std::to_string(zipSize) + ":" + std::to_string((long long)mtime);
-	}
-
-	bool ReadZipBytes(const string& zipPath, vector<uint8_t>& out)
-	{
-		ifstream in(zipPath, std::ios::in | std::ios::binary);
-		if(!in) {
-			return false;
-		}
-		std::stringstream ss;
-		ss << in.rdbuf();
-		string s = ss.str();
-		out.assign(s.begin(), s.end());
-		return true;
-	}
-
-	//Reads+opens the archive and lists its entries; "reader" stays loaded so
-	//the caller can extract from it afterwards
-	bool LoadZipEntries(const string& zipPath, ZipReader& reader, vector<string>& entries, string& error)
-	{
-		vector<uint8_t> zipData;
-		if(!ReadZipBytes(zipPath, zipData)) {
-			error = "cannot open zip";
-			return false;
-		}
-		if(!reader.LoadArchive(zipData)) {
-			error = "not a valid zip archive";
-			return false;
-		}
-		entries = reader.GetFileList();
-		if(entries.empty()) {
-			error = "zip is empty";
-			return false;
-		}
-		return true;
-	}
-
-	//Validates every entry before writing anything (zip-slip, spec §6);
-	//false with a reason when an entry escapes the pack root
-	bool BuildExtractionPlan(const vector<string>& entries, vector<std::pair<string, string>>& plan, bool& hasPackJson, string& error)
-	{
-		hasPackJson = false;
-		for(const string& entry : entries) {
-			string normalized;
-			if(!MepPack::NormalizeRelativePath(entry, normalized)) {
-				error = "zip entry escapes the pack root: '" + entry + "'";
+	public:
+		bool Load(const string& zipPath, vector<string>& entries, string& error) override
+		{
+			ifstream in(zipPath, std::ios::in | std::ios::binary);
+			if(!in) {
+				error = "cannot open zip";
 				return false;
 			}
-			if(normalized.empty()) {
-				continue;
-			}
-			if(normalized == "pack.json") {
-				hasPackJson = true;
-			}
-			plan.emplace_back(entry, normalized);
-		}
-		return true;
-	}
-
-	bool ExtractPlan(ZipReader& reader, const vector<std::pair<string, string>>& plan, const string& outFolder, string& error)
-	{
-		std::error_code ec;
-		FolderUtilities::CreateFolder(outFolder);
-		for(const auto& item : plan) {
-			bool isDir = !item.first.empty() && (item.first.back() == '/' || item.first.back() == '\\');
-			string dest = FolderUtilities::CombinePath(outFolder, item.second);
-			if(isDir) {
-				fs::create_directories(fs::u8path(dest), ec);
-				continue;
-			}
-			fs::create_directories(fs::u8path(dest).parent_path(), ec);
-
-			vector<uint8_t> content;
-			if(!reader.ExtractFile(item.first, content)) {
-				error = "cannot extract '" + item.first + "'";
-				fs::remove_all(fs::u8path(outFolder), ec);
+			std::stringstream ss;
+			ss << in.rdbuf();
+			string content = ss.str();
+			vector<uint8_t> zipData(content.begin(), content.end());
+			if(!_reader.LoadArchive(zipData)) {
+				error = "not a valid zip archive";
 				return false;
 			}
-			ofstream out(dest, std::ios::out | std::ios::binary);
-			if(!out) {
-				error = "cannot write '" + dest + "'";
-				fs::remove_all(fs::u8path(outFolder), ec);
-				return false;
-			}
-			out.write((const char*)content.data(), content.size());
+			entries = _reader.GetFileList();
+			return true;
 		}
-		return true;
-	}
 
-	//ADR-0120: last-priority fallback, consulted only when the pack.json-root
-	//and zip-name-equals-ROM conventions (ADR-0040/ADR-0049) both fail; ""
-	//(none, or ambiguous) keeps the caller's existing reject path
-	string ResolveFallbackPrefix(const vector<std::pair<string, string>>& plan, const string& romName)
-	{
-		vector<string> normalizedEntries;
-		normalizedEntries.reserve(plan.size());
-		for(const auto& item : plan) {
-			normalizedEntries.push_back(item.second);
+		bool ExtractFile(const string& entry, vector<uint8_t>& content) override
+		{
+			return _reader.ExtractFile(entry, content);
 		}
-		return MepPack::FindFallbackSubfolder(normalizedEntries, romName);
-	}
+
+	private:
+		ZipReader _reader;
+	};
 
 	//ADR-0145: true when the file at "path" is a BPS patch (magic "BPS1").
 	//BPS is the only patch format that self-validates the applied output
@@ -160,18 +84,6 @@ namespace
 		return in.gcount() == 4 && memcmp(magic, "BPS1", 4) == 0;
 	}
 
-	//Combines the discovered fallback prefix into outFolder (ADR-0120, no
-	//other output changes) and (re)writes the cache stamp
-	void FinalizePreparedZip(const string& fallbackPrefix, const string& stampPath, const string& stamp, string& outFolder)
-	{
-		if(!fallbackPrefix.empty()) {
-			string combined;
-			MepPack::NormalizeRelativePath(fallbackPrefix, combined);
-			outFolder = FolderUtilities::CombinePath(outFolder, combined);
-		}
-		ofstream stampFile(stampPath, std::ios::out | std::ios::binary);
-		stampFile << stamp;
-	}
 }
 
 MepPackManager::MepPackManager(Emulator* emu)
@@ -613,62 +525,13 @@ string MepPackManager::EffectivePackId(const MepPack& pack) const
 	return "local:" + StringUtilities::ToLower(pack.ContainerName);
 }
 
-bool MepPackManager::IsCacheCurrent(const string& outFolder, const string& stampPath, const string& stamp)
-{
-	std::error_code ec;
-	string existing;
-	return ReadTextFile(stampPath, existing) && StringUtilities::Trim(existing) == stamp && fs::exists(fs::u8path(FolderUtilities::CombinePath(outFolder, "pack.json")), ec);
-}
-
 bool MepPackManager::PrepareZip(const string& zipPath, const string& cacheRoot, string& outFolder, string& error)
 {
-	std::error_code ec;
-	string stamp = ComputeZipStamp(fs::u8path(zipPath), ec);
-	if(ec) {
-		error = "cannot stat zip";
-		return false;
-	}
-
-	string name = FolderUtilities::GetFilename(zipPath, false);
-	outFolder = FolderUtilities::CombinePath(cacheRoot, name);
-	string stampPath = FolderUtilities::CombinePath(outFolder, ".mep-source");
-	if(IsCacheCurrent(outFolder, stampPath, stamp)) {
-		return true;
-	}
-
-	fs::remove_all(fs::u8path(outFolder), ec); //(Re)extract: wipe any stale cache first
-	return ExtractZip(zipPath, name, outFolder, stampPath, stamp, error);
-}
-
-bool MepPackManager::ExtractZip(const string& zipPath, const string& name, string& outFolder, const string& stampPath, const string& stamp, string& error)
-{
-	ZipReader reader;
-	vector<string> entries;
-	if(!LoadZipEntries(zipPath, reader, entries, error)) {
-		return false;
-	}
-
-	vector<std::pair<string, string>> plan; //entry name -> normalised relative path
-	bool hasPackJson = false;
-	if(!BuildExtractionPlan(entries, plan, hasPackJson, error)) {
-		return false;
-	}
-	string fallbackPrefix;
-	if(!hasPackJson && StringUtilities::ToLower(name) != StringUtilities::ToLower(_romName)) {
-		//ADR-0040/ADR-0049 both failed: last-priority fallback (ADR-0120)
-		//before rejecting outright
-		fallbackPrefix = ResolveFallbackPrefix(plan, _romName);
-		if(fallbackPrefix.empty()) {
-			error = "zip has no pack.json at its root";
-			return false;
-		}
-	}
-
-	if(!ExtractPlan(reader, plan, outFolder, error)) {
-		return false;
-	}
-	FinalizePreparedZip(fallbackPrefix, stampPath, stamp, outFolder);
-	return true;
+	//ADR-0120 §4: the pipeline itself (cache stamp, zip-slip validation, the
+	//root/fallback-subfolder decision, extraction) lives in MepZipExtract so
+	//scripts/core_unit_tests.cpp can drive it against real archive bytes.
+	ZipReaderArchive archive;
+	return MepZipExtract::PrepareZip(archive, zipPath, cacheRoot, _romName, outFolder, error);
 }
 
 bool MepPackManager::LoadContainer(const string& rootFolder, const string& containerName, bool fromZip, MepPack& outPack, string& error)

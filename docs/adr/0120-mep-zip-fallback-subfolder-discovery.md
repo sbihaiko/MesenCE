@@ -160,7 +160,7 @@ path that knows which ROM it installs for) — implement the parameter in the
 same change as that caller, porting the normalised comparison from
 `mep_lint.py` and covering it in `UI.Tests/Mep/MepZipValidatorTests.cs`.
 
-### 4. Deferred: a standalone C++ E2E zip-pipeline test harness
+### 4. Deferred: a standalone C++ E2E zip-pipeline test harness (implemented 2026-09-03)
 This task deliberately does **not** build a driver/executable that links
 `MepPackManager.cpp` + `ZipReader.cpp` + miniz + `ArchiveReader` to exercise
 `PrepareZip` end-to-end against a real `.zip` file (extraction, cache-stamp
@@ -200,6 +200,27 @@ tests cannot reproduce, or the real `Contra80s.zip` inspection named under
 Provenance being scheduled — either would justify a `Makefile` target that
 links `MepPackManager.cpp` + `ZipReader.cpp` + miniz and asserts on
 `outFolder`/`error` for `gen_mep_test_pack.py`-generated fixtures.
+
+Implemented 2026-09-03 (wave 2 of
+`docs/validation/manual-validation-automation-plan.md`), by a seam rather
+than a new binary: the whole `PrepareZip` pipeline now lives in
+`Core/Shared/EnhancementPacks/MepZipExtract.h` — stamp/cache reuse,
+stale-cache wipe, zip-slip plan validation, the §2 fallback-subfolder
+resolution and the extraction itself — and `MepPackManager::PrepareZip`
+delegates to it. An `IArchive` seam keeps the real archive readers (and
+therefore `ZipReader.cpp` + miniz) out of the test link, so
+`scripts/core_unit_tests.cpp` **Bloco M** drives the pipeline with
+in-test archives inside the existing `core-unit-tests` target. Asserted:
+path traversal, an absolute path (including a Windows drive letter), the
+nested-wrapper fallback of §2 on a real wrapped archive, `.mep-source`
+cache-stamp reuse, stale-cache wipe, a symlink left in the cache being
+wiped, the empty-archive guard, and the `.mep-source` stamp itself. Each
+check was defect-probed: mutating it makes Bloco M fail. One honest
+caveat: miniz's writer cannot author a true `S_IFLNK` entry, so symlink
+handling is covered by its two reachable halves — an entry whose payload
+is a path (which writes as a plain file) and a pre-existing cache symlink
+— not by a real symlink inside an archive. The §3 follow-up above stays
+deferred.
 
 ## Provenance of the motivating claim (see also AC-8)
 The pack that motivated this fallback is referenced by this repository's own
@@ -254,10 +275,12 @@ close this gap and could be folded into the E2E harness named in §4.
   caller of `MepPack::DetectConventionLayout()` are unaffected — the
   fallback is invisible to them because it only decides *what* gets
   extracted where, not *how* it is consumed afterward.
-- Two follow-ups are explicitly deferred, not silently dropped: an optional
+- Two follow-ups were explicitly deferred, not silently dropped: an optional
   ROM-name parameter for `MepZipValidator.Validate`/`mep_lint.py` (§3 — since
   done for `mep_lint.py`, still open for the C# validator; see ADR-0121), and a
-  standalone C++ E2E zip-pipeline harness (§4).
+  standalone C++ E2E zip-pipeline harness (§4). §4 was implemented on
+  2026-09-03 as `Core/Shared/EnhancementPacks/MepZipExtract.h` + `core_unit_tests`
+  Bloco M (see §4); §3 remains deferred.
 
 ## Alternatives
 - **Recurse in `DetectConventionLayout()` itself** (search subfolders at

@@ -75,6 +75,19 @@ Proposed contract for Block C item 9:
   SMB1 (jump SFX audible while the overworld OGG plays), Zelda (music muted, sword
   audible), plus a check that turning `EnhancedAudioSfxSeparation` off restores
   the exact pre-Block-C output.
+- Validation status 2026-09-03 (wave 2 of
+  `docs/validation/manual-validation-automation-plan.md`): the mask contract is
+  now covered by a unit test rather than by listening. The rule lives in the
+  shared header `Core/Shared/Audio/ReplacementMuteMask.h`
+  (`FullTonalMute`/`IsMuted`/`Compute(roles)`) — a template, so the mixer does
+  not include `ChannelRoleClassifier` and the "mixer consults the classifier"
+  alternative below stays rejected in code as well as on paper. It is consumed
+  by `NesAudioFingerprint::UpdateReplacementMuteMask` and
+  `NesSoundMixer::GetChannelOutput`, and asserted by `scripts/core_unit_tests.cpp`
+  Bloco K: exactly the fingerprinted channel is muted, SFX / expansion / DMC
+  channels are not, and the degraded mode falls back to the full `0x0F`.
+  Defect-probed. What remains manual is only the audible end-to-end — a real
+  game, real ears.
 - This ADR moves to `accepted` when the mask lands and the bool setter is gone.
 
 ## Alternatives

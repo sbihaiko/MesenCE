@@ -14,7 +14,18 @@
 //byte-for-byte parity check, so both interpreters MUST agree on this fixture
 //forever after. No framework: cases print PASS/FAIL, exit is non-zero on any
 //failure (see roles_probe.cpp). Bloco I (ADR-0142) exercises OggMixer's BGM
-//crossfade through IOggSource stubs - no stb_vorbis, no Emulator. Run from the repo root so the golden paths
+//crossfade through IOggSource stubs - no stb_vorbis, no Emulator. Bloco J
+//(ADR-0134) exercises OggLoopStream's track loop point through a stub
+//IOggDecoder; Bloco K (ADR-0133) exercises the replacement mute mask shared
+//by NesAudioReplacer (policy) and NesSoundMixer (application); Bloco L
+//(F5.4g Bloco B) diffs EnhancedSynthEngine's rendered PCM against
+//docs/specs/golden/synth/enhanced-synth-pcm.txt. Bloco M (ADR-0120 §4) is the
+//E2E zip harness that section deferred: it builds real archives with
+//Utilities/miniz.cpp and runs MepZipExtract - the pipeline
+//MepPackManager::PrepareZip delegates to - over them; Bloco N (P.7) covers
+//AspectRatioMath's per-setting geometry (16:9/4:3/auto/PAR), not the pixels on
+//screen; Bloco O (P.4) covers ShortcutKeyRules' keyboard-block exemption that
+//keeps ToggleOverlay reachable inside a keyboard game. Run from the repo root so the golden paths
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
@@ -22,13 +33,20 @@
 #include "Shared/EnhancementPacks/MepPack.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/EnhancementPacks/MepContentId.h"
+#include "Shared/EnhancementPacks/MepZipExtract.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Video/BorderLayout.h"
+#include "Shared/Video/AspectRatioMath.h"
+#include "Shared/ShortcutKeyRules.h"
 #include "NES/HdPacks/OggFadeRamp.h"
+#include "NES/HdPacks/OggLoopStream.h"
 #include "NES/HdPacks/OggMixer.h"
+#include "Shared/Audio/ReplacementMuteMask.h"
 #include "Utilities/Base64.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/JsonReader.h"
+#include "Utilities/StringUtilities.h"
+#include "Utilities/miniz.h"
 #include "Utilities/sha256.h"
 #include <algorithm>
 #include <cmath>
@@ -1385,6 +1403,915 @@ namespace
 	}
 }
 
+//--- Bloco J: OGG track loop point (ADR-0134, F5.4g Block C item 8) ----------
+//A replaced track used to always loop from sample 0, so its intro repeated
+//forever. ADR-0134 Option A puts an optional loop point on the track
+//(fingerprints.json `tracks[i].loop`, PCM samples at the OGG's own rate):
+//once the stream runs out, playback resumes there. OggLoopStream holds that
+//rule; the stub decoder below stands in for stb_vorbis, so the case needs no
+//OGG file and no VirtualFile.
+namespace
+{
+	//A decoder of `length` samples whose sample value is its own position, so
+	//the caller can read back exactly where each frame came from.
+	class StubOggDecoder : public IOggDecoder
+	{
+	private:
+		uint32_t _length;
+		uint32_t _position = 0;
+
+	public:
+		uint32_t SeekCount = 0;
+		uint32_t LastSeekTarget = UINT32_MAX;
+
+		StubOggDecoder(uint32_t length) : _length(length) {}
+
+		int GetSampleRate() override { return 44100; }
+		uint32_t GetStreamLength() override { return _length; }
+		uint32_t GetOffset() override { return _position; }
+
+		void Seek(uint32_t sampleOffset) override
+		{
+			SeekCount++;
+			LastSeekTarget = sampleOffset;
+			_position = sampleOffset;
+		}
+
+		uint32_t ReadFrames(int16_t* buffer, uint32_t frames) override
+		{
+			uint32_t produced = 0;
+			while(produced < frames && _position < _length) {
+				buffer[produced * 2] = (int16_t)_position;
+				buffer[produced * 2 + 1] = (int16_t)_position;
+				_position++;
+				produced++;
+			}
+			return produced;
+		}
+	};
+
+	void TestLoopPointReturnsToLoopPosition()
+	{
+		StubOggDecoder decoder(1000);
+		OggLoopStream stream;
+		stream.Init(&decoder, true, 400);
+		Check(stream.GetLoopPosition() == 400, "BlocoJ: an in-range loop point is kept as-is");
+
+		//Consume the whole track, then one block that runs past its end.
+		vector<int16_t> buffer(600 * 2, 0);
+		Check(stream.Read(buffer.data(), 600) == 600, "BlocoJ: a full block before the end reads in full");
+		uint32_t read = stream.Read(buffer.data(), 600);
+		Check(read == 600, "BlocoJ: the block that crosses the end is still filled in full", std::to_string(read));
+		Check(decoder.SeekCount == 1 && decoder.LastSeekTarget == 400,
+			"BlocoJ: consuming past the end seeks back to loopPosition, not to 0",
+			"seeks " + std::to_string(decoder.SeekCount) + " -> " + std::to_string(decoder.LastSeekTarget));
+		//The first 400 frames of that block are the tail of the track; the rest
+		//is the loop, i.e. samples 400.. - the intro (0..399) is never replayed.
+		Check(buffer[0] == 600 && buffer[399 * 2] == 999, "BlocoJ: the block starts with the track's tail");
+		Check(buffer[400 * 2] == 400 && buffer[401 * 2] == 401, "BlocoJ: playback resumes at the loop point",
+			std::to_string(buffer[400 * 2]));
+		Check(decoder.GetOffset() == 600, "BlocoJ: the read position is past the loop point, not past 0");
+		Check(!stream.IsDone(), "BlocoJ: a looping track never reports playback over");
+	}
+
+	void TestNoLoopPointBehavesAsBefore()
+	{
+		//Backward compatibility (ADR-0134): a pack that omits `loop` keeps the
+		//pre-item-8 behaviour and loops the whole file from 0.
+		StubOggDecoder decoder(1000);
+		OggLoopStream stream;
+		stream.Init(&decoder, true, 0);
+		Check(stream.GetLoopPosition() == 0, "BlocoJ: a track with no loop point loops from 0");
+
+		vector<int16_t> buffer(1200 * 2, 0);
+		stream.Read(buffer.data(), 1200);
+		Check(decoder.SeekCount == 1 && decoder.LastSeekTarget == 0, "BlocoJ: without a loop point the wrap seeks to 0",
+			std::to_string(decoder.LastSeekTarget));
+		Check(buffer[1000 * 2] == 0 && buffer[1001 * 2] == 1, "BlocoJ: without a loop point the intro is replayed");
+
+		//An out-of-range loop point degrades to the same behaviour instead of
+		//seeking past the end of the stream.
+		StubOggDecoder farLoop(1000);
+		OggLoopStream clamped;
+		clamped.Init(&farLoop, true, 5000);
+		Check(clamped.GetLoopPosition() == 0, "BlocoJ: a loop point at or past the end of the stream clamps to 0");
+
+		//A non-looping track still ends instead of wrapping.
+		StubOggDecoder once(1000);
+		OggLoopStream oneShot;
+		oneShot.Init(&once, false, 400);
+		oneShot.Read(buffer.data(), 1200);
+		Check(once.SeekCount == 0 && oneShot.IsDone(), "BlocoJ: a non-looping track ends instead of seeking to the loop point");
+	}
+}
+
+//--- Bloco K: replacement mute mask (ADR-0133, F5.4g Block C item 9) ---------
+//While a fingerprint-matched OGG replaces the music, the APU's tonal channels
+//are muted - but a channel the ChannelRoleClassifier flags as SFX must pass
+//through dry, or the game's jumps and hits disappear. ReplacementMuteMask
+//holds both halves of that contract: Compute() is the policy
+//NesAudioReplacer::UpdateReplacementMuteMask pushes, IsMuted() is the exact
+//test NesSoundMixer::GetChannelOutput applies, so the two cannot drift.
+namespace
+{
+	//Stands in for ChannelRoleClassifier (Compute is a template so the mixer
+	//never has to include it): a fixed set of SFX-flagged channels.
+	struct StubRoles
+	{
+		bool Sfx[4] = {};
+		bool IsSfx(int i) const { return i >= 0 && i < 4 && Sfx[i]; }
+	};
+
+	//Mixer-side: which AudioChannel indices a mask silences. 0..3 are the
+	//tonal channels, 4 is DMC, 5+ are the expansion chips.
+	string MutedChannels(uint8_t mask)
+	{
+		string result;
+		for(int i = 0; i < 11; i++) {
+			if(ReplacementMuteMask::IsMuted(mask, i)) {
+				result += std::to_string(i) + " ";
+			}
+		}
+		return result;
+	}
+
+	void TestReplacementMuteMaskDefaultsToFullTonalMute()
+	{
+		//No classifier at all (Enhanced Audio off) and a warmed-up classifier
+		//that flagged nothing both mute exactly Square1, Square2, Triangle and
+		//Noise - pre-item-9 behaviour, never "unmute all".
+		Check(ReplacementMuteMask::Compute<StubRoles>(nullptr) == 0x0F, "BlocoK: no classifier falls back to the full tonal mute");
+		StubRoles quiet;
+		Check(ReplacementMuteMask::Compute(&quiet) == 0x0F, "BlocoK: a classifier flagging no SFX keeps the full tonal mute");
+		Check(MutedChannels(0x0F) == "0 1 2 3 ", "BlocoK: the full tonal mute silences exactly Square1, Square2, Triangle and Noise",
+			MutedChannels(0x0F));
+	}
+
+	void TestReplacementMuteMaskLetsSfxChannelsThrough()
+	{
+		//Square2 flagged as SFX: its bit is cleared and nothing else moves.
+		StubRoles square2Sfx;
+		square2Sfx.Sfx[1] = true;
+		uint8_t mask = ReplacementMuteMask::Compute(&square2Sfx);
+		Check(mask == 0x0D, "BlocoK: an SFX-flagged channel clears exactly its own bit", MutedChannels(mask));
+		Check(MutedChannels(mask) == "0 2 3 ", "BlocoK: the other tonal channels stay muted", MutedChannels(mask));
+
+		//All three melodic channels flagged: only Noise stays muted (the
+		//classifier has no opinion on it).
+		StubRoles allSfx;
+		allSfx.Sfx[0] = allSfx.Sfx[1] = allSfx.Sfx[2] = true;
+		Check(ReplacementMuteMask::Compute(&allSfx) == 0x08, "BlocoK: with every melodic channel on SFX only Noise stays muted",
+			MutedChannels(ReplacementMuteMask::Compute(&allSfx)));
+
+		//A flag on the Noise slot is not read: it is not one of the three
+		//melodic channels the classifier judges.
+		StubRoles noiseSfx;
+		noiseSfx.Sfx[3] = true;
+		Check(ReplacementMuteMask::Compute(&noiseSfx) == 0x0F, "BlocoK: the Noise channel is not unmuted by an SFX flag");
+	}
+
+	void TestReplacementMuteMaskNeverTouchesDmcOrExpansion()
+	{
+		//DMC (index 4) and every expansion channel keep playing under every
+		//mask the policy can produce - ADR-0133 point 1.
+		for(int sfxBits = 0; sfxBits < 8; sfxBits++) {
+			StubRoles roles;
+			for(int i = 0; i < 3; i++) {
+				roles.Sfx[i] = (sfxBits & (1 << i)) != 0;
+			}
+			uint8_t mask = ReplacementMuteMask::Compute(&roles);
+			bool higherChannelsPass = true;
+			for(int channel = ReplacementMuteMask::DmcChannelIndex; channel < 11; channel++) {
+				higherChannelsPass = higherChannelsPass && !ReplacementMuteMask::IsMuted(mask, channel);
+			}
+			Check(higherChannelsPass, "BlocoK: DMC and the expansion channels are never masked (sfx bits " + std::to_string(sfxBits) + ")",
+				MutedChannels(mask));
+		}
+
+		//A cleared mask (no replacement playing, or any stop path) mutes nothing.
+		Check(MutedChannels(0).empty(), "BlocoK: mask 0 mutes no channel at all");
+	}
+}
+
+//--- Bloco L: EnhancedSynthEngine rendered PCM golden (F5.4g Bloco B) --------
+//The level-2 synth was only ever validated by listening. This renders a fixed
+//APU/role snapshot through the real Render() and diffs the samples against
+//docs/specs/golden/synth/enhanced-synth-pcm.txt (ADR-0129: golden paths are
+//cwd-relative from the repo root). It is a regression net, not a judgement of
+//timbre: any change to the voices, the drums, the FX chain or the mix that
+//moves the output shows up here and has to be re-blessed deliberately.
+//No SoundFont is loaded and InitPresets is never called, so the case does no
+//file I/O and never depends on the user's EnhancedAudioPresets.cfg; the noise
+//RNG of a freshly constructed engine is seeded to a fixed value.
+namespace
+{
+	constexpr uint32_t kGoldenSampleRate = 44100;
+	constexpr uint32_t kGoldenBlockFrames = 32;
+	constexpr uint32_t kGoldenBlocks = 4;
+	//8-bit-ish slack for platform libm differences in the transcendental parts
+	//of the voices; the defects this case targets move samples by hundreds.
+	constexpr int kGoldenTolerance = 2;
+
+	//A synthetic preset written out here on purpose: it belongs to the test,
+	//not to any console's built-in table, so re-tuning the NES or SMS presets
+	//does not invalidate the golden.
+	EnhancedSynthPreset GoldenPreset()
+	{
+		EnhancedSynthPreset p = {};
+		p.LeadDetune = 0.12;
+		p.HarmDetune = 0.08;
+		p.FollowDuty = true;
+		p.FixedWidth = 0.5;
+		p.LeadAlwaysSaw = false;
+		p.LeadOctaveUpMix = 0.25;
+		p.LeadLpHz = 6000;
+		p.HarmLpHz = 4500;
+		p.LeadDrive = 1.2;
+		p.BassSine = 0.6;
+		p.BassSaw = 0.3;
+		p.BassSub = 0.2;
+		p.BassLpHz = 900;
+		p.BassDrive = 1.1;
+		p.DrumBodyLoHz = 180;
+		p.DrumBodyHiHz = 2400;
+		p.DrumTopHz = 9000;
+		p.DrumBodyGain = 0.7;
+		p.ThumpGain = 0.5;
+		p.ThumpDecayS = 0.09;
+		p.ThumpFreqHz = 55;
+		p.AttackMs = 4;
+		p.ReleaseMs = 60;
+		p.EchoDelayS = 0.12;
+		p.EchoGainL = 0.2;
+		p.EchoGainR = 0.15;
+		p.ReverbWet = 0.18;
+		p.LeadGain = 0.9;
+		p.HarmGain = 0.7;
+		p.BassGain = 0.8;
+		p.DrumGain = 0.6;
+		p.CompThreshold = 0.7;
+		p.CompRatio = 4;
+		p.CompAttackMs = 5;
+		p.CompReleaseMs = 120;
+		p.CompMakeup = 1.1;
+		p.GmLeadProgram = 80;
+		p.GmHarmProgram = 81;
+		p.GmBassProgram = 38;
+		p.GmDrums = false;
+		p.FixedRole[0] = p.FixedRole[1] = p.FixedRole[2] = p.FixedRole[3] = -1;
+		return p;
+	}
+
+	//A fixed snapshot: lead A4, harmony C#5, bass A2, a bright-ish noise hit
+	//eligible for the low thump, plus one dry SFX voice.
+	EnhancedSynthEngine::Input GoldenInput()
+	{
+		EnhancedSynthEngine::Input in;
+		in.LeadFreq = 440.0;
+		in.LeadVol = 0.80;
+		in.LeadWidth = 0.5;
+		in.HarmFreq = 554.365;
+		in.HarmVol = 0.55;
+		in.HarmWidth = 0.25;
+		in.BassFreq = 110.0;
+		in.BassVol = 0.70;
+		in.NoiseVol = 0.45;
+		in.NoiseBrightness = 0.30;
+		in.ThumpEligible = true;
+		in.SfxCount = 1;
+		in.Sfx[0] = { 1320.0, 0.35, 0.5 };
+		return in;
+	}
+
+	//Renders the fixed snapshot in kGoldenBlocks blocks, exactly as the audio
+	//path does (Render adds onto a zeroed block buffer).
+	vector<int16_t> RenderGoldenPcm()
+	{
+		EnhancedSynthEngine engine;
+		EnhancedSynthPreset preset = GoldenPreset();
+		EnhancedSynthEngine::Input in = GoldenInput();
+		vector<int16_t> pcm;
+		for(uint32_t block = 0; block < kGoldenBlocks; block++) {
+			vector<int16_t> out(kGoldenBlockFrames * 2, 0);
+			engine.Render(out.data(), kGoldenBlockFrames, kGoldenSampleRate, in, preset, 100.0);
+			pcm.insert(pcm.end(), out.begin(), out.end());
+		}
+		return pcm;
+	}
+
+	void TestEnhancedSynthPcmGolden()
+	{
+		string fixturePath = "docs/specs/golden/synth/enhanced-synth-pcm.txt";
+		ifstream fixture(fixturePath);
+		if(!fixture) {
+			Check(false, "BlocoL: enhanced-synth-pcm.txt fixture opens", "could not open " + fixturePath + " (run from the repo root)");
+			return;
+		}
+
+		vector<int16_t> expected;
+		string line;
+		while(std::getline(fixture, line)) {
+			if(line.empty() || line[0] == '#') {
+				continue;
+			}
+			std::istringstream parser(line);
+			int index = 0, left = 0, right = 0;
+			if(!(parser >> index >> left >> right)) {
+				Check(false, "BlocoL: golden line parses", line);
+				return;
+			}
+			expected.push_back((int16_t)left);
+			expected.push_back((int16_t)right);
+		}
+
+		vector<int16_t> actual = RenderGoldenPcm();
+		Check(expected.size() == actual.size(), "BlocoL: the golden covers every rendered frame",
+			std::to_string(expected.size() / 2) + " golden vs " + std::to_string(actual.size() / 2) + " rendered");
+		if(expected.size() != actual.size()) {
+			return;
+		}
+
+		int worst = 0;
+		size_t worstAt = 0;
+		for(size_t i = 0; i < actual.size(); i++) {
+			int delta = std::abs((int)actual[i] - (int)expected[i]);
+			if(delta > worst) {
+				worst = delta;
+				worstAt = i;
+			}
+		}
+		Check(worst <= kGoldenTolerance, "BlocoL: the rendered PCM matches docs/specs/golden/synth/enhanced-synth-pcm.txt",
+			"worst |diff| " + std::to_string(worst) + " at frame " + std::to_string(worstAt / 2) + " (allowed " + std::to_string(kGoldenTolerance) + ")");
+
+		//A golden of silence would match anything: make sure the snapshot
+		//really produced audio.
+		int peak = 0;
+		for(int16_t sample : actual) {
+			peak = std::max(peak, std::abs((int)sample));
+		}
+		Check(peak > 1000, "BlocoL: the fixed snapshot renders audible audio", "peak " + std::to_string(peak));
+	}
+}
+
+
+//--- Bloco M: the ADR-0120 §4 zip pipeline against real archive bytes -------
+//§4 deferred a "standalone C++ E2E zip-pipeline harness"; §2's pure-function
+//extraction only covered FindFallbackSubfolder with literal string fixtures,
+//and the zip/slip kinds of scripts/gen_mep_test_pack.py were a manual
+//headless_record log inspection. This drives the whole MepZipExtract pipeline
+//(the code MepPackManager::PrepareZip now delegates to) on zips built here
+//with Utilities/miniz.cpp: extraction, zip-slip rejection on real bytes, the
+//.mep-source cache-reuse branch and the wrapped-subfolder fallback.
+namespace
+{
+	const char* kZipRomName = "Contra80s";
+
+	//A zip entry: archive name + contents. Names miniz's writer refuses to
+	//write (a leading '/', a backslash, a drive colon) are produced by
+	//building the archive with a same-length placeholder name and patching
+	//the raw bytes afterwards - see BuildZipWithRawName.
+	struct ZipEntry
+	{
+		string Name;
+		string Content;
+	};
+
+	vector<uint8_t> BuildZip(const vector<ZipEntry>& entries)
+	{
+		mz_zip_archive zip;
+		memset(&zip, 0, sizeof(zip));
+		if(!mz_zip_writer_init_heap(&zip, 0, 64 * 1024)) {
+			return {};
+		}
+		for(const ZipEntry& entry : entries) {
+			mz_zip_writer_add_mem(&zip, entry.Name.c_str(), entry.Content.data(), entry.Content.size(), MZ_BEST_SPEED);
+		}
+		void* buffer = nullptr;
+		size_t size = 0;
+		vector<uint8_t> bytes;
+		if(mz_zip_writer_finalize_heap_archive(&zip, &buffer, &size)) {
+			bytes.assign((uint8_t*)buffer, (uint8_t*)buffer + size);
+		}
+		mz_zip_writer_end(&zip);
+		return bytes;
+	}
+
+	//miniz's writer validates archive names (no leading '/', no '\', no ':'),
+	//so a hostile entry name has to be written after the fact. `placeholder`
+	//and `rawName` MUST have the same length: the name appears verbatim in
+	//both the local file header and the central directory record.
+	vector<uint8_t> BuildZipWithRawName(vector<ZipEntry> entries, const string& placeholder, const string& rawName)
+	{
+		vector<uint8_t> bytes = BuildZip(entries);
+		if(placeholder.size() != rawName.size()) {
+			return {};
+		}
+		for(size_t i = 0; i + placeholder.size() <= bytes.size(); i++) {
+			if(memcmp(bytes.data() + i, placeholder.data(), placeholder.size()) == 0) {
+				memcpy(bytes.data() + i, rawName.data(), rawName.size());
+			}
+		}
+		return bytes;
+	}
+
+	//The unit-test side of MepZipExtract::IArchive: miniz straight on the
+	//bytes, no ZipReader/ArchiveReader (which would drag SevenZip in).
+	class MinizArchive : public MepZipExtract::IArchive
+	{
+	public:
+		~MinizArchive() override
+		{
+			if(_loaded) {
+				mz_zip_reader_end(&_zip);
+			}
+		}
+
+		bool Load(const string& zipPath, vector<string>& entries, string& error) override
+		{
+			ifstream in(zipPath, std::ios::in | std::ios::binary);
+			if(!in) {
+				error = "cannot open zip";
+				return false;
+			}
+			std::stringstream ss;
+			ss << in.rdbuf();
+			string content = ss.str();
+			_bytes.assign(content.begin(), content.end());
+			memset(&_zip, 0, sizeof(_zip));
+			if(!mz_zip_reader_init_mem(&_zip, _bytes.data(), _bytes.size(), 0)) {
+				error = "not a valid zip archive";
+				return false;
+			}
+			_loaded = true;
+			for(mz_uint i = 0, len = mz_zip_reader_get_num_files(&_zip); i < len; i++) {
+				mz_zip_archive_file_stat stat;
+				if(mz_zip_reader_file_stat(&_zip, i, &stat)) {
+					entries.push_back(stat.m_filename);
+				}
+			}
+			return true;
+		}
+
+		bool ExtractFile(const string& entry, vector<uint8_t>& content) override
+		{
+			size_t size = 0;
+			void* data = mz_zip_reader_extract_file_to_heap(&_zip, entry.c_str(), &size, 0);
+			if(!data) {
+				return false;
+			}
+			content.assign((uint8_t*)data, (uint8_t*)data + size);
+			mz_free(data);
+			return true;
+		}
+
+	private:
+		mz_zip_archive _zip;
+		bool _loaded = false;
+		vector<uint8_t> _bytes;
+	};
+
+	string ZipPackJson(const string& name)
+	{
+		return "{\"mep\":\"1.0.0\",\"name\":\"" + name + "\",\"version\":\"1.0.0\",\"license\":\"CC0\","
+			"\"targets\":[{\"system\":\"nes\",\"sha1\":\"0000000000000000000000000000000000000000\",\"name\":\"test rom\"}],"
+			"\"sections\":{\"textures\":{\"path\":\"textures/\"}}}";
+	}
+
+	//Runs the whole PrepareZip pipeline against an existing <dir>/<fileName>,
+	//with <dir>/cache as the cache root. Kept separate from writing the file
+	//so the cache-reuse case can re-run it without touching the zip's mtime.
+	bool PrepareZipAt(const std::filesystem::path& dir, const string& fileName, string& outFolder, string& error)
+	{
+		MinizArchive archive;
+		string cacheRoot = (dir / "cache").u8string();
+		return MepZipExtract::PrepareZip(archive, (dir / fileName).u8string(), cacheRoot, kZipRomName, outFolder, error);
+	}
+
+	//Writes `bytes` as <dir>/<fileName>, then prepares it.
+	bool RunPrepareZip(const std::filesystem::path& dir, const string& fileName, const vector<uint8_t>& bytes,
+		string& outFolder, string& error)
+	{
+		{
+			std::ofstream out(dir / fileName, std::ios::out | std::ios::binary);
+			out.write((const char*)bytes.data(), bytes.size());
+		}
+		return PrepareZipAt(dir, fileName, outFolder, error);
+	}
+
+	bool FileExists(const std::filesystem::path& path)
+	{
+		std::error_code ec;
+		return std::filesystem::exists(path, ec);
+	}
+
+	void TestZipWellFormedPackExtracts()
+	{
+		//gen_mep_test_pack.py's "zip" kind: pack.json at the root plus content.
+		std::filesystem::path dir = MakeTempPackDir("zip_ok");
+		vector<uint8_t> bytes = BuildZip({
+			{ "pack.json", ZipPackJson("MEP test (zip)") },
+			{ "textures/hires.txt", "<ver>106\n<scale>1\n" },
+			{ "synth/preset.cfg", "[Studio]\nCompThreshold=0.5\n" },
+		});
+		Check(!bytes.empty(), "BlocoM: the miniz-built control archive has bytes");
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "mep-test-zip.zip", bytes, outFolder, error);
+		Check(ok, "BlocoM: a well-formed zip pack is accepted", error);
+		Check(FileExists(std::filesystem::u8path(outFolder) / "pack.json"), "BlocoM: pack.json is extracted to the cache folder", outFolder);
+		Check(FileExists(std::filesystem::u8path(outFolder) / "textures" / "hires.txt"), "BlocoM: a nested entry keeps its relative path");
+		Check(FileExists(std::filesystem::u8path(outFolder) / ".mep-source"), "BlocoM: the .mep-source cache stamp is written");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipSlipTraversalEntryIsRejected()
+	{
+		//gen_mep_test_pack.py's "slip" kind: a valid pack plus '../evil.txt'.
+		//The plan is validated before anything is written, so the whole pack
+		//is refused and no file - inside or outside the cache - is created.
+		std::filesystem::path dir = MakeTempPackDir("zip_slip");
+		vector<uint8_t> bytes = BuildZip({
+			{ "pack.json", ZipPackJson("MEP slip") },
+			{ "textures/hires.txt", "<ver>106\n" },
+			{ "../evil.txt", "pwned" },
+		});
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "mep-test-slip.zip", bytes, outFolder, error);
+		Check(!ok, "BlocoM: a '../' zip-slip entry is rejected on real archive bytes");
+		Check(error.find("escapes the pack root") != string::npos, "BlocoM: the zip-slip rejection names the offending entry", error);
+		Check(!FileExists(dir / "cache" / "mep-test-slip" / "pack.json"), "BlocoM: nothing is extracted from a rejected zip-slip pack");
+		Check(!FileExists(dir / "cache" / "evil.txt") && !FileExists(dir / "evil.txt"),
+			"BlocoM: the '../' target is never written outside the cache folder");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipAbsolutePathEntryIsRejected()
+	{
+		//An absolute entry name cannot come out of miniz's writer, so it is
+		//patched into the raw bytes: "Xtmp/evil.txt" -> "/tmp/evil.txt".
+		std::filesystem::path dir = MakeTempPackDir("zip_abs");
+		vector<uint8_t> bytes = BuildZipWithRawName({
+			{ "pack.json", ZipPackJson("MEP absolute") },
+			{ "Xtmp/evil.txt", "pwned" },
+		}, "Xtmp/evil.txt", "/tmp/evil.txt");
+		Check(!bytes.empty(), "BlocoM: the absolute-path archive was patched");
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "mep-test-abs.zip", bytes, outFolder, error);
+		Check(!ok, "BlocoM: an absolute '/tmp/...' zip entry is rejected");
+		Check(!FileExists(dir / "cache" / "mep-test-abs" / "pack.json"), "BlocoM: nothing is extracted from a rejected absolute-path pack");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipWindowsPathEntryIsRejected()
+	{
+		//The other absolute shape mep_lint.py and MepPack reject: a drive
+		//letter with backslashes ("C:\evil.dll"), also unwritable by miniz.
+		std::filesystem::path dir = MakeTempPackDir("zip_win");
+		vector<uint8_t> bytes = BuildZipWithRawName({
+			{ "pack.json", ZipPackJson("MEP windows") },
+			{ "CXevilYdll", "pwned" },
+		}, "CXevilYdll", "C:\\evil.dll");
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "mep-test-win.zip", bytes, outFolder, error);
+		Check(!ok, "BlocoM: a 'C:\\...' zip entry is rejected");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipSymlinkEntryCannotEscape()
+	{
+		//The zip-symlink attack has two halves and this covers both:
+		//(1) an entry whose *payload* is a path is extracted as an ordinary
+		//file, never as a symlink (the extractor writes bytes, it never
+		//consults the entry's unix mode);
+		//(2) a symlink left inside the cache folder by an earlier extraction
+		//is not written through, because PrepareZip wipes a stale cache
+		//before extracting anything.
+		std::filesystem::path dir = MakeTempPackDir("zip_symlink");
+		std::filesystem::path outside = dir / "outside.txt";
+		WriteTestFile(outside, "original");
+
+		std::error_code ec;
+		std::filesystem::path cachedPack = dir / "cache" / "mep-test-symlink";
+		std::filesystem::create_directories(cachedPack, ec);
+		//A stale cache whose "textures/hires.txt" is a symlink pointing out of
+		//the cache, and a stamp that does not match the zip about to be read
+		std::filesystem::create_directories(cachedPack / "textures", ec);
+		std::filesystem::create_symlink(outside, cachedPack / "textures" / "hires.txt", ec);
+		WriteTestFile(cachedPack / ".mep-source", "0:0");
+		bool symlinkReady = !ec && std::filesystem::is_symlink(cachedPack / "textures" / "hires.txt", ec);
+		Check(symlinkReady, "BlocoM: the stale cache symlink fixture was created");
+
+		vector<uint8_t> bytes = BuildZip({
+			{ "pack.json", ZipPackJson("MEP symlink") },
+			{ "textures/hires.txt", "<ver>106\n" },
+			{ "link-payload", "../../outside.txt" },
+		});
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "mep-test-symlink.zip", bytes, outFolder, error);
+		Check(ok, "BlocoM: the symlink-fixture pack itself extracts", error);
+
+		std::filesystem::path extractedLink = std::filesystem::u8path(outFolder) / "textures" / "hires.txt";
+		Check(!std::filesystem::is_symlink(extractedLink, ec), "BlocoM: the stale symlink is wiped, not written through");
+		string outsideContent;
+		{
+			ifstream in(outside);
+			std::stringstream ss;
+			ss << in.rdbuf();
+			outsideContent = ss.str();
+		}
+		Check(outsideContent == "original", "BlocoM: the file outside the cache is left untouched", outsideContent);
+		Check(!std::filesystem::is_symlink(std::filesystem::u8path(outFolder) / "link-payload", ec),
+			"BlocoM: an entry whose payload is a path is extracted as a plain file");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipNestedWrapperFolderFallback()
+	{
+		//ADR-0120's motivating shape: a release zip named after neither the
+		//ROM nor a root pack.json, wrapping everything in a ROM-named folder.
+		std::filesystem::path dir = MakeTempPackDir("zip_wrapper");
+		vector<uint8_t> bytes = BuildZip({
+			{ "Contra80s/pack.json", ZipPackJson("MEP wrapped") },
+			{ "Contra80s/textures/hires.txt", "<ver>106\n" },
+			{ "readme.txt", "release notes" },
+		});
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "Contra80s-HD-v2.zip", bytes, outFolder, error);
+		Check(ok, "BlocoM: a wrapped (ROM-named subfolder) zip is accepted", error);
+		Check(StringUtilities::EndsWith(outFolder, "Contra80s"), "BlocoM: the fallback prefix is folded into the returned folder", outFolder);
+		Check(FileExists(std::filesystem::u8path(outFolder) / "pack.json"), "BlocoM: the wrapped pack.json is where the caller looks for it");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipUnwrappedNoPackJsonIsRejected()
+	{
+		//No root pack.json, zip name != ROM name, and no ROM-named subfolder
+		//either: the fallback finds nothing, so the pack is rejected.
+		std::filesystem::path dir = MakeTempPackDir("zip_norule");
+		vector<uint8_t> bytes = BuildZip({
+			{ "SomeOtherGame/textures/hires.txt", "<ver>106\n" },
+		});
+
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "random-upload.zip", bytes, outFolder, error);
+		Check(!ok, "BlocoM: a zip with neither a root pack.json nor a ROM-named folder is rejected");
+		Check(error == "zip has no pack.json at its root", "BlocoM: the rejection reason is the ADR-0040 one", error);
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipCacheIsReusedUntilTheZipChanges()
+	{
+		//The .mep-source stamp branch: a second PrepareZip on unchanged bytes
+		//must not re-extract (a marker dropped in the cache survives), and a
+		//changed zip must wipe the cache and extract again.
+		std::filesystem::path dir = MakeTempPackDir("zip_cache");
+		vector<uint8_t> bytes = BuildZip({
+			{ "pack.json", ZipPackJson("MEP cached") },
+			{ "textures/hires.txt", "<ver>106\n" },
+		});
+
+		string outFolder;
+		string error;
+		Check(RunPrepareZip(dir, "cached.zip", bytes, outFolder, error), "BlocoM: the cached-pack fixture extracts once", error);
+
+		std::filesystem::path marker = std::filesystem::u8path(outFolder) / "marker.txt";
+		WriteTestFile(marker, "still here");
+		string secondFolder;
+		//The very same file, untouched: same size, same mtime, same stamp
+		Check(PrepareZipAt(dir, "cached.zip", secondFolder, error), "BlocoM: re-preparing the same zip succeeds", error);
+		Check(secondFolder == outFolder, "BlocoM: the cache folder is stable across runs");
+		Check(FileExists(marker), "BlocoM: an unchanged zip reuses the cache instead of re-extracting");
+
+		//Same file name, different content (and therefore a different size):
+		//the stamp no longer matches, so the folder is wiped and rebuilt
+		vector<uint8_t> changed = BuildZip({
+			{ "pack.json", ZipPackJson("MEP cached v2 - a longer name to change the archive size") },
+			{ "textures/hires.txt", "<ver>106\n<scale>2\n" },
+		});
+		string thirdFolder;
+		Check(RunPrepareZip(dir, "cached.zip", changed, thirdFolder, error), "BlocoM: a changed zip re-extracts", error);
+		Check(!FileExists(marker), "BlocoM: a changed zip wipes the stale cache before extracting");
+		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipEmptyArchiveIsRejected()
+	{
+		std::filesystem::path dir = MakeTempPackDir("zip_empty");
+		vector<uint8_t> bytes = BuildZip({});
+		string outFolder;
+		string error;
+		bool ok = RunPrepareZip(dir, "empty.zip", bytes, outFolder, error);
+		Check(!ok && error == "zip is empty", "BlocoM: an empty archive is rejected", error);
+		std::filesystem::remove_all(dir);
+	}
+}
+
+//--- Bloco N: aspect-ratio geometry per setting (P.7 "16:9 stretch") --------
+//Geometry only: this asserts the ratio the renderer is asked to draw at (and
+//the stretched width that follows from it), NOT the pixels on screen. The
+//visual pass on a real display stays manual - a unit test cannot see a
+//stretched image, only the number that produces it.
+namespace
+{
+	const uint32_t kNesWidth = 256;
+	const uint32_t kNesHeight = 240;
+
+	AspectRatioMath::Inputs NesInputs(VideoAspectRatio setting)
+	{
+		AspectRatioMath::Inputs in;
+		in.Setting = setting;
+		in.BaseWidth = kNesWidth;
+		in.BaseHeight = kNesHeight;
+		in.Region = ConsoleRegion::Ntsc;
+		return in;
+	}
+
+	bool NearlyEqual(double a, double b)
+	{
+		return std::fabs(a - b) < 1e-9;
+	}
+
+	void TestAspectRatioPerSetting()
+	{
+		double square = (double)kNesWidth / kNesHeight; //256/240 = 16/15
+
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::NoStretching)), square),
+			"BlocoN: NoStretching keeps the base screen ratio (square pixels)");
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::Standard)), 4.0 / 3.0),
+			"BlocoN: Standard is exactly 4:3 regardless of the base size");
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::Widescreen)), 16.0 / 9.0),
+			"BlocoN: Widescreen is exactly 16:9 regardless of the base size");
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::NTSC)), square * 8.0 / 7.0),
+			"BlocoN: NTSC applies the 8:7 pixel aspect ratio");
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::PAL)), square * 11.0 / 8.0),
+			"BlocoN: PAL applies the 11:8 pixel aspect ratio");
+
+		AspectRatioMath::Inputs custom = NesInputs(VideoAspectRatio::Custom);
+		custom.CustomRatio = 2.5;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(custom), 2.5), "BlocoN: Custom returns the configured ratio verbatim");
+
+		//4:3 and 16:9 are absolute, so a different base resolution (SMS) must
+		//not move them, while the PAR-based settings must follow it
+		AspectRatioMath::Inputs sms = NesInputs(VideoAspectRatio::Widescreen);
+		sms.BaseWidth = 256;
+		sms.BaseHeight = 192;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(sms), 16.0 / 9.0), "BlocoN: Widescreen ignores the base resolution");
+		sms.Setting = VideoAspectRatio::NTSC;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(sms), (256.0 / 192.0) * 8.0 / 7.0), "BlocoN: NTSC follows the base resolution");
+	}
+
+	void TestAspectRatioAutoPerConsole()
+	{
+		AspectRatioMath::Inputs autoNtsc = NesInputs(VideoAspectRatio::Auto);
+		double square = (double)kNesWidth / kNesHeight;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(autoNtsc), square * 8.0 / 7.0), "BlocoN: Auto on an NTSC console is the 8:7 PAR");
+
+		AspectRatioMath::Inputs autoPal = autoNtsc;
+		autoPal.Region = ConsoleRegion::Pal;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(autoPal), square * 11.0 / 8.0), "BlocoN: Auto on a PAL console is the 11:8 PAR");
+		autoPal.Region = ConsoleRegion::Dendy;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(autoPal), square * 11.0 / 8.0), "BlocoN: Auto treats Dendy like PAL");
+
+		AspectRatioMath::Inputs handheld = autoNtsc;
+		handheld.BaseWidth = 160;
+		handheld.BaseHeight = 144;
+		handheld.SquarePixelInAuto = true;
+		handheld.Region = ConsoleRegion::Pal; //must be ignored for GB/GBA/WS
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(handheld), 160.0 / 144.0),
+			"BlocoN: Auto on GB/GBA/WS stays square, even in a PAL region");
+
+		AspectRatioMath::Inputs gameGear = autoNtsc;
+		gameGear.BaseWidth = 160;
+		gameGear.BaseHeight = 144;
+		gameGear.GameGearPar = true;
+		Check(NearlyEqual(AspectRatioMath::ComputeAspectRatio(gameGear), (160.0 / 144.0) * 6.0 / 5.0),
+			"BlocoN: Auto on Game Gear applies its 6:5 PAR");
+	}
+
+	void TestStretchedSizePerSetting()
+	{
+		//The destination size the ratio produces for a 240-row NES frame -
+		//height preserved, width = round(height * ratio). 16:9 is the P.7 case
+		//and must widen the frame past both 4:3 and the unstretched 256.
+		AspectRatioMath::Size square = AspectRatioMath::ComputeStretchedSize(kNesHeight,
+			AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::NoStretching)));
+		AspectRatioMath::Size standard = AspectRatioMath::ComputeStretchedSize(kNesHeight,
+			AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::Standard)));
+		AspectRatioMath::Size wide = AspectRatioMath::ComputeStretchedSize(kNesHeight,
+			AspectRatioMath::ComputeAspectRatio(NesInputs(VideoAspectRatio::Widescreen)));
+
+		Check(square.Width == kNesWidth && square.Height == kNesHeight, "BlocoN: NoStretching renders at the native 256x240",
+			std::to_string(square.Width) + "x" + std::to_string(square.Height));
+		Check(standard.Width == 320 && standard.Height == kNesHeight, "BlocoN: 4:3 stretches 240 rows to 320 columns",
+			std::to_string(standard.Width) + "x" + std::to_string(standard.Height));
+		Check(wide.Width == 427 && wide.Height == kNesHeight, "BlocoN: 16:9 stretches 240 rows to 427 columns",
+			std::to_string(wide.Width) + "x" + std::to_string(wide.Height));
+		Check(wide.Width > standard.Width && standard.Width > square.Width, "BlocoN: 16:9 is wider than 4:3, which is wider than native");
+		Check(wide.Height == square.Height, "BlocoN: stretching never changes the row count");
+	}
+}
+
+//--- Bloco O: the P.4 keyboard-block exemption (Esc while playing) ----------
+//A keyboard game (Family BASIC, a SMS keyboard peripheral, ...) turns every
+//keyboard shortcut into a dead key so the game gets the keystrokes. Pause has
+//always been exempt; P.4 added ToggleOverlay, because in Player mode the
+//overlay is how the player pauses. These assert the exemption directly on the
+//extracted rule, with a stubbed "which host keys are down" probe.
+namespace
+{
+	const uint16_t kEscKey = 27;
+	const uint16_t kMouseKey = IKeyManager::BaseMouseButtonIndex + 1;
+
+	KeyCombination SingleKey(uint16_t key)
+	{
+		KeyCombination comb = {};
+		comb.Key1 = key;
+		return comb;
+	}
+
+	//Only the listed key codes read as pressed
+	ShortcutKeyRules::KeyDownProbe ProbeFor(vector<uint16_t> down)
+	{
+		return [down](uint16_t keyCode) {
+			return std::find(down.begin(), down.end(), keyCode) != down.end();
+		};
+	}
+
+	bool FiresWithEsc(EmulatorShortcut shortcut, bool keyboardConnected, bool paused)
+	{
+		return ShortcutKeyRules::IsShortcutPressed(shortcut, SingleKey(kEscKey), {}, keyboardConnected, paused,
+			true, ProbeFor({ kEscKey }));
+	}
+
+	void TestToggleOverlayStaysReachableInAKeyboardGame()
+	{
+		Check(FiresWithEsc(EmulatorShortcut::ToggleOverlay, true, false),
+			"BlocoO: ToggleOverlay still fires while a keyboard game blocks keys");
+		Check(FiresWithEsc(EmulatorShortcut::Pause, true, false),
+			"BlocoO: Pause is exempt from the keyboard block, as it always was");
+
+		//Every other shortcut bound to the same key is dead while the keyboard
+		//game is running
+		EmulatorShortcut blocked[] = { EmulatorShortcut::Reset, EmulatorShortcut::TakeScreenshot,
+			EmulatorShortcut::ToggleFullscreen, EmulatorShortcut::SaveState, EmulatorShortcut::Exit };
+		for(EmulatorShortcut shortcut : blocked) {
+			Check(!FiresWithEsc(shortcut, true, false),
+				"BlocoO: shortcut " + std::to_string((int)shortcut) + " does not fire while a keyboard game blocks keys");
+		}
+	}
+
+	void TestKeyboardBlockOnlyAppliesWhileRunning()
+	{
+		Check(FiresWithEsc(EmulatorShortcut::Reset, false, false),
+			"BlocoO: with no keyboard plugged in, an ordinary shortcut fires");
+		Check(FiresWithEsc(EmulatorShortcut::Reset, true, true),
+			"BlocoO: while paused, the keyboard block is lifted for every shortcut");
+		Check(!ShortcutKeyRules::ShouldBlockKeyboardKeys(EmulatorShortcut::ToggleOverlay, true, false),
+			"BlocoO: ToggleOverlay is never blocked");
+		Check(!ShortcutKeyRules::ShouldBlockKeyboardKeys(EmulatorShortcut::Pause, true, false),
+			"BlocoO: Pause is never blocked");
+		Check(ShortcutKeyRules::ShouldBlockKeyboardKeys(EmulatorShortcut::Reset, true, false),
+			"BlocoO: any other shortcut is blocked in a running keyboard game");
+	}
+
+	void TestKeyboardBlockSparesNonKeyboardInputs()
+	{
+		//The block is keyboard-only: a shortcut bound to a mouse button or a
+		//pad input (>= BaseMouseButtonIndex) keeps working in a keyboard game
+		bool mouseBound = ShortcutKeyRules::IsShortcutPressed(EmulatorShortcut::Reset, SingleKey(kMouseKey), {},
+			true, false, true, ProbeFor({ kMouseKey }));
+		Check(mouseBound, "BlocoO: a shortcut bound to a mouse/pad input is not affected by the keyboard block");
+
+		//And with nothing pressed at all, nothing fires
+		bool nothingDown = ShortcutKeyRules::IsShortcutPressed(EmulatorShortcut::ToggleOverlay, SingleKey(kEscKey), {},
+			false, false, false, ProbeFor({}));
+		Check(!nothingDown, "BlocoO: no key down means no shortcut fires");
+	}
+
+	void TestSupersetStillShadowsTheExemptShortcut()
+	{
+		//The exemption does not change superset precedence: Ctrl+Esc bound to
+		//another action shadows the bare-Esc ToggleOverlay while both are down
+		KeyCombination superset = {};
+		superset.Key1 = 116; //left ctrl
+		superset.Key2 = kEscKey;
+		bool fires = ShortcutKeyRules::IsShortcutPressed(EmulatorShortcut::ToggleOverlay, SingleKey(kEscKey), { superset },
+			true, false, true, ProbeFor({ kEscKey, (uint16_t)116, (uint16_t)117 }));
+		Check(!fires, "BlocoO: a pressed superset still shadows ToggleOverlay in a keyboard game");
+	}
+}
+
 int main()
 {
 	TestSilentChannelNotSfx();
@@ -1439,6 +2366,34 @@ int main()
 
 	TestBgmCrossfadeIsPerSampleRamp();
 	TestBgmCrossfadeIgnoresRunAheadBlocks();
+
+	TestLoopPointReturnsToLoopPosition();
+	TestNoLoopPointBehavesAsBefore();
+
+	TestReplacementMuteMaskDefaultsToFullTonalMute();
+	TestReplacementMuteMaskLetsSfxChannelsThrough();
+	TestReplacementMuteMaskNeverTouchesDmcOrExpansion();
+
+	TestEnhancedSynthPcmGolden();
+
+	TestZipWellFormedPackExtracts();
+	TestZipSlipTraversalEntryIsRejected();
+	TestZipAbsolutePathEntryIsRejected();
+	TestZipWindowsPathEntryIsRejected();
+	TestZipSymlinkEntryCannotEscape();
+	TestZipNestedWrapperFolderFallback();
+	TestZipUnwrappedNoPackJsonIsRejected();
+	TestZipCacheIsReusedUntilTheZipChanges();
+	TestZipEmptyArchiveIsRejected();
+
+	TestAspectRatioPerSetting();
+	TestAspectRatioAutoPerConsole();
+	TestStretchedSizePerSetting();
+
+	TestToggleOverlayStaysReachableInAKeyboardGame();
+	TestKeyboardBlockOnlyAppliesWhileRunning();
+	TestKeyboardBlockSparesNonKeyboardInputs();
+	TestSupersetStillShadowsTheExemptShortcut();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

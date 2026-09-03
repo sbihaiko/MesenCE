@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Shared/ShortcutKeyHandler.h"
+#include "Shared/ShortcutKeyRules.h"
 #include "Shared/SystemActionManager.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/KeyManager.h"
@@ -41,57 +42,13 @@ ShortcutKeyHandler::~ShortcutKeyHandler()
 
 bool ShortcutKeyHandler::IsKeyPressed(EmulatorShortcut shortcut)
 {
-	//When running while a keyboard is plugged into the console, disable all keyboard
-	//shortcut keys. The pause shortcut is always enabled, allowing it to be used to
-	//pause normally, which allows other shortcuts to be used (while paused).
-	//P.4: ToggleOverlay is exempted too - in Player mode it is the primary way to
-	//pause (the Pause binding on the same key is suppressed by
-	//UiModeShortcutPrecedence on the UI side), so it must stay reachable even in a
-	//keyboard game. The UI ignores it while UiMode == Advanced, so the exemption
-	//has no effect outside Player.
-	bool blockKeyboardKeys = shortcut != EmulatorShortcut::Pause && shortcut != EmulatorShortcut::ToggleOverlay && _isKeyboardConnected && !_isPaused;
-
+	//The rule itself lives in ShortcutKeyRules (host-free, unit-tested): when
+	//running while a keyboard is plugged into the console, keyboard shortcut
+	//keys are disabled, except Pause and (P.4) ToggleOverlay.
 	KeyCombination keyComb = _emu->GetSettings()->GetShortcutKey(shortcut, _keySetIndex);
 	vector<KeyCombination> supersets = _emu->GetSettings()->GetShortcutSupersets(shortcut, _keySetIndex);
-	for(KeyCombination& superset : supersets) {
-		if(IsKeyPressed(superset, blockKeyboardKeys)) {
-			//A superset is pressed, ignore this subset
-			return false;
-		}
-	}
-
-	//No supersets are pressed, check if all matching keys are pressed
-	return IsKeyPressed(keyComb, blockKeyboardKeys);
-}
-
-bool ShortcutKeyHandler::IsKeyPressed(KeyCombination comb, bool blockKeyboardKeys)
-{
-	int keyCount = (comb.Key1 ? 1 : 0) + (comb.Key2 ? 1 : 0) + (comb.Key3 ? 1 : 0);
-
-	if(keyCount == 0 || _pressedKeys.empty()) {
-		return false;
-	}
-
-	bool mergeCtrlAltShift = keyCount > 1;
-
-	return IsKeyPressed(comb.Key1, mergeCtrlAltShift, blockKeyboardKeys) &&
-		(comb.Key2 == 0 || IsKeyPressed(comb.Key2, mergeCtrlAltShift, blockKeyboardKeys)) &&
-		(comb.Key3 == 0 || IsKeyPressed(comb.Key3, mergeCtrlAltShift, blockKeyboardKeys));
-}
-
-bool ShortcutKeyHandler::IsKeyPressed(uint16_t keyCode, bool mergeCtrlAltShift, bool blockKeyboardKeys)
-{
-	if(blockKeyboardKeys && keyCode < IKeyManager::BaseMouseButtonIndex) {
-		return false;
-	}
-
-	if(keyCode >= 116 && keyCode <= 121 && mergeCtrlAltShift) {
-		//Left/right ctrl/alt/shift
-		//Return true if either the left or right key is pressed
-		return KeyManager::IsKeyPressed(keyCode | 1) || KeyManager::IsKeyPressed(keyCode & ~0x01);
-	}
-
-	return KeyManager::IsKeyPressed(keyCode);
+	return ShortcutKeyRules::IsShortcutPressed(shortcut, keyComb, supersets, _isKeyboardConnected, _isPaused,
+		!_pressedKeys.empty(), [](uint16_t keyCode) { return KeyManager::IsKeyPressed(keyCode); });
 }
 
 bool ShortcutKeyHandler::DetectKeyPress(EmulatorShortcut shortcut)

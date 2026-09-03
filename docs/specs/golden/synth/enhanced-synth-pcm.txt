@@ -1,0 +1,148 @@
+# docs/specs/golden/synth/enhanced-synth-pcm.txt
+#
+# F5.4g Bloco B (ADR-0052) rendered-audio golden, consumed by
+# scripts/core_unit_tests.cpp (Bloco L). It is a regression net for
+# EnhancedSynthEngine::Render, not a judgement of timbre - the subjective half
+# of Bloco B stays a listening pass.
+#
+# Produced by rendering the fixed snapshot the test builds (lead A4, harmony
+# C#5, bass A2, one noise hit with the low thump, one dry SFX voice; the
+# test's own synthetic preset, no SoundFont, no EnhancedAudioPresets.cfg) in
+# 4 blocks of 32 frames at 44100 Hz, with a freshly constructed engine so the
+# noise RNG starts from its fixed seed.
+#
+# Format: one frame per line, TAB-separated: <frame index><TAB><left><TAB><right>
+#   - Blank lines and lines starting with '#' are ignored.
+#   - Samples are signed 16-bit. The test allows |diff| <= 2 per sample, for
+#     platform libm differences in the voices' transcendental parts.
+#
+# Re-bless only deliberately: a change here means the enhanced synth's output
+# changed for every game.
+0	-54	-53
+1	-118	-115
+2	-186	-180
+3	-249	-241
+4	-305	-294
+5	-368	-355
+6	-420	-404
+7	-474	-456
+8	-531	-512
+9	-580	-559
+10	-610	-587
+11	-673	-647
+12	-714	-687
+13	-743	-714
+14	-811	-780
+15	-804	-771
+16	-197	-159
+17	-22	18
+18	-30	13
+19	4	49
+20	19	67
+21	30	80
+22	-6	45
+23	-12	42
+24	-42	13
+25	-46	11
+26	-37	23
+27	-62	0
+28	-57	7
+29	-44	21
+30	-42	26
+31	-69	1
+32	-230	-159
+33	-1193	-1129
+34	-1274	-1210
+35	-1253	-1186
+36	-1305	-1238
+37	-1275	-1206
+38	-1352	-1282
+39	-1280	-1208
+40	-1319	-1245
+41	-1286	-1210
+42	-1352	-1275
+43	-1277	-1198
+44	-1076	-993
+45	-820	-732
+46	-712	-621
+47	-619	-525
+48	-576	-479
+49	-87	18
+50	597	695
+51	460	562
+52	385	490
+53	398	504
+54	492	569
+55	742	736
+56	1162	1111
+57	1521	1450
+58	1685	1603
+59	1878	1791
+60	1887	1795
+61	1946	1852
+62	1951	1855
+63	1995	1897
+64	2194	2040
+65	2422	2209
+66	1746	1467
+67	1382	1061
+68	1421	1087
+69	1566	1230
+70	1618	1278
+71	1557	1207
+72	1548	1200
+73	1371	1098
+74	1218	1010
+75	1121	948
+76	1161	1009
+77	1151	1007
+78	1149	1010
+79	1178	1042
+80	1126	989
+81	1180	1043
+82	1371	1237
+83	2324	2208
+84	2468	2354
+85	2565	2467
+86	2250	2240
+87	2132	2184
+88	1980	2067
+89	1598	1711
+90	1428	1555
+91	1210	1349
+92	1182	1324
+93	1312	1455
+94	1181	1329
+95	1233	1381
+96	1158	1309
+97	1273	1422
+98	1289	1440
+99	718	884
+100	-762	-593
+101	-989	-824
+102	-1020	-854
+103	-1025	-859
+104	-1105	-939
+105	-1123	-956
+106	-901	-727
+107	-964	-791
+108	-1044	-872
+109	-1028	-854
+110	-836	-656
+111	-951	-773
+112	-758	-574
+113	-1239	-1066
+114	-1683	-1521
+115	-1718	-1556
+116	-1169	-992
+117	-387	-186
+118	-377	-175
+119	-494	-294
+120	-585	-386
+121	-385	-179
+122	-614	-414
+123	-403	-195
+124	-421	-212
+125	-468	-260
+126	-480	-271
+127	-415	-204

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "NES/NesSoundMixer.h"
+#include "Shared/Audio/ReplacementMuteMask.h"
 #include "NES/NesConsole.h"
 #include "NES/NesConstants.h"
 #include "NES/NesTypes.h"
@@ -178,7 +179,7 @@ double NesSoundMixer::GetChannelOutput(AudioChannel channel, bool forRightChanne
 	//F5.4g Block C item 9 (ADR-0133): a per-channel bit silences only the
 	//channels the mask names (0..4 = Square1..DMC); expansion channels have no
 	//bit and always pass, matching pre-Block-C behaviour.
-	if(_replacementMuteMask & (1 << (int)channel)) {
+	if(ReplacementMuteMask::IsMuted(_replacementMuteMask, (int)channel)) {
 		return 0;
 	}
 	if(forRightChannel) {
