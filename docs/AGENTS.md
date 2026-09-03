@@ -6,7 +6,7 @@ Durable documentation for this fork: open specs, execution plans, and the enhanc
 
 ## Ownership
 
-Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/adr/` (the decision register, moved here from `.dev-squad/adr/` on 2026-09-03), `docs/media/`, and top-level ecosystem notes. Does not own `AGENTS.md` files in other trees or Core/UI source.
+Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/adr/` (the decision register, moved here from `.dev-squad/adr/` on 2026-09-03), `docs/media/`, `docs/validation/` (manual acceptance/validation run scripts), and top-level ecosystem notes. Does not own `AGENTS.md` files in other trees or Core/UI source.
 
 ## Local Contracts
 
@@ -21,12 +21,15 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/adr/` (t
   consolidated PRD, two Parts: Part A (pack/core roadmap) and Part B (default
   GUI, pack identity, picker). No `plano-*.md`. See `docs/roadmap/AGENTS.md`
   for the contract.
-- `community-pack-intake-handoff.md` — agent brief to submit researched
-  HD/MEP packs through the Issue Form pipeline (allow-listed ZIP only;
-  do not hand-edit pack rows into the generated catalog). Extra ROM
-  hashes for auto-install belong in `scripts/rom_target.py`;
-  `community-packs.json`'s `rom.sha1`/`rom.sha1s` must match that map.
-  Not a player-facing guide.
+- Community-pack catalog rows (`docs/community-packs.md` / `.json`) are
+  **generated** by the validate/catalog workflows — never hand-edit pack rows.
+  Extra ROM hashes for auto-install belong in `scripts/rom_target.py`;
+  `community-packs.json`'s `rom.sha1`/`rom.sha1s` must match that map. The
+  intake mechanics (host allow-list, labels, Issue Form pipeline) are
+  documented by the `.github/` workflows and the human-facing
+  `docs/hd-pack-authoring.md`. The 2026-08-30 agent intake brief
+  (`community-pack-intake-handoff.md`) was consumed and deleted 2026-09-03;
+  its full text lives in git history — do not revive it as a task.
 - `hd-pack-authoring.md` - human-facing guide for community HD/MEP pack
   submissions, linked from `.github/ISSUE_TEMPLATE/community-pack.yml`;
   summarizes the "Aceito (MEP completo)" vs. "Aceito parcial (HD Mesen)" vs.
@@ -47,3 +50,4 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/adr/` (t
 - adr/ — the decision register (`NNNN-<kebab-title>.md`); accepted ADRs are binding
 - specs/ — ESP, MEP, MEI, MEP-recipe, hires-gbsms drafts and `golden/`
 - roadmap/ — consolidated PRD (Part A: pack/core; Part B: player shell) (product consoles: NES, GB, SMS-family, GBA)
+- validation/ — manual acceptance/validation run scripts (e.g. F6.5 checklist, validation-automation plan)

@@ -1,24 +1,25 @@
 # MesenCE Community Enhancement Ecosystem
 
-*Status: draft / roadmap — the consolidated PRD (Part A: pack/core; Part B:
-player GUI) at
-[docs/roadmap/PRD-mesence-enhancement-ecosystem.md](roadmap/PRD-mesence-enhancement-ecosystem.md).*
+*Status: maintained front-door narrative. The consolidated, binding roadmap
+(Part A: pack/core; Part B: player GUI) and its shipped record live in
+[docs/roadmap/PRD-mesence-enhancement-ecosystem.md](roadmap/PRD-mesence-enhancement-ecosystem.md);
+the open specs live in [docs/specs/](specs/). This page is the short
+why/vision — where it drifts from the PRD or a spec, the PRD and the spec win.*
 
-Enhanced Audio is step one of a larger plan: turning MesenCE into a platform for
-**extracting, authoring and consuming community enhancement packs** — textures, music
-and synth presets — while keeping the emulator itself legally clean.
-
-The thesis is proven: the relaunched [SUPER ZSNES](https://www.zsnes.com/) built its
-whole product around per-game curated enhancements (hand-drawn hi-res art, audio
-replacement, overclock), each individually toggleable, with enhancement data kept free
-of copyrighted content. MesenCE already ships the three foundations needed to do the
-same as an open ecosystem:
+MesenCE is a platform for **extracting, authoring and consuming community
+enhancement packs** — textures, music and synth presets — while keeping the
+emulator itself legally clean. The thesis is proven: the relaunched
+[SUPER ZSNES](https://www.zsnes.com/) built its whole product around per-game
+curated enhancements (hand-drawn hi-res art, audio replacement, overclock),
+each individually toggleable, with enhancement data kept free of copyrighted
+content. MesenCE already ships the three foundations needed to do the same as
+an open ecosystem:
 
 | Foundation | Where | What it provides |
 |---|---|---|
 | NES HD Packs (HDNes format) | `Core/NES/HdPacks/` | Tile + OGG audio replacement, per-context conditions, and the **HD Pack Builder** (in-emulator tile recorder) |
-| MSU-1 | not on `main` — `Core/SNES/` is an empty skeleton (no tracked files); see [`docs/roadmap/PRD-mesence-enhancement-ecosystem.md`](roadmap/PRD-mesence-enhancement-ecosystem.md) for the product scope (SNES/MSU-1 is out of scope, ADR-0041) | The open SNES streaming-audio standard, kept here as a design reference only |
-| Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | A live tap that already converts chip register state into note/voice abstractions — most of a MIDI exporter |
+| MSU-1 | not on `main` — `Core/SNES/` is an empty skeleton (no tracked files) | The open SNES streaming-audio standard, kept here as a design reference only (out of product scope, ADR-0041) |
+| Enhanced Synth Engine | `Core/Shared/Audio/EnhancedSynthEngine.*` | A live tap that converts chip register state into note/voice abstractions — most of a MIDI exporter |
 
 ## Principles
 
@@ -39,57 +40,16 @@ same as an open ecosystem:
    never bundles, hosts, endorses, or embeds any P2P distribution of derivative
    content (inducement liability — *MGM v. Grokster*, 2005; the 2024 Yuzu settlement).
 
-## Standards
+## Where the detail lives
 
-Rule of thumb: **adopt an existing community standard wherever one exists; formalize a
-small open spec only where none does.**
-
-### Adopted standards
-
-| Area | Standard | Used for | Why |
-|---|---|---|---|
-| ROM identification | No-Intro (Logiqx XML DATs, CRC32/MD5/SHA-1) | Pack and index keys | Interop with RetroArch, collection managers, existing databases |
-| Per-system hashing | rcheevos `rhash` | Systems that hash only part of the file | Future RetroAchievements compatibility |
-| Audio register logs | VGM v1.71+ with GD3 tags | Music exporter | Plays in any VGM player (foobar2000, in_vgm); vgmrips-standard metadata |
-| Note data | SMF type 1 + General MIDI | Music exporter | Opens in MuseScore / any DAW, no conversion |
-| Textures | HDNes `hires.txt` (Mesen is the reference implementation) | Texture packs | Existing pack authors and tools already speak it |
-| SNES audio | MSU-1 (`.msu` + `.pcm`) | Audio replacement | A decade of Zeldix packs work on day zero |
-| NES audio | OGG via HD pack (`OggMixer`) | Audio replacement | Already supported; part of the HDNes standard |
-| ROM patches | BPS (beat) | If packs ever include patches | Validates the source ROM checksum — fits the hash-keyed model |
-
-The one real gap: replacement audio for **GB/SMS** (MSU-MD only covers the Mega
-Drive). It is addressed by the hires.txt extension proposal below.
-
-### New open specs (proposed)
-
-Each spec will live in `docs/specs/<id>-v<N>.md`, licensed **CC0** (public domain —
-any emulator may implement it), written with RFC 2119 normative language
-(MUST/SHOULD/MAY), semver versioning, canonical example files ("golden files") and a
-validation script. Changes go through issues/PRs; breaking changes bump the major
-version.
-
-| Spec | Defines |
-|---|---|
-| **ESP v1** — Enhanced Synth Preset | The `EnhancedAudioPresets.cfg` format: file grammar, per-chip voice parameters (NES APU, GB APU, SMS PSG, YM2413), valid ranges, defaults for omitted fields, and the per-game → per-chip → global fallback rules. The only 100%-new format in the ecosystem. |
-| **MEP v1** — Enhancement Pack | A thin `.zip` envelope with `pack.json` at the root that only *composes* existing standards: No-Intro hash key, metadata (name, author, license, semver), and optional sections — `textures/` (hires.txt), `audio/` (OGG / MSU-1), `synth/` (ESP). Every section is individually toggleable. |
-| **MEI v1** — Enhancement Index | The federated pack-discovery manifest: a `manifest.json` listing packs (name, game, No-Intro hash, URL, artifact checksum, license). Anyone can publish an index; users point the emulator at any of them — the official index is just one MEI among others. |
-| **hires.txt GB/SMS extension** | A backward-compatible extension of the HDNes format via its existing `<ver>` field: new tags for the GB/SMS PPUs (CGB palettes, VDP modes) and OGG audio replacement on those systems. To be discussed with the HDNes/Mesen community before freezing v1. |
-
-## Roadmap phases
-
-Five self-contained phases — each delivers value on its own (details, requirements and
-success criteria in the [PRD](roadmap/PRD-mesence-enhancement-ecosystem.md)):
-
-1. **MIDI/VGM music exporter** built on the Enhanced Synth tap — record a game's music
-   to VGM (+GD3) or MIDI (SMF/GM) while playing.
-2. **HD Pack Builder generalized** to Game Boy and SMS (both tile-based PPUs).
-3. **Unified enhancement pack format** (MEP): textures + audio + synth preset in one
-   hash-keyed archive, every layer individually toggleable.
-4. **In-UI pack browser** consuming federated MEI indexes (GitHub-backed, no custom
-   server, ranking via download counts).
-5. **Offline AI pipeline** (external scripts, never embedded): ESRGAN-family tile
-   upscaling and LLM-assisted preset ear-tuning to produce first-draft packs for the
-   community to refine by hand.
+- **Standards** (adopted + proposed), product consoles in scope, roadmap phases,
+  and the shipped record: the PRD — Part A §1–§3. Don't maintain a second
+  enumeration here.
+- **Open specs** (CC0, RFC 2119, golden files): [`docs/specs/`](specs/) —
+  `ESP-v1`, `MEP-v1`, `MEI-v1`, `MEP-recipe-v1`, `hires-gbsms-v1` (draft); see
+  [`docs/specs/README.md`](specs/README.md) for the index.
+- **Authoring a pack for submission:** [`docs/hd-pack-authoring.md`](hd-pack-authoring.md).
+- **Community catalog:** [`docs/community-packs.md`](community-packs.md) (+ `.json`).
 
 ## Non-goals
 

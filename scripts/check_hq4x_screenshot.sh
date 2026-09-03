@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P.7 (docs/manual-validation-automation-plan.md): objective check that the
+# P.7 (docs/validation/manual-validation-automation-plan.md): objective check that the
 # HQ4x video filter is really applied to the screenshot pipeline
 # (BaseVideoFilter::TakeScreenshot -> ScaleFilter::GetScaleFilter->ApplyFilter),
 # replacing the "look at it on a real display" manual step.
