@@ -569,8 +569,15 @@ jobs:
           # the trailing section and blank lines -> the dependency lines only.
           EXT="$(printf '%s' "$BODY" | sed -n '/^### *External assets/I,$p' | sed '1d' | sed '/^### /,$d' | sed '/^[[:space:]]*$/d' || true)"
           if [ -n "$EXT" ]; then
-            SUFFIX="THE SUBMISSION DECLARES EXTERNAL ASSETS (MEP-recipe-v1 §3.3, user_supplied deps hosted separately) — this is the ADR-0138 §2/§7 EXCEPTION: the referenced section counts as usable, verdict MUST be \"accepted\", and the recipe object MUST be filled (deps user_supplied, no sha256/size). Do not apply MEP-v1 §5's missing-file rule to these:
-            $(printf '%s' "$EXT" | sed 's/^/  - /')"
+            # issue #152: this slot is DATA ONLY. Everything imperative about a declared
+            # external asset (the ADR-0138 §2/§7 exception, "verdict accepted", "fill
+            # recipe") is trusted prompt text in .github/ai/validate-classify.md, so
+            # submitter-controlled bytes are never interpolated into instruction-shaped
+            # context. Here we only fence the field verbatim between the sentinel pair
+            # the prompt describes, indent it, and neutralise any sentinel forged inside
+            # it so the field cannot close its own fence and escape into the prompt.
+            EXT_SAFE="$(printf '%s\n' "$EXT" | sed -e 's/EXTERNAL-ASSETS-DATA-/EXTERNAL-ASSETS-DATA_/g' -e 's/^/  /')"
+            SUFFIX="$(printf 'EXTERNAL-ASSETS-DATA-BEGIN\n%s\nEXTERNAL-ASSETS-DATA-END\n' "$EXT_SAFE")"
           else
             SUFFIX=""
           fi

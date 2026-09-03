@@ -89,6 +89,8 @@ CHECKS = (
     classify.check_classify_step_references_prepare_outputs,
     classify.check_prepare_classify_prompt_renders_md,
     classify.check_prompt_file_markers,
+    classify.check_external_assets_slot_is_data_only,
+    lambda _text: classify.check_prompt_file_owns_external_assets_rule(),
     autofix.check_autofix_step_references_prepare_outputs,
     autofix.check_prepare_autofix_prompt_renders_md,
     autofix.check_autofix_prompt_file_markers,

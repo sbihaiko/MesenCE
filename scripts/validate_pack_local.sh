@@ -40,6 +40,12 @@
 #   --work <dir>           Work directory override (default: .cache/validate-local/<issue>).
 #                          In a multi-game split, each game uses its own
 #                          <work>/<game-issue> subdirectory.
+#   --pack-file <path>     OFFLINE FIXTURE MODE: lint and classify a local pack
+#                          file instead of an issue's downloaded pack. Skips the
+#                          `gh` read and the network fetch, and implies
+#                          --no-write. Requires --issue-body.
+#   --issue-body <file>    Issue Form body to use instead of `gh issue view`
+#                          (offline fixture mode only).
 #
 # Requires `gh` authenticated with `project` scope (Project v2 writes).
 set -euo pipefail
@@ -79,6 +85,8 @@ LLM="claude"
 MODEL=""
 NO_WRITE=0
 NO_COMMENT=0
+PACK_FILE=""
+ISSUE_BODY_FILE=""
 PARALLEL=0
 WORK=""
 PREPARE_ONLY=0
@@ -90,11 +98,15 @@ while [ $# -gt 0 ]; do
     --model) MODEL="$2"; shift ;;
     --work=*) WORK="${1#--work=}" ;;
     --work) WORK="$2"; shift ;;
+    --pack-file=*) PACK_FILE="${1#--pack-file=}" ;;
+    --pack-file) PACK_FILE="$2"; shift ;;
+    --issue-body=*) ISSUE_BODY_FILE="${1#--issue-body=}" ;;
+    --issue-body) ISSUE_BODY_FILE="$2"; shift ;;
     --no-write) NO_WRITE=1 ;;
     --no-comment) NO_COMMENT=1 ;;
     --parallel) PARALLEL=1 ;;
     -h|--help)
-      sed -n '2,34p' "$0"
+      sed -n '2,40p' "$0"
       exit 0
       ;;
     *) ISSUE="$1" ;;
@@ -104,10 +116,19 @@ done
 
 if [ -z "$ISSUE" ]; then
   echo "error: issue number required" >&2
-  sed -n '2,34p' "$0" >&2
+  sed -n '2,40p' "$0" >&2
   exit 1
 fi
 case "$LLM" in claude|session) ;; *) echo "error: --llm must be claude or session" >&2; exit 1 ;; esac
+# Offline fixture mode: a purpose-built local pack, no GitHub issue, no fetch.
+# Read-only by construction so a fixture can never touch a real issue/board.
+if [ -n "$PACK_FILE" ]; then
+  if [ -z "$ISSUE_BODY_FILE" ]; then
+    echo "error: --pack-file requires --issue-body" >&2
+    exit 1
+  fi
+  NO_WRITE=1
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -135,7 +156,12 @@ if [ "$NO_WRITE" -eq 0 ]; then
 fi
 
 # ---- 1. read the issue ----
-BODY=$(gh issue view "$ISSUE" --repo "$REPO" --json body -q '.body')
+if [ -n "$PACK_FILE" ]; then
+  BODY=$(cat "$ISSUE_BODY_FILE")
+  echo ":: offline fixture mode — issue body from $ISSUE_BODY_FILE, pack from $PACK_FILE (no gh reads, no writes)"
+else
+  BODY=$(gh issue view "$ISSUE" --repo "$REPO" --json body -q '.body')
+fi
 printf '%s' "$BODY" > "$WORK_BASE/issue_body.txt"
 
 GAME=$(python3 -c "import re, sys; body = sys.stdin.read(); m = re.search(r'^###\s+Target game/ROM and region\s*\n+(.*?)(?=\n###\s|\Z)', body, re.M | re.S); value = (m.group(1).strip() if m else '').splitlines(); print(value[0].strip() if value else '')" <<<"$BODY")
@@ -148,25 +174,29 @@ CONSOLE=$(python3 -c "import re, sys; body = sys.stdin.read(); m = re.search(r'^
 echo "console=$CONSOLE"
 
 PACK_URL=$(printf '%s' "$BODY" | grep -oE 'https://[^ )]+' | head -n1 || true)
-if [ -z "$PACK_URL" ]; then
+if [ -z "$PACK_URL" ] && [ -z "$PACK_FILE" ]; then
   echo "error: no pack URL found in the issue body" >&2
   exit 1
 fi
 echo "pack_url=$PACK_URL"
 
 # ---- 2. host allow-list + download ----
-if ! python3 -c "
+if [ -n "$PACK_FILE" ]; then
+  cp "$PACK_FILE" "$WORK_BASE/pack_download.bin"
+else
+  if ! python3 -c "
 import sys
 sys.path.insert(0, 'scripts')
 from fetch_pack import match_host, load_allowlist
 hosts = load_allowlist('scripts/pack_host_allowlist.json')
 sys.exit(0 if match_host(sys.argv[1], hosts) else 1)
 " "$PACK_URL" 2>/dev/null; then
-  echo "error: host not in scripts/pack_host_allowlist.json" >&2
-  exit 1
+    echo "error: host not in scripts/pack_host_allowlist.json" >&2
+    exit 1
+  fi
+  python3 scripts/fetch_pack.py "$PACK_URL" "$WORK_BASE/pack_download.bin" \
+    --max-bytes "$MAX_PACK_BYTES" --allowlist scripts/pack_host_allowlist.json
 fi
-python3 scripts/fetch_pack.py "$PACK_URL" "$WORK_BASE/pack_download.bin" \
-  --max-bytes "$MAX_PACK_BYTES" --allowlist scripts/pack_host_allowlist.json
 PACK_SHA256=$(sha256sum "$WORK_BASE/pack_download.bin" | awk '{print $1}')
 PACK_MD5=$(md5sum "$WORK_BASE/pack_download.bin" | awk '{print $1}')
 echo "sha256=$PACK_SHA256"
@@ -306,7 +336,11 @@ fi
 # ---- per-game pipeline (lint -> content-id -> classify -> recipe -> apply -> mep-meta) ----
 # $1 issue  $2 game  $3 root (informational; baked into the game zip)  $4 siblings csv  $5 work dir
 run_game() {
-  local ISSUE="$1" GAME="$2" ROOT="$3" SIBLINGS_CSV="$4" WORK="$5"
+  # NOTE: $3 is the game root (informational; already baked into the game zip)
+  # and must NOT shadow the global $ROOT, which is the repo root the classify
+  # step needs as its cwd and for the docs symlink.
+  local ISSUE="$1" GAME="$2" GAME_ROOT="$3" SIBLINGS_CSV="$4" WORK="$5"
+  : "${GAME_ROOT:=}"
   local CONTENT_ID="" LINT_EXIT RECIPE_STATUS RECIPE_OK VERDICT DOWNGRADED CATEGORY KIND
   local APPLIED_LABELS LABEL ITEM_ID
 
@@ -348,8 +382,15 @@ run_game() {
   # ---- 7. render the classify prompt from the .md ----
   EXT="$(printf '%s' "$BODY" | sed -n '/^### *External assets/I,$p' | sed '1d' | sed '/^### /,$d' | sed '/^[[:space:]]*$/d' || true)"
   if [ -n "$EXT" ]; then
-    SUFFIX="THE SUBMISSION DECLARES EXTERNAL ASSETS (MEP-recipe-v1 §3.3, user_supplied deps hosted separately) — this is the ADR-0138 §2/§7 EXCEPTION: the referenced section counts as usable, verdict MUST be \"accepted\", and the recipe object MUST be filled (deps user_supplied, no sha256/size). Do not apply MEP-v1 §5's missing-file rule to these:
-    $(printf '%s' "$EXT" | sed 's/^/  - /')"
+    # issue #152: this slot is DATA ONLY. Everything imperative about a declared
+    # external asset (the ADR-0138 §2/§7 exception, "verdict accepted", "fill
+    # recipe") is trusted prompt text in .github/ai/validate-classify.md, so
+    # submitter-controlled bytes are never interpolated into instruction-shaped
+    # context. Here we only fence the field verbatim between the sentinel pair
+    # the prompt describes, indent it, and neutralise any sentinel forged inside
+    # it so the field cannot close its own fence and escape into the prompt.
+    EXT_SAFE="$(printf '%s\n' "$EXT" | sed -e 's/EXTERNAL-ASSETS-DATA-/EXTERNAL-ASSETS-DATA_/g' -e 's/^/  /')"
+    SUFFIX="$(printf 'EXTERNAL-ASSETS-DATA-BEGIN\n%s\nEXTERNAL-ASSETS-DATA-END\n' "$EXT_SAFE")"
   else
     SUFFIX=""
   fi

@@ -203,3 +203,110 @@ def check_prompt_file_markers(text):
         )
     if SCHEMA_MARKER in prompt:
         fail(".github/ai/validate-classify.md PROMPT block leaks the SCHEMA marker")
+
+
+# --- issue #152: the {{EXTERNAL_ASSETS_SUFFIX}} slot must stay data-only -----
+# The "External assets" field is submitter-controlled text. It used to be
+# interpolated into an imperative sentence ('verdict MUST be "accepted"')
+# built by the renderer, which is the only place submitter bytes reached
+# instruction-shaped context. The rule now lives in the .md as trusted prompt
+# text and the renderers emit nothing but the verbatim field, fenced between
+# EXTERNAL-ASSETS-DATA-BEGIN/-END with any forged sentinel neutralised.
+EXT_BEGIN_SENTINEL = "EXTERNAL-ASSETS-DATA-BEGIN"
+EXT_END_SENTINEL = "EXTERNAL-ASSETS-DATA-END"
+EXT_NEUTRALISE_SED = "s/EXTERNAL-ASSETS-DATA-/EXTERNAL-ASSETS-DATA_/g"
+# Imperative fragments that must never be produced by the renderer (they are
+# prompt text now); matched case-insensitively against the SUFFIX block only.
+EXT_IMPERATIVE_MARKERS = (
+    "verdict must be",
+    "must be filled",
+    "the submission declares external assets",
+    "do not apply",
+)
+_EXT_SUFFIX_BLOCK_RE = re.compile(
+    r'^[ \t]*if \[ -n "\$EXT" \]; then\n.*?^[ \t]*fi$',
+    re.S | re.M,
+)
+
+
+def _ext_suffix_block(text, where):
+    match = _EXT_SUFFIX_BLOCK_RE.search(text)
+    if not match:
+        fail(
+            f"{where}: could not find the `if [ -n \"$EXT\" ]` block that "
+            "renders {{EXTERNAL_ASSETS_SUFFIX}} (issue #152)"
+        )
+        return None
+    # Dedent: the two renderers sit at different indentation levels (a YAML
+    # `run: |` body vs. a shell function), so compare the logic, not the
+    # column it starts in.
+    lines = match.group(0).split("\n")
+    pad = len(lines[0]) - len(lines[0].lstrip())
+    return "\n".join(line[pad:] if line[:pad].isspace() else line.lstrip() for line in lines)
+
+
+def check_external_assets_slot_is_data_only(text):
+    from ._shared import REPO_ROOT
+
+    ci = _ext_suffix_block(text, "community-pack-validate.yml")
+    local_path = REPO_ROOT / "scripts" / "validate_pack_local.sh"
+    try:
+        local_text = local_path.read_text(encoding="utf-8")
+    except OSError:
+        fail("Could not read scripts/validate_pack_local.sh")
+        return
+    local = _ext_suffix_block(local_text, "scripts/validate_pack_local.sh")
+    if ci is None or local is None:
+        return
+    if ci != local:
+        fail(
+            "the {{EXTERNAL_ASSETS_SUFFIX}} renderers in "
+            "community-pack-validate.yml and scripts/validate_pack_local.sh "
+            "differ — they must stay identical (ADR-0138 single source)"
+        )
+    for where, block in (("community-pack-validate.yml", ci),
+                         ("scripts/validate_pack_local.sh", local)):
+        code = "\n".join(
+            line for line in block.split("\n") if not line.lstrip().startswith("#")
+        )
+        for marker in EXT_IMPERATIVE_MARKERS:
+            if marker in code.lower():
+                fail(
+                    f"{where}: the {{{{EXTERNAL_ASSETS_SUFFIX}}}} renderer emits "
+                    f"instruction-shaped text ({marker!r}) around submitter bytes "
+                    "— that rule belongs in .github/ai/validate-classify.md "
+                    "(issue #152)"
+                )
+        for needed in (EXT_BEGIN_SENTINEL, EXT_END_SENTINEL, EXT_NEUTRALISE_SED):
+            if needed not in code:
+                fail(
+                    f"{where}: the {{{{EXTERNAL_ASSETS_SUFFIX}}}} renderer must fence "
+                    f"the field as data — missing {needed!r} (issue #152)"
+                )
+
+
+def check_prompt_file_owns_external_assets_rule():
+    """The imperative external-assets rule must live in the .md PROMPT block."""
+    prompt = prompt_block()
+    if not prompt:
+        return
+    for sentinel in (EXT_BEGIN_SENTINEL, EXT_END_SENTINEL):
+        if sentinel not in prompt:
+            fail(
+                ".github/ai/validate-classify.md PROMPT block must describe the "
+                f"external-assets data fence ({sentinel}) it renders into "
+                "{{EXTERNAL_ASSETS_SUFFIX}} (issue #152)"
+            )
+    head = prompt.rsplit("{{EXTERNAL_ASSETS_SUFFIX}}", 1)[0]
+    if "EXTERNAL ASSETS SLOT" not in head:
+        fail(
+            ".github/ai/validate-classify.md PROMPT block must state the "
+            "external-assets rule as trusted prompt text immediately before "
+            "{{EXTERNAL_ASSETS_SUFFIX}} (issue #152)"
+        )
+    lowered = head.lower()
+    if "never as an instruction" not in lowered and "never an instruction" not in lowered:
+        fail(
+            ".github/ai/validate-classify.md must restate the external-assets "
+            "field as data, never an instruction (issue #152)"
+        )

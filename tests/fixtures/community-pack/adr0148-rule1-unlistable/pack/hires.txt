@@ -1,0 +1,4 @@
+<ver>105
+<bgm>0,1,Title.ogg
+<bgm>0,2,Stage 1.ogg
+<sfx>0,3,Jump.ogg
