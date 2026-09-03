@@ -1,11 +1,11 @@
 #include "pch.h"
-#include "Shared/Emulator.h"
 #include "NES/HdPacks/OggReader.h"
+#include "NES/HdPacks/OggFadeRamp.h"
 #include "Utilities/Audio/stb_vorbis.h"
 
-OggReader::OggReader(Emulator* emu)
+OggReader::OggReader(std::function<bool()> isRunAheadFrame)
 {
-	_emu = emu;
+	_isRunAheadFrame = isRunAheadFrame;
 	_done = false;
 	_oggBuffer = new int16_t[10000];
 	_outputBuffer = new int16_t[2000];
@@ -63,9 +63,9 @@ void OggReader::SetLoopFlag(bool loop)
 	_loop = loop;
 }
 
-void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volume)
+void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volumeStart, uint8_t volumeEnd)
 {
-	if(_emu->IsRunAheadFrame()) {
+	if(_isRunAheadFrame && _isRunAheadFrame()) {
 		return;
 	}
 
@@ -86,10 +86,9 @@ void OggReader::ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volume
 		samplesRead = _resampler.Resample<false>(_oggBuffer, samplesLoaded, _outputBuffer, sampleCount);
 	}
 
-	uint32_t samplesToProcess = (uint32_t)samplesRead * 2;
-	for(uint32_t i = 0; i < samplesToProcess; i++) {
-		buffer[i] = std::clamp<int32_t>((int32_t)(_outputBuffer[i] * volume / 255) + buffer[i], INT16_MIN, INT16_MAX);
-	}
+	//ADR-0142: the volume is interpolated per sample across the block, so a
+	//fade is a ramp instead of one step per MixAudio call.
+	OggFadeRamp::MixSamples(buffer, _outputBuffer, samplesRead, (uint32_t)sampleCount, volumeStart, volumeEnd);
 }
 
 uint32_t OggReader::GetOffset()

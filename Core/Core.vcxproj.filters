@@ -822,6 +822,12 @@
     <ClInclude Include="NES\HdPacks\OggMixer.h">
       <Filter>NES\HdPacks</Filter>
     </ClInclude>
+    <ClInclude Include="NES\HdPacks\IOggSource.h">
+      <Filter>NES\HdPacks</Filter>
+    </ClInclude>
+    <ClInclude Include="NES\HdPacks\OggFadeRamp.h">
+      <Filter>NES\HdPacks</Filter>
+    </ClInclude>
     <ClCompile Include="NES\HdPacks\OggReader.cpp">
       <Filter>NES\HdPacks</Filter>
     </ClCompile>

@@ -94,9 +94,14 @@ namespace Mesen.ViewModels
 		//is ignored in Player - there is no menu bar); Advanced keeps the classic
 		//AutoHideMenu rule. Re-evaluated whenever UiMode changes (the Advanced GUI
 		//overlay item / the Preferences combo flip it, instant and persisted).
+		//The rule itself lives in PlayerChrome, shared with
+		//MouseManager.UpdateMainMenuVisibility() so the two cannot drift. At
+		//construction there is no window or cursor state yet, so the fullscreen /
+		//menu-open / hover-band inputs are all false, which reduces to the
+		//historical "UiMode != Player && !AutoHideMenu".
 		private void UpdateMenuVisibility()
 		{
-			IsMenuVisible = Config.Preferences.UiMode != UiMode.Player && !Config.Preferences.AutoHideMenu;
+			IsMenuVisible = PlayerChrome.IsMenuVisible(Config.Preferences.UiMode, false, Config.Preferences.AutoHideMenu, false, false);
 		}
 
 		//P.4 (PRD Part B §6): the overlay shortcut toggles the thin Player

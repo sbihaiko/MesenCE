@@ -156,9 +156,10 @@ namespace Mesen.Utilities
 		{
 			//P.4 (PRD Part B §6): Player hides the menu bar entirely - the
 			//AutoHideMenu mouse-hover re-show below is ignored in Player (there is
-			//no menu bar to show).
+			//no menu bar to show). The rule itself lives in PlayerChrome so this
+			//site and the MainWindowViewModel initializer cannot drift.
 			if(ConfigManager.Config.Preferences.UiMode == UiMode.Player) {
-				MainWindowViewModel.Instance.IsMenuVisible = false;
+				MainWindowViewModel.Instance.IsMenuVisible = PlayerChrome.IsMenuVisible(UiMode.Player, false, false, false, false);
 				return;
 			}
 
@@ -168,23 +169,17 @@ namespace Mesen.Utilities
 
 			bool inExclusiveFullscreen = _wnd.WindowState == WindowState.FullScreen && ConfigManager.Config.Video.UseExclusiveFullscreen;
 			bool autoHideMenu = _wnd.WindowState == WindowState.FullScreen || ConfigManager.Config.Preferences.AutoHideMenu;
-			if(inExclusiveFullscreen) {
-				MainWindowViewModel.Instance.IsMenuVisible = false;
-			} else if(autoHideMenu) {
-				if(_mainMenu.MainMenu.IsOpen) {
-					MainWindowViewModel.Instance.IsMenuVisible = true;
-				} else {
-					PixelPoint wndTopLeft = _wnd.PointToScreen(new Point(0, 0));
-					double scale = LayoutHelper.GetLayoutScale(_wnd);
-					bool showMenu = (
-						mousePos.Y >= wndTopLeft.Y - 15 && mousePos.Y <= wndTopLeft.Y + Math.Max(_mainMenu.Bounds.Height * scale + 10, 35 * scale) &&
-						mousePos.X >= wndTopLeft.X && mousePos.X <= wndTopLeft.X + _wnd.Bounds.Width * scale
-					);
-					MainWindowViewModel.Instance.IsMenuVisible = showMenu;
-				}
-			} else {
-				MainWindowViewModel.Instance.IsMenuVisible = true;
+			bool menuOpen = _mainMenu.MainMenu.IsOpen;
+
+			bool cursorInBand = false;
+			if(!inExclusiveFullscreen && autoHideMenu && !menuOpen) {
+				//Only the hover-band branch needs the window geometry
+				PixelPoint wndTopLeft = _wnd.PointToScreen(new Point(0, 0));
+				double scale = LayoutHelper.GetLayoutScale(_wnd);
+				cursorInBand = PlayerChrome.IsCursorInMenuBand(mousePos.X, mousePos.Y, wndTopLeft.X, wndTopLeft.Y, _wnd.Bounds.Width, _mainMenu.Bounds.Height, scale);
 			}
+
+			MainWindowViewModel.Instance.IsMenuVisible = PlayerChrome.IsMenuVisible(ConfigManager.Config.Preferences.UiMode, inExclusiveFullscreen, autoHideMenu, menuOpen, cursorInBand);
 		}
 
 		private static void SetMouseOffScreen()

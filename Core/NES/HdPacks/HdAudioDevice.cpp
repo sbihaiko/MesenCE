@@ -2,6 +2,7 @@
 #include "NES/HdPacks/HdAudioDevice.h"
 #include "NES/HdPacks/HdData.h"
 #include "NES/HdPacks/OggMixer.h"
+#include "NES/HdPacks/OggReader.h"
 #include "NES/NesConsole.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Emulator.h"
@@ -19,7 +20,14 @@ HdAudioDevice::HdAudioDevice(Emulator* emu, HdPackData* hdData)
 	_sfxVolume = 128;
 	_bgmVolume = 128;
 
-	_oggMixer.reset(new OggMixer(emu));
+	//ADR-0142: the mixer is host-free; this is the one site that binds it to the
+	//emulator (run-ahead probe) and to the real stb_vorbis-backed source.
+	std::function<bool()> isRunAheadFrame = [emu]() { return emu->IsRunAheadFrame(); };
+	OggMixer::SourceFactory createSource = [isRunAheadFrame](string filename, bool loop, uint32_t sampleRate, uint32_t startOffset, uint32_t loopPosition) -> shared_ptr<IOggSource> {
+		shared_ptr<OggReader> reader(new OggReader(isRunAheadFrame));
+		return reader->Init(filename, loop, sampleRate, startOffset, loopPosition) ? reader : nullptr;
+	};
+	_oggMixer.reset(new OggMixer(isRunAheadFrame, createSource));
 	_oggMixer->SetBgmVolume(_bgmVolume);
 	_oggMixer->SetSfxVolume(_sfxVolume);
 	_emu->GetSoundMixer()->RegisterAudioProvider(_oggMixer.get());

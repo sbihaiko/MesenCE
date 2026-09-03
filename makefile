@@ -316,6 +316,7 @@ core-unit-tests:
 	  Core/Shared/EnhancementPacks/MepContentId.cpp \
 	  Core/Shared/MessageManager.cpp \
 	  Core/Shared/Video/BorderLayout.cpp \
+	  Core/NES/HdPacks/OggMixer.cpp \
 	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
 	  Utilities/sha256.cpp Utilities/SimpleLock.cpp Utilities/Timer.cpp Utilities/miniz.cpp \
 	  -o scripts/core_unit_tests
