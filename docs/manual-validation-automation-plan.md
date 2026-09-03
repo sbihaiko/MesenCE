@@ -175,3 +175,75 @@ adopted; the reason is recorded so they are not re-raised.
 | "Fix the file path `UI/Logic/CommunityPackInstallCoordinator.cs`" | review 2 | The plan never wrote that path; only the file name. The path `UI/Services/` is now spelled out to remove the ambiguity |
 | Treat `MouseManager.UpdateMainMenuVisibility()` as *the* source of truth and the ViewModel line as irrelevant | review 2 | Overstated: in Player both sites yield the same `false`. Adopted in reduced form — one helper consumed by both sites so they cannot drift |
 | Automate the real-fetch check as a regular test | plan v1 (implied) | External hosts, rate limits and outages make it non-deterministic; kept as an on-demand script |
+
+## Wave 2 — the rest of the project's manual/pending items
+
+The first wave covered four items (P.6 toast, P.7 menu + HQ4x, ADR-0142
+crossfade, F6.5 checklist). A full sweep on 2026-09-03 of the PRD (Part A
+and Part B), `docs/adr/*.md` with Status `accepted`, and the open issues on
+the bug board found ~24 further "manual", "pending" or "not verified"
+clauses. They are classified below by the *same* rule the first wave used:
+what can a host-free unit test, a `core-unit-tests` case or an on-demand
+headless script actually answer, versus what needs eyes or hardware.
+
+Board state at the time of the sweep: the 11 open issues are all
+`community-pack` intake rows; #149, #150 and #151 are closed. No open bug
+is waiting on a validation.
+
+### 2A. Automatable with the tools already in the repo
+
+Wave 1 made several of these cheaper: decoupling `OggMixer`/`OggReader`
+from the concrete `Emulator` (injected run-ahead probe + `IOggSource`) put
+the whole replaced-BGM path inside the `core-unit-tests` target, and
+`scripts/headless_record.cpp`'s new `filter=<name>` flag makes the
+screenshot pipeline configurable from a script.
+
+| Item | Pending clause | Mechanism |
+|---|---|---|
+| F5.4g Block C item 8 | "loop-intro não repete" (listening) | `core_unit_tests` case reusing the Bloco I stub-source harness: consume past the track end and assert the read position returns to `loopPosition`, not to 0 (ADR-0134's contract) |
+| F5.4g Block C item 9 | SMB1/Zelda SFX audible | `NesSoundMixer::SetReplacementMuteMask` (ADR-0133) and `NesAudioFingerprint` are not in the `core-unit-tests` source list; add them with the same dependency-injection move used on the mixer, then assert the mask mutes exactly the fingerprinted channel |
+| F5.4g Block B | "GUI/listening validation of the rendered audio" | `EnhancedSynthEngine` is already in the target: render a fixed APU state to a PCM golden and diff it. Catches regressions, does not judge timbre — the subjective half stays manual |
+| ADR-0120 §4 | the C++ E2E zip harness "does not exist"; zip/slip recipe kinds "that is a manual" | `MepRecipeOps` is already in the target; the gap is fixtures. Build zips with `Utilities/miniz.cpp` in the test itself (traversal, absolute path, symlink, nested wrapper) and assert the extraction refuses them |
+| P.7 | 16:9 stretch | Extract the destination-rectangle math out of `Core/Shared/Video/VideoRenderer.cpp` into a pure function and test it per aspect-ratio setting. This tests the geometry, **not** the pixels on screen — the visual pass stays in "genuinely manual" below |
+| P.4 | "Player cannot reach Debug without switching", Esc-while-playing | Same extraction pattern as `UI/Logic/PlayerChrome.cs`: move the Player menu/Debug gating predicate into `UI/Logic/`, consumed by the ViewModel. The Esc keyboard-block exemption lives in `Core/Shared/ShortcutKeyHandler.cpp` and needs that file added to the target |
+| F6.4b / F6.5 | "manual GUI pass"; the installer half of the F6.5 run | The "optional later" already noted above: extract the coordinator's pure decisions (dependency prompt list, hash-match verdict) from `UI/Services/CommunityPackInstallCoordinator.cs` into `UI/Logic/`. Shrinks the checklist to the file-picker step; does not remove it |
+| D13 / ADR-0148 rule 1 | "classify refusal is NOT yet confirmed — still needs one CI run" | Run it locally instead: `scripts/validate_pack_local.sh` with the `.github/ai/validate-classify.md` prompt family against a purpose-built refusal fixture. No CI run, no live host |
+| ADR-0143 | "the split stays a manual step … automating it in the workflow is deferred" | Deferred by decision, not by feasibility — the split logic is already in `scripts/`. Wiring it into `community-pack-validate.yml` is a slice, not a validation |
+
+### 2B. Blocked on the ADR-0150 decision
+
+Pure XAML wiring with no logic layer left to extract; the gating
+predicates behind them are already unit-tested, so what is unverified is
+strictly "is it on screen and does it react".
+
+- P.7 — Welcome/Continue cards on screen.
+- P.4 §6 — the Player Settings reduced tab set rendering.
+- P.5 — keyboard-arrows-as-gamepad-proxy navigation in the picker.
+- I.2 — the live highlight in `ControllerConfigWindow`.
+- I.3 — the circularity ring drawing in the Test tab.
+
+While ADR-0150 stays `proposed`, all five stay manual. Accepting it is the
+single change that would move this whole group into `UI.Tests`-shaped
+coverage; per CLAUDE.md, accepting it is also a work request, so it needs
+a human decision first.
+
+### 2C. Genuinely not automatable here
+
+| Item | Why |
+|---|---|
+| I.1, I.3 hardware items — pad GUI run, MBC7/GBA tilt UI, Linux `UpdateDevices()`, macOS pads without `extendedGamepad` | Needs the physical device and, for two of them, the other OS |
+| P.5 "toast noise judgement", F5.4g timbre/listening quality | Subjective; a test can assert the toast fires, never that it is welcome |
+| H7 / ADR-0128 GB/SMS cheat support, ADR-0004 v1-draft community review | Product decisions, not validations |
+| F6.5 `LIVE_VALIDATION_ENABLED` → `'true'` | Deferred by explicit user decision 2026-08-29 |
+| P.6 phase 2 of `catalog_update_live_check.sh` | Needs a logged-in desktop session; the script already detects and reports the headless-shell case instead of passing silently |
+| ADR-0130 `.gitignore` exclusion for new harness binaries | A process rule for authors, not a runtime behaviour |
+
+### Suggested order for wave 2
+
+1. F5.4g C item 8, then C item 9, then Block B — they reuse the Bloco I
+   harness and close the oldest listening-pending clauses.
+2. ADR-0120 §4 zip fixtures.
+3. The two extractions (P.4 Debug/Esc gating, F6.4b/F6.5 coordinator
+   decisions), both following `PlayerChrome`'s shape.
+4. P.7 viewport geometry, D13 local refusal fixture.
+5. ADR-0150: a human decision, which unblocks 2B as its own wave.
