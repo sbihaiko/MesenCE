@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>]
 //
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
@@ -15,6 +15,11 @@
 //With the "screenshot" flag it runs N seconds and saves the final frame to
 //<home>/Screenshots/ - installing a recorded pack into <home>/HdPacks/<rom>/
 //between two runs gives a with/without-replacement pair to diff (F2.3).
+//With "filter=<name>" the video filter used by the screenshot pipeline is
+//selected (none, hq2x, hq3x, hq4x, scale2x/3x/4x, xbrz2x..6x, prescale2x/3x/
+//4x/6x/8x/10x); the default is "none", i.e. a 1:1 native-resolution frame.
+//A scaling filter multiplies the PNG dimensions by its scale factor - this is
+//what scripts/check_hq4x_screenshot.sh asserts for HQ4x (P.7).
 //With the "log" flag the core message log is dumped to stdout at the end
 //(used by the F3 MEP tests to check "[MEP] ..." matching/rejection lines;
 //the MEP folder is <home>/EnhancementPacks/ inside the scratch home).
@@ -63,6 +68,7 @@ extern "C"
 	void SetNesConfig(NesConfig config);
 	void SetGameboyConfig(GameboyConfig config);
 	void SetEnhancementPackConfig(EnhancementPackConfig config);
+	void SetVideoConfig(VideoConfig config);
 	void SetMepPackEnabled(const char* containerName, bool enabled);
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
@@ -116,6 +122,7 @@ int main(int argc, char** argv)
 	bool romTiles = false;
 	bool screenshot = false;
 	bool dumpLog = false;
+	VideoFilterType videoFilter = VideoFilterType::None;
 	EnhancementPackConfig mep = {};
 	mep.BootstrapEnhancementFolder = false; //opt-in headless ("bootstrap" flag) - it writes beside the ROM
 	std::string mepDisable;
@@ -128,6 +135,30 @@ int main(int argc, char** argv)
 			romTiles = true;
 		} else if(strcmp(argv[i], "screenshot") == 0) {
 			screenshot = true;
+		} else if(strncmp(argv[i], "filter=", 7) == 0) {
+			const char* name = argv[i] + 7;
+			if(strcmp(name, "none") == 0) { videoFilter = VideoFilterType::None; }
+			else if(strcmp(name, "hq2x") == 0) { videoFilter = VideoFilterType::HQ2x; }
+			else if(strcmp(name, "hq3x") == 0) { videoFilter = VideoFilterType::HQ3x; }
+			else if(strcmp(name, "hq4x") == 0) { videoFilter = VideoFilterType::HQ4x; }
+			else if(strcmp(name, "scale2x") == 0) { videoFilter = VideoFilterType::Scale2x; }
+			else if(strcmp(name, "scale3x") == 0) { videoFilter = VideoFilterType::Scale3x; }
+			else if(strcmp(name, "scale4x") == 0) { videoFilter = VideoFilterType::Scale4x; }
+			else if(strcmp(name, "xbrz2x") == 0) { videoFilter = VideoFilterType::xBRZ2x; }
+			else if(strcmp(name, "xbrz3x") == 0) { videoFilter = VideoFilterType::xBRZ3x; }
+			else if(strcmp(name, "xbrz4x") == 0) { videoFilter = VideoFilterType::xBRZ4x; }
+			else if(strcmp(name, "xbrz5x") == 0) { videoFilter = VideoFilterType::xBRZ5x; }
+			else if(strcmp(name, "xbrz6x") == 0) { videoFilter = VideoFilterType::xBRZ6x; }
+			else if(strcmp(name, "prescale2x") == 0) { videoFilter = VideoFilterType::Prescale2x; }
+			else if(strcmp(name, "prescale3x") == 0) { videoFilter = VideoFilterType::Prescale3x; }
+			else if(strcmp(name, "prescale4x") == 0) { videoFilter = VideoFilterType::Prescale4x; }
+			else if(strcmp(name, "prescale6x") == 0) { videoFilter = VideoFilterType::Prescale6x; }
+			else if(strcmp(name, "prescale8x") == 0) { videoFilter = VideoFilterType::Prescale8x; }
+			else if(strcmp(name, "prescale10x") == 0) { videoFilter = VideoFilterType::Prescale10x; }
+			else {
+				fprintf(stderr, "unknown filter name: %s\n", name);
+				return 1;
+			}
 		} else if(strcmp(argv[i], "log") == 0) {
 			dumpLog = true;
 		} else if(strcmp(argv[i], "mep-off") == 0) {
@@ -210,6 +241,14 @@ int main(int argc, char** argv)
 	gameboy.GbcAdjustColors = false;
 	gameboy.BlendFrames = false;
 	SetGameboyConfig(gameboy);
+
+	//The screenshot pipeline (BaseVideoFilter::TakeScreenshot) runs the
+	//configured scale filter before writing the PNG, so the video config has
+	//to be pushed before the frame is captured. Every other field keeps the
+	//struct's own default (neutral pipeline: no scanlines, no rotation).
+	VideoConfig video = {};
+	video.VideoFilter = videoFilter;
+	SetVideoConfig(video);
 
 	SetEnhancementPackConfig(mep);
 	if(!mepDisable.empty()) {
