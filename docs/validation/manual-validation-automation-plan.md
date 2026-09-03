@@ -139,6 +139,12 @@ music switch may never occur. Neither replaces the unit test above.
 Everything else is an existing test, a new unit test, or an on-demand
 headless script.
 
+*Updated 2026-09-03 by wave 2*: of the two above, the cards are now
+asserted headlessly and the aspect-ratio math by a `core_unit_tests` case;
+the F6.5 flow shrank to its OS file-picker step. See "What remains
+genuinely manual after wave 2" at the end of this note for the current
+list.
+
 ## Execution order and status
 
 Steps 1-5 and 7 were executed on 2026-09-03 (four parallel workstreams);
@@ -151,8 +157,8 @@ step 6 is the only one that still needs a human at a display.
 | 3 | **P.7**: `PlayerChrome` helper in `UI/Logic/` consumed by both `MainWindowViewModel` and `MouseManager`, plus tests. HQ4x check via `headless_record` screenshot | **done** - `UI/Logic/PlayerChrome.cs` (`IsMenuVisible` + `IsCursorInMenuBand`) consumed by both call sites, 8 `UI.Tests` cases, 386 total green; `scripts/headless_record.cpp` gained a `filter=<name>` flag (it never pushed a `VideoConfig`, so no filter was reachable headlessly) and `scripts/check_hq4x_screenshot.sh` measures 256x240 -> 1024x960 with interpolated colours (11 -> 146 distinct) |
 | 4 | **F6.5**: write the manual checklist; run it once with a wired-patch audio pack; gate the result with `smoke_pack_headless.sh` | **checklist written, run pending** - `docs/validation/f65-install-acceptance-checklist.md`. Gap found: all 11 published catalog rows are `kind: "hd-legacy"` with no `deps`/`recipe`, so no live row can raise the pending-dependency prompt; Part B therefore uses a seeded catalog |
 | 5 | **P.6 real fetch**: on-demand script, log-line check | **script written, phase 1 verified live** - `scripts/catalog_update_live_check.sh`; phase 2 needs a logged-in desktop session and reports the headless-shell case instead of passing silently |
-| 6 | **Manual screen pass** for 16:9 and the cards, last | **pending (human)** - the only genuinely pixel-level items left |
-| 7 | Separately: an ADR proposing `Avalonia.Headless` for XAML wiring tests | **done** - ADR-0150, Status `proposed` (deliberately not accepted: an accepted ADR is a work request) |
+| 6 | **Manual screen pass** for 16:9 and the cards, last | **superseded by wave 2 (2026-09-03)** - the cards are asserted by `UI.HeadlessTests/PlayerHomeCardsTests.cs` and the aspect-ratio math by `core_unit_tests` Bloco N; only the on-window letterbox fit is still a human pass |
+| 7 | Separately: an ADR proposing `Avalonia.Headless` for XAML wiring tests | **done** - ADR-0150, Status `proposed` (deliberately not accepted: an accepted ADR is a work request). **Accepted by the user on 2026-09-03** and implemented the same day as wave 2's `UI.HeadlessTests/` project |
 
 ## Rejected suggestions (and why)
 
@@ -198,34 +204,55 @@ the whole replaced-BGM path inside the `core-unit-tests` target, and
 `scripts/headless_record.cpp`'s new `filter=<name>` flag makes the
 screenshot pipeline configurable from a script.
 
-| Item | Pending clause | Mechanism |
-|---|---|---|
-| F5.4g Block C item 8 | "loop-intro não repete" (listening) | `core_unit_tests` case reusing the Bloco I stub-source harness: consume past the track end and assert the read position returns to `loopPosition`, not to 0 (ADR-0134's contract) |
-| F5.4g Block C item 9 | SMB1/Zelda SFX audible | `NesSoundMixer::SetReplacementMuteMask` (ADR-0133) and `NesAudioFingerprint` are not in the `core-unit-tests` source list; add them with the same dependency-injection move used on the mixer, then assert the mask mutes exactly the fingerprinted channel |
-| F5.4g Block B | "GUI/listening validation of the rendered audio" | `EnhancedSynthEngine` is already in the target: render a fixed APU state to a PCM golden and diff it. Catches regressions, does not judge timbre — the subjective half stays manual |
-| ADR-0120 §4 | the C++ E2E zip harness "does not exist"; zip/slip recipe kinds "that is a manual" | `MepRecipeOps` is already in the target; the gap is fixtures. Build zips with `Utilities/miniz.cpp` in the test itself (traversal, absolute path, symlink, nested wrapper) and assert the extraction refuses them |
-| P.7 | 16:9 stretch | Extract the destination-rectangle math out of `Core/Shared/Video/VideoRenderer.cpp` into a pure function and test it per aspect-ratio setting. This tests the geometry, **not** the pixels on screen — the visual pass stays in "genuinely manual" below |
-| P.4 | "Player cannot reach Debug without switching", Esc-while-playing | Same extraction pattern as `UI/Logic/PlayerChrome.cs`: move the Player menu/Debug gating predicate into `UI/Logic/`, consumed by the ViewModel. The Esc keyboard-block exemption lives in `Core/Shared/ShortcutKeyHandler.cpp` and needs that file added to the target |
-| F6.4b / F6.5 | "manual GUI pass"; the installer half of the F6.5 run | The "optional later" already noted above: extract the coordinator's pure decisions (dependency prompt list, hash-match verdict) from `UI/Services/CommunityPackInstallCoordinator.cs` into `UI/Logic/`. Shrinks the checklist to the file-picker step; does not remove it |
-| D13 / ADR-0148 rule 1 | "classify refusal is NOT yet confirmed — still needs one CI run" | Run it locally instead: `scripts/validate_pack_local.sh` with the `.github/ai/validate-classify.md` prompt family against a purpose-built refusal fixture. No CI run, no live host |
-| ADR-0143 | "the split stays a manual step … automating it in the workflow is deferred" | Deferred by decision, not by feasibility — the split logic is already in `scripts/`. Wiring it into `community-pack-validate.yml` is a slice, not a validation |
+#### Wave 2 status 2026-09-03
 
-### 2B. Blocked on the ADR-0150 decision
+All nine 2A items were executed on 2026-09-03, in the suggested order
+below. Same shape as the wave-1 table: what the pending clause was, and
+what now answers it.
+
+| Item | Pending clause | Status |
+|---|---|---|
+| F5.4g Block C item 8 | "loop-intro não repete" (listening) | **done** - `scripts/core_unit_tests.cpp` **Bloco J** covers ADR-0134's loop-point rule through the new decoder-agnostic `Core/NES/HdPacks/OggLoopStream.h` (an `IOggDecoder` seam the production `OggReader` delegates to): consuming past the track end returns to `loopPosition`, not to 0, and a track without a loop point behaves exactly as before. Defect-probed - seeking to 0 instead fails 3 cases |
+| F5.4g Block C item 9 | SMB1/Zelda SFX audible | **done** - the ADR-0133 mask is now the shared header `Core/Shared/Audio/ReplacementMuteMask.h` (`FullTonalMute`/`IsMuted`/`Compute(roles)`; a template, so the mixer never includes `ChannelRoleClassifier`, as ADR-0133 requires), consumed by `NesAudioFingerprint::UpdateReplacementMuteMask` and `NesSoundMixer::GetChannelOutput`. **Bloco K** asserts that exactly the fingerprinted channel is muted and that SFX / expansion / DMC channels are not. Defect-probed. The audible end-to-end (real game, real ears) is the residue |
+| F5.4g Block B | "GUI/listening validation of the rendered audio" | **done** - **Bloco L** renders the `EnhancedSynthEngine` against the committed PCM golden `docs/specs/golden/synth/enhanced-synth-pcm.txt` (128 frames from a synthetic preset declared in the test, ±2 LSB tolerance plus a >1000 peak gate so a silent render cannot pass; cwd-relative golden per ADR-0129). Defect-probed - moving the harmony mix from 0.80 to 0.79 shifts 8 samples. Timbre judgement stays subjective; regression coverage no longer is |
+| ADR-0120 §4 | the C++ E2E zip harness "does not exist"; zip/slip recipe kinds "that is a manual" | **done** - **Bloco M** drives the whole `PrepareZip` pipeline through the new `Core/Shared/EnhancementPacks/MepZipExtract.h` (stamp/cache reuse, stale-cache wipe, zip-slip plan validation, ADR-0120 fallback-subfolder resolution, extraction), which `MepPackManager::PrepareZip` now delegates to; an `IArchive` seam keeps the real archive readers out of the test link. Covers path traversal, absolute path (incl. a Windows drive letter), nested wrapper fallback, cache-stamp reuse, stale-cache wipe, a symlink left in the cache being wiped, the empty-archive guard and the `.mep-source` stamp. Defect-probed per check. Caveat recorded in ADR-0120 §4: miniz's writer cannot author a true `S_IFLNK` entry, so symlinks are covered by their two reachable halves (a path-payload entry writes as a plain file; a pre-existing cache symlink is wiped), not by a real symlink inside an archive |
+| P.7 | 16:9 stretch | **done for the math** - the destination-size rule is extracted into `Core/Shared/Video/AspectRatioMath.h` and asserted by **Bloco N** per `VideoAspectRatio` setting (NoStretching/Auto/4:3/16:9/NTSC/PAL/Custom → the destination size; e.g. 240 rows → 256/320/427 columns). **Residue**: the on-window letterbox fit (`RendererPanel_LayoutUpdated` in `UI/Windows/MainWindow.axaml.cs`, `FullscreenForceIntegerScale`) is not in that header and stays untested geometry |
+| P.4 | "Player cannot reach Debug without switching", Esc-while-playing | **done, and it was a real defect** - `UI/Logic/PlayerDebugAccess.cs` (`IsDebugReachable(UiMode)` + `IsDebugEntryEnabled`) is consumed by the new `ApplyPlayerDebugGate` in `UI/ViewModels/MainMenuViewModel.cs`, which sets every Debug action's `IsEnabled` *before* `DebugShortcutManager.RegisterActions`; `UI.Tests/Config/PlayerDebugAccessTests.cs` covers it. The old claim was false: hiding the menu only blocked the mouse, and the debugger hotkeys still fired in Player via `DebugShortcutManager`. Gating `IsEnabled` closes both paths in Player (what PRD §6 specifies) and is a strict no-op in Advanced. The Esc-while-playing keyboard-block exemption for `ToggleOverlay` is now `Core/Shared/ShortcutKeyRules.h` + **Bloco O** |
+| F6.4b / F6.5 | "manual GUI pass"; the installer half of the F6.5 run | **done** - the coordinator's pure decisions are extracted: `UI/Logic/CommunityPackDepPlan.cs` (`Build(deps, alreadyResolvedIds, packFolderFiles, downloadsCacheFiles)` → Resolved/Pending, the hash verdict still delegated to the existing `CommunityPackDepResolver`) and `UI/Logic/PlayerDebugAccess.cs`, both consumed by `UI/Services/CommunityPackInstallCoordinator.cs`; `UI.Tests/CommunityPacks/CommunityPackDepPlanTests.cs` covers dep present/absent/partial, hash match/mismatch and a wrong-bytes-right-name negative control. **Residue**: the F6.5 run's manual surface is now only the OS file-picker step (a human choosing the user-supplied file) plus the OSD toast appearing |
+| D13 / ADR-0148 rule 1 | "classify refusal is NOT yet confirmed — still needs one CI run" | **done, locally, no CI run** - the real `.github/ai/validate-classify.md` prompt driven by the real `scripts/validate_pack_local.sh --pack-file`/`--issue-body` over the purpose-built fixture `tests/fixtures/community-pack/adr0148-rule1-unlistable/`: a lint-valid (0 errors) pack whose `<bgm>`/`<sfx>` targets are absent and whose bundled `.ips` is unwired returns `verdict=invalid`, with a comment naming the three ways to make it listable. A prompt-injection variant (bundled README + patch file name + the issue's game field) did not change the verdict. The run added an offline mode to `validate_pack_local.sh` and fixed a pre-existing `ROOT`-shadowing bug in its `run_game()`. Recorded in ADR-0148 and in the PRD D13 row |
+| ADR-0143 | "the split stays a manual step … automating it in the workflow is deferred" | **not a validation** - unchanged: deferred by decision, not by feasibility. The split logic is already in `scripts/`; wiring it into `community-pack-validate.yml` is a slice |
+
+### 2B. Was blocked on the ADR-0150 decision — unblocked and done
 
 Pure XAML wiring with no logic layer left to extract; the gating
-predicates behind them are already unit-tested, so what is unverified is
+predicates behind them were already unit-tested, so what was unverified is
 strictly "is it on screen and does it react".
 
-- P.7 — Welcome/Continue cards on screen.
-- P.4 §6 — the Player Settings reduced tab set rendering.
-- P.5 — keyboard-arrows-as-gamepad-proxy navigation in the picker.
-- I.2 — the live highlight in `ControllerConfigWindow`.
-- I.3 — the circularity ring drawing in the Test tab.
+ADR-0150 was **accepted on 2026-09-03 and implemented the same day**: the
+new `UI.HeadlessTests/` project (references `UI/UI.csproj` +
+`Avalonia.Headless(.XUnit)`; `UI.Tests` stays host-free per ADR-0123, and
+`NativeCore.cs` loads the real MesenCore when it is built and self-skips
+otherwise, so the CI job stays honest per ADR-0131/0137), a
+`make headless-ui-tests` target, and a separate `headless-ui-tests` job in
+`.github/workflows/unit-tests.yml` (ubuntu-latest,
+`-p:RuntimeIdentifier=linux-x64`; 4 run + 7 explicit skips when no core is
+present). `UI.HeadlessTests/AGENTS.md` records the scope rule: wiring
+only, never a rule `UI.Tests` could assert host-free. Two CI-critical
+groups were defect-probed (making the tab reduction unconditional fails
+`Advanced_settings_still_shows_every_tab`; renaming the highlight selector
+fails `Pressed_binding_lights_the_button_up`). Cross-RID gotcha, recorded
+in the ADR's consequences: building UI for another RID (e.g.
+`dotnet build -p:RuntimeIdentifier=linux-x64`) and then running osx-arm64
+without cleaning `UI/obj` yields CS8012 and a host crash ("No test is
+available") — clean `UI/obj` between RID switches.
 
-While ADR-0150 stays `proposed`, all five stay manual. Accepting it is the
-single change that would move this whole group into `UI.Tests`-shaped
-coverage; per CLAUDE.md, accepting it is also a work request, so it needs
-a human decision first.
+| Item | Status |
+|---|---|
+| P.7 — Welcome/Continue cards on screen | **done** - `UI.HeadlessTests/PlayerHomeCardsTests.cs`: the Welcome card is genuinely `IsOnScreen()` on a first Player boot, the Continue card on a populated recents list, and the Welcome CTA dismisses it for good. Found and fixed **issue #153** (an empty recents list collapsed the host, hiding the Welcome card); closed |
+| P.4 §6 — Player Settings reduced tab set | **done** - `UI.HeadlessTests/PlayerSettingsTabsTests.cs` (the reduced set renders in Player; Advanced still shows every tab) |
+| P.5 — keyboard-arrow navigation in the picker | **done** - `UI.HeadlessTests/PlayerPackPickerTests.cs` asserts focus really moves between choices on ArrowDown/ArrowUp. Found and fixed **issue #154** (`XYFocus.NavigationModes` was never set on the `PackPickerList` `ItemsControl`, so the arrows moved no focus); closed |
+| I.2 — live highlight in `ControllerConfigWindow` | **XAML half done** - `UI.HeadlessTests/ControllerHighlightTests.cs`: a `KeyBindingButton` with `Highlighted = true` gains the `highlighted` class and the #3388CC/#55AAEE restyle, and releasing restores it. **Residue**: the polling half (`InputApi` + a physically pressed key) needs a real pad/keypress and stays hardware |
+| I.3 — circularity ring in the Test tab | **markup done** - `UI.HeadlessTests/GamepadTestTabTests.cs`: selecting the Test tab realizes one section per pad, the deadzone ring and live dot take their size/offset from the view-model, and the circularity readout replaces its hint once measured. **Residue**: the physical pad end-to-end stays hardware |
 
 ### 2C. Genuinely not automatable here
 
@@ -238,12 +265,30 @@ a human decision first.
 | P.6 phase 2 of `catalog_update_live_check.sh` | Needs a logged-in desktop session; the script already detects and reports the headless-shell case instead of passing silently |
 | ADR-0130 `.gitignore` exclusion for new harness binaries | A process rule for authors, not a runtime behaviour |
 
-### Suggested order for wave 2
+### Order followed by wave 2 (executed 2026-09-03)
 
 1. F5.4g C item 8, then C item 9, then Block B — they reuse the Bloco I
-   harness and close the oldest listening-pending clauses.
-2. ADR-0120 §4 zip fixtures.
+   harness and close the oldest listening-pending clauses. **Done**
+   (Blocos J, K, L).
+2. ADR-0120 §4 zip fixtures. **Done** (Bloco M + `MepZipExtract.h`).
 3. The two extractions (P.4 Debug/Esc gating, F6.4b/F6.5 coordinator
-   decisions), both following `PlayerChrome`'s shape.
-4. P.7 viewport geometry, D13 local refusal fixture.
+   decisions), both following `PlayerChrome`'s shape. **Done**
+   (`PlayerDebugAccess.cs` + `ShortcutKeyRules.h`/Bloco O;
+   `CommunityPackDepPlan.cs`).
+4. P.7 viewport geometry, D13 local refusal fixture. **Done**
+   (`AspectRatioMath.h`/Bloco N; the ADR-0148 rule-1 fixture).
 5. ADR-0150: a human decision, which unblocks 2B as its own wave.
+   **Accepted and implemented the same day** — 2B is done, see above.
+
+### What remains genuinely manual after wave 2
+
+- **16:9** — the on-window letterbox fit (`RendererPanel_LayoutUpdated`,
+  `FullscreenForceIntegerScale`). The aspect-ratio math itself is Bloco N.
+- **F6.5** — the OS file-picker step (a human choosing the user-supplied
+  file) and the OSD toast appearing. Everything upstream of the picker is
+  now host-free and unit-tested.
+- **Hardware** — a physical pad or keypress: I.2's polling half, I.3's
+  end-to-end, and the 2C items below.
+- **Subjective audio** — timbre quality (F5.4g Block B), the audible
+  SFX-during-OGG end-to-end (Block C item 9), the P.5 toast-noise
+  judgement.
