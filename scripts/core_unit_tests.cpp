@@ -13,7 +13,8 @@
 //read-only Python reference interpreter (scripts/mep_recipe.py apply) for a
 //byte-for-byte parity check, so both interpreters MUST agree on this fixture
 //forever after. No framework: cases print PASS/FAIL, exit is non-zero on any
-//failure (see roles_probe.cpp). Run from the repo root so the golden paths
+//failure (see roles_probe.cpp). Bloco I (ADR-0142) exercises OggMixer's BGM
+//crossfade through IOggSource stubs - no stb_vorbis, no Emulator. Run from the repo root so the golden paths
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
@@ -23,6 +24,8 @@
 #include "Shared/EnhancementPacks/MepContentId.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Video/BorderLayout.h"
+#include "NES/HdPacks/OggFadeRamp.h"
+#include "NES/HdPacks/OggMixer.h"
 #include "Utilities/Base64.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/JsonReader.h"
@@ -1189,6 +1192,199 @@ namespace
 	}
 }
 
+//--- Bloco I: OggMixer BGM crossfade ramp (ADR-0142) -------------------------
+//The shipped fade was block-stepped: MixAudio computed one uint8_t volume per
+//call and applied it to the whole block, so at the real 735-sample block size
+//the 1764-sample window was 2-3 steps of ~40% - a quieter click, not a
+//crossfade (https://github.com/sbihaiko/MesenCE/issues/151). The volume is now
+//interpolated per sample (OggFadeRamp::MixSamples, the same kernel OggReader
+//uses). The mixer is driven here through IOggSource stubs of constant
+//amplitude, so the case needs no stb_vorbis, no VirtualFile and no Emulator.
+namespace
+{
+	constexpr uint32_t kFadeSamples = 1764; //OggMixer::kBgmFadeSamples
+	constexpr uint32_t kBlockSamples = 735; //one NTSC frame at 44.1kHz - the real MixAudio block
+	constexpr double kMixVolume = 128.0;    //OggMixer::Reset's default _bgmVolume
+	constexpr double kAmpA = 6000.0;
+	constexpr double kAmpB = 9000.0;
+
+	//A source of constant amplitude that mixes through the production ramp
+	//kernel and, like OggReader, produces nothing on run-ahead frames.
+	class ConstantOggSource : public IOggSource
+	{
+	private:
+		int16_t _amplitude;
+		const bool* _runAhead;
+		std::vector<int16_t> _scratch;
+
+	public:
+		uint32_t MixedFrames = 0;
+
+		ConstantOggSource(int16_t amplitude, const bool* runAhead) : _amplitude(amplitude), _runAhead(runAhead) {}
+
+		bool IsPlaybackOver() override { return false; }
+		void SetSampleRate(int sampleRate) override {}
+		void SetLoopFlag(bool loop) override {}
+		uint32_t GetOffset() override { return MixedFrames; }
+
+		void ApplySamples(int16_t* buffer, size_t sampleCount, uint8_t volumeStart, uint8_t volumeEnd) override
+		{
+			if(*_runAhead) {
+				return;
+			}
+			_scratch.assign(sampleCount * 2, _amplitude);
+			OggFadeRamp::MixSamples(buffer, _scratch.data(), (uint32_t)sampleCount, (uint32_t)sampleCount, volumeStart, volumeEnd);
+			MixedFrames += (uint32_t)sampleCount;
+		}
+	};
+
+	//Expected mixed level of one source at fade factor `fade` (the mixer scales
+	//by _bgmVolume, the source by volume/255).
+	double FadedLevel(double amplitude, double fade)
+	{
+		return amplitude * (kMixVolume * fade) / 255.0;
+	}
+
+	struct CrossfadeRun
+	{
+		bool RunAhead = false;
+		std::vector<int16_t> Left;
+		std::vector<std::shared_ptr<ConstantOggSource>> Sources;
+
+		OggMixer::SourceFactory Factory()
+		{
+			return [this](string filename, bool loop, uint32_t sampleRate, uint32_t startOffset, uint32_t loopPosition) -> shared_ptr<IOggSource> {
+				auto source = std::make_shared<ConstantOggSource>((int16_t)(filename == "A" ? kAmpA : kAmpB), &RunAhead);
+				Sources.push_back(source);
+				return source;
+			};
+		}
+
+		void MixBlock(OggMixer& mixer)
+		{
+			std::vector<int16_t> out(kBlockSamples * 2, 0);
+			mixer.MixAudio(out.data(), kBlockSamples, 44100);
+			for(uint32_t f = 0; f < kBlockSamples; f++) {
+				Left.push_back(out[f * 2]);
+			}
+		}
+	};
+
+	//Records A fading in, A->B crossfading, then B fading out on StopBgm.
+	//`runAheadBlock` (when >= 0) inserts one run-ahead block before that block
+	//index of the fade-in, which must produce silence and must not advance the
+	//fade counters.
+	void RecordCrossfade(CrossfadeRun& run, int runAheadBlock)
+	{
+		OggMixer mixer([&run]() { return run.RunAhead; }, run.Factory());
+		mixer.Reset(44100);
+
+		mixer.Play("A", false, 0, 0);
+		for(int i = 0; i < 5; i++) {
+			if(i == runAheadBlock) {
+				run.RunAhead = true;
+				std::vector<int16_t> out(kBlockSamples * 2, 0);
+				mixer.MixAudio(out.data(), kBlockSamples, 44100);
+				bool silent = true;
+				for(int16_t sample : out) {
+					silent = silent && sample == 0;
+				}
+				Check(silent, "BlocoI: a run-ahead block produces no audio");
+				run.RunAhead = false;
+			}
+			run.MixBlock(mixer);
+		}
+		mixer.Play("B", false, 0, 0);
+		for(int i = 0; i < 5; i++) {
+			run.MixBlock(mixer);
+		}
+		mixer.StopBgm();
+		for(int i = 0; i < 5; i++) {
+			run.MixBlock(mixer);
+		}
+	}
+
+	void TestBgmCrossfadeIsPerSampleRamp()
+	{
+		CrossfadeRun run;
+		RecordCrossfade(run, -1);
+		const std::vector<int16_t>& left = run.Left;
+		const size_t switchAt = 5 * kBlockSamples;
+		const size_t stopAt = 10 * kBlockSamples;
+
+		//(a) No sample-to-sample jump larger than the two linear ramps can
+		//produce. The old block-stepped code jumped ~1250 here (0.42 * a full
+		//block volume step); the ramp's own slope is under 5.
+		double maxJump = (kAmpA + kAmpB) * (kMixVolume / 255.0) / kFadeSamples + 2.0;
+		int worstJump = 0;
+		size_t worstAt = 0;
+		for(size_t i = 1; i < left.size(); i++) {
+			int delta = std::abs((int)left[i] - (int)left[i - 1]);
+			if(delta > worstJump) {
+				worstJump = delta;
+				worstAt = i;
+			}
+		}
+		Check(worstJump <= maxJump, "BlocoI: no sample-to-sample jump beyond the linear ramp slope",
+			"worst " + std::to_string(worstJump) + " at " + std::to_string(worstAt) + ", allowed " + std::to_string(maxJump));
+
+		//(b) The envelope tracks the expected linear curves. Tolerance covers
+		//the 8-bit quantisation of the per-block endpoint volumes: one LSB of
+		//volume is amplitude/255 of level (~0.8% of the loudest source here,
+		//against the ~1250 step the block-stepped fade produced).
+		double tolerance = kAmpB / 255.0 + 2.0;
+		double worstFadeIn = 0;
+		for(uint32_t t = 0; t < kFadeSamples; t++) {
+			worstFadeIn = std::max(worstFadeIn, std::abs(left[t] - FadedLevel(kAmpA, (double)t / kFadeSamples)));
+		}
+		Check(worstFadeIn <= tolerance, "BlocoI: fade-in follows the linear 0->1 ramp over kBgmFadeSamples",
+			"worst " + std::to_string(worstFadeIn) + " > " + std::to_string(tolerance));
+
+		Check(std::abs(left[switchAt - 1] - FadedLevel(kAmpA, 1.0)) <= tolerance,
+			"BlocoI: fade-in settles at the full BGM volume", std::to_string(left[switchAt - 1]));
+
+		double worstCrossfade = 0;
+		for(uint32_t t = 0; t < kFadeSamples; t++) {
+			double u = (double)t / kFadeSamples;
+			double expected = FadedLevel(kAmpA, 1.0 - u) + FadedLevel(kAmpB, u);
+			worstCrossfade = std::max(worstCrossfade, std::abs(left[switchAt + t] - expected));
+		}
+		Check(worstCrossfade <= 2 * tolerance, "BlocoI: a switch crossfades - the two linear ramps overlap and sum",
+			"worst " + std::to_string(worstCrossfade) + " > " + std::to_string(2 * tolerance));
+
+		double worstFadeOut = 0;
+		for(uint32_t t = 0; t < kFadeSamples; t++) {
+			worstFadeOut = std::max(worstFadeOut, std::abs(left[stopAt + t] - FadedLevel(kAmpB, 1.0 - (double)t / kFadeSamples)));
+		}
+		Check(worstFadeOut <= tolerance, "BlocoI: StopBgm follows the linear 1->0 ramp over kBgmFadeSamples",
+			"worst " + std::to_string(worstFadeOut) + " > " + std::to_string(tolerance));
+
+		//(c) Silence once the stop window is over.
+		bool silent = true;
+		for(size_t i = stopAt + kFadeSamples; i < left.size(); i++) {
+			silent = silent && left[i] == 0;
+		}
+		Check(silent, "BlocoI: nothing is mixed after the stop fade window");
+	}
+
+	void TestBgmCrossfadeIgnoresRunAheadBlocks()
+	{
+		CrossfadeRun plain;
+		RecordCrossfade(plain, -1);
+
+		//Same run with one extra run-ahead block in the middle of the fade-in:
+		//it must be silent (asserted inside RecordCrossfade) and must leave the
+		//fade counters and the sources' positions untouched, so every real
+		//block that follows is sample-identical to the plain run.
+		CrossfadeRun withRunAhead;
+		RecordCrossfade(withRunAhead, 1);
+
+		Check(plain.Left == withRunAhead.Left, "BlocoI: a run-ahead block advances neither the fade counters nor the sources");
+		Check(plain.Sources.size() == 2 && withRunAhead.Sources.size() == 2 && plain.Sources[0]->MixedFrames == withRunAhead.Sources[0]->MixedFrames,
+			"BlocoI: the run-ahead block consumed no source samples");
+	}
+}
+
 int main()
 {
 	TestSilentChannelNotSfx();
@@ -1240,6 +1436,9 @@ int main()
 	TestBorderViewportClamping();
 	TestBorderBlendOver();
 	TestBorderCompositeOrdering();
+
+	TestBgmCrossfadeIsPerSampleRamp();
+	TestBgmCrossfadeIgnoresRunAheadBlocks();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

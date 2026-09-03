@@ -68,7 +68,40 @@ path (never by run-ahead frames):
   the click-free switch/stop verification on a real pack is recorded as
   manual-pending (listening validation — loop-intro, SFX audibility, no click
   on switch), not a blocker for the acceptance.
-- Implementation state (verified 2026-09-01): `Core/NES/HdPacks/OggMixer.h:19`
+- **Defect found and fixed 2026-09-03 (bug
+  https://github.com/sbihaiko/MesenCE/issues/151).** The shipped fade was
+  block-stepped, not a ramp: `MixAudio` computed one `fadeIn`/`fadeOut` factor
+  per call and handed `ApplySamples` a single `uint8_t` volume for the whole
+  block. `SoundMixer::PlayAudioBuffer` calls `MixAudio` once per emulated frame
+  (~735 samples at 44.1 kHz / 60 Hz), so a `kBgmFadeSamples = 1764` window was
+  2-3 volume steps of roughly 40 % each — a quieter click, not a crossfade, and
+  not the "no click at the boundary" contract this ADR states. Decision 3's
+  "ramps 0→1 over the window" is unchanged and `kBgmFadeSamples` stays 1764;
+  what changed is *where* the ramp is applied: the volume is now interpolated
+  **per sample inside the block**. `MixAudio` passes the block's start **and**
+  end factor down (`OggFadeRamp::MixSamples`, 16.16 fixed point so the ramp is
+  finer than its 8-bit endpoints); when the window ends mid-block the block is
+  split so the ramp finishes exactly at `kBgmFadeSamples` — the fade-in's
+  remainder mixes at the steady volume, the fade-out's remainder is not mixed
+  at all. A block with no fade in progress still takes the constant-volume fast
+  path, so a non-fading mix costs what it did before.
+- Consequence of the fix on testability: `OggMixer`/`OggReader` no longer take
+  a concrete `Emulator`. The run-ahead probe is an injected
+  `std::function<bool()>` and the mixer drives its voices through the new
+  `IOggSource` interface, both bound at the single real construction site
+  (`HdAudioDevice`). That makes the crossfade linkable into the makefile's
+  `core-unit-tests` target, which deliberately links neither `Emulator` nor
+  stb_vorbis. Public behaviour is unchanged.
+- The "click-free listening verification" is therefore no longer the only
+  evidence: `scripts/core_unit_tests.cpp` Bloco I drives the mixer with two
+  constant-amplitude `IOggSource` stubs in real 735-sample blocks (play A →
+  switch to B → `StopBgm`) and asserts no sample-to-sample jump beyond the two
+  linear ramps' slope, that each envelope tracks its linear curve within the
+  8-bit volume quantisation, silence after the stop window, and that a
+  run-ahead block advances neither the fade counters nor the sources. Against
+  the pre-fix block-stepped code those assertions fail by ~1900 units.
+- Implementation state (verified 2026-09-01; line numbers predate the
+  2026-09-03 ramp fix): `Core/NES/HdPacks/OggMixer.h:19`
   (`kBgmFadeSamples = 1764`), `OggMixer.cpp:47-56` (`StopBgm` moves `_bgm` into
   `_bgmFadeOut`), `:117-118` (`Play` does the same on a switch), `:142-164`
   (fade-in/fade-out ramps gated on `!IsRunAheadFrame()`), `Reset` clears both
