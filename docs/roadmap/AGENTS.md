@@ -26,7 +26,7 @@ one of the two Parts.
 ## Ownership
 
 Owned with `docs/` (see parent `docs/AGENTS.md`). Does not own specs
-(`docs/specs/`), ADRs (`.dev-squad/adr/`), or runtime behavior.
+(`docs/specs/`), ADRs (`docs/adr/`), or runtime behavior.
 
 ## Local Contracts
 
@@ -44,10 +44,10 @@ Owned with `docs/` (see parent `docs/AGENTS.md`). Does not own specs
   or Super Game Boy. SNES **gamepads** (`SnesController` and related port
   devices) stay as input for the remaining cores.
 - Decisions are not made in a PRD: an architecture/trade-off choice goes
-  through an ADR (`/dev-squad:adr`), and the relevant Part's ADR map
+  through an ADR (the `adr` skill), and the relevant Part's ADR map
   points at it.
-- One dev-squad run per slice; never feed a whole phase or the whole PRD to
-  a single run.
+- One slice per task; never hand a whole phase or the whole PRD to a single
+  run — slice it and settle the slice's ADRs first.
 - Prose is en-US (CLAUDE.md); quoted GitHub Project Status option names
   stay verbatim.
 

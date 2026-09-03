@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AC-8: .dev-squad/adr/0120-*.md states the provenance of the
+# AC-8: docs/adr/0120-*.md states the provenance of the
 # TasticHacks/Contra80s zip-structure claim (citing issue #3 and/or the
 # release source it was described from), explicitly distinguishes what was
 # independently verified by reading the current source (PrepareZip /
@@ -11,14 +11,14 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ADR_GLOB=("$REPO_ROOT"/.dev-squad/adr/0120-*.md)
+ADR_GLOB=("$REPO_ROOT"/docs/adr/0120-*.md)
 
 fail() {
   echo "FAIL: $1" >&2
   exit 1
 }
 
-[ -e "${ADR_GLOB[0]}" ] || fail "no .dev-squad/adr/0120-*.md file found"
+[ -e "${ADR_GLOB[0]}" ] || fail "no docs/adr/0120-*.md file found"
 [ "${#ADR_GLOB[@]}" -eq 1 ] || fail "expected exactly 1 file matching 0120-*.md, found ${#ADR_GLOB[@]}: ${ADR_GLOB[*]}"
 
 ADR="${ADR_GLOB[0]}"

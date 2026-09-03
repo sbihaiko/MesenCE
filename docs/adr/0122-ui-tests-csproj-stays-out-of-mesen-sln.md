@@ -24,7 +24,7 @@ of `Mesen.sln`"), and `.github/workflows/unit-tests.yml` runs
 `dotnet test UI.Tests/UI.Tests.csproj --nologo` on `ubuntu-latest`, so sln
 membership is not needed for CI. ADR-0060 and ADR-0066 asked for exactly this:
 promote the `UI/AGENTS.md` paragraph to a numbered ADR because the repo keeps a
-real ADR register (`.dev-squad/adr/`) and `UI/Logic/MepZipValidator.cs` already
+real ADR register (`docs/adr/`) and `UI/Logic/MepZipValidator.cs` already
 cites ADR-0049, so a durable cross-cutting trade-off living only in a directory
 `AGENTS.md` was inconsistent.
 

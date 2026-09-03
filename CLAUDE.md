@@ -2,12 +2,13 @@
 
 ## Documentation and user-facing message language
 
-All **project documentation** (files under `docs/`, `README.md`,
-`CONTRIBUTING.md`, `MIGRATION.md`, `docs/specs/*.md`, and any other
-versioned `.md` aimed at external contributors), all **instruction files
-for Claude/agents** (this file, `AGENTS.md` at every level, dev-squad
-memory prose), and all **messages aimed at users/collaborators** (Issue and
-PR titles/bodies/comments, comments posted by GitHub Actions workflows,
+All **project documentation** (files under `docs/`, including the ADR
+register `docs/adr/`, `README.md`, `CONTRIBUTING.md`, `MIGRATION.md`,
+`docs/specs/*.md`, and any other versioned `.md` aimed at external
+contributors), all **instruction files for Claude/agents** (this file,
+`AGENTS.md` at every level, `.claude/skills/*/SKILL.md`), and all
+**messages aimed at users/collaborators** (Issue and PR
+titles/bodies/comments, comments posted by GitHub Actions workflows,
 Issue Form text) MUST be written in **en-US** — regardless of the language
 used in conversation with Claude, which stays pt-br per the user's
 preference for the chat itself.
@@ -16,11 +17,7 @@ This does not apply to literal string values that are tied to live external
 state and must match it exactly — e.g. the GitHub Project 3 Status field's
 configured option names (see below): those stay whatever they are actually
 configured as, quoted verbatim in docs, never "translated" in a way that
-would desync the doc from the real field. The same applies to the field
-labels of dev-squad memory entries (`.dev-squad/memory/L-*.md`):
-`Pedido`, `Diagnóstico`, `Por que falhamos / como evitar`, `Escopo`,
-`Reflexão-de` are literals parsed by the plugin and MUST stay as-is — only
-the prose *values* after them are written in en-US.
+would desync the doc from the real field.
 
 ## Source code comment and in-code text language
 
@@ -48,44 +45,53 @@ the developer-facing `usage:` messages in `scripts/headless_record.cpp`
 and `scripts/roles_probe.cpp` — and were fixed; a full accent-based scan
 finds no remaining pt-BR in source).
 
-## Architecture Decision Records (`.dev-squad/adr/`)
+## Architecture Decision Records (`docs/adr/`)
 
-- Architecture/trade-off decisions go through an ADR via `/dev-squad:adr`;
-  bugs go to the bug board (below), never the other way round.
-- ADRs are NOT loaded into a Claude Code session automatically — only the
-  dev-squad runner injects them (accepted ones, at Scout/Spec). So, before
-  designing or changing anything in MEP/HD Pack storage and discovery,
-  audio export/replacement, the bootstrap builder, unit-test/CI wiring or
-  the community-pack pipeline, list the accepted ADRs
-  (`grep -l "^- Status: accepted" .dev-squad/adr/*.md`) and read the ones
-  whose title touches the area; treat them as binding unless the user
-  decides otherwise (then write/amend an ADR, don't silently diverge).
-  When a decision conflicts with an accepted ADR, say so before coding.
-- The dev-squad plugin recognises exactly three status tokens —
-  `proposed`, `accepted`, `superseded` — and injects **only `accepted`**
-  ADRs into runs. There is no `rejected`: a retired ADR is marked
+- Architecture/trade-off decisions go through an ADR — run the `adr` skill
+  (`/adr`), which allocates the next id and writes the file; bugs go to the
+  bug board (below), never the other way round.
+- The register is `docs/adr/NNNN-<kebab-title>.md`, versioned like any
+  other doc and owned by `docs/AGENTS.md`. It used to live in
+  `.dev-squad/adr/` (a plugin-managed directory); the plugin is gone and
+  the ADR convention is now enforced by this file, the `adr` skill and
+  `scripts/checks/verify_adr_refs.py` alone. Old commits, run logs and
+  external links may still say `.dev-squad/adr/` — same files, moved on
+  2026-09-03 with history preserved.
+- Every session starts with an **index** of the accepted ADRs (id, title,
+  date) injected by the `SessionStart` hook in `.claude/settings.json`,
+  which runs `python3 scripts/adr_index.py`. The index is titles only —
+  before designing or changing anything in MEP/HD Pack storage and
+  discovery, audio export/replacement, the bootstrap builder,
+  unit-test/CI wiring or the community-pack pipeline, **read** the bodies
+  of the ones whose title touches the area (`docs/adr/NNNN-*.md`). Treat
+  them as binding unless the user decides otherwise (then write/amend an
+  ADR, don't silently diverge). When a decision conflicts with an accepted
+  ADR, say so before coding.
+- There are exactly three status tokens — `proposed`, `accepted`,
+  `superseded`. There is no `rejected`: a retired ADR is marked
   `superseded` with a "Superseded by" line naming its successor (or the
-  reason, when it has none).
+  reason, when it has none). Only `accepted` ones reach the session index.
 - `accepted` means "decided" — either already reflected in the code/docs,
   or decided and listed as a slice in
   `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (single consolidated
   PRD; Part A = pack/core, Part B = player GUI); each ADR's Status line
-  says which. An ADR whose Decision is
-  still an open question or an either/or stays `proposed` until a human
-  picks — the autonomous dev-squad task implements accepted ADRs on its
-  own, so accepting one is a request for work; stop that daemon
-  (`.claude/scheduled_tasks.lock`) while another agent works on the same
-  ADR.
+  says which. An ADR whose Decision is still an open question or an
+  either/or stays `proposed` until a human picks. Accepting one is a
+  request for work, not a note — say so and get a go-ahead before
+  implementing it in the same turn it is accepted.
 - ADR ids are never reused (ADR-0035): ids 0009–0010, 0015–0020 and
   0022–0032 are permanently retired.
-- Review findings that the dev-squad run auto-mints as ADRs (truncated
-  sentence titles, placeholder sections) are not decisions; they are
-  consolidated into one real ADR per topic and then deleted (their text
-  lives in git history only) — ADR-0122–0137 are the 2026-08-27
-  consolidation of the former ADR-0053–0119; each lists its sources in a
-  "Consolidates:" line.
+- Machine-generated review findings are not decisions. ADR-0122–0137 are
+  the 2026-08-27 consolidation of the former ADR-0053–0119 (auto-minted
+  findings with truncated titles and placeholder sections, folded into one
+  real ADR per topic and then deleted — their text lives in git history
+  only); each lists its sources in a "Consolidates:" line. Don't re-mint
+  that shape: one ADR per decision, written by hand.
 - ADR prose is en-US, like every other instruction file; quoted GitHub
   Project Status option names stay verbatim.
+- Verification: `python3 scripts/checks/verify_adr_refs.py` (wired into
+  `make doc-checks`) fails when any cited `ADR-NNNN` has no
+  `docs/adr/NNNN-*.md`.
 
 ## Bug tracking (GitHub Project)
 
@@ -94,11 +100,11 @@ Tracker" board: https://github.com/users/sbihaiko/projects/1
 
 ### When to file one
 
-- You (or a dev-squad subagent) find a real, reproducible bug that is
+- You (or a subagent) find a real, reproducible bug that is
   **out of scope for the current task** — don't fix it in passing, file it.
 - The user explicitly asks to "open a bug" / "file an issue".
 - Don't use this for architecture/trade-off decisions — those still go
-  through an ADR via `/dev-squad:adr` (`.dev-squad/adr/`). The board is only
+  through an ADR via the `adr` skill (`docs/adr/`). The board is only
   for actionable bugs, not design decisions.
 
 ### How to file one

@@ -69,7 +69,7 @@ reworded to say the scripts are manual and listing which command runs each.
   pushing (see Clarifications).
 - `check-file-loc.sh` gains an explicit list of guarded files in the makefile,
   which is where the per-file caps stop being folklore.
-- Future dev-squad runs that add a hygiene script have a concrete wiring step
+- Future changes that add a hygiene script have a concrete wiring step
   to verify in their acceptance criteria, instead of a prose claim.
 
 ## Alternatives

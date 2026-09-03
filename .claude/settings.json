@@ -1,0 +1,17 @@
+{
+  "enabledPlugins": {
+    "dev-squad@dev-squad-marketplace": false
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/adr_index.py"
+          }
+        ]
+      }
+    ]
+  }
+}

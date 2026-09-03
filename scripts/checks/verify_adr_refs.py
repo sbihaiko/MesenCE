@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ADR reference integrity — every `ADR-NNNN` cited in docs resolves to a file.
 
-Scans `.dev-squad/adr/*.md`, `docs/**/*.md`, `.github/**/*.md`, `CLAUDE.md`
-and every `AGENTS.md` for `ADR-NNNN` references and fails when `NNNN` has no
-`.dev-squad/adr/NNNN-*.md` file. Motivation: commit b0b334b0 (2026-08-28)
+Scans `docs/**/*.md` (the ADR register itself included), `.github/**/*.md`,
+`CLAUDE.md` and every `AGENTS.md` for `ADR-NNNN` references and fails when it has no
+`docs/adr/NNNN-*.md` file. Motivation: commit b0b334b0 (2026-08-28)
 deleted four accepted ADRs (0130/0131/0136/0137) as a side effect of an
 unrelated fix and nothing noticed for four days (PRD slice D1).
 
@@ -20,7 +20,7 @@ Two classes of ids intentionally have no file and are tolerated in context:
   that carries its own `- Consolidates:` header line — those ADRs discuss
   their sources by id throughout.
 
-`.dev-squad/runs/` and `roms/` are skipped (unversioned historical output).
+`roms/` is skipped (unversioned local content).
 
 Usage: python3 scripts/checks/verify_adr_refs.py
 Exit 0 on PASS, 1 on any dangling reference (each reported as file:line).
@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-ADR_DIR = ROOT / ".dev-squad/adr"
+ADR_DIR = ROOT / "docs/adr"
 
 RETIRED_IDS = (
     {f"{n:04d}" for n in range(9, 11)}
@@ -41,7 +41,7 @@ CONSOLIDATED_IDS = {f"{n:04d}" for n in range(53, 120)} | {"0045", "0046", "0048
 RETIRED_CONTEXT = re.compile(r"former|retired|consolidat|superseded|deleted", re.IGNORECASE)
 CONSOLIDATES_HEADER = re.compile(r"^- Consolidates:", re.MULTILINE)
 ADR_REF = re.compile(r"ADR-(\d{4})")
-SKIP_PARTS = {".dev-squad/runs", "roms"}
+SKIP_PARTS = {"roms"}
 
 
 def known_ids():
@@ -55,7 +55,7 @@ def known_ids():
 
 def candidate_files():
     seen = set()
-    for pattern in (".dev-squad/adr/*.md", "docs/**/*.md", ".github/**/*.md",
+    for pattern in ("docs/**/*.md", ".github/**/*.md",
                     "CLAUDE.md", "**/AGENTS.md"):
         for p in ROOT.glob(pattern):
             rel = p.relative_to(ROOT).as_posix()
@@ -76,7 +76,7 @@ def scan(failures):
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        consolidating_adr = rel.startswith(".dev-squad/adr/") and bool(
+        consolidating_adr = rel.startswith("docs/adr/") and bool(
             CONSOLIDATES_HEADER.search(text))
         for lineno, line in enumerate(text.splitlines(), 1):
             for m in ADR_REF.finditer(line):
@@ -95,7 +95,7 @@ def scan(failures):
                         "former/retired/consolidated/superseded/deleted context")
                     continue
                 failures.append(
-                    f"{rel}:{lineno}: ADR-{num} has no .dev-squad/adr/{num}-*.md")
+                    f"{rel}:{lineno}: ADR-{num} has no docs/adr/{num}-*.md")
 
 
 def main():
@@ -106,7 +106,7 @@ def main():
         for f in failures:
             print(f"  {f}")
         return 1
-    print("PASS verify_adr_refs: every cited ADR-NNNN resolves to .dev-squad/adr/")
+    print("PASS verify_adr_refs: every cited ADR-NNNN resolves to docs/adr/")
     return 0
 
 

@@ -263,7 +263,7 @@ doc-checks: check-manifest
 	./scripts/checks/verify_status_kind_parity.sh
 	./scripts/checks/verify_synthetic_nrom.sh
 	#ADR reference integrity (PRD slice D1): every ADR-NNNN cited in docs/ADRs/
-	#AGENTS.md/CLAUDE.md must resolve to .dev-squad/adr/NNNN-*.md.
+	#AGENTS.md/CLAUDE.md must resolve to docs/adr/NNNN-*.md.
 	python3 scripts/checks/verify_adr_refs.py
 	#Unit tests for the community-pack pipeline's leaf modules (stdlib-only,
 	#no network/PAT/ROM): the MEI/recipe/content-id/identity/meta/rules

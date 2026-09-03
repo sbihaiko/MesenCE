@@ -199,7 +199,7 @@ claudei.sh
 # graphify - generated knowledge graph output (regenerable, machine-local paths)
 graphify-out/
 
-# git worktrees (dev-squad task branches)
+# git worktrees (task branches)
 .worktrees/
 
 scripts/headless_record
@@ -216,11 +216,9 @@ scripts/core_unit_tests
 pack_download.bin
 mep_lint_output.txt
 
-# >>> dev-squad shared team assets (managed — do not edit) >>>
+# Claude Code: local session state is machine-local, but the project's own
+# agent config (the ADR skill, the accepted-ADR index hook, permissions) is
+# shared. ADRs themselves live in docs/adr/, versioned like any other doc.
 .claude/*
-!.claude/guardrails/
-!.claude/dev-squad.local.md
-.dev-squad/*
-!.dev-squad/adr/
-!.dev-squad/memory/
-# <<< dev-squad shared team assets (managed) <<<
+!.claude/settings.json
+!.claude/skills/

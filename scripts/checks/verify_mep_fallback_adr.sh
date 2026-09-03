@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AC-7: .dev-squad/adr/0120-*.md documents the zip subfolder fallback as:
+# AC-7: docs/adr/0120-*.md documents the zip subfolder fallback as:
 #   (a) an additive, lowest-priority extension of ADR-0040/ADR-0049's
 #       discovery precedence (not a reordering of it);
 #   (b) a pure, I/O-free function that PrepareZip consults, with
@@ -12,14 +12,14 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ADR_GLOB=("$REPO_ROOT"/.dev-squad/adr/0120-*.md)
+ADR_GLOB=("$REPO_ROOT"/docs/adr/0120-*.md)
 
 fail() {
   echo "FAIL: $1" >&2
   exit 1
 }
 
-[ -e "${ADR_GLOB[0]}" ] || fail "no .dev-squad/adr/0120-*.md file found"
+[ -e "${ADR_GLOB[0]}" ] || fail "no docs/adr/0120-*.md file found"
 [ "${#ADR_GLOB[@]}" -eq 1 ] || fail "expected exactly 1 file matching 0120-*.md, found ${#ADR_GLOB[@]}: ${ADR_GLOB[*]}"
 
 ADR="${ADR_GLOB[0]}"

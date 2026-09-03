@@ -511,7 +511,13 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `make doc-checks` as its own step on the Linux and macOS build jobs,
   before "Build Mesen". `check-f5-4b-doc.sh` was deleted on 2026-08-27
   together with the plan header it guarded.
-- `checks/` - per-deliverable acceptance-criteria verifiers for dev-squad
+- `adr_index.py` - prints one line per `accepted` ADR (id, date, title) from
+  `docs/adr/`. Run by the `SessionStart` hook in `.claude/settings.json` so
+  every session knows which decisions are binding without loading 60 files;
+  `--all` groups the proposed/superseded ones too. Never fails a session: a
+  missing register prints a note and exits 0. Keep the output one line per
+  ADR — it is injected into every session's context.
+- `checks/` - per-deliverable acceptance-criteria verifiers
   runs (one script per AC, invoked directly by its AC's Verification
   command). Same PASS/FAIL-and-exit-code convention as the top-level shell
   checks above; no shared test framework. As of 2026-08-29 the structural
@@ -562,7 +568,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   expression (`cancel-in-progress` parsed as
   `${{ github.event_name == 'issues' }}`, not a comment grep).
   `verify_mep_fallback_adr.sh` (AC-7 of the MEP zip-fallback task) checks
-  `.dev-squad/adr/0120-*.md` documents the subfolder fallback as an additive
+  `docs/adr/0120-*.md` documents the subfolder fallback as an additive
   last-priority extension of ADR-0040/ADR-0049's precedence, a pure I/O-free
   function `PrepareZip` consults with its `outFolder` contract held fixed,
   the C++ (name match) vs C#/Python (structural match) asymmetry with its
@@ -614,6 +620,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `make roles-probe` / `make capture-tool` / `make spike-sound-driver` -
   each depends on `make core` first.
 - `python3 scripts/validate-specs.py` - specs/goldens under `docs/specs/`.
+- `python3 scripts/checks/verify_adr_refs.py` (also in `make doc-checks`) -
+  every `ADR-NNNN` cited in `docs/`, `.github/`, `CLAUDE.md` or any
+  `AGENTS.md` resolves to `docs/adr/NNNN-*.md`.
 - `python3 scripts/test_mei_rules.py` (F6.3b) - `mei_rules.py` leaf: constant
   shapes, `required_mei_pack_fields`/`mei_entry_conforms` per kind,
   `resolve_kind`'s mep-meta-first / Status-fallback / None-when-unmapped
@@ -656,8 +665,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   Status->kind pairing is defined exactly once, in
   `mei_rules.STATUS_TO_KIND`; see `checks/` above.
 - `python3 scripts/checks/verify_adr_refs.py` (PRD slice D1, 2026-09-01) -
-  every `ADR-NNNN` cited in `.dev-squad/adr/`, `docs/`, `.github/`,
-  `CLAUDE.md` and any `AGENTS.md` resolves to `.dev-squad/adr/NNNN-*.md`;
+  every `ADR-NNNN` cited in `docs/adr/`, `docs/`, `.github/`,
+  `CLAUDE.md` and any `AGENTS.md` resolves to `docs/adr/NNNN-*.md`;
   the ADR-0035 retired ids and the 2026-08-27 consolidated ids
   (0045/0046/0048, 0053-0119) are tolerated only with former/retired/
   consolidated/superseded/deleted context on the line (or, for the
@@ -705,7 +714,7 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Child DOX Index
 
-- `checks/` - dev-squad/community-pack acceptance-criteria verifiers and
+- `checks/` - acceptance-criteria verifiers for deliverables and community packs, and
   one-script-one-contract structural checkers (see Work Guidance above); no
   dedicated AGENTS.md yet (a flat collection of independent per-AC
   verifiers with no domain contract of its own beyond what's listed in the
