@@ -1099,7 +1099,30 @@ namespace Mesen.ViewModels
 				}
 			};
 
+			ApplyPlayerDebugGate(DebugMenuItems);
 			DebugShortcutManager.RegisterActions(wnd, DebugMenuItems);
+		}
+
+		//P.4 (PRD Part B §6): "reachable only after switching to Advanced". The
+		//rule itself is the host-free PlayerDebugAccess (UI/Logic, unit-tested);
+		//this composes it over each Debug action's own IsEnabled before the
+		//actions are registered, so a Player-mode press of a debugger shortcut is
+		//ignored the same way the hidden menu item is unclickable
+		//(DebugShortcutManager only fires an action whose IsEnabled is true).
+		//In Advanced the composition is a no-op: the mode gate is always true and
+		//the original condition decides, exactly as before.
+		private static void ApplyPlayerDebugGate(List<object> menuItems)
+		{
+			foreach(object item in menuItems) {
+				if(item is BaseMenuAction action) {
+					Func<bool>? baseEnabled = action.IsEnabled;
+					action.IsEnabled = () => PlayerDebugAccess.IsDebugEntryEnabled(
+						ConfigManager.Config.Preferences.UiMode, baseEnabled?.Invoke());
+					if(action.SubActions != null) {
+						ApplyPlayerDebugGate(action.SubActions);
+					}
+				}
+			}
 		}
 
 		private void InitHelpMenu(Window wnd)

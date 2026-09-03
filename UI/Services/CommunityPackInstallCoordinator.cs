@@ -246,20 +246,16 @@ namespace Mesen.Services
 			List<CommunityPackLocalFile> packFiles = HashFolder(outFolder);
 			List<CommunityPackLocalFile> cacheFiles = HashFolder(GetDownloadsCacheFolder());
 
-			foreach(CommunityPackDep dep in entry.Deps) {
-				if(string.IsNullOrEmpty(dep.Id) || depPaths.ContainsKey(dep.Id) || string.IsNullOrEmpty(dep.Sha256)) {
-					continue;
-				}
-
-				CommunityPackDepResolution resolution = CommunityPackDepResolver.Resolve(
-					dep.Sha256, packFiles, cacheFiles, dep.Hints != null ? string.Join(", ", dep.Hints) : null, dep.License);
-
-				if(resolution.ResolvedPath != null) {
-					depPaths[dep.Id] = resolution.ResolvedPath;
-				} else {
-					//Unresolved: MepRecipeInstaller withholds the dependent patch (§6).
-					pending.Add(new CommunityPackDepPrompt(dep.Id, resolution.Hints, resolution.License, GetDownloadsCacheFolder()));
-				}
+			//The decision itself (skip / resolve by content hash / prompt) is the
+			//host-free CommunityPackDepPlan (UI/Logic, unit-tested); this only
+			//supplies the hashed file lists and the drop-folder path.
+			CommunityPackDepPlanResult plan = CommunityPackDepPlan.Build(entry.Deps, depPaths.Keys, packFiles, cacheFiles);
+			foreach(KeyValuePair<string, string> resolved in plan.Resolved) {
+				depPaths[resolved.Key] = resolved.Value;
+			}
+			foreach(CommunityPackPendingDep dep in plan.Pending) {
+				//Unresolved: MepRecipeInstaller withholds the dependent patch (§6).
+				pending.Add(new CommunityPackDepPrompt(dep.DepId, dep.Hints, dep.License, GetDownloadsCacheFolder()));
 			}
 			return (depPaths, pending);
 		}
