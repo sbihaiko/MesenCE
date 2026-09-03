@@ -65,6 +65,16 @@ namespace Mesen.ViewModels
 
 			List<RecentGameInfo> entries = new();
 
+			//#153: the two Player-home cards live in the same DataTemplate as the
+			//recent-games grid and share its host ContentControl's IsVisible. On a
+			//genuine first boot the recents list is empty and `Visible = entries.Count > 0`
+			//below was collapsing the whole template - taking the Welcome card down
+			//with it, for exactly the user it exists for. The Player home (constructor:
+			//"the grid is always shown when no ROM runs") must stay up with zero entries
+			//so the cards render above an empty grid; Save/Load/game-selection keep the
+			//old empty->hidden behaviour.
+			bool keepPlayerHomeHostVisible = false;
+
 			if(mode == GameScreenMode.RecentGames) {
 				NeedResume = false;
 				Title = string.Empty;
@@ -78,6 +88,7 @@ namespace Mesen.ViewModels
 				//screen (GameSelectionScreenMode) reuses this same ViewModel/mode
 				//but is not the "Player home" these cards belong to.
 				bool isPlayerHome = ConfigManager.Config.Preferences.UiMode == UiMode.Player;
+				keepPlayerHomeHostVisible = isPlayerHome;
 				ShowWelcomeCard = isPlayerHome && PlayerEnhancementsToggle.ShouldShowWelcomeCard(ConfigManager.Config.PlayerEnhancements.WelcomeCardDismissed);
 				ShowContinueCard = isPlayerHome && PlayerEnhancementsToggle.ShouldShowContinueCard(entries.Count > 0);
 				ContinueLabel = entries.Count > 0 ? ResourceHelper.GetMessage("ContinueCardLabel", entries[0].Name) : "";
@@ -107,7 +118,7 @@ namespace Mesen.ViewModels
 				}
 			}
 
-			Visible = entries.Count > 0;
+			Visible = keepPlayerHomeHostVisible || entries.Count > 0;
 			GameEntries = entries;
 		}
 

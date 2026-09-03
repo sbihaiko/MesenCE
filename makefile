@@ -215,6 +215,20 @@ unit-tests:
 	./scripts/verify-ui-logic-firewall.sh
 	$(DOTNET) test UI.Tests/UI.Tests.csproj --nologo
 
+#ADR-0150 (accepted 2026-09-03): headless Avalonia XAML-wiring tests, in a
+#SEPARATE project that references UI/UI.csproj. UI.Tests stays host-free
+#(ADR-0123); this is the opposite project and must never be merged into it.
+#UI/UI.csproj hardcodes <RuntimeIdentifier>win-x64</RuntimeIdentifier>, so the
+#test run must pass -p:RuntimeIdentifier=$(MESENPLATFORM) (a global property
+#wins over the csproj assignment) and DefineConstants=TRACE (DEBUG off avoids
+#App.Initialize() re-attaching Avalonia developer tools per test - the csproj's
+#ProjectReference already adds it, but it is spelled out here too).
+#The MainWindow-backed cases self-skip with an explicit reason when the native
+#MesenCore is not built (NativeCore), which is always the case on CI (ADR-0131);
+#run `make core` first to exercise all of them.
+headless-ui-tests:
+	$(DOTNET) test UI.HeadlessTests/UI.HeadlessTests.csproj -p:RuntimeIdentifier=$(MESENPLATFORM) --nologo
+
 check-manifest:
 	./scripts/check-core-manifest.sh
 

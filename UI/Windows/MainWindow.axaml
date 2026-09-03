@@ -30,7 +30,7 @@
 				<!--P.7 (PRD Part B §6.2): Welcome card - shown once, on the very
 				first Player-mode boot (recents necessarily empty); its one CTA
 				("Load ROM") is also what dismisses it for good.-->
-				<Border DockPanel.Dock="Top" Background="#22FFFFFF" Padding="16" Margin="0 0 0 8" IsVisible="{Binding ShowWelcomeCard}">
+				<Border Name="PlayerWelcomeCard" DockPanel.Dock="Top" Background="#22FFFFFF" Padding="16" Margin="0 0 0 8" IsVisible="{Binding ShowWelcomeCard}">
 					<StackPanel Spacing="8" HorizontalAlignment="Center">
 						<TextBlock Text="{l:Translate lblWelcomeCardTitle}" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center" />
 						<TextBlock Text="{l:Translate lblWelcomeCardBody}" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Center" />
@@ -40,7 +40,7 @@
 				<!--P.7 (§6.2): Continue card - not first-run gated, simply shown
 				whenever there is a most-recent game to resume; sits alongside the
 				recent-games grid, same as any other home entry.-->
-				<Border DockPanel.Dock="Top" Background="#22FFFFFF" Padding="12" Margin="0 0 0 8" IsVisible="{Binding ShowContinueCard}">
+				<Border Name="PlayerContinueCard" DockPanel.Dock="Top" Background="#22FFFFFF" Padding="12" Margin="0 0 0 8" IsVisible="{Binding ShowContinueCard}">
 					<Button HorizontalAlignment="Stretch" Click="OnContinueCard" Content="{Binding ContinueLabel}" />
 				</Border>
 				<c:StateGrid IsVisible="{Binding Visible}" Entries="{Binding GameEntries}" Title="{Binding Title}" Mode="{Binding Mode}" />
@@ -153,7 +153,7 @@
 			>
 				<StackPanel Spacing="10" MinWidth="340" MaxWidth="520">
 					<TextBlock Text="{l:Translate lblChoosePackForThisGame}" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
-					<ItemsControl Name="PackPickerList" ItemsSource="{Binding PlayerPackChoices}">
+					<ItemsControl Name="PackPickerList" ItemsSource="{Binding PlayerPackChoices}" XYFocus.NavigationModes="Enabled">
 						<ItemsControl.ItemsPanel>
 							<ItemsPanelTemplate>
 								<StackPanel Spacing="8" />

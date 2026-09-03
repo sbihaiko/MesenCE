@@ -1,10 +1,10 @@
 # ADR-0150: Avalonia.Headless for XAML-wiring tests (Welcome/Continue cards, menu visibility, enhancements panel)
 
-- Status: proposed
+- Status: accepted (2026-09-03) — decided by the user; implementation is wave 2 of `docs/validation/manual-validation-automation-plan.md`
 - Date: 2026-09-03
-- Origin: `docs/manual-validation-automation-plan.md` (step 7 of "Proposed execution order"; the plan's "Rejected suggestions" table lists `Avalonia.Headless` as the right long-term answer for XAML wiring but explicitly refuses to adopt it as a plan step, because it changes unit-test/CI wiring and CLAUDE.md routes that through an ADR).
+- Origin: `docs/validation/manual-validation-automation-plan.md` (step 7 of "Proposed execution order"; the plan's "Rejected suggestions" table lists `Avalonia.Headless` as the right long-term answer for XAML wiring but explicitly refuses to adopt it as a plan step, because it changes unit-test/CI wiring and CLAUDE.md routes that through an ADR).
 - Related: ADR-0123 (UI/Logic host-free firewall: the dual-compile is the authoritative gate), ADR-0130 (core unit-test binary gitignored), ADR-0131 (`unit-tests.yml` contract invariants), ADR-0137 (repo-hygiene checks wired into make/CI), PRD Part B §5–§6 (Player shell, pack picker, enhancements quick-toggle panel).
-- Decides nothing yet: this ADR asks for a human choice between adopting a headless Avalonia test host and keeping the current manual pass.
+- Decision taken 2026-09-03: the user chose to adopt the headless Avalonia test host. The "Proposed decision (not decided)" wording below is kept as written for the record; it is now the accepted decision, and the "Unknowns to resolve" list is the implementation's checklist.
 
 ## Context
 
@@ -155,7 +155,7 @@ than each push.
   fallback if the spike above shows the headless host cannot run without a
   native build.
 - **Drive the real macOS window via Accessibility/AppleScript** and
-  screenshot it. Rejected in `docs/manual-validation-automation-plan.md`:
+  screenshot it. Rejected in `docs/validation/manual-validation-automation-plan.md`:
   Avalonia does not expose native AppKit control hierarchies, so element
   targeting is unreliable for a non-native toolkit, and the setup cost
   outweighs two remaining visual checks. It is also macOS-only, while CI is

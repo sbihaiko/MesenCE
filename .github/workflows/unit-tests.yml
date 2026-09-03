@@ -43,3 +43,29 @@ jobs:
 
       - name: Run core unit tests
         run: make core-unit-tests
+
+  # ADR-0150 (accepted 2026-09-03): headless Avalonia XAML-wiring tests in a
+  # separate project that references UI/UI.csproj. Kept as its own job - NOT a
+  # step appended to ui-tests - so a headless-host failure never reds the cheap
+  # host-free leg (ADR-0131's invariants for that job stay readable).
+  # No MesenCore is built here (ADR-0131), so the MainWindow-backed cases
+  # self-skip with an explicit reason via NativeCore.cs (Assert.SkipWhen); the
+  # core-free wiring cases (PlayerSettingsTabs, ControllerHighlight) run. Run
+  # `make core && make headless-ui-tests` locally to exercise all of them.
+  # The RID is overridden from the command line because UI/UI.csproj hardcodes
+  # <RuntimeIdentifier>win-x64</RuntimeIdentifier> (a global property wins over
+  # the csproj assignment); linux-x64 matches the runner.
+  headless-ui-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Run headless UI wiring tests
+        run: dotnet test UI.HeadlessTests/UI.HeadlessTests.csproj -p:RuntimeIdentifier=linux-x64 --nologo

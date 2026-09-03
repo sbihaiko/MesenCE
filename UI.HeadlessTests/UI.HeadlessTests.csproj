@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		ADR-0150: headless Avalonia host for XAML-wiring tests. This project is the
+		deliberate opposite of UI.Tests: it DOES reference UI/UI.csproj, so it can
+		instantiate the real windows/views and assert on the visual tree.
+		UI.Tests stays host-free (ADR-0123) and is untouched - see UI.HeadlessTests/AGENTS.md.
+		Scope rule: wiring only (IsVisible/IsEnabled/focus/bindings), never a rule
+		that UI.Tests can assert host-free.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<RootNamespace>Mesen.HeadlessTests</RootNamespace>
+		<!-- The referenced app sets JsonSerializerIsReflectionEnabledByDefault=false;
+		     match it so a test run behaves like the published app. -->
+		<JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+		<!-- No IsAotCompatible here: unlike UI.Tests this project does not
+		     dual-compile app sources, it references the app assembly, so the
+		     AOT/trim analysis that matters already runs in UI/UI.csproj. -->
+		<AvaloniaNameGeneratorIsEnabled>False</AvaloniaNameGeneratorIsEnabled>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- UI/UI.csproj hardcodes <RuntimeIdentifier>win-x64</RuntimeIdentifier>. It is
+		     overridden from the command line (-p:RuntimeIdentifier=<rid>), which is a
+		     global property and therefore wins over the csproj assignment - see the
+		     `headless-ui-tests` makefile target and the CI job. -->
+		<!--
+			DefineConstants=TRACE (i.e. DEBUG off) is not cosmetic: App.Initialize()
+			calls this.AttachDeveloperTools() under #if DEBUG, and Avalonia's headless
+			session builds a fresh Application per test - the second attach throws
+			"Developer tools have already been attached". Dropping DEBUG also makes the
+			referenced app match the published one (UI.csproj's Release configuration
+			re-defines DEBUG; the shipping build clears it via OptimizeUi).
+		-->
+		<ProjectReference Include="../UI/UI.csproj" AdditionalProperties="DefineConstants=TRACE" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Avalonia.Headless" Version="12.1.1" />
+		<PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.1" />
+		<!-- xunit v3: Avalonia.Headless.XUnit 12.1.1 depends on xunit.v3.extensibility.core
+		     (UI.Tests stays on xunit v2 - the two projects are independent). -->
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+		<PackageReference Include="xunit.v3" Version="3.2.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+	</ItemGroup>
+
+</Project>
