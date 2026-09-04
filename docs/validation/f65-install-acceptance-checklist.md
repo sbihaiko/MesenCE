@@ -86,10 +86,13 @@ out of scope here, and the reason Part B exists.
   `scripts/build_app_macos.sh` → `bin/osx-arm64/Release/osx-arm64/publish/Mesen.app`.
 - A user-supplied No-Intro **Mega Man (USA)** dump (never redistributed with
   this repo). Catalog `rom.sha1` = `6047E52929DFE8ED4708D325766CCB8D3D583C7D`.
-- One `.ogg` file of your own to play the "user-supplied audio" role in
-  Part B (any small Vorbis file; content is irrelevant, its sha256 is not).
+- A **zip** of your own to play the "user-supplied audio" role in Part B,
+  holding one small `.ogg` at the path the recipe's ops read. The dep artifact
+  is always opened as an archive (`MepRecipeSource::LoadBytes`); handing over a
+  bare `.ogg` fails the install with `not a valid zip archive`. Its content is
+  irrelevant, its sha256 is not.
 - Paths used below (macOS):
-  - Mesen home: `~/Library/Application Support/Mesen2`
+  - Mesen home: `~/Library/Application Support/MesenCE`
   - log: `<home>/mesen.log` (previous session rotated to `mesen.log.1`)
   - downloads cache: `<home>/EnhancementPacks/.cache/downloads/`
   - catalog cache: `<home>/EnhancementPacks/.cache/community-packs.json`
@@ -166,7 +169,7 @@ Nothing here patches the client.
       `docs/specs/MEP-recipe-v1.md`; `scripts/gen_mep_recipe_fixture.py`
       emits a valid one) whose `sources.deps[]` has a single entry with
       `"user_supplied": true`, a `hints` string, a `license`, and
-      `"sha256": "<sha256 of your .ogg>"`.
+      `"sha256": "<sha256 of your dep zip>"`.
 - [ ] **B2.** Write it to `<home>/EnhancementPacks/.cache/community-packs.json`
       and write the **live** catalog's current ETag to
       `<home>/EnhancementPacks/.cache/community-packs.etag`:
@@ -184,7 +187,11 @@ Nothing here patches the client.
 - [ ] **B4.** Launch, load the ROM. Confirm
       `[CommunityPackFetch] catalog HTTP status=304 cacheUsable=True resolvedBodyLen=…`
       — this proves your seeded body is the one in play.
-- [ ] **B5. (outcome 1 — the prompt)** With your `.ogg` **absent** from
+- [ ] **B5. (outcome 1 — the prompt)** A pending dep does **not** abort the
+      install: the recipe installer completes, withholding only the ops that
+      read the dep (`InstallMepRecipe returned success=True resultText=1\n\naudio/`,
+      `Status=Installed`), and the dep-backed folder is absent on disk.
+      With your dep **absent** from
       `.cache/downloads/`, an on-screen message appears, worded exactly:
       `Missing file '<hints>' (licence: <license>) - drop it into <home>/EnhancementPacks/.cache/downloads and power cycle`
       (an undeclared licence must render as the literal `not declared`, never
@@ -192,11 +199,20 @@ Nothing here patches the client.
       `[CommunityPackInstall] calling EmuApi.InstallMepRecipe` line.
 - [ ] **B6. (outcome 2 — hash validation)** Copy your `.ogg` into
       `.cache/downloads/` **under a deliberately wrong name** (the resolver
-      matches by content sha256, never by file name) and power-cycle. The
-      prompt must be gone and `pendingDeps=0`.
-- [ ] **B7.** Negative control: replace the file with a different `.ogg`
-      (different bytes, same name) and power-cycle. The prompt must come
-      back — a name-only match would be a bug worth filing on the bug board.
+      matches by content sha256, never by file name) and **restart the app**,
+      then load the ROM again. The prompt must be gone and `pendingDeps=0`,
+      with the dep-backed folder now present on disk.
+      Do not follow the prompt's own "power cycle" wording, and do not just
+      reload the ROM: both are no-ops here (issue #156) — `OnGameLoaded`
+      returns early on `isPowerCycle`, and `_attemptedRomSha1` latches the ROM
+      for the rest of the process after a partial install.
+- [ ] **B7.** Negative control: replace the file with a different but equally
+      well-formed zip (different bytes, plausible name and inner layout), bump
+      the seeded row's `content_id` so the verdict is `Updated` rather than
+      `UpToDate`, and restart. The prompt must come back, `pendingDeps=1`, and
+      the dep-backed folder must be gone again — the pack is rebuilt from the
+      recipe, not patched in place. A name-only or shape-only match would be a
+      bug worth filing on the bug board.
 - [ ] **B8.** Remove the seeded `community-packs.json` / `.etag` afterwards so
       the client returns to the published catalog.
 
@@ -204,8 +220,10 @@ Nothing here patches the client.
 
 This is the objective part of the run: it boots the real core (no GUI) over
 the folder the installer just produced and fails on any missing
-`<img>`/`<tile>`/`<background>`/`<bgm>`/`<sfx>` target. Run it on the **sibling
-folder** (the one that holds `mep/`), not on `mep/` itself:
+`<img>`/`<tile>`/`<background>`/`<bgm>`/`<sfx>` target. Run it on the **pack
+root** — `mep/`, the folder that holds `pack.json` and `textures/hires.txt`.
+Pointing it at the sibling folder instead exits with
+`FAIL: no hires.txt manifest`.
 
 ```bash
 scripts/smoke_pack_headless.sh "<rom folder>/<Rom Name>" "<rom folder>/<Rom Name>.nes"
@@ -242,16 +260,56 @@ Note the smoke deliberately excludes `<patch>` from its gate scope: a
 
 ## Sign-off
 
+Run of 2026-09-04, build `ea2bd0f21982aa35cc10595aefff5226ed2519bb`
+(`make clean && scripts/build_app_macos.sh`, core-unit-tests 287/287).
+Pack under test: catalog row `issue-139` (Zelda HD), not the Mega Man row the
+steps above use as their example. ROM: a user-supplied No-Intro dump,
+No-Intro sha1 `B6643CE5CD43F14915466407FFA1F89C1CDFE76F`.
+
 | Item | Result | Log line / path observed |
 |---|---|---|
-| A2 fetch + download+verify | | |
-| A3 `update verdict=NotInstalled` | | |
-| A4 `mep/` folder | | |
-| A5 `.mep-install.json` | | |
-| A7 `<patch>` applied (or hash-mismatch override) | | |
-| B5 pending-dependency prompt | | |
-| B6 dep resolved by sha256 | | |
-| B7 wrong-bytes negative control | | |
-| smoke gate | | |
+| A2 fetch + download+verify | PASS | `catalog HTTP status=200 cacheUsable=False resolvedBodyLen=9648`; `matching entry … via=game: issue-139`; Drive 303→confirm→200, `final response status=200 bodyBytes=187345689`; `downloaded+verified` |
+| A3 `update verdict=NotInstalled` | PASS | `verdict=NotInstalled installStampExists=False entryContentId=57af4f12… entrySha256=03b5eeab…`; `gates passed`; `hd-legacy installed (MEP-ized)` |
+| A4 `mep/` folder | PASS | 423 files under `<rom folder>/<Rom Name>/mep/textures`, including `ZeldaHD.ips` |
+| A5 `.mep-install.json` | PASS | stamp carries the three identity fields; `installed_at 2026-09-04T22:56:50Z` |
+| A7 `<patch>` applied (or hash-mismatch override) | PASS (both halves) | gated: `<patch> skipped: no entry for this ROM's sha1 3CDFA4F2… / no-intro B6643CE5…`; after ticking the override: `<patch> hash mismatch - applied '…/mep/textures/ZeldaHD.ips' anyway (ApplyPatchOnHashMismatch)` |
+| B5 pending-dependency prompt | PASS (log); OSD wording unverified | `depPaths=0 pendingDeps=1`; `InstallMepRecipe returned success=True resultText=1\n\naudio/`; `Status=Installed`; `mep/audio/` absent on disk |
+| B6 dep resolved by sha256 | PASS | dep dropped as `definitely-not-an-ogg.bin`; `depPaths=1 pendingDeps=0`; `success=True`; `mep/audio/zelda-hd-audio.ogg` present |
+| B7 wrong-bytes negative control | PASS | valid decoy zip, correct inner layout, wrong bytes → `depPaths=0 pendingDeps=1`, `resultText=1\n\naudio/`, `mep/audio/` gone again |
+| smoke gate | **FAIL** — see issue #155 | `FAIL: missing target: Error while loading background: selectscreen.png`; the artifact ships `selectscreen1..6.png` and `selectscreentop.png` but no `selectscreen.png`, while `hires.txt:6124` declares it. `mep_lint.py` on the same folder reports 0 errors — the two gates disagree |
 
-Tester / date / build (git sha): ______________________
+Also observed:
+
+- Matching covered both paths: `via=game` in Part A (the dump's sha1 is not in
+  the published row) and `via=sha1` in Part B (the seeded row lists it).
+- HD rendering confirmed from a captured frame rather than by eye:
+  `scripts/headless_record "<rom>" 4 <outdir> screenshot` produces a 512×480 PNG
+  of the pack's title screen. It runs against an isolated mesen-home yet still
+  loads the sibling `mep/`, so it does not disturb the installed state.
+- Defects filed: **#155** (row `issue-139` declares a target it does not ship;
+  `mep_lint` passes it, the smoke gate rejects it — ADR-0148) and **#156**
+  (a pending dep is unrecoverable within a session; the prompt names an action
+  the service skips).
+
+### Re-run after the fixes (same day, working tree on top of `ea2bd0f2`)
+
+Both defects were fixed and re-tested in the same session:
+
+| Item | Result | Evidence |
+|---|---|---|
+| #156 — dep recovery within one session | PASS | first load: `depPaths=0 pendingDeps=1`, `mep/audio/` absent. Dep dropped into `.cache/downloads` under a deliberately wrong name (`totally-wrong-name.bin`, matched by sha256). Second **ROM load in the same process** (no restart): `depPaths=1 pendingDeps=0`, `InstallMepRecipe returned success=True resultText=1\n`, `mep/audio/zelda-hd-audio.ogg` (1.6M) on disk. Before the fix this second load logged `skipped: already attempted this session` |
+| #155 — gate alignment | PASS (both gates now reject the same row) | `mep_lint.py` exit 1 with `error hires.txt:6124 <background> selectscreen.png does not exist …`; `smoke_pack_headless.sh` exit 1 with `FAIL: missing target: Error while loading background: selectscreen.png`. Same line, same file, same verdict (ADR-0151) |
+
+Consequence to carry forward: catalog row `issue-139` no longer passes
+validation. It is live and auto-installed today; the next `/revalidate` (manual
+or via the daily drift check) will fail it, and ADR-0148's de-listing path
+applies until the manifest or the artifact is corrected.
+
+Note on the checklist's own steps: the "reload the ROM" step above was driven by
+re-launching the binary with the ROM as `argv[1]` — `SingleInstance` forwards it
+to the running process, which is the same non-power-cycle `GameLoaded` path a
+manual File → Reload ROM takes.
+
+Tester / date / build (git sha): Claude (Opus 5) with the maintainer, 2026-09-04,
+`ea2bd0f21982aa35cc10595aefff5226ed2519bb` plus the uncommitted fixes for
+#155/#156
