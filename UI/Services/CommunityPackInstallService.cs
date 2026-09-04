@@ -127,7 +127,12 @@ namespace Mesen.Services
 					fetched.Entry, fetched.PrimaryPackPath, fetched.ResolvedDepPaths);
 				EmuApi.WriteLogEntry("[CommunityPack] Install() outcome: Status=" + outcome.Status +
 					" ContainerName=" + outcome.ContainerName + " Message=" + outcome.Message);
-				if(outcome.Status == CommunityPackInstallStatus.Failed) {
+				//An install that withheld dep-backed ops is incomplete, so it belongs
+				//with the other retryable outcomes: without this, _attemptedRomSha1
+				//latches the ROM for the rest of the process and the user can never
+				//complete a user_supplied dep - the power-cycle path is closed by the
+				//isPowerCycle guard in OnGameLoaded, and reloading hits this set (#156).
+				if(outcome.Status == CommunityPackInstallStatus.Failed || outcome.PendingDeps.Count > 0) {
 					ClearAttempt(romSha1);
 				}
 				Surface(outcome, romSha1);
@@ -206,7 +211,9 @@ namespace Mesen.Services
 			foreach(CommunityPackDepPrompt dep in pending) {
 				string license = string.IsNullOrWhiteSpace(dep.License) ? "not declared" : dep.License;
 				string hints = string.IsNullOrWhiteSpace(dep.Hints) ? dep.DepId : dep.Hints;
-				Notify("Missing file '" + hints + "' (licence: " + license + ") - drop it into " + dep.DropFolder + " and power cycle");
+				//"reload the ROM", not "power cycle": OnGameLoaded returns early on
+				//isPowerCycle, so the power-cycle path can never re-resolve a dep (#156).
+				Notify("Missing file '" + hints + "' (licence: " + license + ") - drop it into " + dep.DropFolder + " and reload the ROM");
 			}
 		}
 
