@@ -1008,8 +1008,15 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             rep.info(where, "<patch> matches by the whole-file sha1 or the No-Intro PRG+CHR sha1 (ADR-0044); other revisions load the pack without the patch")
     if version == 0:
         rep.error(rel, "<ver> missing")
+    # ADR-0148: a listed row must be a self-contained, verifiable artifact.
+    # HdPackLoader logs "Error while loading background: <name>" and
+    # scripts/smoke_pack_headless.sh fails the pack on it, so accepting the
+    # same manifest here would let an unverifiable row into the catalog and
+    # only surface at runtime. Matches the existing <img> treatment; a
+    # case-mismatched-but-present target stays a warning (it does load on
+    # macOS/Windows).
     for name, lines in sorted(missing.items(), key=lambda kv: -len(kv[1])):
-        rep.warning(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries dropped, falls back to original graphics (HdPackLoader::ProcessBackgroundTag)")
+        rep.error(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries would be dropped at load (HdPackLoader::ProcessBackgroundTag)")
     for (ref, real), lines in badcase.items():
         rep.warning(f"{rel}:{lines[0]}", f"<background> {ref} only exists as '{real}' — loads on macOS/Windows, fails on Linux ({len(lines)} entry/entries)")
     if dups:
