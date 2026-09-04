@@ -12,7 +12,6 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Zelda II: The Adventure of Link (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/141) |
 | Mega Man (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/138) |
 | Contra (USA) | NES | TasticHacks | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/137) |
-| The Legend of Zelda (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/139) |
 | Castlevania (USA) | NES | ? | 2026-08-30 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/143) |
 | Donkey Kong (JU) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/144) |
 | Ninja Gaiden (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/145) |
