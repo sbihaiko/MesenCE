@@ -42,7 +42,7 @@
 #                          (No-Intro PRG+CHR sha1 vs the row's rom.sha1/sha1s)
 #   --app <Mesen.app>      app bundle (default: the Release publish output)
 #   --home <dir>           Mesen home folder holding mesen.log (default:
-#                          ~/Library/Application Support/Mesen2)
+#                          ~/Library/Application Support/MesenCE)
 #   --seconds N            how long to leave the client running (default 40)
 #   --expect <verdict>     fail unless the observed verdict equals this
 #   --no-launch            catalog phase only: resolve the live row for the
@@ -65,7 +65,7 @@ PY="${PYTHON:-python3}"
 CATALOG_URL="https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/community-packs.json"
 
 APP="$REPO_ROOT/bin/osx-arm64/Release/osx-arm64/publish/Mesen.app"
-HOME_FOLDER="$HOME/Library/Application Support/Mesen2"
+HOME_FOLDER="$HOME/Library/Application Support/MesenCE"
 RUN_SECONDS=40
 EXPECT=""
 NO_LAUNCH=0
