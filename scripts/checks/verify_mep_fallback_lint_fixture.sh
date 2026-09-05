@@ -38,6 +38,10 @@
 #     name passed to this CLI invocation for the name-anchored one.
 #   - (ADR-0121) rejects two such wrappers together as ambiguous, same
 #     fail-closed philosophy as the pre-existing two-subfolder fixture.
+#   - (#161) still discovers the real root of a pack that also ships variant
+#     manifests: a subfolder holding a bare hires.txt and no image beside it
+#     cannot resolve a single <img>/<background>, so it is not a candidate
+#     pack root and must not make a one-game pack look ambiguous.
 # No mocks: runs the real mep_lint.py CLI against real generated zip files.
 set -euo pipefail
 
@@ -61,6 +65,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 # Mirrors ACCEPT_WRAPPER in gen_mep_fallback_test_pack.py.
 ACCEPT_WRAPPER_PACK_JSON="Contra80s-v1.1/Contra (U) [!]/pack.json"
+# Mirrors LOOSE_LEGACY_WRAPPER in gen_mep_fallback_test_pack.py.
+LOOSE_LEGACY_WRAPPER="HDNes-Graphics-Pac-master"
 
 run_lint() {
   # run_lint <zip> -> stdout on global RUN_OUT, exit code on global RUN_RC
@@ -210,4 +216,19 @@ grep -q "structural fallback (ADR-0120)" <<<"$RUN_OUT" \
   && fail "ADR-0121: the ambiguous loose-legacy pack should not emit the fallback info line (the candidate should be refused for ambiguity):
 $RUN_OUT"
 
-echo "PASS: mep_lint.py accepts the Contra80s-shaped pack via the structural fallback (with path/depth info), rejects the ambiguous two-subfolder pack, rejects a malformed pack.json discovered via the fallback, rejects sections.textures.path==\"\" with a broken hires.txt under the fallback, rejects a broken legacy hires.txt loose at the fallback root, rejects a zip-slip-shaped candidate ('..'), does not change the classification of an existing pack.json-root pack, accepts a classic Mesen HD pack whose wrapper is named after a repo rather than the ROM (ADR-0121), and rejects two such wrappers together as ambiguous"
+# --- fixture 10: bare-manifest variant folders must not create ambiguity ---
+"$PY" "$GEN_FALLBACK" "$WORK/fallback" variant-manifests >/dev/null \
+  || fail "gen_mep_fallback_test_pack.py failed generating 'variant-manifests'"
+VARIANT_ZIP="$WORK/fallback/mep-fallback-variant-manifests.zip"
+[ -f "$VARIANT_ZIP" ] || fail "'variant-manifests' fixture was not generated: $VARIANT_ZIP"
+
+run_lint "$VARIANT_ZIP"
+[ "$RUN_RC" -eq 0 ] || fail "#161: mep_lint.py rejected a pack whose only extra candidates are image-less variant manifests (expected exit 0, got $RUN_RC):
+$RUN_OUT"
+grep -qF "pack root discovered at '$LOOSE_LEGACY_WRAPPER' (depth 2)" <<<"$RUN_OUT" \
+  || fail "#161: the fallback did not discover the real pack root of the variant-manifests fixture:
+$RUN_OUT"
+grep -q "0 error(s)" <<<"$RUN_OUT" || fail "#161: variant-manifests pack accepted but the summary does not report 0 error(s):
+$RUN_OUT"
+
+echo "PASS: mep_lint.py accepts the Contra80s-shaped pack via the structural fallback (with path/depth info), rejects the ambiguous two-subfolder pack, rejects a malformed pack.json discovered via the fallback, rejects sections.textures.path==\"\" with a broken hires.txt under the fallback, rejects a broken legacy hires.txt loose at the fallback root, rejects a zip-slip-shaped candidate ('..'), does not change the classification of an existing pack.json-root pack, accepts a classic Mesen HD pack whose wrapper is named after a repo rather than the ROM (ADR-0121), rejects two such wrappers together as ambiguous, and still discovers the real root of a pack that ships image-less variant manifests (#161)"

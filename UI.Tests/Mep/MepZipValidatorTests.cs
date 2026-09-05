@@ -90,7 +90,16 @@ namespace Mesen.Tests.Mep
 			yield return new object[] { new[] { ("Wrapper/preset.cfg", "x") }, true };
 			yield return new object[] { new[] { ("Wrapper/fingerprints.json", "x") }, true };
 			//Two distinct repo-named wrappers, each with its own loose root hires.txt: ambiguous, must reject.
-			yield return new object[] { new[] { ("RepoA-main/hires.txt", "x"), ("RepoB-master/hires.txt", "x") }, false };
+			//Each carries a PNG so both stay real candidates under the #161 qualification below - without one
+			//they would be rejected for having no candidate at all, and this row would stop testing ambiguity.
+			yield return new object[] { new[] { ("RepoA-main/hires.txt", "x"), ("RepoA-main/Chr_00_0.png", "x"), ("RepoB-master/hires.txt", "x"), ("RepoB-master/Chr_00_0.png", "x") }, false };
+			//#161: a folder holding a bare hires.txt and no image beside it is a variant manifest, not a pack
+			//root - in an HD Mesen pack the PNGs are siblings of hires.txt, so it cannot resolve a single
+			//<img>/<background>. Counting those made a one-game pack that ships alternate manifests next to a
+			//patch (issue #138's "Customization/Patch - Music .../") look ambiguous and failed discovery.
+			yield return new object[] { new[] { ("W/hires.txt", "x"), ("W/Chr_00_0.png", "x"), ("W/Custom/A/hires.txt", "x"), ("W/Custom/A/p.ips", "x") }, true };
+			//The qualification is not a licence to accept a manifest-only archive: still nothing to resolve.
+			yield return new object[] { new[] { ("W/Custom/A/hires.txt", "x"), ("W/Custom/A/p.ips", "x") }, false };
 		}
 
 		[Theory]

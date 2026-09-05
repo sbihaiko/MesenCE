@@ -303,6 +303,25 @@ def _longest_matching_suffix(normalized: str):
     return best
 
 
+#ADR-0121 accepts a bare `hires.txt` with no textures/ wrapper as a pack root.
+#That is the only candidate shape carrying no structural evidence of its own --
+#a folder holding just a manifest looks exactly like a pack root -- and packs do
+#ship alternate manifests in subfolders (#138: four `Customization/<variant>/`
+#folders with a hires.txt and an .ips each, zero images). Counting those as
+#roots made a single-game pack ambiguous, so discovery failed closed on a pack
+#that has 1222 PNGs (#161). In an HD Mesen pack the images are siblings of
+#hires.txt, so a folder with a manifest and no image beside it cannot resolve a
+#single <img>/<background> and is a variant manifest, not a root. The wrapper
+#shapes (textures/hires.txt, pack.json, ...) are an explicit layout declaration
+#and are left alone.
+FALLBACK_IMAGE_EXTS = (".png",)
+
+
+def _has_sibling_image(prefix, names_by_prefix):
+    """Whether `prefix` directly holds at least one image file."""
+    return any(leaf.lower().endswith(FALLBACK_IMAGE_EXTS) for leaf in names_by_prefix.get(prefix, ()))
+
+
 def find_fallback_subfolder_candidates(names):
     """Every distinct subfolder prefix in `names` that directly holds a
     fallback probe (pack.json, a textures/audio/synth probe — human or auto/
@@ -315,6 +334,14 @@ def find_fallback_subfolder_candidates(names):
     protection the single-root fallback applies to every entry."""
     if len(names) > FALLBACK_MAX_ENTRIES:
         return []
+    # Leaf names per folder, for the bare-manifest qualification below.
+    names_by_prefix = {}
+    for name in names:
+        normalized = safe_rel(name)
+        if normalized is None or "/" not in normalized:
+            continue
+        folder, _, leaf = normalized.rpartition("/")
+        names_by_prefix.setdefault(folder, []).append(leaf)
     depths = {}
     for name in sorted(names):
         # safe_rel rejects '..' segments, a leading '/', and drive letters —
@@ -336,6 +363,8 @@ def find_fallback_subfolder_candidates(names):
         prefix = normalized[: -(len(suffix) + 1)]
         if not prefix:
             continue  # root-level match: already covered by the existing conventions
+        if suffix == "hires.txt" and not _has_sibling_image(prefix, names_by_prefix):
+            continue  # variant manifest, not a pack root (#161)
         depths[prefix] = len(segments)
     return [(prefix, depths[prefix]) for prefix in sorted(depths)]
 

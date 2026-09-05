@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IO.Compression;
 using System.Linq;
 
@@ -104,17 +106,38 @@ namespace Mesen.Logic
 				.Append("pack.json")
 				.ToArray();
 
-			string? candidate = null;
-			int visited = 0;
-			foreach(ZipArchiveEntry entry in zip.Entries) {
-				if(++visited > FallbackMaxEntries) {
-					//Fail closed: too many entries to search safely rather than
-					//silently searching only a prefix of them.
-					return null;
-				}
+			if(zip.Entries.Count > FallbackMaxEntries) {
+				//Fail closed: too many entries to search safely rather than
+				//silently searching only a prefix of them.
+				return null;
+			}
 
+			//Folders that directly hold at least one image, for the
+			//bare-hires.txt qualification below. Mirrors scripts/mep_lint.py.
+			HashSet<string> foldersWithImages = new();
+			foreach(ZipArchiveEntry entry in zip.Entries) {
+				string normalized = entry.FullName.Replace('\\', '/');
+				int slash = normalized.LastIndexOf('/');
+				if(slash > 0 && normalized.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) {
+					foldersWithImages.Add(normalized.Substring(0, slash));
+				}
+			}
+
+			string? candidate = null;
+			foreach(ZipArchiveEntry entry in zip.Entries) {
 				string? prefix = MatchCandidatePrefix(entry.FullName, suffixes);
 				if(prefix == null || prefix.Length == 0) {
+					continue;
+				}
+				if(entry.FullName.Replace('\\', '/') == prefix + "/hires.txt" && !foldersWithImages.Contains(prefix)) {
+					//A folder holding a bare hires.txt and no image beside it is
+					//a variant manifest, not a pack root: in an HD Mesen pack the
+					//PNGs are siblings of hires.txt, so such a folder cannot
+					//resolve a single <img>/<background>. Counting them as roots
+					//made a one-game pack look ambiguous and failed discovery on
+					//a pack with 1222 PNGs (#161). The wrapper shapes
+					//(textures/hires.txt, pack.json, ...) are an explicit layout
+					//declaration and keep their old meaning.
 					continue;
 				}
 				if(candidate != null && candidate != prefix) {

@@ -66,6 +66,14 @@ outcome:
              hires.txt — two structurally valid bare-basename candidates,
              ambiguous, must be rejected (no section found), same
              fail-closed philosophy as 'reject'.
+  variant-manifests <out>/mep-fallback-variant-manifests.zip   one real pack
+             root plus two subfolders holding a bare hires.txt and a patch,
+             with no image beside them (issue #138's "Customization/Patch -
+             Music .../" shape). Such a folder cannot resolve a single
+             <img>/<background>, so it is a variant manifest rather than a
+             pack root; counting it made a one-game pack ambiguous and failed
+             discovery outright (#161) — must be accepted, discovering the
+             real root.
 
 Usage:
   python3 scripts/gen_mep_fallback_test_pack.py <out-dir> [kinds...]
@@ -182,10 +190,33 @@ def write_loose_legacy_zip(path: Path):
 def write_loose_legacy_ambiguous_zip(path: Path):
     """Two distinct repo-named wrappers, each with its own loose root
     hires.txt: two structurally valid bare-basename candidates, ambiguous,
-    must be rejected rather than guessed at."""
+    must be rejected rather than guessed at. Each wrapper ships a PNG beside
+    its manifest so both stay real candidates under the #161 qualification --
+    otherwise this would still be rejected, but for having no candidate at
+    all, and would stop testing the ambiguity path it exists for."""
     _write_zip(path, [
         ("RepoA-main/hires.txt", HIRES_TXT),
+        ("RepoA-main/Chr_00_0.png", "not really a png, unchecked by discovery"),
         ("RepoB-master/hires.txt", HIRES_TXT),
+        ("RepoB-master/Chr_00_0.png", "not really a png, unchecked by discovery"),
+    ])
+
+
+def write_variant_manifests_zip(path: Path):
+    """One real pack root plus subfolders that hold a bare hires.txt and no
+    image at all -- the shape of a pack shipping alternate manifests next to a
+    patch ("Customization/Patch - Music .../"), issue #138. Those folders
+    cannot resolve a single <img>/<background>, so they are variant manifests,
+    not pack roots; counting them made discovery ambiguous and failed a
+    one-game pack outright (#161). Must be accepted, resolving to the real
+    root."""
+    _write_zip(path, [
+        (f"{LOOSE_LEGACY_WRAPPER}/hires.txt", HIRES_TXT),
+        (f"{LOOSE_LEGACY_WRAPPER}/Chr_00_0.png", "not really a png, unchecked by discovery"),
+        (f"{LOOSE_LEGACY_WRAPPER}/Customization/Music NES/hires.txt", HIRES_TXT),
+        (f"{LOOSE_LEGACY_WRAPPER}/Customization/Music NES/patch.ips", "PATCH"),
+        (f"{LOOSE_LEGACY_WRAPPER}/Customization/Music Remixed/hires.txt", HIRES_TXT),
+        (f"{LOOSE_LEGACY_WRAPPER}/Customization/Music Remixed/patch.ips", "PATCH"),
     ])
 
 
@@ -214,6 +245,8 @@ def main() -> int:
             write_loose_legacy_zip(out / "mep-fallback-loose-legacy.zip")
         elif kind == "loose-legacy-ambiguous":
             write_loose_legacy_ambiguous_zip(out / "mep-fallback-loose-legacy-ambiguous.zip")
+        elif kind == "variant-manifests":
+            write_variant_manifests_zip(out / "mep-fallback-variant-manifests.zip")
         else:
             print(f"unknown kind: {kind}")
             return 1

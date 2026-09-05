@@ -2,6 +2,7 @@
 
 - Status: accepted (2026-08-27 — option A chosen by the user; already shipped in `805cb10d` across Python, C# and C++; MEP-v1 §2.1 rule 9 wording shipped with F6.1)
 - Date: 2026-08-27
+- Amended 2026-09-04 (bare `hires.txt` must have a sibling image — see "Amendment" below; issue #161)
 - Extends ADR-0120 §2/§3 (subfolder fallback for wrapped zips). Motivated by issues #46, #47, #48.
 
 ## Context
@@ -38,6 +39,33 @@ Option B — reject and require re-zip/rename:
 - No code change; ADR-0120's convention-shape signal stays as tight as designed.
 - Issue #48 is closed by documentation: legacy-format submissions must be re-zipped (or the wrapper folder renamed) so the existing name-anchored fallback applies. Submitters of #46/#47 have to act, and the same friction will recur for every raw GitHub archive download of a legacy pack.
 - Runtime behaviour stays aligned with what the C++ loader already does (name-anchored only), so validators do not accept anything the engine would reject.
+
+## Amendment (2026-09-04): a bare `hires.txt` counts only with a sibling image
+
+The Consequences above predicted the cost of Option A — "any zip with a
+`hires.txt` somewhere in its first four path segments becomes a candidate" —
+and issue #161 is that cost coming due. `AxlRocks/Megaman-Super` ships one real
+pack root (1222 PNGs) plus four `Customization/Patch - Music <variant>/`
+folders, each holding a `hires.txt` and an `.ips` and **no images**. Five
+candidates, ambiguity, and structural discovery failed closed on a single-game
+pack that works.
+
+The bare-basename shape is the only candidate shape that carries no structural
+evidence of its own: `textures/hires.txt` or `pack.json` is an explicit layout
+declaration, while a lone manifest looks exactly like a pack root. So it is
+qualified: **a folder discovered through a bare `hires.txt` is a candidate only
+when it directly holds at least one image file.** In an HD Mesen pack the PNGs
+are siblings of `hires.txt`, so a folder with a manifest and nothing to draw
+cannot resolve a single `<img>`/`<background>` and is a variant manifest, not a
+root. `preset.cfg` and `fingerprints.json` are unaffected — a synth or audio
+section has no image to require.
+
+This narrows what counts as a "game" for the ADR-0143 multi-game split trigger
+too, and deliberately so: both read the same
+`find_fallback_subfolder_candidates`, so the split cannot drift from discovery.
+Mirrored in `UI/Logic/MepZipValidator.cs`. `Core/Shared/EnhancementPacks/MepPack.cpp`
+needs no change — it is ROM-name-anchored, so sibling variant folders under the
+same anchored wrapper already resolve to one prefix.
 
 ## Alternatives
 - **A. Accept bare legacy probe basenames as a discovery signal** in the structural fallback (and optionally the name-anchored one), under the same fail-closed-on-ambiguity, depth-4/entry-cap-2000 rules as ADR-0120 §2, implemented in lockstep across Python, C# and C++.
