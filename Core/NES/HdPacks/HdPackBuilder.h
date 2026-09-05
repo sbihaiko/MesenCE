@@ -146,6 +146,10 @@ private:
 	void WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup);
 
 	vector<MesenSheets::GridFrame> _gridFrames;
+	//F9.9: true while _gridFrames.back() is the frame OnFrameEnd is closing,
+	//so a captured screen flags its own grid frame and never an older one.
+	bool _gridFrameLive = false;
+	uint32_t _screenResidentCells = 0; //cells the screen surface owns (ADR-0156)
 	unordered_map<HdTileKey, MesenSheets::ShapeId> _shapeIds;
 	vector<MesenSheets::SheetTileKey> _shapeTiles; //drawable art per shape id
 	bool _sheetsBuilt = false;

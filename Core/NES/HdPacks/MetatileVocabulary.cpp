@@ -616,6 +616,96 @@ namespace MesenSheets
 		}
 	}
 
+	//ADR-0156 (F9.9). One sighting: the cell, where it sat, under which fine
+	//scroll. Position and scroll are both part of the identity because the
+	//captured screen is a *positional* surface: the same cell one column to the
+	//left, or the same column at another sub-tile offset, is a pixel the screen
+	//PNG does not cover.
+	struct Sighting
+	{
+		uint32_t Cell;
+		uint32_t Row;
+		uint32_t Col;
+		uint8_t FineX;
+
+		bool operator<(const Sighting& o) const
+		{
+			if(Cell != o.Cell) { return Cell < o.Cell; }
+			if(Row != o.Row) { return Row < o.Row; }
+			if(Col != o.Col) { return Col < o.Col; }
+			return FineX < o.FineX;
+		}
+	};
+
+	//Every sighting a captured frame accounts for, plus which cells any captured
+	//frame shows at all.
+	static void CollectCapturedSightings(const std::vector<GridFrame>& frames, const Vocabulary& vocab, std::set<Sighting>& explained, std::set<uint32_t>& shown)
+	{
+		for(size_t i = 0; i < frames.size(); i++) {
+			if(!frames[i].Captured) {
+				continue;
+			}
+			Placements placements;
+			CollectScreen(frames[i], vocab.Grid, vocab.Grid.PhaseX, vocab.Grid.PhaseY, placements);
+			for(Placements::const_iterator it = placements.begin(); it != placements.end(); ++it) {
+				int32_t index = vocab.Find(it->second);
+				if(index < 0) {
+					continue;
+				}
+				Sighting sighting = { (uint32_t)index, it->first.first, it->first.second, frames[i].FineX };
+				explained.insert(sighting);
+				shown.insert((uint32_t)index);
+			}
+		}
+	}
+
+	//Cells with at least one sighting no captured frame accounts for. Those
+	//pixels do reach the screen through their tile art, so the cell has to stay
+	//on the contact sheet whatever else is true of it.
+	static void CollectUnexplained(const std::vector<GridFrame>& frames, const Vocabulary& vocab, const std::set<Sighting>& explained, std::set<uint32_t>& unexplained)
+	{
+		for(size_t i = 0; i < frames.size(); i++) {
+			if(frames[i].Captured) {
+				continue;
+			}
+			Placements placements;
+			CollectScreen(frames[i], vocab.Grid, vocab.Grid.PhaseX, vocab.Grid.PhaseY, placements);
+			for(Placements::const_iterator it = placements.begin(); it != placements.end(); ++it) {
+				int32_t index = vocab.Find(it->second);
+				if(index < 0) {
+					continue;
+				}
+				Sighting sighting = { (uint32_t)index, it->first.first, it->first.second, frames[i].FineX };
+				if(explained.find(sighting) == explained.end()) {
+					unexplained.insert((uint32_t)index);
+				}
+			}
+		}
+	}
+
+	void MarkScreenResidentCells(const std::vector<GridFrame>& frames, Vocabulary& vocab)
+	{
+		std::set<Sighting> explained;
+		std::set<uint32_t> shown;
+		CollectCapturedSightings(frames, vocab, explained, shown);
+		if(shown.empty()) {
+			return; //nothing was captured: there is no screen surface to route to
+		}
+		std::set<uint32_t> unexplained;
+		CollectUnexplained(frames, vocab, explained, unexplained);
+
+		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
+			MetatileEntry& entry = vocab.Entries[i];
+			//Scene only. hud/font are legibility surfaces of their own (a status
+			//bar sits inside every captured screen, so the test would empty
+			//them), and misc is the noise budget PRD Phase 9 test 7 measures.
+			if(entry.Context != SheetContext::Scene) {
+				continue;
+			}
+			entry.ScreenResident = shown.find(i) != shown.end() && unexplained.find(i) == unexplained.end();
+		}
+	}
+
 	//Second pass at unit 16 (ADR-0153 §3 "unaligned"): rescue the shapes the
 	//chosen phase never covers, nothing more.
 	static void CollectOffPhase(const std::vector<const GridFrame*>& screens, const GridDetection& grid, uint32_t hudTop, uint32_t hudBottom, std::map<MetatileKey, Observation>& obs)
@@ -655,6 +745,9 @@ namespace MesenSheets
 		RemapAdjacency(east, vocab, vocab.East);
 		RemapAdjacency(south, vocab, vocab.South);
 		MarkIsolatedAsMisc(vocab);
+		//After the contexts are final: residency is a scene-cell decision, and
+		//MarkIsolatedAsMisc is what makes a cell stop being a scene cell.
+		MarkScreenResidentCells(frames, vocab);
 		return vocab;
 	}
 }

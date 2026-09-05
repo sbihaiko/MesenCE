@@ -28,6 +28,13 @@ namespace MesenSheets
 	//recording is too thin in aligned placements to justify it.
 	GridDetection DetectGrid(const std::vector<const GridFrame*>& screens, uint32_t hudRows, uint32_t hudBottomRows);
 
+	//ADR-0156 (F9.9): which cells the captured-screen surface already owns.
+	//Sets MetatileEntry::ScreenResident on every scene cell whose every sighting
+	//in `frames` sits where a Captured frame already shows that same cell, under
+	//the same fine scroll. Reads the *whole* stream, not the stable screens: the
+	//sighting that disqualifies a cell is precisely the one no screen captured.
+	void MarkScreenResidentCells(const std::vector<GridFrame>& frames, Vocabulary& vocab);
+
 	//The whole F9.1 pass: stable screens -> HUD rows -> grid detection ->
 	//vocabulary with counts, contexts and E/S adjacency between entries.
 	Vocabulary BuildVocabulary(const std::vector<GridFrame>& frames, const TileLookup& lookup);

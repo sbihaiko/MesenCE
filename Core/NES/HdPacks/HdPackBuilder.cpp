@@ -641,7 +641,17 @@ void HdPackBuilder::OnFrameEnd()
 		if(_stableFrames == StableFramesNeeded && _screensSeen.find(_frameHash) == _screensSeen.end()) {
 			_screensSeen.insert(_frameHash);
 			if(_hdData.BackgroundFileData.size() < MaxScreensPerSession) {
+				size_t before = _hdData.BackgroundFileData.size();
 				CaptureScreen();
+				//F9.9 (ADR-0156): tie the screen that was just written back to
+				//the grid frame it was written from, so the inference can tell
+				//"a <background> covers this" from "this only ever showed as
+				//tiles". Only on a real write - CaptureScreen bails out when
+				//the PNG fails or the screen has no usable anchor, and a screen
+				//that was never written covers nothing.
+				if(_gridFrameLive && _hdData.BackgroundFileData.size() > before) {
+					_gridFrames.back().Captured = true;
+				}
 			}
 		}
 	} else {
@@ -665,6 +675,10 @@ void HdPackBuilder::OnFrameEnd()
 //never correctness.
 void HdPackBuilder::RecordGridFrame()
 {
+	//Set again below once this frame really is _gridFrames.back(); a dropped
+	//frame (empty runs, or the retention cap) must never let CaptureScreen
+	//flag some older frame as the one it just wrote out.
+	_gridFrameLive = false;
 	if(_frameRuns.empty() || _gridFrames.size() >= MesenSheets::kMaxSheetFrames) {
 		return;
 	}
@@ -714,10 +728,12 @@ void HdPackBuilder::RecordGridFrame()
 
 	if(!_gridFrames.empty() && _gridFrames.back().FineX == frame.FineX && _gridFrames.back().SameCells(frame)) {
 		_gridFrames.back().RepeatCount++;
+		_gridFrameLive = true;
 		return;
 	}
 	frame.FrameNumber = (uint32_t)_gridFrames.size();
 	_gridFrames.push_back(frame);
+	_gridFrameLive = true;
 }
 
 //F9.5 (ADR-0153 §2): one on-screen sprite. The shape id comes from the same
@@ -875,7 +891,8 @@ void HdPackBuilder::BuildSheets()
 		", consistency " + std::to_string(vocab.Grid.ChosenConsistency) + " vs 8x8 " + std::to_string(vocab.Grid.Alt8x8) +
 		"), " + std::to_string(vocab.Entries.size()) + " metatiles from " + std::to_string(vocab.DistinctScreens) +
 		" distinct screens, HUD rows " + std::to_string(vocab.HudRows) + "/" + std::to_string(vocab.HudBottomRows) +
-		", " + std::to_string(_spriteSheetCount) + " sprite groups from " + std::to_string(_oamFrames.size()) + " OAM frames");
+		", " + std::to_string(_spriteSheetCount) + " sprite groups from " + std::to_string(_oamFrames.size()) + " OAM frames" +
+		", " + std::to_string(_screenResidentCells) + " cells routed to the captured screens");
 }
 
 //metatiles / hud / font / misc, split by context so a rupee counter never
@@ -889,12 +906,24 @@ void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::
 		{ MesenSheets::SheetContext::Misc, "misc" },
 	};
 
+	_screenResidentCells = 0;
 	for(const auto& sheet : kSheets) {
 		vector<uint32_t> indexes;
 		for(uint32_t i = 0; i < vocab.Entries.size(); i++) {
-			if(vocab.Entries[i].Context == sheet.first) {
-				indexes.push_back(i);
+			if(vocab.Entries[i].Context != sheet.first) {
+				continue;
 			}
+			//F9.9 (ADR-0156): a cell the captured screens already account for
+			//everywhere it was ever seen is not spent a second time as a loose
+			//fragment. It stays in the vocabulary - maps, objects and sprites
+			//address entries by index - and the artist meets it whole, on
+			//backgrounds/screenNNN.png, which is the only positional surface
+			//the format has.
+			if(vocab.Entries[i].ScreenResident) {
+				_screenResidentCells++;
+				continue;
+			}
+			indexes.push_back(i);
 		}
 		if(indexes.empty()) {
 			continue;

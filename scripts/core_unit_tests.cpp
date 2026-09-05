@@ -2837,6 +2837,111 @@ namespace
 		}
 	}
 
+	//---- F9.12: a continuous region ends when the world is replaced --------
+
+	//The Super Mario Bros. shape: a title screen that *is* the level's first
+	//screen with art stamped into it. `overlayCols` x `overlayRows` cells of
+	//the window are replaced, so the two frames agree over
+	//1 - (overlayCols * overlayRows) / (kGridRows * kGridCols) of the
+	//playfield; 18x16 gives 0.70, which is what the installed recording
+	//measures between screen001 and screen003 (see TileSheetTypes.h).
+	GridFrame SheetOverlayScreen(int32_t col0, ShapeId overlay)
+	{
+		GridFrame frame = SheetWorldWindow(col0);
+		for(uint32_t r = 2; r < 18; r++) {
+			for(uint32_t c = 2; c < 20; c++) {
+				frame.Cells[r][c] = (ShapeId)(overlay + (r % 4) * 4 + (c % 4));
+			}
+		}
+		return frame;
+	}
+
+	void TestSheetStitchEndsARegionWhenTheWorldIsReplaced()
+	{
+		//Six title frames, then the same world with the title art gone and the
+		//camera walking right. The step between them reports dx == 0 - the
+		//camera really did not move - at 0.70 agreement, which clears kMinMatch
+		//and used to keep one region: first-writer-wins then kept the overlay
+		//and the level filled in around it. The title's own region is 256 px, so
+		//it is dropped by kContinuousMinWidth and one map is left either way -
+		//what the rule buys is that the map contains no title art.
+		std::vector<GridFrame> frames;
+		const ShapeId overlay = 400;
+		for(int32_t i = 0; i < 6; i++) {
+			GridFrame frame = SheetOverlayScreen(0, overlay);
+			frame.FrameNumber = (uint32_t)i;
+			frames.push_back(frame);
+		}
+		for(int32_t i = 0; i < 120; i++) {
+			GridFrame frame = SheetWorldWindow(i);
+			frame.FrameNumber = (uint32_t)(6 + i);
+			frames.push_back(frame);
+		}
+		std::vector<const GridFrame*> screens;
+
+		Vocabulary vocab = SheetStitchVocabulary(frames);
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, vocab);
+		Check(maps.size() == 1, "BlocoP: the replaced world leaves exactly one continuous map",
+			"maps=" + std::to_string(maps.size()));
+		if(maps.empty()) {
+			return;
+		}
+		Check(maps[0].Mode == StitchMode::Continuous && maps[0].Width > kContinuousMinWidth,
+			"BlocoP: the surviving map is the walked world, not the title screen",
+			"width=" + std::to_string(maps[0].Width));
+
+		//The load-bearing assertion: no placement on the map resolves to a
+		//metatile that carries an overlay shape.
+		size_t overlayPlacements = 0;
+		for(size_t i = 0; i < maps[0].Placements.size(); i++) {
+			uint32_t index = maps[0].Placements[i].Cell;
+			if(index >= vocab.Entries.size()) {
+				continue;
+			}
+			const MetatileKey& key = vocab.Entries[index].Key;
+			for(size_t t = 0; t < key.Tiles.size(); t++) {
+				overlayPlacements += key.Tiles[t] >= overlay ? 1 : 0;
+			}
+		}
+		Check(overlayPlacements == 0, "BlocoP: no title-screen cell is welded into the level map",
+			"overlayCells=" + std::to_string(overlayPlacements));
+	}
+
+	void TestSheetStitchKeepsAStillSceneInOneMap()
+	{
+		//The other side of the same rule: a scroller that stops. Sampled frames
+		//that are the same place must not be read as a replaced world, or every
+		//pause would chop the map. The walk stops for 30 frames halfway, and the
+		//still frames are not byte-identical - a paused scene still animates
+		//(coins, ? blocks, a waterfall), so 24 of the 960 playfield cells
+		//flicker, i.e. the still score is 0.975 and not 1.00. That is the
+		//headroom kStitchWorldAgree has to leave.
+		std::vector<GridFrame> frames;
+		for(int32_t i = 0; i < 60; i++) {
+			GridFrame frame = SheetWorldWindow(i);
+			frame.FrameNumber = (uint32_t)i;
+			frames.push_back(frame);
+		}
+		for(int32_t i = 0; i < 30; i++) {
+			GridFrame frame = SheetWorldWindow(59);
+			for(uint32_t c = 0; c < 24; c++) {
+				frame.Cells[10][c] = (ShapeId)(300 + (i % 3) * 24 + c);
+			}
+			frame.FrameNumber = (uint32_t)(60 + i);
+			frames.push_back(frame);
+		}
+		for(int32_t i = 0; i < 60; i++) {
+			GridFrame frame = SheetWorldWindow(59 + i);
+			frame.FrameNumber = (uint32_t)(90 + i);
+			frames.push_back(frame);
+		}
+		std::vector<const GridFrame*> screens;
+
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, SheetStitchVocabulary(frames));
+		Check(maps.size() == 1, "BlocoP: a scroller that pauses stays one map",
+			"maps=" + std::to_string(maps.size()));
+	}
+
 	//F9.7 fixture: three renderings of one subject - a CHR bank swap that is
 	//byte-identical under another id, a re-upload that lost one bitplane bit,
 	//and one genuinely different subject - plus the pair that caught the first
@@ -2917,6 +3022,193 @@ namespace
 		survivors = CollapseAliases(vocab, indexes, SheetAliasLookup(), SheetPalette(), 0.0, aliases);
 		Check(survivors.size() == 5, "BlocoP: at tolerance 0 only exact duplicates collapse",
 			"survivors=" + std::to_string(survivors.size()));
+	}
+
+
+	//--- F9.9 (ADR-0156): which surface owns a cell --------------------------
+	//
+	//A captured screen is written as backgrounds/screenNNN.png and drawn at
+	//priority 20 (BehindFgSpritesPriority), i.e. *over* the background tiles.
+	//So a cell whose every sighting sits where a captured screen already shows
+	//it is never the pixel that reaches the display, and a cell spent on it in
+	//metatiles.png is paint the artist can never see. These cases pin the two
+	//halves of the disqualifier: an unexplained position, and an unexplained
+	//fine scroll.
+
+	//Shapes 900+ are the fixture's "figure": a 2x2 block an artist would
+	//recognise as a subject, distinct from the backdrop vocabulary.
+	const ShapeId kSheetFigureShape = 900;
+
+	void SheetPlaceFigure(GridFrame& frame, uint32_t row, uint32_t col)
+	{
+		for(uint32_t r = 0; r < 2; r++) {
+			for(uint32_t c = 0; c < 2; c++) {
+				frame.Cells[row + r][col + c] = (ShapeId)(kSheetFigureShape + r * 2 + c);
+			}
+		}
+	}
+
+	//Two static screens, each held far past StableFramesNeeded, with a figure
+	//standing on the first one. `captured` is what the recorder would set after
+	//CaptureScreen wrote the PNG.
+	std::vector<GridFrame> SheetScreenRecording(bool captured)
+	{
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 2; i++) {
+			GridFrame frame = SheetBlockScreen(i, 3);
+			if(i == 0) {
+				SheetPlaceFigure(frame, 10, 10);
+			}
+			frame.RepeatCount = 30;
+			frame.FrameNumber = i;
+			frame.Captured = captured;
+			frames.push_back(frame);
+		}
+		return frames;
+	}
+
+	int32_t SheetFigureIndex(const Vocabulary& vocab)
+	{
+		return vocab.Find(MetatileKey{ { kSheetFigureShape, (ShapeId)(kSheetFigureShape + 1),
+			(ShapeId)(kSheetFigureShape + 2), (ShapeId)(kSheetFigureShape + 3) } });
+	}
+
+	uint32_t SheetResidentCount(const Vocabulary& vocab)
+	{
+		uint32_t n = 0;
+		for(size_t i = 0; i < vocab.Entries.size(); i++) {
+			n += vocab.Entries[i].ScreenResident ? 1 : 0;
+		}
+		return n;
+	}
+
+	uint32_t SheetSceneCount(const Vocabulary& vocab)
+	{
+		uint32_t n = 0;
+		for(size_t i = 0; i < vocab.Entries.size(); i++) {
+			n += vocab.Entries[i].Context == SheetContext::Scene ? 1 : 0;
+		}
+		return n;
+	}
+
+	void TestSheetCapturedScreensOwnTheirCells()
+	{
+		std::vector<GridFrame> frames = SheetScreenRecording(true);
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+
+		uint32_t scene = SheetSceneCount(vocab);
+		Check(scene > 0 && SheetResidentCount(vocab) == scene,
+			"BlocoP: a recording that is nothing but captured screens routes every scene cell to them",
+			"scene=" + std::to_string(scene) + " resident=" + std::to_string(SheetResidentCount(vocab)));
+		//Routing is a sheet decision, never a vocabulary one: maps, objects and
+		//sprites address entries by index (ADR-0153 §4, F9.7).
+		Check(SheetFigureIndex(vocab) >= 0,
+			"BlocoP: a routed cell keeps its vocabulary entry and its index");
+	}
+
+	void TestSheetACellSeenOffTheScreenStaysOnTheSheet()
+	{
+		//The figure walks: one frame nobody captured shows it two columns to the
+		//right, where no <background> covers it. Its tiles do render there, so
+		//the cell has to stay reachable on metatiles.png.
+		std::vector<GridFrame> frames = SheetScreenRecording(true);
+		GridFrame moved = SheetBlockScreen(0, 3);
+		SheetPlaceFigure(moved, 10, 10);
+		SheetPlaceFigure(moved, 10, 12);
+		moved.FrameNumber = 2;
+		frames.push_back(moved);
+
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		int32_t figure = SheetFigureIndex(vocab);
+		Check(figure >= 0, "BlocoP: the moving figure is in the vocabulary to begin with");
+		if(figure < 0) {
+			return;
+		}
+		Check(!vocab.Entries[figure].ScreenResident,
+			"BlocoP: a cell seen at a position no captured screen explains stays on the contact sheet");
+		Check(SheetResidentCount(vocab) > 0,
+			"BlocoP: one moving cell does not drag the whole backdrop off the sheet",
+			"resident=" + std::to_string(SheetResidentCount(vocab)));
+	}
+
+	void TestSheetAScrolledSightingIsNotExplained()
+	{
+		//The other half of the disqualifier, and the one that separates a
+		//non-scrolling game from a scroller: the same cells, at the same grid
+		//positions, under a fine scroll the captured screen was not showing.
+		//The screen PNG is pixel-positional, so those are different pixels.
+		std::vector<GridFrame> still = SheetScreenRecording(true);
+		Vocabulary before = BuildVocabulary(still, SheetLookup());
+
+		std::vector<GridFrame> scrolled = SheetScreenRecording(true);
+		GridFrame shifted = SheetBlockScreen(0, 3);
+		SheetPlaceFigure(shifted, 10, 10);
+		shifted.FineX = 3;
+		shifted.FrameNumber = 2;
+		scrolled.push_back(shifted);
+		Vocabulary after = BuildVocabulary(scrolled, SheetLookup());
+
+		Check(SheetResidentCount(after) < SheetResidentCount(before),
+			"BlocoP: a sighting under another fine scroll takes cells back off the screen surface",
+			"before=" + std::to_string(SheetResidentCount(before)) + " after=" + std::to_string(SheetResidentCount(after)));
+		int32_t figure = SheetFigureIndex(after);
+		Check(figure >= 0 && !after.Entries[figure].ScreenResident,
+			"BlocoP: the scrolled frame disqualifies the very cells it re-showed");
+	}
+
+	void TestSheetNothingIsRoutedWithoutACapturedScreen()
+	{
+		//A recording whose screens were never written out (the PNG failed, the
+		//per-session cap was hit, or the frames never held still) has no
+		//positional surface to route to, so nothing may leave the sheet.
+		std::vector<GridFrame> frames = SheetScreenRecording(false);
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		Check(SheetSceneCount(vocab) > 0 && SheetResidentCount(vocab) == 0,
+			"BlocoP: with no captured screen, no cell is routed off the contact sheet",
+			"resident=" + std::to_string(SheetResidentCount(vocab)));
+	}
+
+	void TestSheetResidencyLeavesTheHudSheetAlone()
+	{
+		//A status bar sits inside every captured screen, so the residency test
+		//would empty hud.png and font.png - the two sheets whose whole point is
+		//that the artist finds the HUD without hunting for it. Scene only.
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 3; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 1);
+			//Four frozen rows, not two: a unit-16 metatile spans two rows, and
+			//InHudBand only counts a cell whose every row is inside the band -
+			//the reason ADR-0153 records hud.png coming out empty on Zelda,
+			//whose status bar is three rows tall.
+			for(uint32_t row = 0; row < 4; row++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[row][c] = (ShapeId)(500 + row * 32 + c);
+				}
+			}
+			for(uint32_t c = 24; c < kGridCols; c++) {
+				frame.Cells[3][c] = (ShapeId)(900 + i * 32 + c);
+			}
+			frame.RepeatCount = 30;
+			frame.FrameNumber = i;
+			frame.Captured = true;
+			frames.push_back(frame);
+		}
+
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		uint32_t band = 0;
+		uint32_t routedBand = 0;
+		for(size_t i = 0; i < vocab.Entries.size(); i++) {
+			SheetContext context = vocab.Entries[i].Context;
+			if(context != SheetContext::Hud && context != SheetContext::Font) {
+				continue;
+			}
+			band++;
+			routedBand += vocab.Entries[i].ScreenResident ? 1 : 0;
+		}
+		Check(band > 0, "BlocoP: the fixture really does produce a status bar",
+			"band=" + std::to_string(band));
+		Check(routedBand == 0, "BlocoP: hud and font cells are never routed to the screen surface",
+			"routed=" + std::to_string(routedBand));
 	}
 
 
@@ -3224,7 +3516,14 @@ int main()
 	TestSheetStitchJoinsScreensThatShareABorderBand();
 	TestSheetStitchRefusesScreensWithoutAdjacencyEvidence();
 	TestSheetStitchKeepsAContinuousScrollInOneMap();
+	TestSheetStitchEndsARegionWhenTheWorldIsReplaced();
+	TestSheetStitchKeepsAStillSceneInOneMap();
 	TestSheetAliasesCollapseOntoTheFirstSurvivor();
+	TestSheetCapturedScreensOwnTheirCells();
+	TestSheetACellSeenOffTheScreenStaysOnTheSheet();
+	TestSheetAScrolledSightingIsNotExplained();
+	TestSheetNothingIsRoutedWithoutACapturedScreen();
+	TestSheetResidencyLeavesTheHudSheetAlone();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();
 	TestSheetJsonCarriesTheGridDecision();

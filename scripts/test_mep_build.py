@@ -413,6 +413,56 @@ def edited_precedence_tests(root: Path):
         ok("a sheet with no *.orig.png twin counts as fully painted and keeps its static rank")
 
 
+def screen_residency_tests(root: Path):
+    """ADR-0156 (F9.9): the cells a captured screen owns leave `metatiles.png`,
+    so the sidecar stops listing them and no sheet claims their tile keys any
+    more. Two things have to hold for that to be safe: the build must not
+    break, and the `<background>` line plus its PNG - the surface those cells
+    were routed *to* - must come through the rebuild intact."""
+    folder, vocab, cells = make_sheet_folder(root, "screen-resident")
+    sheets = folder / "textures" / "sheets"
+    unit, gutter, columns = 16, 1, 3
+
+    # Cell 5 is the routed one: metatiles-only, so nothing else can claim its
+    # keys. The builder would not have drawn it at all; dropping it from the
+    # sidecar is the same thing as far as the slicing contract goes.
+    kept = [c for c in cells if c["index"] != 5]
+    (sheets / "metatiles.json").write_text(
+        serialize_sheet("metatiles", unit, gutter, columns, "metatiles.png",
+                        "metatiles.orig.png", kept),
+        encoding="utf-8")
+
+    # The screen the cell was routed to, as the emulator writes it: a
+    # condition-gated <background> in the body, PNG under auto/textures only.
+    hires = folder / "textures" / "hires.txt"
+    bg_line = "[screen001_A&screen001_B]<background>backgrounds/screen001.png,1,0,0,20"
+    hires.write_text(hires.read_text(encoding="utf-8") + bg_line + "\n", encoding="utf-8")
+    auto_bg = folder / "auto" / "textures" / "backgrounds"
+    auto_bg.mkdir(parents=True)
+    (auto_bg / "screen001.png").write_bytes(png(256, 240))
+
+    out = run("build", str(folder))
+    if out is None:
+        return
+    _imgs, tiles = parse_hires(hires)
+    routed = [s for s in (18, 19) if (tile_hex(s), PAL_HEX) in tiles]
+    if routed:
+        fail(f"a routed cell still claims tile keys {routed} after the rebuild")
+    else:
+        ok("ADR-0156: a cell routed to the screen surface claims no tile key")
+    if (tile_hex(0), PAL_HEX) not in tiles:
+        fail("routing one cell off metatiles.png took the rest of the sheet with it")
+    else:
+        ok("ADR-0156: the cells that stayed on the sheet still round-trip")
+    body = [l.strip() for l in hires.read_text(encoding="utf-8").splitlines()]
+    if bg_line not in body:
+        fail("the <background> line the cells were routed to did not survive the rebuild")
+    elif not (folder / "textures" / "backgrounds" / "screen001.png").is_file():
+        fail("the captured screen was not copied up into textures/")
+    else:
+        ok("ADR-0156: the captured screen survives the rebuild, line and PNG")
+
+
 def sheet_alias_tests(root: Path):
     """ADR-0153 §3 alias pass (F9.7): a cell absorbs the vocabulary entries that
     render to the same pixels, and the build must emit a <tile> for every one of
@@ -600,6 +650,7 @@ def sheet_round_trip_tests(root: Path):
         fail(f"unknown sheet version: {out}")
 
     edited_precedence_tests(root)
+    screen_residency_tests(root)
 
 
 def run(*argv, expect=0, cwd=None):
