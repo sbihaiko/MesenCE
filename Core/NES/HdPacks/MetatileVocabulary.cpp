@@ -724,6 +724,8 @@ namespace MesenSheets
 		std::set<uint32_t> unexplained;
 		CollectUnexplained(frames, vocab, explained, unexplained);
 
+		uint32_t scene = 0;
+		uint32_t resident = 0;
 		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
 			MetatileEntry& entry = vocab.Entries[i];
 			//Scene only. hud/font are legibility surfaces of their own (a status
@@ -733,6 +735,17 @@ namespace MesenSheets
 				continue;
 			}
 			entry.ScreenResident = shown.find(i) != shown.end() && unexplained.find(i) == unexplained.end();
+			scene++;
+			resident += entry.ScreenResident ? 1 : 0;
+		}
+
+		//The sampling floor: a rule that takes the whole scene sheet has stopped
+		//describing the game and started describing the length of the recording.
+		if(scene > 0 && (double)resident / (double)scene > kMaxRoutedSceneShare) {
+			for(size_t i = 0; i < vocab.Entries.size(); i++) {
+				vocab.Entries[i].ScreenResident = false;
+			}
+			vocab.RoutingWithheld = true;
 		}
 	}
 

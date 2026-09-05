@@ -244,6 +244,7 @@ doc-checks: check-manifest
 	./scripts/verify-ui-logic-firewall.sh
 	./scripts/check-file-loc.sh Core/Shared/Audio/MidiExporter.cpp 200
 	./scripts/check-file-loc.sh scripts/gameplay_probe.py 200
+	./scripts/check-file-loc.sh scripts/gameplay_screen_metrics.py 200
 	./scripts/check-file-loc.sh scripts/sheet_report.py 200
 	./scripts/check-file-loc.sh scripts/bootstrap_auto_packs.sh 200
 	./scripts/checks/verify_pack_host_allowlist_embed.sh

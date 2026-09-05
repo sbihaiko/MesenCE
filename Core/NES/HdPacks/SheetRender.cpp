@@ -339,6 +339,7 @@ namespace MesenSheets
 		json << "  \"cell\": { \"w\": " << doc.CellWidth << ", \"h\": " << doc.CellHeight << " },\n";
 		json << "  \"gutter\": " << doc.Gutter << ",\n";
 		json << "  \"columns\": " << doc.Columns << ",\n";
+		json << "  \"routedCells\": " << doc.RoutedCells << ",\n";
 		json << "  \"sheet\": \"" << doc.SheetFile << "\",\n";
 		json << "  \"reference\": \"" << doc.ReferenceFile << "\",\n";
 

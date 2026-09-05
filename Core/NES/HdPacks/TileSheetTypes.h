@@ -345,6 +345,26 @@ namespace MesenSheets
 	constexpr double kGameplayTileStructure = 0.86;
 	constexpr double kGameplayMiscShare = 0.32;
 
+	//A second floor, for the failure the two clauses above cannot see. Residency
+	//is proved against the *retained* frames, which are a sample (kMaxSheetFrames);
+	//for a game whose screen space is combinatorial - Tetris, where every board
+	//state is another screen - that sample says "every sighting is covered" when
+	//what it means is "the recording did not last long enough to see otherwise".
+	//The pack then ships with no metatiles.png at all and the artist has nothing
+	//to paint but the handful of screens that happened to be captured; on a
+	//variant whose anchors miss (issue #164), the result is vanilla.
+	//
+	//Measured over the 30-ROM library re-recorded on 2026-09-05, as a share of
+	//the *scene* vocabulary: six games sit at 0.974-1.000 and leave a sheet of
+	//1 to 10 cells (Mario Bros. 106/106 and no sheet at all, Tennis 206/207,
+	//Tetris 648/651, Donkey Kong 171/172, Golf 184/186, Tetris 2 376/386). The
+	//next game down is Zelda 1 at 0.879, which still leaves 28 usable cells, and
+	//below it the field is continuous (Lifeforce 0.770, Mega Man 2 0.754,
+	//Punch-Out!! 0.637, Super Mario Bros. 0.106). 0.93 is the midpoint of that
+	//gap. Above it, the evidence is treated as an artefact of sampling and
+	//nothing is routed - the same asymmetry as the clauses above.
+	constexpr double kMaxRoutedSceneShare = 0.93;
+
 	struct Vocabulary
 	{
 		GridDetection Grid;

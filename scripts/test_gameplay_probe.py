@@ -35,7 +35,8 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gameplay_probe  # noqa: E402
+import gameplay_probe
+import gameplay_screen_metrics  # noqa: E402
 
 FAILED = 0
 PASSED = 0
@@ -122,10 +123,11 @@ def write_pack(root, sheets=None, screens=(), scale=1, name="Game"):
     return str(sheet_dir)
 
 
-def metatiles(alt8x8=0.97, cells=40):
+def metatiles(alt8x8=0.97, cells=40, routed=0):
     return {"version": 1, "kind": "metatiles", "gridUnit": 16,
             "gridPhase": {"x": 0, "y": 0},
             "gridConsistency": {"chosen": alt8x8, "alt8x8": alt8x8},
+            "routedCells": routed,
             "cells": [{"index": i} for i in range(cells)]}
 
 
@@ -143,7 +145,7 @@ def screen_tiles(sheet_dir, index=0):
     path = os.path.join(os.path.dirname(sheet_dir), "backgrounds",
                         "screen%03d.orig.png" % index)
     try:
-        return gameplay_probe._screen_tiles(path)
+        return gameplay_screen_metrics._screen_tiles(path)
     except Exception as exc:  # noqa: BLE001 - reported as a failure below
         return exc
 
@@ -204,6 +206,33 @@ def test_clause_b_misc_share(root):
         fail(f"clause B clears a small misc share (got {clean})")
         return
     ok("clause B: a misc-dominated vocabulary is menu-only, a small misc share is not")
+
+
+def test_clause_b_counts_cells_routed_to_the_screens(root):
+    # A pack where F9.9 routed most of the scene vocabulary onto the captured
+    # screens looks misc-dominated if you count only what is left on the sheet:
+    # 6 metatiles against 14 misc is 70 %, well over the bar. Those 34 routed
+    # cells are scene cells that exist - the routing is why they are not drawn
+    # here - so they belong in the denominator. This is not hypothetical: the
+    # re-recorded library came back with Zelda 1 menu-only at 33 % (203 of 231
+    # scene cells routed) and Tetris at 95 % (648 of 651).
+    routed = verdict_of(write_pack(
+        root, sheets={"metatiles.json": metatiles(cells=6, routed=34),
+                      "misc.json": misc_sheet(14)},
+        screens=[tiled()], name="Routed"))
+    if routed["verdict"] != "gameplay":
+        fail(f"routed cells are counted as vocabulary, not as absence (got {routed})")
+        return
+    # And the fix must not blind the clause: with nothing routed, the same
+    # counts are a genuinely misc-dominated pack.
+    thin = verdict_of(write_pack(
+        root, sheets={"metatiles.json": metatiles(cells=6, routed=0),
+                      "misc.json": misc_sheet(14)},
+        screens=[tiled()], name="ThinNoRouting"))
+    if thin["verdict"] != "menu-only":
+        fail(f"without routing the same sheet is still misc-dominated (got {thin})")
+        return
+    ok("clause B: cells routed to the captured screens stay in the denominator")
 
 
 def test_clause_c_churn(root):
@@ -270,7 +299,7 @@ def test_clause_d_takes_the_best_screen(root):
 def test_reuse_abstains_on_a_near_blank_screen(root):
     result = verdict_of(write_pack(
         root, sheets={"metatiles.json": metatiles()},
-        screens=[blank_but(gameplay_probe.MIN_DRAWN_TILES - 1)], name="Fade"))
+        screens=[blank_but(gameplay_screen_metrics.MIN_DRAWN_TILES - 1)], name="Fade"))
     if result["metrics"]["reuse"] is not None:
         fail(f"a near-blank screen gets no vote (got {result['metrics']})")
         return
@@ -297,18 +326,18 @@ def test_screens_are_sampled(root):
     sheet_dir = write_pack(root, sheets={"metatiles.json": metatiles()},
                            screens=[tiled(i) for i in range(total)], name="Many")
     seen = []
-    original = gameplay_probe._screen_tiles
+    original = gameplay_screen_metrics._screen_tiles
 
     def counting(path):
         seen.append(path)
         return original(path)
 
-    gameplay_probe._screen_tiles = counting
+    gameplay_screen_metrics._screen_tiles = counting
     try:
         result = verdict_of(sheet_dir)
     finally:
-        gameplay_probe._screen_tiles = original
-    if len(seen) > cap or len(seen) > gameplay_probe.MAX_SCREENS_SAMPLED:
+        gameplay_screen_metrics._screen_tiles = original
+    if len(seen) > cap or len(seen) > gameplay_screen_metrics.MAX_SCREENS_SAMPLED:
         fail(f"at most {cap} screens are decoded out of {total} (decoded {len(seen)})")
         return
     if len(set(seen)) != len(seen):
@@ -389,6 +418,7 @@ def main():
         test_screen_tiles_rejects_odd_size(tmp)
         test_clause_a_tile_structure(tmp)
         test_clause_b_misc_share(tmp)
+        test_clause_b_counts_cells_routed_to_the_screens(tmp)
         test_clause_c_churn(tmp)
         test_clause_c_abstains_without_a_series(tmp)
         test_clause_d_tile_reuse(tmp)

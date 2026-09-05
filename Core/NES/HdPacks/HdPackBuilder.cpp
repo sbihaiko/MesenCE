@@ -912,6 +912,7 @@ void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::
 	_screenResidentCells = 0;
 	for(const auto& sheet : kSheets) {
 		vector<uint32_t> indexes;
+		uint32_t routedHere = 0;
 		for(uint32_t i = 0; i < vocab.Entries.size(); i++) {
 			if(vocab.Entries[i].Context != sheet.first) {
 				continue;
@@ -924,6 +925,7 @@ void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::
 			//the format has.
 			if(vocab.Entries[i].ScreenResident) {
 				_screenResidentCells++;
+				routedHere++;
 				continue;
 			}
 			indexes.push_back(i);
@@ -955,6 +957,7 @@ void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::
 		doc.Grid = vocab.Grid;
 		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
 		doc.Columns = columns;
+		doc.RoutedCells = routedHere;
 		WriteSheetFiles(folder, sheet.second, image, doc, lookup);
 	}
 }

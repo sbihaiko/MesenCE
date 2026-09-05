@@ -79,6 +79,13 @@ namespace MesenSheets
 		uint32_t Gutter = kSheetGutter;
 		uint32_t Columns = 1;
 		std::vector<SheetCell> Cells;
+		//F9.9: scene cells this sheet does *not* show because a captured screen
+		//owns them (ADR-0156). Written so a reader can tell a sheet that is
+		//small because the recording was thin from one that is small because
+		//the routing worked - the two look identical in a cell count, and
+		//scripts/gameplay_probe.py read the difference backwards until it had
+		//this number.
+		uint32_t RoutedCells = 0;
 
 		//map only
 		bool IsMap = false;

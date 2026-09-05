@@ -3064,6 +3064,24 @@ namespace
 			frame.Captured = captured;
 			frames.push_back(frame);
 		}
+		//Somewhere the recording went that no screen was written for. Without
+		//it every scene cell would be routed and the sampling floor
+		//(kMaxRoutedSceneShare) would withhold the lot - which is the right
+		//behaviour for a real pack and a useless fixture for testing what the
+		//residency rule itself decides.
+		GridFrame elsewhere;
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				//A disjoint shape space on purpose: reusing SheetBlockScreen's
+				//would put the captured screens' own cells at positions no
+				//screen explains, and disqualify the very cells under test.
+				uint32_t block = ((r / 2) * 7u + (c / 2)) % 5u;
+				elsewhere.Cells[r][c] = (ShapeId)(500 + block * 4 + (r % 2) * 2 + (c % 2));
+			}
+		}
+		elsewhere.RepeatCount = 30;
+		elsewhere.FrameNumber = 2;
+		frames.push_back(elsewhere);
 		return frames;
 	}
 
@@ -3097,9 +3115,10 @@ namespace
 		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
 
 		uint32_t scene = SheetSceneCount(vocab);
-		Check(scene > 0 && SheetResidentCount(vocab) == scene,
-			"BlocoP: a recording that is nothing but captured screens routes every scene cell to them",
-			"scene=" + std::to_string(scene) + " resident=" + std::to_string(SheetResidentCount(vocab)));
+		uint32_t resident = SheetResidentCount(vocab);
+		Check(scene > 0 && resident > 0 && resident < scene,
+			"BlocoP: the cells a captured screen covers are routed to it, and the ones it never showed are not",
+			"scene=" + std::to_string(scene) + " resident=" + std::to_string(resident));
 		//Routing is a sheet decision, never a vocabulary one: maps, objects and
 		//sprites address entries by index (ADR-0153 §4, F9.7).
 		Check(SheetFigureIndex(vocab) >= 0,
@@ -3207,6 +3226,33 @@ namespace
 			"BlocoP: a tiled playfield clears the routing floor",
 			"withheld=" + std::to_string(ok.RoutingWithheld ? 1 : 0) +
 			" resident=" + std::to_string(SheetResidentCount(ok)));
+	}
+
+	void TestSheetRoutingIsWithheldWhenItWouldTakeTheWholeSheet()
+	{
+		//Residency is proved against the *retained* frames, which are a sample.
+		//A recording of a single-screen game satisfies "every sighting is
+		//explained" for its whole scene vocabulary, and the pack then ships
+		//with no metatiles.png at all - measured on the re-recorded library,
+		//where Mario Bros. routed 106 of 106 and Tetris 648 of 651. Above
+		//kMaxRoutedSceneShare the evidence is a fact about the recording's
+		//length, not about the game, so nothing is routed.
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 2; i++) {
+			//The same screen twice: nothing is ever seen anywhere else, so
+			//every scene cell qualifies and the share reaches 1.0.
+			GridFrame frame = SheetBlockScreen(0, 3);
+			frame.RepeatCount = 30;
+			frame.FrameNumber = i;
+			frame.Captured = true;
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		Check(SheetSceneCount(vocab) > 0 && vocab.RoutingWithheld && SheetResidentCount(vocab) == 0,
+			"BlocoP: routing that would take the whole scene sheet is withheld",
+			"scene=" + std::to_string(SheetSceneCount(vocab)) +
+			" withheld=" + std::to_string(vocab.RoutingWithheld ? 1 : 0) +
+			" resident=" + std::to_string(SheetResidentCount(vocab)));
 	}
 
 	void TestSheetResidencyLeavesTheHudSheetAlone()
@@ -3565,6 +3611,7 @@ int main()
 	TestSheetAScrolledSightingIsNotExplained();
 	TestSheetNothingIsRoutedWithoutACapturedScreen();
 	TestSheetRoutingIsWithheldWhenTheRecordingIsNotGameplay();
+	TestSheetRoutingIsWithheldWhenItWouldTakeTheWholeSheet();
 	TestSheetResidencyLeavesTheHudSheetAlone();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();
