@@ -126,7 +126,7 @@ cp -R "$PACK_DIR" "$WORK/roms/$ROM_NAME"
 LOG="$WORK/log.txt"
 # The harness copies MesenNesDB.txt from the repo-root cwd, so run from there.
 # The exit code is NOT discarded: a hard crash (SIGSEGV/SIGABRT) kills the
-# harness before any "emulacao parou" line, and must fail the smoke.
+# harness before any "emulation stopped" line, and must fail the smoke.
 set +e
 (cd "$REPO_ROOT" && ./scripts/headless_record "$WORK/roms/$ROM_BASE" "$SECONDS_BOOT" "$WORK/out/x" log) > "$LOG" 2>&1
 HARNESS_EXIT=$?
@@ -139,10 +139,10 @@ skipped_lines=()
 if [[ "$HARNESS_EXIT" -ne 0 ]]; then
 	fail_lines+=("boot: headless_record exited $HARNESS_EXIT (hard crash / load failure?)")
 fi
-if ! grep -q "ROM carregada" "$LOG"; then
-	fail_lines+=("boot: ROM did not load (no 'ROM carregada' line)")
+if ! grep -q "ROM loaded" "$LOG"; then
+	fail_lines+=("boot: ROM did not load (no 'ROM loaded' line)")
 fi
-if grep -q "emulacao parou inesperadamente\|FALHA ao carregar ROM" "$LOG"; then
+if grep -q "emulation stopped unexpectedly\|failed to load ROM" "$LOG"; then
 	fail_lines+=("boot: emulation died during the run")
 fi
 

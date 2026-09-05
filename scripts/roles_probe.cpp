@@ -240,7 +240,7 @@ int main(int argc, char** argv)
 		SetPreferences(prefs);
 	}
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
-		fprintf(stderr, "FALHA ao carregar ROM\n");
+		fprintf(stderr, "failed to load ROM\n");
 		return 2;
 	}
 	InitializeDebugger(); //input overrides + console state

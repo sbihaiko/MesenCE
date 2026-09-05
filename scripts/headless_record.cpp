@@ -111,7 +111,9 @@ namespace
 int main(int argc, char** argv)
 {
 	if(argc < 4) {
-		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack]\n", argv[0]);
+		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
+			"       [screenshot] [log] [bootstrap] [filter=<name>] [mep-off]\n"
+			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -256,12 +258,12 @@ int main(int argc, char** argv)
 	}
 
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
-		fprintf(stderr, "FALHA ao carregar ROM: %s\n", rom.c_str());
+		fprintf(stderr, "failed to load ROM: %s\n", rom.c_str());
 		return 1;
 	}
 	TimingInfoAbi timing = GetTimingInfo(CpuTypeFromExtension(rom));
-	printf("ROM carregada: %s%s\n", rom.c_str(), pal ? " [regiao forcada: PAL]" : "");
-	printf("fps emulado: %.3f (clock mestre %u Hz)\n", timing.Fps, timing.MasterClockRate);
+	printf("ROM loaded: %s%s\n", rom.c_str(), pal ? " [region forced: PAL]" : "");
+	printf("emulated fps: %.3f (master clock %u Hz)\n", timing.Fps, timing.MasterClockRate);
 
 	std::string mid = prefix + ".mid", vgm = prefix + ".vgm";
 	std::string packFolder = std::filesystem::absolute(prefix + "-hdpack").string();
@@ -272,7 +274,7 @@ int main(int argc, char** argv)
 		options.Scale = 1;
 		options.ChrRamBankSize = 0x1000;
 		ExecuteShortcut({ EmulatorShortcut::ExportRomTilesHdPack, 0, &options });
-		printf("export estatico de tiles: hdpack=%s\n", packFolder.c_str());
+		printf("static tile export: hdpack=%s\n", packFolder.c_str());
 		//short grace period so the emulation thread is fully up before Stop()
 		seconds = std::min(seconds, 0.5);
 	} else if(hdPack) {
@@ -282,27 +284,27 @@ int main(int argc, char** argv)
 		options.Scale = 1;
 		options.ChrRamBankSize = 0x1000; //NES-only field
 		ExecuteShortcut({ EmulatorShortcut::StartRecordHdPack, 0, &options });
-		printf("gravando: hdpack=%s\n", packFolder.c_str());
+		printf("recording: hdpack=%s\n", packFolder.c_str());
 	} else if(screenshot) {
-		printf("rodando %.1fs para screenshot final\n", seconds);
+		printf("running %.1fs for a final screenshot\n", seconds);
 	} else {
 		MidiRecord((char*)mid.c_str());
 		VgmRecord((char*)vgm.c_str());
-		printf("gravando: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
+		printf("recording: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
 	}
 
 	auto t0 = std::chrono::steady_clock::now();
 	while(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 		if(!IsRunning()) {
-			fprintf(stderr, "emulacao parou inesperadamente\n");
+			fprintf(stderr, "emulation stopped unexpectedly\n");
 			break;
 		}
 	}
 
 	if(screenshot) {
 		TakeScreenshot();
-		printf("screenshot salvo em %s\n", (home / "Screenshots").string().c_str());
+		printf("screenshot saved in %s\n", (home / "Screenshots").string().c_str());
 	}
 
 	if(hdPack) {
@@ -311,7 +313,7 @@ int main(int argc, char** argv)
 		MidiStop();
 		VgmStop();
 	}
-	printf("captura encerrada (%.1fs)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+	printf("capture finished (%.1fs)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
 	if(dumpLog) {
 		std::string log(65536, '\0');
 		GetLog(log.data(), (uint32_t)log.size());
