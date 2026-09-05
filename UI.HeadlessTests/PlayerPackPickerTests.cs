@@ -65,4 +65,39 @@ public class PlayerPackPickerTests
 		Dispatcher.UIThread.RunJobs();
 		Assert.True(choices[0].IsFocused);
 	}
+
+	//ADR-0152: a row whose artifact carries reviewed known-missing declarations
+	//says so in the picker, attributing the gap to MesenCE validation rather than
+	//to the author. The row without an errata shows no such line at all - the
+	//marker has to stay rare enough to mean something.
+	[AvaloniaFact]
+	public void A_known_missing_declaration_is_shown_on_its_own_row()
+	{
+		Assert.SkipWhen(!NativeCore.IsAvailable, NativeCore.SkipReason ?? "");
+
+		ConfigManager.Config.Preferences.UiMode = UiMode.Player;
+		MainWindow window = new();
+		window.Show();
+		MainWindowViewModel model = Assert.IsType<MainWindowViewModel>(window.DataContext);
+
+		CommunityPackErrata errata = new() {
+			DeclaredBy = "MesenCE validation",
+			KnownMissing = new[] { new CommunityPackKnownMissing { Manifest = "hires.txt", Tag = "background", Target = "selectscreen.png" } }
+		};
+		model.PlayerPackChoices = new() {
+			new PlayerPackChoice(new PackPreferenceResolver.Candidate { Container = "/packs/aaa", Name = "Aaa Pack", PackId = "issue-1", Enabled = true }, null, 0, errata),
+			new PlayerPackChoice(new PackPreferenceResolver.Candidate { Container = "/packs/bbb", Name = "Bbb Pack", PackId = "issue-2", Enabled = true }, null)
+		};
+		model.IsPlayerPackPickerVisible = true;
+		Dispatcher.UIThread.RunJobs();
+
+		Button[] choices = window.FindNamed<ItemsControl>("PackPickerList").FindAll<Button>().ToArray();
+		Assert.Equal(2, choices.Length);
+
+		string[] declaredRow = choices[0].FindAll<TextBlock>().Where(t => t.IsVisible).Select(t => t.Text ?? "").ToArray();
+		Assert.Contains(declaredRow, t => t == "1 known-missing asset — declared by MesenCE validation, not by the author");
+
+		string[] cleanRow = choices[1].FindAll<TextBlock>().Where(t => t.IsVisible).Select(t => t.Text ?? "").ToArray();
+		Assert.DoesNotContain(cleanRow, t => t.Contains("known-missing"));
+	}
 }
