@@ -14,6 +14,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Ninja Gaiden (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/145) |
 | Donkey Kong (JU) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/144) |
 | Zelda II: The Adventure of Link (USA) | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/141) |
+| Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/147) |
 
 † This pack references one or more files it does not ship. The gap was
 checked and declared by MesenCE validation — **not by the pack's author** —
