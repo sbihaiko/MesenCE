@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <filesystem>
 #include <thread>
 #include <chrono>
@@ -58,8 +59,17 @@ struct ExecuteShortcutParamsAbi
 	void* ParamPtr;
 };
 
+//Mirror of Core/Debugger/DebugTypes.h DebugControllerState (14 bools) - that
+//header drags pch.h in; the layout is trivially stable.
+struct DebugControllerState
+{
+	bool A, B, X, Y, L, R, U, D, Up, Down, Left, Right, Select, Start;
+};
+
 extern "C"
 {
+	void SetInputOverrides(uint32_t index, DebugControllerState state);
+	void LoadStateFile(char* filepath);
 	TimingInfoAbi GetTimingInfo(uint8_t cpuType);
 	void InitDll();
 	void InitializeEmu(const char* homeFolder, void* windowHandle, void* viewerHandle, bool softwareRenderer, bool noAudio, bool noVideo, bool noInput);
@@ -113,7 +123,8 @@ int main(int argc, char** argv)
 	if(argc < 4) {
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [log] [bootstrap] [filter=<name>] [mep-off]\n"
-			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n", argv[0]);
+			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
+			"       [state=<file.mss>] [input=<script>]  (spike: scripted play)\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -128,6 +139,10 @@ int main(int argc, char** argv)
 	EnhancementPackConfig mep = {};
 	mep.BootstrapEnhancementFolder = false; //opt-in headless ("bootstrap" flag) - it writes beside the ROM
 	std::string mepDisable;
+	std::string stateFile;
+	//input script: lines "<seconds> <buttons>", buttons in U D L R A B S(elect) T(start) or "-"
+	struct InputStep { double seconds; DebugControllerState state; };
+	std::vector<InputStep> inputScript;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
@@ -173,6 +188,42 @@ int main(int argc, char** argv)
 			mep.BootstrapEnhancementFolder = true;
 		} else if(strcmp(argv[i], "mep-forcepatch") == 0) {
 			mep.ApplyPatchOnHashMismatch = true;
+		} else if(strncmp(argv[i], "state=", 6) == 0) {
+			stateFile = argv[i] + 6;
+		} else if(strncmp(argv[i], "input=", 6) == 0) {
+			FILE* f = fopen(argv[i] + 6, "r");
+			if(!f) {
+				fprintf(stderr, "cannot open input script: %s\n", argv[i] + 6);
+				return 1;
+			}
+			char line[256];
+			while(fgets(line, sizeof(line), f)) {
+				double secs = 0;
+				char buttons[64] = {};
+				if(sscanf(line, "%lf %63s", &secs, buttons) < 2 || line[0] == '#') {
+					continue;
+				}
+				InputStep step = {};
+				step.seconds = secs;
+				//The debugger applies an override only when some button is set; X has
+				//no NES mapping, so "-" (release) sets X to force all NES buttons off.
+				step.state.X = true;
+				for(char* c = buttons; *c; c++) {
+					switch(*c) {
+						case 'U': step.state.Up = true; break;
+						case 'D': step.state.Down = true; break;
+						case 'L': step.state.Left = true; break;
+						case 'R': step.state.Right = true; break;
+						case 'A': step.state.A = true; break;
+						case 'B': step.state.B = true; break;
+						case 'S': step.state.Select = true; break;
+						case 'T': step.state.Start = true; break;
+						default: break;
+					}
+				}
+				inputScript.push_back(step);
+			}
+			fclose(f);
 		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {
 			mepDisable = argv[i] + 12;
 		}
@@ -206,6 +257,11 @@ int main(int argc, char** argv)
 	if(pal) {
 		sms.Region = ConsoleRegion::Pal;
 	}
+	//The core defaults every port to ControllerType::None, so with no input
+	//backend no control device is created at all - and the debugger's input
+	//overrides (SetInputOverrides, used by "input=<script>") are dropped on the
+	//floor because NesDebugger/SmsDebugger only write into a device that exists.
+	sms.Port1.Type = ControllerType::SmsController;
 	SetSmsConfig(sms);
 
 	NesConfig nes = GetNesConfig();
@@ -231,6 +287,9 @@ int main(int argc, char** argv)
 	if(pal) {
 		nes.Region = ConsoleRegion::Pal;
 	}
+	//See the SmsConfig note above: without a standard controller in port 1 an
+	//input script has nothing to drive.
+	nes.Port1.Type = ControllerType::NesController;
 	SetNesConfig(nes);
 
 	//Pin the GB model to the ROM extension so the HD pack capture path
@@ -260,6 +319,12 @@ int main(int argc, char** argv)
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
 		fprintf(stderr, "failed to load ROM: %s\n", rom.c_str());
 		return 1;
+	}
+	if(!stateFile.empty()) {
+		//Let the emulation thread come up before the state swap
+		std::this_thread::sleep_for(std::chrono::milliseconds(300));
+		LoadStateFile((char*)stateFile.c_str());
+		printf("state loaded: %s\n", stateFile.c_str());
 	}
 	TimingInfoAbi timing = GetTimingInfo(CpuTypeFromExtension(rom));
 	printf("ROM loaded: %s%s\n", rom.c_str(), pal ? " [region forced: PAL]" : "");
@@ -294,8 +359,27 @@ int main(int argc, char** argv)
 	}
 
 	auto t0 = std::chrono::steady_clock::now();
+	size_t inputIndex = 0;
+	double inputStepStart = 0;
+	bool inputApplied = false;
 	while(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(250));
+		std::this_thread::sleep_for(std::chrono::milliseconds(inputScript.empty() ? 250 : 50));
+		if(inputIndex < inputScript.size()) {
+			double now = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+			if(!inputApplied) {
+				SetInputOverrides(0, inputScript[inputIndex].state);
+				inputStepStart = now;
+				inputApplied = true;
+			} else if(now - inputStepStart >= inputScript[inputIndex].seconds) {
+				inputIndex++;
+				inputApplied = false;
+				if(inputIndex >= inputScript.size()) {
+					DebugControllerState release = {};
+					release.X = true;
+					SetInputOverrides(0, release);
+				}
+			}
+		}
 		if(!IsRunning()) {
 			fprintf(stderr, "emulation stopped unexpectedly\n");
 			break;

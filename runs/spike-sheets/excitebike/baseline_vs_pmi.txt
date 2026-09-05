@@ -1,0 +1,7 @@
+F5.4e baseline (tile shapes, adjacency count >= 2): component sizes
+  components: 1  largest: [132]
+  shapes in giant component: 132 of 132
+
+metatile + mutual predictability (count>=3, p>=0.6):
+  components: 48  sizes: [24, 12, 10, 8, 8, 8, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+  edges kept: 187 of 1093

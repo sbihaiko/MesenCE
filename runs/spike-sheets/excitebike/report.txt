@@ -1,0 +1,57 @@
+frames: 17553  tiles(exact): 406  shapes: 176
+stable screens: 42  distinct: 16
+metatiles (2x2 shape tuples, aligned): 300
+baseline giant component: 132/132 shapes, 1 comps
+PMI objects: 48  sizes [24, 12, 10, 8, 8, 8, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 4, 4, 4]
+  obj000: 24 metatiles, layout 10x4
+  obj001: 12 metatiles, layout 3x5
+  obj002: 10 metatiles, layout 3x5
+  obj003: 8 metatiles, layout 6x2
+  obj004: 8 metatiles, layout 2x5
+  obj005: 8 metatiles, layout 4x3
+  obj006: 7 metatiles, layout 5x2
+  obj007: 6 metatiles, layout 2x3
+  obj008: 6 metatiles, layout 2x3
+  obj009: 6 metatiles, layout 2x3
+  obj010: 6 metatiles, layout 2x3
+  obj011: 5 metatiles, layout 1x5
+  obj012: 5 metatiles, layout 2x3
+  obj013: 5 metatiles, layout 1x5
+  obj014: 5 metatiles, layout 5x1
+  obj015: 5 metatiles, layout 5x1
+  obj016: 5 metatiles, layout 5x1
+  obj017: 4 metatiles, layout 3x2
+  obj018: 4 metatiles, layout 1x4
+  obj019: 4 metatiles, layout 1x4
+  obj020: 4 metatiles, layout 2x2
+  obj021: 4 metatiles, layout 1x4
+  obj022: 4 metatiles, layout 4x1
+  obj023: 4 metatiles, layout 2x2
+  obj024: 3 metatiles, layout 1x3
+  obj025: 3 metatiles, layout 1x3
+  obj026: 3 metatiles, layout 3x1
+  obj027: 3 metatiles, layout 2x2
+  obj028: 3 metatiles, layout 1x3
+  obj029: 3 metatiles, layout 1x3
+  obj030: 3 metatiles, layout 1x3
+  obj031: 3 metatiles, layout 1x3
+  obj032: 3 metatiles, layout 3x1
+  obj033: 3 metatiles, layout 2x2
+  obj034: 2 metatiles, layout 2x1
+  obj035: 2 metatiles, layout 1x2
+  obj036: 2 metatiles, layout 2x1
+  obj037: 2 metatiles, layout 2x1
+  obj038: 2 metatiles, layout 1x2
+  obj039: 2 metatiles, layout 2x1
+  obj040: 2 metatiles, layout 2x1
+  obj041: 2 metatiles, layout 1x2
+  obj042: 2 metatiles, layout 2x1
+  obj043: 2 metatiles, layout 2x1
+  obj044: 2 metatiles, layout 2x1
+  obj045: 2 metatiles, layout 2x1
+  obj046: 2 metatiles, layout 2x1
+  obj047: 2 metatiles, layout 2x1
+continuous stitch: 23712 px wide, 3 cuts
+  frame 5799: match 0.00 < 0.5, cut -> new segment
+  frame 6426: match 0.00 < 0.5, cut -> new segment
+  frame 13080: match 0.00 < 0.5, cut -> new segment

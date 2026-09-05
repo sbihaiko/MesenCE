@@ -31,6 +31,23 @@ build  reads `textures/sheets/*.png` (16-column grids of `8*scale`-px
        <bgm>/<sfx> never live in the textures manifest — they belong to the
        audio section (MEP-v1 §2.1 rule 6), so build moves them there.
 
+       ADR-0153 sheets (F9.4) live in the same folder and are recognised by
+       their sidecar: `textures/sheets/<name>.json` with `"version": 1`. They
+       are NOT 16-column grids — each cell carries the exact hires.txt key of
+       every 8x8 tile inside it, so the build slices them back through
+       `cells[]` (contact sheets) or `placements[]` (a stitched map, resolved
+       against the sibling `metatiles.json` vocabulary) and emits one <tile>
+       per resolved crop. `*.orig.png` twins are references: never sliced,
+       never emitted. An artist can therefore paint a sheet in any image
+       editor, re-run build, and see the change in the emulator without ever
+       opening hires.txt.
+
+       The same tile key comes out of several sheets (a metatile is also on
+       the map, and inside an object), so a cell only *claims* a key when it
+       was actually painted, measured against its `*.orig.png` twin. Painted
+       beats untouched; among painted cells - and among untouched ones - the
+       static kind rank decides.
+
 pack   writes `pack.json` at the folder root from the folder tree and the
        given identity (MEP-v1 §3.1), then zips the whole folder with a
        deterministic layout (fixed timestamps, STORED, 0o644, lexical
@@ -53,6 +70,7 @@ import re
 import struct
 import sys
 import zipfile
+import zlib
 from pathlib import Path
 
 import mep_lint
@@ -130,11 +148,462 @@ def _sheet_layout(path: Path, scale: int) -> int:
     return cols * (height // cell)
 
 
+# --- ADR-0153 (F9.4): artist-legible sheets --------------------------------
+#
+# Precedence when two sheets resolve the same hires.txt tile key.
+#
+# The first question is not "which kind of sheet?" but "which sheet did the
+# artist edit?", because hires.txt keys by tile content: the same key comes
+# out of metatiles.png, out of the map that places that metatile, and out of
+# any object built from it. A cell claims a key only when its pixels differ
+# from the `*.orig.png` twin (see _EditedProbe), so PRD Phase 9 validation
+# test 3 (paint a bush on metatiles.png) and test 4 (paint a seam on
+# map-NNN.png) both work - no static order can satisfy both.
+#
+# The rank below is the tie-break, applied among painted cells and, when
+# nobody painted anything, among untouched ones (the captured art still has
+# to reach hires.txt, or the identity round-trip breaks). It reads "most
+# specific last": the metatile vocabulary is the generic building block, a
+# map is the surface the artist actually paints, an object/sprite is a named
+# figure, and a HUD/font glyph is the most specific thing a tile can be. A
+# legacy (ADR-0049, 16-column) sheet always loses to an ADR-0153 sheet. Ties
+# inside one rank are broken by sidecar file name, later wins. Every override
+# is logged, so a surprising win is visible in the build output rather than
+# silent.
+_SHEET_RANK = {
+    "metatiles": 1,
+    "misc": 2,
+    "map": 3,
+    "object": 4,
+    "sprite": 4,
+    "hud": 5,
+    "font": 5,
+}
+_SHEET_VERSION = 1
+_HEX_TILE_RE = re.compile(r"^[0-9A-F]{32}$")
+_HEX_PAL_RE = re.compile(r"^[0-9A-F]{8}$")
+
+
+class SheetDoc:
+    """One ADR-0153 sidecar plus the PNG it names."""
+
+    def __init__(self, json_path: Path, png_path: Path, doc: dict):
+        self.json_path = json_path
+        self.png_path = png_path
+        self.doc = doc
+        self.kind = str(doc.get("kind") or "")
+        self.unit = int(doc.get("gridUnit") or 8)
+        self.gutter = int(doc.get("gutter") or 0)
+        self.columns = max(1, int(doc.get("columns") or 1))
+        self.cells = doc.get("cells") or []
+        self.rank = _SHEET_RANK[self.kind]
+
+    @property
+    def name(self) -> str:
+        return self.png_path.name
+
+    @property
+    def tiles_per_cell(self) -> int:
+        # SheetRender::AppendTiles emits 4 entries at grid unit 16 (row-major
+        # 2x2) and 1 at unit 8.
+        return 4 if self.unit >= 16 else 1
+
+
+def _is_reference_png(path: Path) -> bool:
+    """`*.orig.png` is the F5.4d pixel-exact twin: a reference for the artist,
+    never a build input (ADR-0153 §3)."""
+    return path.name.lower().endswith(".orig.png")
+
+
+def _load_sheet_docs(sheets_dir: Path):
+    """Every `<name>.json` under textures/sheets/ that declares version 1.
+    Anything else is skipped with a warning — never a crash (F9.4 req. 1).
+
+    Returns (docs, claimed): a PNG that any sidecar points at is claimed even
+    when that sidecar is unusable, so an ADR-0153 sheet is never mistaken for
+    an ADR-0049 16-column grid and blamed for the wrong geometry."""
+    docs = []
+    claimed = set()
+    for jp in sorted(sheets_dir.glob("*.json")):
+        claimed.add(sheets_dir / f"{jp.stem}.png")
+        try:
+            doc = json.loads(jp.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"warning: {jp.name}: not readable as JSON, skipped ({e})")
+            continue
+        if not isinstance(doc, dict):
+            print(f"warning: {jp.name}: sidecar is not a JSON object, skipped")
+            continue
+        version = doc.get("version")
+        if version != _SHEET_VERSION:
+            print(f"warning: {jp.name}: sheet version {version!r} is not {_SHEET_VERSION}, skipped "
+                  "(this build only knows the ADR-0153 v1 schema)")
+            continue
+        kind = str(doc.get("kind") or "")
+        if kind not in _SHEET_RANK:
+            print(f"warning: {jp.name}: unknown sheet kind {kind!r}, skipped")
+            continue
+        png = sheets_dir / str(doc.get("sheet") or f"{jp.stem}.png")
+        claimed.add(png)
+        if not png.is_file():
+            print(f"warning: {jp.name}: names sheet '{png.name}', which does not exist — skipped")
+            continue
+        if _is_reference_png(png):
+            print(f"warning: {jp.name}: names the reference twin '{png.name}' — skipped")
+            continue
+        docs.append(SheetDoc(jp, png, doc))
+    return docs, claimed
+
+
+def _logical_size(sd: SheetDoc):
+    """The size SheetRender emitted the contact sheet at, before any upscale.
+    Width comes from `columns` (exact even when the last row is short) and
+    height from the lowest cell — both mirror BuildContactSheet/RenderGroup."""
+    stride = sd.unit + sd.gutter
+    width = sd.columns * stride + sd.gutter
+    bottom = 0
+    for c in sd.cells:
+        try:
+            bottom = max(bottom, int(c.get("y", 0)))
+        except (TypeError, ValueError):
+            continue
+    return width, bottom + sd.unit + sd.gutter
+
+
+def _sheet_scale(docs: list) -> int | None:
+    """Integer upscale factor N shared by the ADR-0153 contact sheets: an
+    artist may paint at 1x or at any integer multiple of what the builder
+    emitted. A non-integer ratio, or two sheets at different factors, is a
+    build error. Maps carry no `columns`, so they inherit N and are bounds
+    checked while slicing. Returns None when nothing pins N down."""
+    found = None
+    origin = None
+    for sd in docs:
+        if sd.kind == "map" or not sd.cells:
+            continue
+        size = _png_size(sd.png_path)
+        if size is None:
+            raise BuildError(f"{sd.name}: not a valid PNG")
+        lw, lh = _logical_size(sd)
+        if lw <= 0 or lh <= 0:
+            continue
+        w, h = size
+        if w % lw or h % lh or w // lw != h // lh or w // lw < 1:
+            raise BuildError(
+                f"{sd.name}: {w}x{h} is not an integer multiple of the {lw}x{lh} sheet "
+                f"{sd.json_path.name} describes — resize by a whole factor (1x, 2x, 3x, ...)")
+        n = w // lw
+        if found is None:
+            found, origin = n, sd.name
+        elif n != found:
+            raise BuildError(
+                f"{sd.name}: painted at {n}x while {origin} is at {found}x — "
+                "all sheets of a pack share one <scale>")
+    return found
+
+
+def _vocabulary(sd: SheetDoc, sheets_dir: Path):
+    """The metatile vocabulary a map's `placements[].cell` indexes into: the
+    `cells[]` of the sibling metatiles.json (ADR-0153 §4/§6). Cells are keyed
+    by their `metatile` (the vocabulary index the builder wrote) and, as a
+    fallback, by their position in the array."""
+    meta = sheets_dir / "metatiles.json"
+    if not meta.is_file():
+        print(f"warning: {sd.json_path.name}: no sibling metatiles.json to resolve placements against — sheet skipped")
+        return None
+    try:
+        doc = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"warning: metatiles.json is not readable ({e}) — {sd.json_path.name} skipped")
+        return None
+    cells = doc.get("cells") if isinstance(doc, dict) else None
+    if not isinstance(cells, list) or not cells:
+        print(f"warning: metatiles.json has no cells[] — {sd.json_path.name} skipped")
+        return None
+    by_index = {}
+    for pos, c in enumerate(cells):
+        if not isinstance(c, dict):
+            continue
+        by_index.setdefault(pos, c)
+    by_vocab = {}
+    for c in cells:
+        if isinstance(c, dict) and isinstance(c.get("metatile"), int):
+            by_vocab.setdefault(c["metatile"], c)
+    return by_vocab or by_index, by_index
+
+
+class _Bitmap:
+    """Unfiltered 8-bit RGB/RGBA scanlines of a PNG, kept as raw bytes: the
+    edited-cell test compares byte ranges, never per-pixel Python objects, so
+    a 4096px-wide map stays cheap."""
+
+    def __init__(self, width: int, height: int, channels: int, raw: bytearray):
+        self.width = width
+        self.height = height
+        self.channels = channels
+        self.raw = raw
+        self.stride = width * channels
+        self._rows = {}
+
+    def band(self, y: int, x0: int, x1: int) -> bytes:
+        off = y * self.stride
+        return bytes(self.raw[off + x0 * self.channels:off + x1 * self.channels])
+
+    def band_upscaled(self, y: int, x0: int, x1: int, n: int) -> bytes:
+        """`band` with every pixel repeated n times — the reference twin as it
+        would look painted at n x, without materialising the whole image."""
+        if n == 1:
+            return self.band(y, x0, x1)
+        key = (y, x0, x1, n)
+        got = self._rows.get(key)
+        if got is None:
+            src = self.band(y, x0, x1)
+            ch = self.channels
+            got = b"".join(src[i:i + ch] * n for i in range(0, len(src), ch))
+            self._rows[key] = got
+        return got
+
+
+def _png_pixels(path: Path):
+    """Decode a non-interlaced 8-bit RGB/RGBA PNG into a _Bitmap, or None when
+    the file is missing or in a form this builder cannot read (16-bit, palette,
+    interlaced). None means "cannot compare", which the caller turns into
+    "treat the sheet as edited" — never into a wrong slice."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if len(data) < 8 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    pos = 8
+    width = height = channels = 0
+    idat = bytearray()
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        tag = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + length]
+        if tag == b"IHDR":
+            if length < 13:
+                return None
+            width, height, depth, color, _comp, _filt, interlace = struct.unpack(">IIBBBBB", body[:13])
+            if depth != 8 or interlace != 0 or color not in (2, 6):
+                return None
+            channels = 3 if color == 2 else 4
+        elif tag == b"IDAT":
+            idat += body
+        elif tag == b"IEND":
+            break
+        pos += 12 + length
+    if not width or not height or not channels:
+        return None
+    try:
+        raw = zlib.decompress(bytes(idat))
+    except zlib.error:
+        return None
+    stride = width * channels
+    if len(raw) < height * (stride + 1):
+        return None
+    out = bytearray(height * stride)
+    prev = bytes(stride)
+    bpp = channels
+    src = 0
+    for y in range(height):
+        ft = raw[src]
+        src += 1
+        line = bytearray(raw[src:src + stride])
+        src += stride
+        if ft == 1:
+            for i in range(bpp, stride):
+                line[i] = (line[i] + line[i - bpp]) & 0xFF
+        elif ft == 2:
+            for i in range(stride):
+                line[i] = (line[i] + prev[i]) & 0xFF
+        elif ft == 3:
+            for i in range(stride):
+                left = line[i - bpp] if i >= bpp else 0
+                line[i] = (line[i] + ((left + prev[i]) >> 1)) & 0xFF
+        elif ft == 4:
+            for i in range(stride):
+                a = line[i - bpp] if i >= bpp else 0
+                b = prev[i]
+                c = prev[i - bpp] if i >= bpp else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 0xFF
+        elif ft != 0:
+            return None
+        out[y * stride:(y + 1) * stride] = line
+        prev = line
+    return _Bitmap(width, height, channels, out)
+
+
+class _EditedProbe:
+    """Answers "was this cell painted?" for one sheet, by comparing it with its
+    pixel-exact `*.orig.png` twin (ADR-0153 §3, F5.4d `_writeReferences`).
+
+    The twin is always 1x while the sheet may be painted at N x, so the sheet
+    is compared against the twin upscaled by N — the cheaper direction, since
+    it needs no resampling decision and no whole-image allocation.
+
+    With no usable twin (`"reference": ""`, a missing or unreadable file, a
+    size that is not exactly N x the sheet's) there is nothing to diff against,
+    so every cell of that sheet counts as edited and the static rank decides,
+    exactly as before this rule existed."""
+
+    def __init__(self, sd: "SheetDoc", scale: int, sheets_dir: Path):
+        self.scale = scale
+        self.sheet = None
+        self.orig = None
+        self.reason = ""
+        ref = str(sd.doc.get("reference") or "").strip()
+        if not ref:
+            self.reason = "no reference twin declared"
+            return
+        ref_path = sheets_dir / ref
+        if not ref_path.is_file():
+            self.reason = f"reference twin {ref} does not exist"
+            return
+        self.sheet = _png_pixels(sd.png_path)
+        self.orig = _png_pixels(ref_path)
+        if self.sheet is None or self.orig is None:
+            self.reason = f"{sd.name} or {ref} is not an 8-bit RGB/RGBA PNG"
+            self.sheet = self.orig = None
+        elif (self.orig.width * scale != self.sheet.width
+              or self.orig.height * scale != self.sheet.height
+              or self.orig.channels != self.sheet.channels):
+            self.reason = (f"reference twin {ref} is {self.orig.width}x{self.orig.height}, "
+                           f"not {self.sheet.width // scale}x{self.sheet.height // scale}")
+            self.sheet = self.orig = None
+
+    @property
+    def blind(self) -> bool:
+        return self.sheet is None or self.orig is None
+
+    def edited(self, ox: int, oy: int, size: int) -> bool:
+        """True when the `size`x`size` cell at logical (ox, oy) differs from
+        the twin. Granularity is the cell, not the 8x8 tile: an artist repaints
+        a bush, not a quadrant of one."""
+        if self.blind:
+            return True
+        n = self.scale
+        px0, py0, span = ox * n, oy * n, size * n
+        if px0 < 0 or py0 < 0 or px0 + span > self.sheet.width or py0 + span > self.sheet.height:
+            return True
+        for py in range(py0, py0 + span):
+            if self.sheet.band(py, px0, px0 + span) != self.orig.band_upscaled(py // n, ox, ox + size, n):
+                return True
+        return False
+
+
+def _cell_crops(tiles, ox: int, oy: int, per_cell: int, scale: int, where: str, out: list, skipped: list,
+                edited: bool = True):
+    """One 8x8 crop per resolved entry of `tiles[]`, row-major inside the cell
+    at the same offsets RenderMetatile drew them. A null/short/malformed entry
+    means that sub-tile had no art: it is skipped, and the entries after it do
+    NOT shift up (F9.4 req. 2)."""
+    if not isinstance(tiles, list):
+        skipped.append(where)
+        return
+    for i in range(per_cell):
+        entry = tiles[i] if i < len(tiles) else None
+        if not isinstance(entry, dict):
+            skipped.append(f"{where}[{i}]")
+            continue
+        data = str(entry.get("tile") or "").strip().upper()
+        pal = str(entry.get("palette") or "").strip().upper()
+        if not _HEX_TILE_RE.match(data) or not _HEX_PAL_RE.match(pal):
+            skipped.append(f"{where}[{i}]")
+            continue
+        out.append(((ox + (i % 2) * 8) * scale, (oy + (i // 2) * 8) * scale, data, pal, edited))
+
+
+def _slice_sheet(sd: SheetDoc, scale: int, sheets_dir: Path) -> list:
+    """(x, y, tileData, palette, edited) for every 8x8 crop the sheet resolves,
+    in sheet pixels at `scale`. `edited` says the crop's cell differs from the
+    `*.orig.png` twin, i.e. the artist actually painted it. Crops that fall
+    outside the PNG are dropped with a warning rather than emitting a tile that
+    would render transparent."""
+    crops = []
+    skipped = []
+    per = sd.tiles_per_cell
+    probe = _EditedProbe(sd, scale, sheets_dir)
+    if probe.blind:
+        print(f"info: {sd.name}: {probe.reason} — every cell counts as painted (static precedence applies)")
+    if sd.kind == "map":
+        vocab = _vocabulary(sd, sheets_dir)
+        if vocab is None:
+            return []
+        by_vocab, by_pos = vocab
+        unresolved = 0
+        for p in sd.doc.get("placements") or []:
+            if not isinstance(p, dict):
+                unresolved += 1
+                continue
+            try:
+                px, py, idx = int(p["x"]), int(p["y"]), int(p["cell"])
+            except (KeyError, TypeError, ValueError):
+                unresolved += 1
+                continue
+            cell = by_vocab.get(idx, by_pos.get(idx))
+            if cell is None:
+                unresolved += 1
+                continue
+            _cell_crops(cell.get("tiles"), px, py, per, scale, f"{sd.name} @({px},{py})", crops, skipped,
+                        probe.edited(px, py, sd.unit))
+        if unresolved:
+            print(f"warning: {sd.name}: {unresolved} placement(s) do not resolve in the metatile vocabulary — skipped")
+    else:
+        for c in sd.cells:
+            if not isinstance(c, dict):
+                skipped.append(sd.name)
+                continue
+            try:
+                cx, cy = int(c["x"]), int(c["y"])
+            except (KeyError, TypeError, ValueError):
+                skipped.append(sd.name)
+                continue
+            painted = probe.edited(cx, cy, sd.unit)
+            _cell_crops(c.get("tiles"), cx, cy, per, scale, f"{sd.name} cell {c.get('index')}", crops, skipped,
+                        painted)
+            # ADR-0153 §3 alias pass (F9.7): a bank-swapping mapper delivers the
+            # same drawing under several tile keys, so the sheet carries one cell
+            # per *subject* and lists the keys it absorbed. The artist paints the
+            # crop once and every alias is emitted from it — which is also the
+            # only way the duplicates cannot drift apart, as they did when each
+            # was painted by hand.
+            for alias in c.get("aliases") or []:
+                if not isinstance(alias, dict):
+                    continue
+                _cell_crops(alias.get("tiles"), cx, cy, per, scale,
+                            f"{sd.name} cell {c.get('index')} alias {alias.get('metatile')}",
+                            crops, skipped, painted)
+    if skipped:
+        print(f"info: {sd.name}: {len(skipped)} sub-tile(s) with no art skipped (null/short tiles[])")
+
+    size = _png_size(sd.png_path)
+    if size is None:
+        raise BuildError(f"{sd.name}: not a valid PNG")
+    w, h = size
+    span = 8 * scale
+    inside = [c for c in crops if 0 <= c[0] and 0 <= c[1] and c[0] + span <= w and c[1] + span <= h]
+    if len(inside) != len(crops):
+        print(f"warning: {sd.name}: {len(crops) - len(inside)} crop(s) fall outside the {w}x{h} image — dropped")
+    return inside
+
+
 def _emit_comment(sheet_rel: str, cell: int) -> list:
     """ADR-0049: the generated hires.txt records the cell -> key map in a
     comment header, so the mapping survives edits and re-builds."""
     return [
         f"# {sheet_rel} — {cell} cell(s); cells map to tile keys through the sheet's order (ADR-0049)",
+    ]
+
+
+def _emit_sheet_comment(sheet_rel: str, kind: str, tiles: int, sidecar: str) -> list:
+    """ADR-0153 §4: the sidecar is the slicing contract, so the generated
+    manifest points at it instead of restating the cell -> key map."""
+    return [
+        f"# {sheet_rel} — {kind} sheet, {tiles} tile crop(s) sliced through {sidecar} (ADR-0153)",
     ]
 
 
@@ -265,10 +734,41 @@ def cmd_build(args) -> int:
     if not sheets_dir.is_dir():
         print(f"error: no textures/sheets/ folder with the author sheets: {sheets_dir}", file=sys.stderr)
         return 2
-    sheets = sorted(p for p in sheets_dir.iterdir() if p.suffix.lower() == ".png")
-    if not sheets:
+
+    # ADR-0153 sheets are recognised by their sidecar; everything else that is
+    # a PNG and not an `*.orig.png` reference twin stays on the ADR-0049
+    # 16-column path.
+    sheet_docs, owned = _load_sheet_docs(sheets_dir)
+    sheets = sorted(p for p in sheets_dir.iterdir()
+                    if p.suffix.lower() == ".png" and p not in owned and not _is_reference_png(p))
+    for p in sorted(owned):
+        if p.is_file() and not any(sd.png_path == p for sd in sheet_docs):
+            print(f"info: {p.name} has a sidecar this build could not use — left untouched, no <tile> emitted for it")
+    if not sheets and not sheet_docs:
         print(f"error: no PNG sheets in {sheets_dir}", file=sys.stderr)
         return 2
+
+    # An ADR-0153 sheet may be painted at any integer upscale of what the
+    # builder emitted; that factor IS the pack scale, since a hires.txt has a
+    # single <scale> for every <img> (MEP-v1 §2.1). An explicit --scale, or a
+    # legacy sheet that already pins the geometry, wins instead — and then a
+    # disagreeing sheet is a build error rather than a silent mis-slice.
+    try:
+        sheet_scale = _sheet_scale(sheet_docs)
+    except BuildError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    if sheet_scale is not None:
+        if args.scale is None and not sheets:
+            if sheet_scale != scale:
+                print(f"info: scale {sheet_scale} taken from the textures/sheets/ art (key source said {scale})")
+            scale = sheet_scale
+        elif sheet_scale != scale:
+            why = "--scale" if args.scale is not None else "the legacy 16-column sheets"
+            print(f"error: textures/sheets/ art is painted at {sheet_scale}x but {why} pins scale {scale}; "
+                  f"re-scale the sheets by a whole factor or pass --scale {sheet_scale}", file=sys.stderr)
+            return 2
+
     try:
         cell_sizes = [_sheet_layout(p, scale) for p in sheets]
     except BuildError as e:
@@ -276,8 +776,12 @@ def cmd_build(args) -> int:
         return 2
     total_cells = sum(cell_sizes)
     if total_cells < len(tiles):
-        print(f"error: sheets hold {total_cells} cell(s) but the key source has {len(tiles)} tile key(s)", file=sys.stderr)
-        return 2
+        # With ADR-0153 sheets present the key source is a key/attribute
+        # source, not a cell budget: those sheets carry their own keys.
+        if not sheet_docs:
+            print(f"error: sheets hold {total_cells} cell(s) but the key source has {len(tiles)} tile key(s)", file=sys.stderr)
+            return 2
+        print(f"info: legacy sheets hold {total_cells} cell(s) of the {len(tiles)} key(s); the rest come from the ADR-0153 sheets")
     if total_cells > len(tiles):
         print(f"info: sheets hold {total_cells} cell(s), only {len(tiles)} are referenced; trailing cells stay unused")
 
@@ -304,11 +808,15 @@ def cmd_build(args) -> int:
     if not has_scale:
         out_header.append(f"<scale>{scale}")
     cell = 8 * scale
-    out_lines = list(out_header)
+
+    # One slot per emitted <img>, in emission order: the ADR-0049 16-column
+    # sheets first (unchanged), then the ADR-0153 sheets. Each slot collects
+    # (key, condition, fields) entries; the img index is filled in after the
+    # precedence pass, so an ADR-0153 sheet whose every tile lost never
+    # occupies an index.
+    slots = []
     for i, p in enumerate(sheets):
-        rel = f"sheets/{p.name}"
-        out_lines.extend(_emit_comment(rel, cell_sizes[i]))
-        out_lines.append(f"<img>{rel}")
+        entries = []
         for k in range(offsets[i], offsets[i] + cell_sizes[i]):
             if k >= len(tiles):
                 break
@@ -318,10 +826,96 @@ def cmd_build(args) -> int:
                 print(f"error: key source <tile> #{k} has only {len(fields)} fields: {raw}", file=sys.stderr)
                 return 2
             cell_in_sheet = k - offsets[i]
-            fields[0] = str(i)  # img index == sheet index (emission order)
             fields[3] = str((cell_in_sheet % 16) * cell)
             fields[4] = str((cell_in_sheet // 16) * cell)
+            # A legacy 16-column sheet has no reference twin to diff against,
+            # so its cells always count as painted and it relies on rank 0.
+            entries.append(((cond, fields[1].strip().upper(), fields[2].strip().upper()), cond, fields, True))
+        slots.append({
+            "rel": f"sheets/{p.name}", "rank": 0, "always": True,
+            "comment": _emit_comment(f"sheets/{p.name}", cell_sizes[i]), "entries": entries,
+        })
+
+    # ADR-0153: the sidecar carries each crop's exact hires.txt key, so the
+    # remaining <tile> fields (condition prefix, brightness, defaultTile, ...)
+    # are carried over from the key source when it knows the key, and default
+    # to "1,N" for a key the bootstrap never recorded.
+    keysrc_attrs = {}
+    for cond, raw in tiles:
+        f = [x.strip() for x in raw.split(",")]
+        if len(f) >= 6:
+            keysrc_attrs.setdefault((f[1].upper(), f[2].upper()), (cond, f[5:]))
+    for sd in sheet_docs:
+        try:
+            crops = _slice_sheet(sd, scale, sheets_dir)
+        except BuildError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        entries = []
+        seen = {}
+        repeats = 0
+        for x, y, data, pal, edited in crops:
+            cond, rest = keysrc_attrs.get((data, pal), ("", ["1", "N"]))
+            key = (cond, data, pal)
+            row = (key, cond, ["0", data, pal, str(x), str(y)] + list(rest), edited)
+            at = seen.get(key)
+            if at is not None:
+                # The same metatile placed twice on one sheet: only one crop can
+                # own the key, and a painted instance beats an untouched one.
+                repeats += 1
+                if edited and not entries[at][3]:
+                    entries[at] = row
+                continue
+            seen[key] = len(entries)
+            entries.append(row)
+        if repeats:
+            print(f"info: {sd.name}: {repeats} crop(s) repeat a tile key already taken by an earlier crop of the same sheet")
+        rel = f"sheets/{sd.name}"
+        slots.append({
+            "rel": rel, "rank": sd.rank, "always": False,
+            "comment": _emit_sheet_comment(rel, sd.kind, len(entries), sd.json_path.name),
+            "entries": entries,
+        })
+
+    # Precedence (ADR-0153 §4): a cell only claims a tile key when it was
+    # actually painted, measured against the `*.orig.png` twin. A painted cell
+    # always beats an untouched one, whatever their kinds; between two painted
+    # cells - and between two untouched ones - the static rank decides, ties
+    # broken by emission order (later wins). Every override is logged, so
+    # nothing silently disappears.
+    winner = {}
+    for order, slot in enumerate(slots):
+        for pos, entry in enumerate(slot["entries"]):
+            key = entry[0]
+            edited = entry[3] if len(entry) > 3 else True
+            score = (1 if edited else 0, slot["rank"], order)
+            prev = winner.get(key)
+            if prev is not None:
+                why = "painted" if edited and not prev[2][0] else "precedence"
+                if score < prev[2]:
+                    lost = "untouched" if prev[2][0] and not edited else "precedence"
+                    print(f"info: {slot['rel']} loses tile {key[1]}/{key[2]} to {slots[prev[0]]['rel']} ({lost})")
+                    continue
+                print(f"info: {slot['rel']} overrides tile {key[1]}/{key[2]} from {slots[prev[0]]['rel']} ({why})")
+            winner[key] = (order, pos, score)
+    kept = {(o, p) for o, p, _s in winner.values()}
+
+    out_lines = list(out_header)
+    img_index = 0
+    emitted = 0
+    for order, slot in enumerate(slots):
+        live = [(pos, e) for pos, e in enumerate(slot["entries"]) if (order, pos) in kept]
+        if not live and not slot["always"]:
+            print(f"info: {slot['rel']} contributes no tile of its own — no <img> emitted")
+            continue
+        out_lines.extend(slot["comment"])
+        out_lines.append(f"<img>{slot['rel']}")
+        for _pos, (_key, cond, fields, *_rest) in live:
+            fields = list(fields)
+            fields[0] = str(img_index)
             out_lines.append(f"{cond}<tile>{','.join(fields)}")
+        emitted += len(live)
+        img_index += 1
     out_lines.extend(body)
 
     textures_dir = folder / "textures"
@@ -350,7 +944,8 @@ def cmd_build(args) -> int:
 
     hires = textures_dir / "hires.txt"
     hires.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
-    print(f"built {hires} — {len(tiles)} tile(s), {len(sheets)} sheet(s), scale {scale}")
+    print(f"built {hires} — {emitted} tile(s), {img_index} sheet(s), scale {scale}"
+          + (f" ({len(sheet_docs)} ADR-0153 sheet(s))" if sheet_docs else ""))
 
     # --- regenerate audio/hires.txt (new OGGs into audio/) ---
     system = None

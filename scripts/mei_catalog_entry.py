@@ -2,22 +2,21 @@
 """mei_catalog_entry — MEI v1.3 `packs[]` entry assembly for the community
 pack catalog (ADR-0138 §26/§27/§28, split off `generate_community_pack_
 catalog.py` per §35's 200-line-per-file guardrail). Depends only on the
-stdlib-only leaf `mei_rules` (never on `community_pack_markdown` or the
-facade -- §24). `build_pack_entry` derives `kind` via `mei_rules.
-resolve_kind` (§29); `build_catalog` self-checks each entry via this
-leaf's `mei_rules.mei_entry_conforms` (§28, re-exported here; built on `required_
-mei_pack_fields`/`MEI_KINDS` but matching `validate_mei`'s real semantics:
-presence for every required field, truthy for all but `rom` (§2.3: `rom.
-sha1` MAY be absent). `STATUS_MEP_COMPLETO`/`STATUS_HD_PARCIAL`/
+stdlib-only leaves `mei_rules` and `pack_generated_disclosure` (never on
+`community_pack_markdown` or the facade -- §24). `build_pack_entry` derives
+`kind` via `mei_rules.resolve_kind` (§29); `build_catalog` self-checks each
+entry via that leaf's `mei_rules.mei_entry_conforms` (§28, re-exported here;
+built on `required_mei_pack_fields`/`MEI_KINDS` but matching `validate_mei`'s
+real semantics: presence for every required field, truthy for all but `rom`
+(§2.3: `rom.sha1` MAY be absent). `STATUS_MEP_COMPLETO`/`STATUS_HD_PARCIAL`/
 `kind_from_status` derive FROM `mei_rules.STATUS_TO_KIND` (never a second
-pairing -- verify_status_kind_parity.sh, §29).
-
-stdlib only.
+pairing -- verify_status_kind_parity.sh, §29). stdlib only.
 """
 from __future__ import annotations
 
 import mei_rules
 import mep_errata  # ADR-0152 known-missing declarations, keyed on the artifact hash
+import pack_generated_disclosure  # ADR-0154 §3: root `generated` -> disclosure
 import pack_id_rules
 
 MEI_VERSION = "1.4.0"
@@ -39,6 +38,7 @@ def kind_from_status(status):
 # generator facade and its checkers keep one name for one function.
 mei_entry_conforms = mei_rules.mei_entry_conforms
 pack_version_fields = mei_rules.pack_version_fields
+generated_field = pack_generated_disclosure.generated_field  # ADR-0154 §3 (re-export)
 
 
 def _dep_entry(dep):
@@ -126,12 +126,15 @@ def _entry_base(issue_number, game, system, license_, pack_url, pack_hash, rom_s
 
 
 def _apply_mep_meta_passthrough(entry, mep_meta):
-    """Copies verdict/validated_at/labels from mep-meta verbatim (§26)."""
+    """Copies verdict/validated_at/labels from mep-meta verbatim (§26), plus
+    ADR-0154 §3's `generated` -- additive disclosure, never a verdict."""
     if not isinstance(mep_meta, dict):
         return
     for key in ("verdict", "validated_at", "labels"):
         if mep_meta.get(key):
             entry[key] = mep_meta[key]
+    if (generated := generated_field(mep_meta)):
+        entry["generated"] = generated
 
 
 def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0, crc32=None):

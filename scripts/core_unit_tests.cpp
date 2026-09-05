@@ -25,7 +25,12 @@
 //MepPackManager::PrepareZip delegates to - over them; Bloco N (P.7) covers
 //AspectRatioMath's per-setting geometry (16:9/4:3/auto/PAR), not the pixels on
 //screen; Bloco O (P.4) covers ShortcutKeyRules' keyboard-block exemption that
-//keeps ToggleOverlay reachable inside a keyboard game. Run from the repo root so the golden paths
+//keeps ToggleOverlay reachable inside a keyboard game; Bloco P (ADR-0153,
+//Phase 9) covers the artist-legible sheet pipeline end to end on synthetic
+//grids - status-bar detection, grid phase advantage, vocabulary counts and the
+//`misc` isolation rule, mutual-predictability grouping over background
+//adjacency and (F9.5) over OAM offsets, scroll matching, and
+//SheetRender's geometry and sidecar JSON. Run from the repo root so the golden paths
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
@@ -38,6 +43,11 @@
 #include "Shared/Video/BorderLayout.h"
 #include "Shared/Video/AspectRatioMath.h"
 #include "Shared/ShortcutKeyRules.h"
+#include "NES/HdPacks/MetatileVocabulary.h"
+#include "NES/HdPacks/ScreenStitcher.h"
+#include "NES/HdPacks/SheetGrouping.h"
+#include "NES/HdPacks/SheetRender.h"
+#include "NES/HdPacks/SpriteGrouping.h"
 #include "NES/HdPacks/OggFadeRamp.h"
 #include "NES/HdPacks/OggLoopStream.h"
 #include "NES/HdPacks/OggMixer.h"
@@ -2310,6 +2320,812 @@ namespace
 			true, false, true, ProbeFor({ kEscKey, (uint16_t)116, (uint16_t)117 }));
 		Check(!fires, "BlocoO: a pressed superset still shadows ToggleOverlay in a keyboard game");
 	}
+
+	//--- Bloco P: artist-legible sheet pipeline (ADR-0153) -------------------
+
+	using namespace MesenSheets;
+
+	//A tile whose 16 CHR bytes are just the shape id repeated, so every shape
+	//renders to distinguishable pixels without needing a real CHR dump.
+	SheetTileKey SheetTileFor(ShapeId shape)
+	{
+		SheetTileKey tile;
+		for(int i = 0; i < 16; i++) {
+			tile.TileData[i] = (uint8_t)((shape + i) & 0xFF);
+		}
+		tile.PaletteColors = 0x0F162A30;
+		return tile;
+	}
+
+	//RenderTile indexes a 512-entry NES master palette; the values only have to
+	//be distinct for the geometry tests below.
+	NesPalette SheetPalette()
+	{
+		static uint32_t palette[512];
+		for(uint32_t i = 0; i < 512; i++) {
+			palette[i] = 0x00010101u * i;
+		}
+		return palette;
+	}
+
+	TileLookup SheetLookup()
+	{
+		return [](ShapeId shape) -> const SheetTileKey* {
+			static std::map<ShapeId, SheetTileKey> cache;
+			std::map<ShapeId, SheetTileKey>::iterator it = cache.find(shape);
+			if(it == cache.end()) {
+				it = cache.insert(std::make_pair(shape, SheetTileFor(shape))).second ? cache.find(shape) : cache.end();
+			}
+			return it == cache.end() ? nullptr : &it->second;
+		};
+	}
+
+	//A screen built out of a small vocabulary of 2x2 blocks, placed
+	//pseudo-randomly: at phase (0,0) the screen holds exactly `shapes` distinct
+	//metatiles, at any other phase every tuple straddles two blocks and the
+	//count explodes. That gap is what ADR-0153 §1 calls the phase advantage.
+	GridFrame SheetBlockScreen(uint32_t blockOffset, uint32_t shapes)
+	{
+		GridFrame frame;
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				uint32_t state = ((r / 2) * 31u + (c / 2) + blockOffset) * 2654435761u;
+				uint32_t block = (state >> 13) % shapes;
+				frame.Cells[r][c] = (ShapeId)(1 + block * 4 + (r % 2) * 2 + (c % 2));
+			}
+		}
+		return frame;
+	}
+
+	//A screen with no grid at all: every cell an independent pseudo-random shape.
+	GridFrame SheetNoiseScreen(uint32_t seed)
+	{
+		GridFrame frame;
+		uint32_t state = seed * 2654435761u + 1u;
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				state = state * 1664525u + 1013904223u;
+				frame.Cells[r][c] = (ShapeId)(1 + (state >> 16) % 64);
+			}
+		}
+		return frame;
+	}
+
+	void TestSheetStableScreensCollapseRepeats()
+	{
+		//The recorder collapses duplicate frames into RepeatCount; a fixture may
+		//hold literal repeats. Both forms must select the same screens.
+		GridFrame a = SheetBlockScreen(0, 3);
+		GridFrame b = SheetBlockScreen(1, 3);
+
+		std::vector<GridFrame> collapsed;
+		a.RepeatCount = 30;
+		b.RepeatCount = 30;
+		collapsed.push_back(a);
+		collapsed.push_back(b);
+
+		std::vector<GridFrame> literal;
+		a.RepeatCount = 1;
+		b.RepeatCount = 1;
+		for(int i = 0; i < 30; i++) { literal.push_back(a); }
+		for(int i = 0; i < 30; i++) { literal.push_back(b); }
+
+		uint32_t distinctCollapsed = 0;
+		uint32_t distinctLiteral = 0;
+		std::vector<const GridFrame*> keptCollapsed = SelectStableScreens(collapsed, 20, distinctCollapsed);
+		std::vector<const GridFrame*> keptLiteral = SelectStableScreens(literal, 20, distinctLiteral);
+
+		Check(keptCollapsed.size() == 2 && keptLiteral.size() == 2,
+			"BlocoP: a collapsed run and a literal run both yield two stable screens");
+		Check(distinctCollapsed == 2 && distinctLiteral == 2,
+			"BlocoP: both forms report the same distinct-screen count");
+	}
+
+	void TestSheetHudRowsSurviveAChangingScore()
+	{
+		//Regression for the 2026-09-05 amendment: byte-identity found zero HUD
+		//rows on any game whose status bar holds a score or a timer.
+		std::vector<GridFrame> screens;
+		for(uint32_t i = 0; i < 3; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 1);
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				frame.Cells[0][c] = kEmptyCell;                       //blank band above the bar
+				frame.Cells[1][c] = (ShapeId)(500 + c);               //frozen labels
+				frame.Cells[2][c] = (ShapeId)(500 + c);
+			}
+			//A handful of digits change between screens, the labels do not.
+			for(uint32_t c = 24; c < kGridCols; c++) {
+				frame.Cells[2][c] = (ShapeId)(900 + i * 32 + c);
+			}
+			screens.push_back(frame);
+		}
+		std::vector<const GridFrame*> pointers;
+		for(size_t i = 0; i < screens.size(); i++) { pointers.push_back(&screens[i]); }
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(pointers, top, bottom);
+		Check(top == 3, "BlocoP: a status bar with a changing score is still a HUD band",
+			"top=" + std::to_string(top));
+		Check(bottom == 0, "BlocoP: a scrolling playfield contributes no bottom HUD rows");
+	}
+
+	void TestSheetHudRowsIgnoreAnAllSkyScreen()
+	{
+		//Sky rows are identical everywhere but draw nothing, so they must not
+		//pass the status-bar test on their own content.
+		std::vector<GridFrame> screens;
+		for(uint32_t i = 0; i < 3; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 7);
+			for(uint32_t r = 0; r < 4; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = kEmptyCell;
+				}
+			}
+			screens.push_back(frame);
+		}
+		std::vector<const GridFrame*> pointers;
+		for(size_t i = 0; i < screens.size(); i++) { pointers.push_back(&screens[i]); }
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(pointers, top, bottom);
+		Check(top == 4, "BlocoP: a blank band counts as HUD rows but stops at the first drawn, varying row",
+			"top=" + std::to_string(top));
+	}
+
+	void TestSheetHudRowsSurviveATitleScreenInTheRecording()
+	{
+		//Regression for the second 2026-09-05 amendment: a recording is a whole
+		//session, so a title card sits in the screen set next to the gameplay
+		//screens and shares no row with them. Requiring unanimity hid
+		//Excitebike's gauge bar and Metroid's energy bar completely.
+		std::vector<GridFrame> screens;
+		for(uint32_t i = 0; i < 8; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 21);
+			for(uint32_t r = kGridRows - 2; r < kGridRows; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = (ShapeId)(600 + r * 32 + c);
+				}
+			}
+			//The clock in the corner ticks; the labels next to it do not.
+			frame.Cells[kGridRows - 1][30] = (ShapeId)(1000 + i);
+			frame.Cells[kGridRows - 1][31] = (ShapeId)(1100 + i);
+			screens.push_back(frame);
+		}
+		//Two title/menu screens that share nothing with the playfield.
+		screens.push_back(SheetNoiseScreen(91));
+		screens.push_back(SheetNoiseScreen(92));
+
+		std::vector<const GridFrame*> pointers;
+		for(size_t i = 0; i < screens.size(); i++) { pointers.push_back(&screens[i]); }
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(pointers, top, bottom);
+		Check(bottom == 2, "BlocoP: a status bar survives a minority of unrelated screens",
+			"bottom=" + std::to_string(bottom));
+
+		//...but a bar that only two screens out of ten agree on is not one.
+		std::vector<GridFrame> rare;
+		for(uint32_t i = 0; i < 10; i++) {
+			rare.push_back(SheetNoiseScreen(i + 41));
+		}
+		for(uint32_t i = 0; i < 2; i++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				rare[i].Cells[kGridRows - 1][c] = (ShapeId)(700 + c);
+			}
+		}
+		std::vector<const GridFrame*> rarePtrs;
+		for(size_t i = 0; i < rare.size(); i++) { rarePtrs.push_back(&rare[i]); }
+		DetectHudRows(rarePtrs, top, bottom);
+		Check(bottom == 0, "BlocoP: a row two screens in ten agree on is not a status bar",
+			"bottom=" + std::to_string(bottom));
+	}
+
+	void TestSheetGridPhaseAdvantageSeparatesGridFromNoise()
+	{
+		std::vector<GridFrame> gridded;
+		gridded.push_back(SheetBlockScreen(0, 3));
+		gridded.push_back(SheetBlockScreen(1, 3));
+		std::vector<const GridFrame*> griddedPtrs;
+		for(size_t i = 0; i < gridded.size(); i++) { griddedPtrs.push_back(&gridded[i]); }
+		GridDetection gridDet = DetectGrid(griddedPtrs, 0, 0);
+
+		Check(gridDet.HasGrid, "BlocoP: a 2x2-block screen is detected as having a grid",
+			"advantage=" + std::to_string(gridDet.PhaseAdvantage));
+		Check(gridDet.PhaseX == 0 && gridDet.PhaseY == 0,
+			"BlocoP: the winning phase is the one the blocks are aligned to");
+		Check(gridDet.PhaseAdvantage >= kGridPhaseAdvantage,
+			"BlocoP: the winning phase clears the advantage threshold");
+		Check(gridDet.Unit == 16, "BlocoP: a gridded recording keeps unit 16");
+
+		std::vector<GridFrame> noisy;
+		noisy.push_back(SheetNoiseScreen(11));
+		noisy.push_back(SheetNoiseScreen(12));
+		std::vector<const GridFrame*> noisyPtrs;
+		for(size_t i = 0; i < noisy.size(); i++) { noisyPtrs.push_back(&noisy[i]); }
+		GridDetection noiseDet = DetectGrid(noisyPtrs, 0, 0);
+
+		Check(!noiseDet.HasGrid, "BlocoP: a screen of independent tiles has no grid",
+			"advantage=" + std::to_string(noiseDet.PhaseAdvantage));
+		Check(noiseDet.Unit == 16,
+			"BlocoP: no grid still means unit 16 - HasGrid selects the parity, not the unit");
+	}
+
+	void TestSheetVocabularyCountsAndIsolationRule()
+	{
+		//One block shape repeated all over the screen, plus a single stray
+		//metatile that neighbours nothing recurring: the stray is the noise.
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 2; i++) {
+			GridFrame frame;
+			for(uint32_t r = 0; r < kGridRows; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = 1;
+				}
+			}
+			//A distinct 2x2 stray, and a second one so the two screens differ.
+			for(uint32_t r = 0; r < 2; r++) {
+				for(uint32_t c = 0; c < 2; c++) {
+					frame.Cells[r][c] = (ShapeId)(50 + i);
+				}
+			}
+			frame.RepeatCount = 30;
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+
+		int32_t common = vocab.Find(MetatileKey{ { 1, 1, 1, 1 } });
+		Check(common >= 0, "BlocoP: the repeated block is in the vocabulary");
+		Check(common >= 0 && vocab.Entries[(size_t)common].Count > 100,
+			"BlocoP: the repeated block carries its placement count");
+		Check(common >= 0 && vocab.Entries[(size_t)common].Context == SheetContext::Scene,
+			"BlocoP: the repeated block is scene, not noise");
+
+		int32_t stray = vocab.Find(MetatileKey{ { 50, 50, 50, 50 } });
+		Check(stray >= 0 && vocab.Entries[(size_t)stray].Count == 1,
+			"BlocoP: the stray metatile is seen exactly once");
+		//The amended §3 rule: rarity alone is not noise. This stray borders the
+		//recurring block, so it is part of the scene the artist paints.
+		Check(stray >= 0 && vocab.Entries[(size_t)stray].Context == SheetContext::Scene,
+			"BlocoP: a count-1 metatile bordering a recurring scene block is not misc");
+		Check(vocab.Entries.size() >= 2 && vocab.Entries[0].Count >= vocab.Entries[1].Count,
+			"BlocoP: the vocabulary is ordered most-seen first (ADR-0153 §3)");
+	}
+
+	void TestSheetIsolatedMetatilesAreMisc()
+	{
+		//Nothing repeats and nothing borders anything recurring: every entry is
+		//isolated, which is exactly what the noise budget is meant to catch.
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 2; i++) {
+			GridFrame frame = SheetNoiseScreen(31 + i);
+			frame.RepeatCount = 30;
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+
+		size_t misc = 0;
+		for(size_t i = 0; i < vocab.Entries.size(); i++) {
+			misc += vocab.Entries[i].Context == SheetContext::Misc ? 1 : 0;
+		}
+		Check(!vocab.Entries.empty() && misc == vocab.Entries.size(),
+			"BlocoP: a screen where nothing recurs is entirely misc",
+			std::to_string(misc) + "/" + std::to_string(vocab.Entries.size()));
+	}
+
+	//Vocabulary built by hand so the grouping criterion can be tested without
+	//going through a recording: A is always followed east by B, while S (sand)
+	//sits east of everything.
+	Vocabulary SheetGroupingFixture()
+	{
+		Vocabulary vocab;
+		vocab.Grid.Unit = 16;
+		vocab.Grid.HasGrid = true;
+		for(uint32_t i = 0; i < 4; i++) {
+			MetatileEntry entry;
+			entry.Key = MetatileKey{ { (ShapeId)(10 + i), (ShapeId)(10 + i), (ShapeId)(10 + i), (ShapeId)(10 + i) } };
+			entry.Count = 20;
+			vocab.Entries.push_back(entry);
+			vocab.Index[entry.Key] = i;
+		}
+		//0 -> 1 exclusively, in both directions.
+		vocab.East[std::make_pair(0u, 1u)] = 8;
+		//2 (sand) sits east of 3 sometimes, but also east of everything else,
+		//so neither direction predicts the other.
+		vocab.East[std::make_pair(3u, 2u)] = 8;
+		vocab.East[std::make_pair(3u, 0u)] = 7;
+		vocab.East[std::make_pair(1u, 2u)] = 9;
+		return vocab;
+	}
+
+	void TestSheetMutualPredictabilityRejectsPromiscuousPairs()
+	{
+		Vocabulary vocab = SheetGroupingFixture();
+		std::vector<GroupEdge> edges = SelectPredictiveEdges(vocab, kSheetMinPairCount, kSheetMinPairProb);
+
+		bool hasExclusivePair = false;
+		bool hasSandPair = false;
+		for(size_t i = 0; i < edges.size(); i++) {
+			if(edges[i].A == 0 && edges[i].B == 1) { hasExclusivePair = true; }
+			if(edges[i].B == 2) { hasSandPair = true; }
+		}
+		Check(hasExclusivePair, "BlocoP: a pair that predicts itself in both directions is kept");
+		Check(!hasSandPair, "BlocoP: a tile that sits next to everything joins nothing");
+	}
+
+	void TestSheetObjectsAreLaidOutFromPredictiveEdges()
+	{
+		std::vector<SheetGroup> groups = BuildObjects(SheetGroupingFixture());
+		Check(groups.size() == 1, "BlocoP: exactly one object comes out of the fixture",
+			"groups=" + std::to_string(groups.size()));
+		if(groups.size() == 1) {
+			Check(groups[0].Cells.size() == 2, "BlocoP: the object is the two mutually predictive cells");
+			Check(groups[0].Columns == 2 && groups[0].Rows == 1,
+				"BlocoP: an east-joined pair lays out side by side");
+		}
+	}
+
+	void TestSheetBestShiftRecoversTheScroll()
+	{
+		GridFrame a = SheetNoiseScreen(21);
+		GridFrame b;
+		//b is a, scrolled four cells to the left (the playfield moved east).
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c + 4 < kGridCols; c++) {
+				b.Cells[r][c] = a.Cells[r][c + 4];
+			}
+		}
+		ShiftMatch match = BestShift(a, b, 0, 0, 8, 0);
+		Check(match.Dx == 4 && match.Dy == 0, "BlocoP: BestShift recovers a four-cell horizontal scroll",
+			"dx=" + std::to_string(match.Dx) + " dy=" + std::to_string(match.Dy));
+		Check(match.Score > 0.9, "BlocoP: the recovered shift matches nearly every cell");
+	}
+
+	//---- F9.8: adjacency evidence before two screens share a map -----------
+
+	//A pseudo-random world, addressed in cells; a screen is a 32-column window
+	//onto it, so two windows 32 columns apart are genuine neighbours and any
+	//other pair is not.
+	ShapeId SheetWorldCell(int32_t col, int32_t row)
+	{
+		uint32_t state = ((uint32_t)(col + 4096) * 73856093u) ^ ((uint32_t)(row + 4096) * 19349663u);
+		state ^= state >> 13;
+		state *= 1274126177u;
+		return (ShapeId)(1 + (state >> 11) % 211);
+	}
+
+	GridFrame SheetWorldWindow(int32_t col0)
+	{
+		GridFrame frame;
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				frame.Cells[r][c] = SheetWorldCell(col0 + (int32_t)c, (int32_t)r);
+			}
+		}
+		return frame;
+	}
+
+	//A Punch-Out!!-shaped card: a tiled backdrop with a small figure on it and
+	//nothing else. Two such cards match each other at any multiple of the
+	//backdrop's period, so a bare "the shift matched" test glues them into one
+	//map even though the game never scrolled a pixel.
+	GridFrame SheetCardScreen(uint32_t figureCol, uint32_t figureRow, ShapeId figure)
+	{
+		GridFrame frame;
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				frame.Cells[r][c] = (ShapeId)(2 + (c % 8) + (r % 2) * 8);
+			}
+		}
+		for(uint32_t r = 0; r < 8; r++) {
+			for(uint32_t c = 0; c < 8; c++) {
+				frame.Cells[figureRow + r][figureCol + c] = (ShapeId)(figure + (r / 2) * 4 + (c / 2));
+			}
+		}
+		return frame;
+	}
+
+	//Every aligned metatile of the given frames, no HUD band: the stitcher
+	//tests are about geometry, not about classification.
+	Vocabulary SheetStitchVocabulary(const std::vector<GridFrame>& frames)
+	{
+		Vocabulary vocab;
+		vocab.Grid.Unit = 16;
+		vocab.Grid.HasGrid = true;
+		for(size_t i = 0; i < frames.size(); i++) {
+			for(uint32_t r = 0; r + 1 < kGridRows; r += 2) {
+				for(uint32_t c = 0; c + 1 < kGridCols; c += 2) {
+					MetatileKey key;
+					key.Tiles[0] = frames[i].Cells[r][c];
+					key.Tiles[1] = frames[i].Cells[r][c + 1];
+					key.Tiles[2] = frames[i].Cells[r + 1][c];
+					key.Tiles[3] = frames[i].Cells[r + 1][c + 1];
+					if(vocab.Index.find(key) != vocab.Index.end()) {
+						continue;
+					}
+					vocab.Index[key] = (uint32_t)vocab.Entries.size();
+					MetatileEntry entry;
+					entry.Key = key;
+					entry.Count = 1;
+					vocab.Entries.push_back(entry);
+				}
+			}
+		}
+		return vocab;
+	}
+
+	void TestSheetStitchJoinsScreensThatShareABorderBand()
+	{
+		//Anchor at world column 0, candidate at 32, with the scroll caught in
+		//between: each transition frame exposes a band that really is the
+		//candidate's west edge, which is the evidence a join needs.
+		std::vector<GridFrame> frames;
+		const int32_t offsets[] = { 0, 8, 16, 24, 32 };
+		for(size_t i = 0; i < 5; i++) {
+			frames.push_back(SheetWorldWindow(offsets[i]));
+		}
+		std::vector<const GridFrame*> screens;
+		screens.push_back(&frames[0]);
+		screens.push_back(&frames[4]);
+
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, SheetStitchVocabulary(frames));
+		Check(maps.size() == 1, "BlocoP: two screens with a shared border band make one map",
+			"maps=" + std::to_string(maps.size()));
+		if(maps.size() == 1) {
+			Check(maps[0].Mode == StitchMode::Screen && maps[0].Width == 2 * kGridCols * 8,
+				"BlocoP: the joined map is exactly two screens wide",
+				"width=" + std::to_string(maps[0].Width));
+		}
+	}
+
+	void TestSheetStitchRefusesScreensWithoutAdjacencyEvidence()
+	{
+		//Two cards that never scroll, with the redraw caught in between. The
+		//best shift between them still scores 0.85 - the backdrop matches
+		//itself every two rows - and the band that shift exposes really is
+		//backdrop, so even the band test alone would pass it: measured on this
+		//fixture, band 1.00 over 64 cells, and with kStitchBandLead at 0 the
+		//two cards come out stacked into one 256x480 map. What rejects it is that the band says nothing
+		//the anchor did not already say (lead 0.00). With no evidence anywhere
+		//there is no map at all: a map of one screen would only duplicate the
+		//backgrounds/screenNNN.png the bootstrap already writes.
+		std::vector<GridFrame> frames;
+		frames.push_back(SheetCardScreen(4, 4, 100));
+		frames.push_back(SheetCardScreen(4, 4, 100));
+		frames[1].Cells[4][20] = 140; //a redraw has started
+		frames.push_back(SheetCardScreen(20, 4, 140));
+		frames[2].Cells[4][4] = 100;  //...and is not finished
+		frames.push_back(SheetCardScreen(20, 4, 140));
+		std::vector<const GridFrame*> screens;
+		screens.push_back(&frames[0]);
+		screens.push_back(&frames[3]);
+
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, SheetStitchVocabulary(frames));
+		size_t joined = 0;
+		for(size_t i = 0; i < maps.size(); i++) {
+			joined += maps[i].Width > kGridCols * 8 || maps[i].Height > kGridRows * 8 ? 1 : 0;
+		}
+		Check(joined == 0, "BlocoP: two unrelated screens are never concatenated",
+			"joined=" + std::to_string(joined));
+		Check(maps.empty(), "BlocoP: with no adjacency evidence anywhere, no map is emitted",
+			"maps=" + std::to_string(maps.size()));
+	}
+
+	void TestSheetStitchKeepsAContinuousScrollInOneMap()
+	{
+		//The Excitebike shape: no stable screen at all, the camera walking two
+		//cells per frame across a long world. This must still come out as one
+		//continuous region - it is the regression guard for the evidence rule.
+		std::vector<GridFrame> frames;
+		for(int32_t i = 0; i < 120; i++) {
+			GridFrame frame = SheetWorldWindow(i * 2);
+			frame.FrameNumber = (uint32_t)i;
+			frames.push_back(frame);
+		}
+		std::vector<const GridFrame*> screens;
+
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, SheetStitchVocabulary(frames));
+		Check(maps.size() == 1, "BlocoP: a continuous scroll stays one map",
+			"maps=" + std::to_string(maps.size()));
+		if(maps.size() == 1) {
+			//119 frames of travel at 2 cells each, plus the 32-cell window.
+			Check(maps[0].Mode == StitchMode::Continuous && maps[0].Width > kContinuousMinWidth * 3,
+				"BlocoP: the continuous map spans the whole world it walked",
+				"width=" + std::to_string(maps[0].Width));
+		}
+	}
+
+	//F9.7 fixture: three renderings of one subject - a CHR bank swap that is
+	//byte-identical under another id, a re-upload that lost one bitplane bit,
+	//and one genuinely different subject - plus the pair that caught the first
+	//budget rule: a blank cell and a cell that draws eight pixels.
+	TileLookup SheetAliasLookup()
+	{
+		return [](ShapeId shape) -> const SheetTileKey* {
+			static std::map<ShapeId, SheetTileKey> cache;
+			std::map<ShapeId, SheetTileKey>::iterator it = cache.find(shape);
+			if(it != cache.end()) {
+				return &it->second;
+			}
+			SheetTileKey tile;
+			if(shape >= 300) {
+				//A blank cell, and its sparse neighbour drawing one tile row.
+				tile.PaletteColors = 0x0F162A30;
+				tile.TileData[0] = shape == 301 ? 0xFF : 0x00;
+			} else {
+				//120..123 mirror 20..23 exactly; 220..223 one bitplane bit off.
+				tile = SheetTileFor(shape >= 120 && shape <= 223 ? (ShapeId)(shape % 100) : shape);
+				if(shape >= 220) {
+					tile.TileData[0] ^= 0x03;
+				}
+			}
+			cache.insert(std::make_pair(shape, tile));
+			return &cache.find(shape)->second;
+		};
+	}
+
+	Vocabulary SheetAliasVocabulary(std::vector<uint32_t>& indexes)
+	{
+		Vocabulary vocab;
+		vocab.Grid.Unit = 16;
+		ShapeId keys[6][4] = {
+			{ 20, 21, 22, 23 },     //canonical
+			{ 40, 41, 42, 43 },     //a genuinely different subject
+			{ 120, 121, 122, 123 }, //the same pixels under another CHR bank
+			{ 220, 21, 22, 23 },    //the same subject, one bitplane bit off
+			{ 300, 300, 300, 300 }, //blank
+			{ 301, 300, 300, 300 }, //blank except eight pixels
+		};
+		indexes.clear();
+		for(uint32_t i = 0; i < 6; i++) {
+			MetatileEntry entry;
+			entry.Key = MetatileKey{ { keys[i][0], keys[i][1], keys[i][2], keys[i][3] } };
+			entry.Count = 10 - i;
+			vocab.Entries.push_back(entry);
+			indexes.push_back(i);
+		}
+		return vocab;
+	}
+
+	void TestSheetAliasesCollapseOntoTheFirstSurvivor()
+	{
+		std::vector<uint32_t> indexes;
+		Vocabulary vocab = SheetAliasVocabulary(indexes);
+
+		std::vector<std::vector<uint32_t>> aliases;
+		std::vector<uint32_t> survivors = CollapseAliases(vocab, indexes, SheetAliasLookup(), SheetPalette(), kSheetAliasTolerance, aliases);
+		Check(survivors.size() == 4, "BlocoP: three renderings of one subject leave one cell",
+			"survivors=" + std::to_string(survivors.size()));
+		if(survivors.size() == 4) {
+			Check(survivors[0] == 0 && survivors[1] == 1,
+				"BlocoP: the first index in the order survives, so the sheet keeps its count ranking");
+			Check(aliases[0].size() == 2 && aliases[0][0] == 2 && aliases[0][1] == 3,
+				"BlocoP: both duplicates are recorded as aliases of the survivor");
+			Check(aliases[1].empty(), "BlocoP: a subject with no duplicate collects no aliases");
+			//The regression the area-based budget caused: a near-empty cell
+			//matched anything else that was mostly background, so one cell
+			//absorbed 335 of Ninja Gaiden's 465 entries.
+			Check(survivors[2] == 4 && survivors[3] == 5 && aliases[2].empty(),
+				"BlocoP: a blank cell does not absorb a cell that draws something");
+		}
+
+		//At tolerance 0 only the byte-identical bank swap collapses - the
+		//near-duplicate stays its own cell, so the tolerance is a real knob.
+		aliases.clear();
+		survivors = CollapseAliases(vocab, indexes, SheetAliasLookup(), SheetPalette(), 0.0, aliases);
+		Check(survivors.size() == 5, "BlocoP: at tolerance 0 only exact duplicates collapse",
+			"survivors=" + std::to_string(survivors.size()));
+	}
+
+
+	void TestSheetContactSheetGeometry()
+	{
+		Vocabulary vocab;
+		vocab.Grid.Unit = 16;
+		std::vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < 4; i++) {
+			MetatileEntry entry;
+			entry.Key = MetatileKey{ { (ShapeId)(20 + i), (ShapeId)(20 + i), (ShapeId)(20 + i), (ShapeId)(20 + i) } };
+			entry.Count = 10 - i;
+			vocab.Entries.push_back(entry);
+			indexes.push_back(i);
+		}
+		std::vector<SheetCell> cells;
+		SheetImage image = BuildContactSheet(vocab, indexes, SheetLookup(), SheetPalette(), 2, cells);
+
+		//2 columns x 2 rows of 16px cells, one gutter around and between.
+		Check(image.Width == 2 * 17 + 1 && image.Height == 2 * 17 + 1,
+			"BlocoP: the contact sheet is cells + gutters",
+			std::to_string(image.Width) + "x" + std::to_string(image.Height));
+		Check(cells.size() == 4, "BlocoP: every index gets a cell");
+		if(cells.size() == 4) {
+			Check(cells[0].X == 1 && cells[0].Y == 1, "BlocoP: the first cell starts after the gutter");
+			Check(cells[1].X == 18 && cells[1].Y == 1, "BlocoP: the second cell is one stride east");
+			Check(cells[2].X == 1 && cells[2].Y == 18, "BlocoP: the third cell wraps to the next row");
+			Check(cells[3].Metatile == 3, "BlocoP: a cell carries its vocabulary index for the round-trip");
+		}
+	}
+
+	void TestSheetUpscaleIsNearestNeighbour()
+	{
+		SheetImage source;
+		source.Reset(2, 2);
+		source.Row(0)[0] = 0xFF112233;
+		source.Row(0)[1] = 0xFF445566;
+		source.Row(1)[0] = 0xFF778899;
+		source.Row(1)[1] = 0xFFAABBCC;
+
+		SheetImage scaled = Upscale(source, 4);
+		Check(scaled.Width == 8 && scaled.Height == 8, "BlocoP: Upscale multiplies both axes");
+		Check(scaled.Row(0)[3] == 0xFF112233 && scaled.Row(3)[0] == 0xFF112233,
+			"BlocoP: every source pixel becomes a solid NxN block");
+		Check(scaled.Row(4)[4] == 0xFFAABBCC, "BlocoP: the last source pixel lands in the last block");
+		Check(Upscale(source, 1).Pixels == source.Pixels, "BlocoP: a factor of 1 is the identity");
+	}
+
+	//F9.5 fixture: a four-tile figure that always holds the same 2x2 offsets
+	//while the whole thing moves across the screen, plus a fifth sprite that
+	//drifts to a fresh offset every frame - the bullet the criterion must
+	//reject. Every offset the drifter takes is unique over these frames, so it
+	//never reaches kSheetMinPairCount on any single one of them.
+	std::vector<OamFrame> SpriteFigureFrames(uint32_t frames)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < frames; f++) {
+			uint32_t x0 = 40 + f * 3;
+			uint32_t y0 = 90 + (f % 5);
+			OamFrame frame;
+			frame.FrameNumber = f;
+			for(uint32_t i = 0; i < 4; i++) {
+				OamEntry entry;
+				entry.Shape = (ShapeId)(1 + i);
+				entry.X = (uint8_t)(x0 + (i % 2) * 8);
+				entry.Y = (uint8_t)(y0 + (i / 2) * 8);
+				frame.Entries.push_back(entry);
+			}
+			OamEntry drifter;
+			drifter.Shape = 9;
+			drifter.X = (uint8_t)(x0 + 24 - (f % 7) * 4);
+			drifter.Y = (uint8_t)(y0 - 16 + (f % 5) * 6);
+			frame.Entries.push_back(drifter);
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestSpriteOffsetGroupingRejectsADrifter()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		Check(vocab.Entries.size() == 5, "BlocoP: every distinct OAM shape reaches the sprite vocabulary",
+			"entries=" + std::to_string(vocab.Entries.size()));
+		Check(vocab.Grid.Unit == 8, "BlocoP: a sprite vocabulary is built on the 8x8 OAM unit");
+
+		int32_t drifter = vocab.Find(MetatileKey{ { 9, kEmptyCell, kEmptyCell, kEmptyCell } });
+		Check(drifter >= 0 && vocab.Entries[(size_t)drifter].Count == 12,
+			"BlocoP: the drifter is on screen as often as the figure");
+
+		std::vector<GroupEdge> edges = SelectSpriteEdges(frames, vocab, kSheetMinPairCount, kSheetMinPairProb);
+		Check(edges.size() == 6, "BlocoP: the four figure tiles pair up in both directions",
+			"edges=" + std::to_string(edges.size()));
+		bool touchesDrifter = false;
+		for(size_t i = 0; i < edges.size(); i++) {
+			touchesDrifter |= (int32_t)edges[i].A == drifter || (int32_t)edges[i].B == drifter;
+		}
+		Check(!touchesDrifter, "BlocoP: a sprite that never holds one offset joins nothing");
+	}
+
+	void TestSpriteGroupIsLaidOutAtItsOamOffsets()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<SheetGroup> groups = BuildSprites(frames, vocab);
+
+		Check(groups.size() == 1, "BlocoP: exactly one sprite group comes out of the fixture",
+			"groups=" + std::to_string(groups.size()));
+		if(groups.size() != 1) {
+			return;
+		}
+		Check(groups[0].Cells.size() == 4, "BlocoP: the group is the whole 2x2 figure, drifter excluded",
+			"cells=" + std::to_string(groups[0].Cells.size()));
+		Check(groups[0].Columns == 2 && groups[0].Rows == 2,
+			"BlocoP: a 2x2 metasprite lays out 2x2, not in a row",
+			std::to_string(groups[0].Columns) + "x" + std::to_string(groups[0].Rows));
+
+		std::vector<SheetCell> cells;
+		SheetImage image = RenderGroup(groups[0], vocab, SheetLookup(), SheetPalette(), cells, true);
+		//2 columns x 2 rows of 8px cells, one gutter around and between.
+		Check(image.Width == 2 * 9 + 1 && image.Height == 2 * 9 + 1,
+			"BlocoP: a sprite sheet is 8px cells + gutters",
+			std::to_string(image.Width) + "x" + std::to_string(image.Height));
+		Check(cells.size() == 4 && cells[0].X == 1 && cells[0].Y == 1,
+			"BlocoP: the first sprite cell starts after the gutter");
+		Check(image.Pixels[0] == 0, "BlocoP: the gutter of a sprite sheet stays transparent");
+
+		//Colour index 0 is the OAM backdrop: it must not ship as a box around
+		//the figure. SheetTileFor's byte 0 is the shape id, byte 8 the shape id
+		//plus 8, so the top-left pixel of shape 1 is index 0 either way.
+		bool anyTransparentInsideACell = false;
+		for(uint32_t y = 1; y < 9; y++) {
+			for(uint32_t x = 1; x < 9; x++) {
+				anyTransparentInsideACell |= image.Row(y)[x] == 0;
+			}
+		}
+		Check(anyTransparentInsideACell, "BlocoP: OAM colour 0 is punched out of a sprite cell");
+	}
+
+	void TestSpriteSheetJsonCarriesTheOffsetEvidence()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<SheetGroup> groups = BuildSprites(frames, vocab);
+		Check(!groups.empty(), "BlocoP: the sprite JSON fixture has a group to serialise");
+		if(groups.empty()) {
+			return;
+		}
+
+		SheetJsonDoc doc;
+		doc.Kind = "sprite";
+		doc.SheetFile = "spr000.png";
+		doc.ReferenceFile = "spr000.orig.png";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = groups[0].Columns;
+		doc.Edges = groups[0].Edges;
+		RenderGroup(groups[0], vocab, SheetLookup(), SheetPalette(), doc.Cells, true);
+
+		std::string json = SerializeSheet(doc, SheetLookup());
+		Check(json.find("\"kind\": \"sprite\"") != std::string::npos,
+			"BlocoP: the sprite sidecar declares its kind");
+		Check(json.find("\"gridUnit\": 8") != std::string::npos,
+			"BlocoP: the sprite sidecar reports the 8x8 OAM unit");
+		Check(json.find("\"reference\": \"spr000.orig.png\"") != std::string::npos,
+			"BlocoP: the sprite sheet names its pixel-exact twin (F5.4d convention)");
+		Check(json.find("\"dx\": 1, \"dy\": 0") != std::string::npos,
+			"BlocoP: the evidence carries the OAM offset that joined two sprites");
+		Check(json.find("\"pAB\": 1.0000") != std::string::npos,
+			"BlocoP: a figure that never comes apart predicts itself perfectly");
+		Check(json.find("\"metatile\": ") != std::string::npos,
+			"BlocoP: a sprite cell carries its vocabulary index for the round-trip");
+		Check(SerializeSheet(doc, SheetLookup()) == json, "BlocoP: sprite serialisation is deterministic");
+	}
+
+	void TestSheetJsonCarriesTheGridDecision()
+	{
+		SheetJsonDoc doc;
+		doc.Kind = "metatiles";
+		doc.SheetFile = "metatiles.png";
+		doc.ReferenceFile = "metatiles.orig.png";
+		doc.Grid.Unit = 16;
+		doc.Grid.HasGrid = true;
+		doc.Grid.PhaseAdvantage = 0.3447;
+		doc.Grid.ChosenConsistency = 0.9938;
+		doc.Grid.Alt8x8 = 0.9994;
+		doc.Columns = 4;
+
+		SheetCell cell;
+		cell.Index = 0;
+		cell.X = 1;
+		cell.Y = 1;
+		cell.Count = 431;
+		cell.Metatile = 0;
+		cell.Key = MetatileKey{ { 7, 7, 7, 7 } };
+		doc.Cells.push_back(cell);
+
+		std::string json = SerializeSheet(doc, SheetLookup());
+		Check(json.find("\"version\": 1") != std::string::npos, "BlocoP: the sidecar declares schema version 1");
+		Check(json.find("\"hasGrid\": true") != std::string::npos,
+			"BlocoP: the sidecar carries the amended grid decision");
+		Check(json.find("\"phaseAdvantage\": 0.3447") != std::string::npos,
+			"BlocoP: the sidecar carries the phase advantage that made it");
+		Check(json.find("\"label\": \"\"") != std::string::npos,
+			"BlocoP: the artist's label field is always emitted and always empty");
+		Check(json.find("\"tiles\": [{ \"tile\": \"") != std::string::npos,
+			"BlocoP: a cell carries the exact hires.txt keys of its tiles");
+		Check(SerializeSheet(doc, SheetLookup()) == json, "BlocoP: serialisation is deterministic");
+	}
 }
 
 int main()
@@ -2394,6 +3210,27 @@ int main()
 	TestKeyboardBlockOnlyAppliesWhileRunning();
 	TestKeyboardBlockSparesNonKeyboardInputs();
 	TestSupersetStillShadowsTheExemptShortcut();
+
+	TestSheetStableScreensCollapseRepeats();
+	TestSheetHudRowsSurviveAChangingScore();
+	TestSheetHudRowsIgnoreAnAllSkyScreen();
+	TestSheetHudRowsSurviveATitleScreenInTheRecording();
+	TestSheetGridPhaseAdvantageSeparatesGridFromNoise();
+	TestSheetVocabularyCountsAndIsolationRule();
+	TestSheetIsolatedMetatilesAreMisc();
+	TestSheetMutualPredictabilityRejectsPromiscuousPairs();
+	TestSheetObjectsAreLaidOutFromPredictiveEdges();
+	TestSheetBestShiftRecoversTheScroll();
+	TestSheetStitchJoinsScreensThatShareABorderBand();
+	TestSheetStitchRefusesScreensWithoutAdjacencyEvidence();
+	TestSheetStitchKeepsAContinuousScrollInOneMap();
+	TestSheetAliasesCollapseOntoTheFirstSurvivor();
+	TestSheetContactSheetGeometry();
+	TestSheetUpscaleIsNearestNeighbour();
+	TestSheetJsonCarriesTheGridDecision();
+	TestSpriteOffsetGroupingRejectsADrifter();
+	TestSpriteGroupIsLaidOutAtItsOamOffsets();
+	TestSpriteSheetJsonCarriesTheOffsetEvidence();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

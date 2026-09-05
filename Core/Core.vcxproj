@@ -88,6 +88,12 @@
     <ClInclude Include="GBA\Debugger\MgbaLogHandler.h" />
     <ClInclude Include="NES\HdPacks\HdBuilderPpu.h" />
     <ClInclude Include="NES\HdPacks\HdPackBuilder.h" />
+    <ClInclude Include="NES\HdPacks\MetatileVocabulary.h" />
+    <ClInclude Include="NES\HdPacks\ScreenStitcher.h" />
+    <ClInclude Include="NES\HdPacks\SheetGrouping.h" />
+    <ClInclude Include="NES\HdPacks\SheetRender.h" />
+    <ClInclude Include="NES\HdPacks\SpriteGrouping.h" />
+    <ClInclude Include="NES\HdPacks\TileSheetTypes.h" />
     <ClInclude Include="Shared\ColorUtilities.h" />
     <ClInclude Include="Shared\Utilities\emu2413.h" />
     <ClInclude Include="NES\Mappers\Nintendo\FnsMmc1.h" />
@@ -724,6 +730,11 @@
     <ClCompile Include="NES\HdPacks\HdNesPack.cpp" />
     <ClCompile Include="NES\HdPacks\HdNesPpu.cpp" />
     <ClCompile Include="NES\HdPacks\HdPackBuilder.cpp" />
+    <ClCompile Include="NES\HdPacks\MetatileVocabulary.cpp" />
+    <ClCompile Include="NES\HdPacks\ScreenStitcher.cpp" />
+    <ClCompile Include="NES\HdPacks\SheetGrouping.cpp" />
+    <ClCompile Include="NES\HdPacks\SheetRender.cpp" />
+    <ClCompile Include="NES\HdPacks\SpriteGrouping.cpp" />
     <ClCompile Include="NES\HdPacks\HdPackLoader.cpp" />
     <ClCompile Include="NES\HdPacks\HdVideoFilter.cpp" />
     <ClCompile Include="NES\HdPacks\OggMixer.cpp" />

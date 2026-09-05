@@ -1,0 +1,15 @@
+frames: 18138  tiles(exact): 611  shapes: 197
+stable screens: 11  distinct: 9
+vocabulary source: stable screens
+metatiles (2x2 shape tuples, aligned): 62
+baseline giant component: 59/59 shapes, 1 comps
+PMI objects: 0  sizes []
+stitched screens: 5
+  screen 1: shift (8,0) match 0.75 -> placed at (1,0)
+  screen 2: shift (8,0) match 0.75 -> placed at (2,0)
+  screen 4: shift (0,-5) match 0.77 -> placed at (1,-1)
+  screen 5: shift (0,-6) match 0.73 -> placed at (1,-2)
+  screen 7: transition match 0.00 too low, skipped
+  screen 8: not adjacent to the anchor, skipped
+  screen 9: not adjacent to the anchor, skipped
+  screen 10: not adjacent to the anchor, skipped

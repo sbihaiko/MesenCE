@@ -1,0 +1,7 @@
+F5.4e baseline (tile shapes, adjacency count >= 2): component sizes
+  components: 1  largest: [59]
+  shapes in giant component: 59 of 59
+
+metatile + mutual predictability (count>=3, p>=0.6):
+  components: 0  sizes: []
+  edges kept: 0 of 211

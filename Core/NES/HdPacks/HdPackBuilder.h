@@ -1,6 +1,9 @@
 #pragma once
 #include "pch.h"
 #include "NES/HdPacks/HdData.h"
+#include "NES/HdPacks/TileSheetTypes.h"
+#include "NES/HdPacks/SheetRender.h"
+#include "NES/HdPacks/SpriteGrouping.h"
 #include "NES/NesTypes.h"
 #include "Shared/SettingTypes.h"
 #include <map>
@@ -120,6 +123,46 @@ private:
 	bool _objectsBuilt = false; //guard: build the object sheets once per session
 	void AccumulateCoOccurrence();
 	void BuildObjectSheets(stringstream& tileRows);
+
+	//F9.1-F9.3 (ADR-0153): artist-legible sheets. While recording, OnFrameEnd
+	//turns each frame's background runs into a compact MesenSheets::GridFrame
+	//(shape ids, consecutive duplicates collapsed, capped at kMaxSheetFrames);
+	//SaveHdPack then runs the whole inference once - metatile vocabulary, grid
+	//detection, stitched maps, mutual-predictability objects - and writes
+	//textures/sheets/. The analysis itself is host-free and unit-tested
+	//(MetatileVocabulary / ScreenStitcher / SheetGrouping / SheetRender); this
+	//class only feeds it and writes the bytes it returns.
+	//F9.5 (ADR-0153 §2): the same retention discipline for OAM. HdBuilderPpu
+	//hands every on-screen sprite of the frame to RecordSprite (read straight
+	//from OAM, so an entry hidden by the 8-sprite limit or by a background tile
+	//still counts, and an 8x16 sprite arrives as its two 8x8 halves); OnFrameEnd
+	//closes the frame, collapsing a consecutive duplicate into RepeatCount and
+	//stopping at kMaxSheetFrames. SpriteGrouping turns the stream into
+	//sheets/sprNNN.png at save time.
+	vector<MesenSheets::OamFrame> _oamFrames;
+	MesenSheets::OamFrame _frameOam;
+	uint32_t _spriteSheetCount = 0;
+	void RecordOamFrame();
+	void WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup);
+
+	vector<MesenSheets::GridFrame> _gridFrames;
+	unordered_map<HdTileKey, MesenSheets::ShapeId> _shapeIds;
+	vector<MesenSheets::SheetTileKey> _shapeTiles; //drawable art per shape id
+	bool _sheetsBuilt = false;
+	unordered_set<uint32_t> _sheetObjectShapes; //shape hashes inside an inferred object
+	vector<uint32_t> _shapeHashes;              //shape id -> shape hash
+	uint32_t _sheetObjectCount = 0;
+	void RecordGridFrame();
+	MesenSheets::ShapeId ShapeIdFor(const HdPpuTileInfo& tile);
+	void BuildSheets();
+	void WriteContextSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
+	void WriteMapSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
+	void WriteObjectSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
+	void WriteSheetFiles(const string& folder, const string& baseName, const MesenSheets::SheetImage& image, MesenSheets::SheetJsonDoc& doc, const MesenSheets::TileLookup& lookup);
+	//Debug flag (ADR-0153 §7): MESEN_SHEET_GRID_DUMP=<file> writes the recorded
+	//grid stream in the format scripts/spike_tile_sheets.py parses, once, at
+	//save time - the hot path keeps no dump code.
+	void WriteGridDump(const string& path) const;
 	HdPackTileInfo* FindObjectArt(uint32_t shapeHash, std::map<uint32_t, HdPackTileInfo*>& bestByShape);
 
 	void AddTile(HdPackTileInfo* tile, uint32_t usageCount);
@@ -163,6 +206,9 @@ public:
 			_frameHash = _frameHash * 16777619u ^ (tile.GetHashCode() + (x | (y << 8)));
 		}
 	}
+	//F9.5: one on-screen sprite, post-flip shape, screen origin in pixels.
+	//Gated on screen capture like the background grid, and a no-op otherwise.
+	void RecordSprite(uint8_t x, uint8_t y, HdPpuTileInfo& tile);
 	void OnFrameEnd();
 
 	//Static export (no gameplay needed): every 16-byte tile of CHR ROM becomes

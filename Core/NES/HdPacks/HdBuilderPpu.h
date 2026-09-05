@@ -5,6 +5,7 @@
 #include "NES/HdPacks/HdPackBuilder.h"
 #include "Shared/Video/VideoDecoder.h"
 #include "Shared/RewindManager.h"
+#include "Utilities/BitUtilities.h"
 #include "Utilities/Serializer.h"
 
 class HdBuilderPpu final : public NesPpu<HdBuilderPpu>
@@ -24,7 +25,17 @@ private:
 public:
 	__forceinline bool RemoveSpriteLimit() { return _console->GetNesConfig().RemoveSpriteLimit; }
 	__forceinline bool UseAdaptiveSpriteLimit() { return _console->GetNesConfig().AdaptiveSpriteLimit; }
-	void* OnBeforeSendFrame() { return nullptr; }
+
+	//F9.5 (ADR-0153 §2): one OAM snapshot per frame for the sprite sheets. Read
+	//from OAM rather than from DrawPixel because the sheet wants the figure the
+	//game *placed*, not the pixels that survived the 8-sprite limit and the
+	//background priority bit. Runs once a frame, before NesConsole closes the
+	//frame on the builder, and is a no-op unless screen capture is on.
+	void* OnBeforeSendFrame()
+	{
+		CaptureOam();
+		return nullptr;
+	}
 
 	__forceinline void StoreSpriteInformation(bool horizontalMirror, bool verticalMirror, uint16_t tileAddr, uint8_t lineOffset, NesSpriteInfo& sprite)
 	{
@@ -135,6 +146,71 @@ public:
 		}
 	}
 
+private:
+	//OAM flips are attribute bits, not tile data, so a mirrored half of a figure
+	//shares its CHR with its twin. Baking the flip into the recorded shape is
+	//what lets the two sit side by side on a sheet instead of collapsing into
+	//one cell (a group cannot place the same vocabulary entry twice).
+	static void ApplyFlips(uint8_t* tileData, bool horizontalMirror, bool verticalMirror)
+	{
+		if(verticalMirror) {
+			for(int plane = 0; plane < 16; plane += 8) {
+				for(int row = 0; row < 4; row++) {
+					std::swap(tileData[plane + row], tileData[plane + 7 - row]);
+				}
+			}
+		}
+		if(horizontalMirror) {
+			for(int i = 0; i < 16; i++) {
+				tileData[i] = BitUtilities::ReverseByte(tileData[i]);
+			}
+		}
+	}
+
+	void CaptureOam()
+	{
+		BaseMapper* mapper = _console->GetMapper();
+		bool isChrRam = !mapper->HasChrRom();
+		uint32_t halves = _control.LargeSprites ? 2 : 1;
+		for(uint32_t i = 0; i < 64; i++) {
+			uint8_t spriteY = _spriteRam[i * 4];
+			//239 and up is how a game parks a sprite off-screen
+			if(spriteY >= 0xEF) {
+				continue;
+			}
+			uint8_t tileIndex = _spriteRam[i * 4 + 1];
+			uint8_t attributes = _spriteRam[i * 4 + 2];
+			uint8_t spriteX = _spriteRam[i * 4 + 3];
+			uint8_t paletteOffset = ((attributes & 0x03) << 2) | 0x10;
+			bool horizontalMirror = (attributes & 0x40) != 0;
+			bool verticalMirror = (attributes & 0x80) != 0;
+
+			for(uint32_t half = 0; half < halves; half++) {
+				//An 8x16 sprite is recorded as its two 8x8 halves, top half first
+				//on screen whichever way the sprite is flipped.
+				uint32_t part = verticalMirror ? (halves - 1 - half) : half;
+				uint16_t tileAddr = _control.LargeSprites
+					? (uint16_t)((((tileIndex & 0x01) << 12) | ((tileIndex & ~0x01) << 4)) + part * 16)
+					: (uint16_t)(_control.SpritePatternAddr | (tileIndex << 4));
+				int32_t absoluteTileAddr = mapper->GetPpuAbsoluteAddress(tileAddr).Address;
+				uint32_t y = spriteY + 1 + half * 8;
+				if(absoluteTileAddr < 0 || y >= 240) {
+					continue;
+				}
+
+				HdPpuTileInfo sprite = {};
+				sprite.TileIndex = (isChrRam ? (tileAddr & _chrRamIndexMask) : (uint32_t)absoluteTileAddr) / 16;
+				sprite.PaletteColors = ReadPaletteRam(paletteOffset + 3) | (ReadPaletteRam(paletteOffset + 2) << 8) | (ReadPaletteRam(paletteOffset + 1) << 16) | 0xFF000000;
+				sprite.IsChrRamTile = isChrRam;
+				mapper->CopyChrTile((uint32_t)absoluteTileAddr & 0xFFFFFFF0, sprite.TileData);
+				ApplyFlips(sprite.TileData, horizontalMirror, verticalMirror);
+
+				_hdPackBuilder->RecordSprite(spriteX, (uint8_t)y, sprite);
+			}
+		}
+	}
+
+public:
 	void WriteRAM(uint16_t addr, uint8_t value)
 	{
 		if(GetRegisterID(addr) == PpuRegisters::VideoMemoryData) {

@@ -295,6 +295,10 @@ doc-checks: check-manifest
 	python3 scripts/test_mep_lint_border.py
 	python3 scripts/test_mep_errata.py
 	python3 scripts/test_mep_audio_patch_resolution.py
+	#F9.6 (ADR-0154): the external repaint's own suite -- stdlib-only Python,
+	#no model, no weights, no network (its diffusion backend is exercised only
+	#against a loopback stub and through its unavailable paths).
+	python3 scripts/test_sheet_repaint.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
 	python3 scripts/validate-specs.py
@@ -316,7 +320,8 @@ core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 
 #Fase 4 of the now-completed unit-test plan (see git history for
 #docs/roadmap/plano-testes-unitarios.md): framework-free C++ unit
-#tests for ChannelRoleClassifier + MepPack + BorderLayout (ADR-0149). No `core` prerequisite - links
+#tests for ChannelRoleClassifier + MepPack + BorderLayout (ADR-0149) + the
+#artist-legible sheet pipeline (ADR-0153). No `core` prerequisite - links
 #only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
 #then runs the binary; a failing case exits non-zero.
 core-unit-tests:
@@ -333,6 +338,11 @@ core-unit-tests:
 	  Core/Shared/MessageManager.cpp \
 	  Core/Shared/Video/BorderLayout.cpp \
 	  Core/NES/HdPacks/OggMixer.cpp \
+	  Core/NES/HdPacks/MetatileVocabulary.cpp \
+	  Core/NES/HdPacks/ScreenStitcher.cpp \
+	  Core/NES/HdPacks/SheetGrouping.cpp \
+	  Core/NES/HdPacks/SheetRender.cpp \
+	  Core/NES/HdPacks/SpriteGrouping.cpp \
 	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
 	  Utilities/sha256.cpp Utilities/SimpleLock.cpp Utilities/Timer.cpp Utilities/miniz.cpp \
 	  -o scripts/core_unit_tests

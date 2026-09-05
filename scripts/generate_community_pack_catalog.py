@@ -5,7 +5,9 @@ and docs/community-packs.json.
 The board/accepted-item fetch lives in `mei_catalog_fetch` (ADR-0138 §35
 split: this module orchestrates, that one fetches, `mei_catalog_entry`
 assembles, `community_pack_markdown` renders the Game / Console / Author /
-Date / 👍 table). P.2 (ADR-0140/0141, PRD §3.3/§3.6): each item becomes a
+Date / 👍 table, to which `pack_generated_disclosure` adds ADR-0154 §3's
+"Generated" column: a pack that declares `generated` in its pack.json says
+so next to Author -- disclosure, never a verdict). P.2 (ADR-0140/0141, PRD §3.3/§3.6): each item becomes a
 `_candidate` with its resolved pack_id/content_id/origin/version/
 validated_at/votes; `pack_id_rules.select_catalog_rows` keeps one live row
 per pack_id (the §3.6 slot winner), drops byte-duplicates (same content_id)
@@ -24,6 +26,7 @@ from datetime import date
 from pathlib import Path
 
 import community_pack_markdown as markdown
+import pack_generated_disclosure as disclosure  # ADR-0154 §3 "Generated" column
 import mep_errata  # ADR-0152 known-missing declarations, keyed on the artifact sha256
 import mei_catalog_entry as entry_mod
 import pack_id_rules
@@ -86,6 +89,9 @@ def _candidate(item):
             "content_id": (mep_meta or {}).get("content_id"), "version": version,
             "validated_at": (mep_meta or {}).get("validated_at"),
             "origin": pack_id_rules.pack_origin(pack_url, author),
+            #ADR-0154 §3: read off the pack, like `author` -- never off the
+            #submitter, and never turned into a verdict.
+            "generated": disclosure.generated_field(mep_meta),
             "votes": markdown.thumbs_up_count(details)}
 
 
@@ -144,10 +150,18 @@ def main():
     rows, entries = [], []
     for c in kept:
         row, entry = _render(c)
+        #ADR-0154 §3: the disclosure rides on the row rather than through
+        #`build_row`, whose renderer this slice does not own; see
+        #`with_generated_column`.
+        row["generated"] = c.get("generated")
         rows.append(row)
         if entry is not None:
             entries.append(entry)
-    OUTPUT_PATH.write_text(markdown.build_markdown(rows), encoding="utf-8")
+    OUTPUT_PATH.write_text(
+        disclosure.with_generated_column(markdown.build_markdown(rows), rows,
+                                         markdown.TABLE_HEADER, markdown.TABLE_SEP,
+                                         markdown.POPULARITY_NOTE),
+        encoding="utf-8")
     catalog = entry_mod.build_catalog(entries, date.today().isoformat())
     JSON_OUTPUT_PATH.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"docs/community-packs.md regenerated with {len(rows)} accepted pack(s); "

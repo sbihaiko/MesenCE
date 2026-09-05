@@ -9,6 +9,10 @@
 #include "NES/NesConstants.h"
 #include "NES/HdPacks/HdPackLoader.h"
 #include "NES/HdPacks/HdPackConditions.h"
+#include "NES/HdPacks/MetatileVocabulary.h"
+#include "NES/HdPacks/ScreenStitcher.h"
+#include "NES/HdPacks/SheetGrouping.h"
+#include "NES/HdPacks/SheetRender.h"
 #include "Shared/MessageManager.h"
 #include "NES/NesDefaultVideoFilter.h"
 #include "Utilities/xBRZ/xbrz.h"
@@ -143,17 +147,21 @@ HdPackTileInfo* HdPackBuilder::FindObjectArt(uint32_t shapeHash, std::map<uint32
 	return it != bestByShape.end() ? it->second : nullptr;
 }
 
-//F5.4e: cluster the co-occurrence graph into objects and write one editable
-//per-object sheet + "# inferred" tileNearby candidates. See the header comment.
+//ADR-0153 retires F5.4e's clustering (union-find over pairs seen adjacent >= 2
+//times): on every real game it collapsed the whole scene into one component,
+//so no object sheet was ever emitted. The sheets now come from the metatile
+//pipeline (BuildSheets / WriteObjectSheets). What survives here, unchanged, is
+//F5.4e's *inert* contract: for a pair of shapes that a real object is made of,
+//define a tileNearby condition the artist may wire to a <tile> by hand. Never
+//auto-attached - a wrong inference must not make a tile fail to render.
 void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 {
-	if(_objectsBuilt || _coOccurrence.empty()) {
+	if(_objectsBuilt || _coOccurrence.empty() || _sheetObjectShapes.empty()) {
 		return;
 	}
 	_objectsBuilt = true;
 
-	//Most-used non-default art per shape, used to draw the object sheets and as
-	//the tileNearby target data.
+	//Most-used non-default art per shape, the tileNearby target data.
 	std::map<uint32_t, HdPackTileInfo*> bestByShape;
 	for(unique_ptr<HdPackTileInfo>& tile : _hdData.Tiles) {
 		if(!tile || tile->DefaultTile) {
@@ -166,229 +174,54 @@ void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 		}
 	}
 
-	//Union-find over shapes whose edges were seen at least twice. Groups bigger
-	//than 32 shapes are skipped - a huge connected component is a contiguous
-	//background region, not a discrete object an artist would edit as one sheet.
-	struct DisjointSet
-	{
-		vector<int32_t> parent;
-		explicit DisjointSet(size_t n) : parent(n, -1) {}
-		int32_t Find(int32_t x)
-		{
-			while(parent[x] >= 0) {
-				if(parent[parent[x]] >= 0) {
-					parent[x] = parent[parent[x]];
-				}
-				x = parent[x];
-			}
-			return x;
-		}
-		void Union(int32_t a, int32_t b)
-		{
-			a = Find(a);
-			b = Find(b);
-			if(a == b) {
-				return;
-			}
-			if(parent[a] > parent[b]) {
-				std::swap(a, b);
-			}
-			parent[a] += parent[b];
-			parent[b] = a;
-		}
-	};
+	tileRows << std::endl << "# inferred " << _sheetObjectCount << " object sheet(s) -> sheets/objNNN.png" << std::endl;
 
-	std::vector<uint32_t> shapes;
-	std::map<uint32_t, int32_t> shapeIndex;
+	int edgeIndex = 0;
 	for(const auto& edge : _coOccurrence) {
-		if(edge.second.Count() < 2) {
+		uint32_t lo = edge.first.first, hi = edge.first.second;
+		if(edge.second.Count() < 3) {
 			continue;
 		}
-		for(uint32_t s : { edge.first.first, edge.first.second }) {
-			if(shapeIndex.find(s) == shapeIndex.end()) {
-				shapeIndex[s] = (int32_t)shapes.size();
-				shapes.push_back(s);
-			}
+		if(_sheetObjectShapes.find(lo) == _sheetObjectShapes.end() || _sheetObjectShapes.find(hi) == _sheetObjectShapes.end()) {
+			continue;
 		}
-	}
-	if(shapes.empty()) {
-		return;
-	}
-
-	DisjointSet ds(shapes.size());
-	for(const auto& edge : _coOccurrence) {
-		if(edge.second.Count() >= 2) {
-			ds.Union(shapeIndex[edge.first.first], shapeIndex[edge.first.second]);
-		}
-	}
-
-	std::map<int32_t, vector<uint32_t>> groups;
-	for(uint32_t s : shapes) {
-		groups[ds.Find(shapeIndex[s])].push_back(s);
-	}
-
-	int objectIndex = 0;
-	for(const auto& group : groups) {
-		if(group.second.size() < 2 || group.second.size() > 32) {
+		HdPackTileInfo* source = FindObjectArt(lo, bestByShape);
+		HdPackTileInfo* target = FindObjectArt(hi, bestByShape);
+		if(!source || !target) {
 			continue;
 		}
 
-		//BFS layout from the most-co-occurring shape; each placed neighbor goes at
-		//the dominant 8px offset of the edge that connects it (E or S relative to
-		//the lower-hash endpoint, per AccumulateCoOccurrence).
-		std::map<uint32_t, std::pair<int32_t, int32_t>> placed;
-		std::vector<uint32_t> queue;
-		int32_t minX = 0, minY = 0, maxX = 0, maxY = 0;
-
-		uint32_t seed = group.second[0];
-		uint32_t seedDegree = 0;
-		for(uint32_t s : group.second) {
-			uint32_t degree = 0;
-			for(const auto& edge : _coOccurrence) {
-				uint32_t lo = edge.first.first, hi = edge.first.second;
-				if(s == lo || s == hi) {
-					degree += edge.second.Count();
-				}
-			}
-			if(degree > seedDegree) {
-				seedDegree = degree;
-				seed = s;
+		string condName = "obj_nearby" + std::to_string(edgeIndex++);
+		bool alreadyDefined = false;
+		for(unique_ptr<HdPackCondition>& existing : _hdData.Conditions) {
+			if(existing->Name == condName) {
+				alreadyDefined = true;
+				break;
 			}
 		}
-
-		std::map<uint32_t, bool> inObject;
-		for(uint32_t s : group.second) {
-			inObject[s] = true;
-		}
-		std::map<uint32_t, bool> visited;
-		visited[seed] = true;
-		placed[seed] = { 0, 0 };
-		queue.push_back(seed);
-		for(size_t qi = 0; qi < queue.size(); qi++) {
-			uint32_t a = queue[qi];
-			std::pair<int32_t, int32_t> aPos = placed[a];
-			for(const auto& edge : _coOccurrence) {
-				uint32_t lo = edge.first.first, hi = edge.first.second;
-				if(a != lo && a != hi) {
-					continue;
-				}
-				if(!inObject[lo] || !inObject[hi]) {
-					continue;
-				}
-				bool east = edge.second.ECount >= edge.second.SCount;
-				uint32_t b = (a == lo) ? hi : lo;
-				if(visited[b]) {
-					continue;
-				}
-				visited[b] = true;
-				std::pair<int32_t, int32_t> offset = east ? std::pair<int32_t, int32_t>(1, 0) : std::pair<int32_t, int32_t>(0, 1);
-				std::pair<int32_t, int32_t> bPos = (a == lo) ? std::make_pair(aPos.first + offset.first, aPos.second + offset.second)
-				                                             : std::make_pair(aPos.first - offset.first, aPos.second - offset.second);
-				placed[b] = bPos;
-				minX = std::min(minX, bPos.first);
-				minY = std::min(minY, bPos.second);
-				maxX = std::max(maxX, bPos.first);
-				maxY = std::max(maxY, bPos.second);
-				queue.push_back(b);
-			}
+		if(alreadyDefined) {
+			continue;
 		}
 
-		//Unreachable members (should not happen inside one connected component)
-		//are appended in a fresh row so nothing silently drops.
-		int nextCell = maxX + 1;
-		for(uint32_t s : group.second) {
-			if(!visited[s]) {
-				placed[s] = { nextCell++, 0 };
-				maxX = std::max(maxX, nextCell - 1);
+		bool east = edge.second.ECount >= edge.second.SCount;
+		HdPackTileNearbyCondition* cond = new HdPackTileNearbyCondition();
+		cond->Name = condName;
+		string tileData;
+		int32_t tileIndex = -1;
+		bool ignorePalette = false;
+		if(target->IsChrRamTile) {
+			for(int i = 0; i < 16; i++) {
+				tileData += HexUtilities::ToHex(target->TileData[i]);
 			}
+			ignorePalette = true;
+		} else {
+			tileIndex = target->TileIndex;
 		}
+		cond->Initialize(east ? 8 : 0, east ? 0 : 8, target->PaletteColors, tileIndex, tileData, ignorePalette);
+		_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
 
-		int width = maxX - minX + 1;
-		int height = maxY - minY + 1;
-		int tileDimension = 8 * _hdData.Scale;
-		int sheetWidth = width * tileDimension;
-		int sheetHeight = height * tileDimension;
-		std::vector<uint32_t> sheetBuffer((size_t)sheetWidth * sheetHeight, 0xFFFF00FF);
-
-		stringstream cellOrder;
-		for(const auto& kv : placed) {
-			HdPackTileInfo* art = FindObjectArt(kv.first, bestByShape);
-			if(!art) {
-				continue;
-			}
-			if(art->HdTileData.empty()) {
-				GenerateHdTile(art);
-				art->UpdateFlags();
-			}
-			int cx = kv.second.first - minX;
-			int cy = kv.second.second - minY;
-			for(int i = 0; i < tileDimension; i++) {
-				for(int j = 0; j < tileDimension; j++) {
-					sheetBuffer[(size_t)(cy * tileDimension + i) * sheetWidth + (cx * tileDimension + j)] = art->HdTileData[(size_t)i * tileDimension + j];
-				}
-			}
-			cellOrder << "# inferred   cell " << (cy * width + cx) << " = tile " << HexUtilities::ToHex(art->TileIndex) << " palette " << HexUtilities::ToHex(art->PaletteColors, true) << std::endl;
-		}
-
-		namespace fs = std::filesystem;
-		std::error_code ec;
-		fs::create_directories(fs::u8path(FolderUtilities::CombinePath(_saveFolder, "textures/sheets")), ec);
-		string sheetName = "object" + std::to_string(objectIndex) + ".png";
-		PNGHelper::WritePNG(FolderUtilities::CombinePath(FolderUtilities::CombinePath(_saveFolder, "textures/sheets"), sheetName), sheetBuffer.data(), sheetWidth, sheetHeight, 32);
-
-		tileRows << std::endl << "# inferred object " << objectIndex << " -> textures/sheets/" << sheetName << std::endl;
-		tileRows << cellOrder.str();
-
-		//"# inferred" tileNearby condition candidates: for every object edge seen
-		//at least 3 times, define a condition that fires when the higher-hash shape
-		//is at the dominant 8px offset of the lower-hash one. Inert by design - the
-		//artist wires it to a <tile> ([name]<tile>) only after verifying the pair
-		//really co-occurs, so a wrong inference can never make a tile fail to render.
-		int edgeIndex = 0;
-		for(const auto& edge : _coOccurrence) {
-			uint32_t lo = edge.first.first, hi = edge.first.second;
-			if(!inObject[lo] || !inObject[hi] || edge.second.Count() < 3) {
-				continue;
-			}
-			bool east = edge.second.ECount >= edge.second.SCount;
-			HdPackTileInfo* target = FindObjectArt(hi, bestByShape);
-			if(!target) {
-				continue;
-			}
-			string condName = "obj" + std::to_string(objectIndex) + "_nearby" + std::to_string(edgeIndex++);
-			bool alreadyDefined = false;
-			for(unique_ptr<HdPackCondition>& existing : _hdData.Conditions) {
-				if(existing->Name == condName) {
-					alreadyDefined = true;
-					break;
-				}
-			}
-			if(alreadyDefined) {
-				continue;
-			}
-
-			HdPackTileNearbyCondition* cond = new HdPackTileNearbyCondition();
-			cond->Name = condName;
-			uint32_t palette = target->PaletteColors;
-			string tileData;
-			int32_t tileIndex = -1;
-			bool ignorePalette = false;
-			if(target->IsChrRamTile) {
-				for(int i = 0; i < 16; i++) {
-					tileData += HexUtilities::ToHex(target->TileData[i]);
-				}
-				ignorePalette = true;
-			} else {
-				tileIndex = target->TileIndex;
-			}
-			cond->Initialize(east ? 8 : 0, east ? 0 : 8, palette, tileIndex, tileData, ignorePalette);
-			_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
-
-			tileRows << "# inferred   tileNearby: attach [" << condName << "] to tile " << HexUtilities::ToHex(FindObjectArt(lo, bestByShape)->TileIndex)
-			         << " to require tile " << HexUtilities::ToHex(target->TileIndex) << " " << (east ? "8px east" : "8px south") << std::endl;
-		}
-
-		objectIndex++;
+		tileRows << "# inferred   tileNearby: attach [" << condName << "] to tile " << HexUtilities::ToHex(source->TileIndex)
+		         << " to require tile " << HexUtilities::ToHex(target->TileIndex) << " " << (east ? "8px east" : "8px south") << std::endl;
 	}
 }
 
@@ -794,6 +627,13 @@ void HdPackBuilder::OnFrameEnd()
 	//co-occurrence graph (grid filled in ProcessBgPixel), then reset the grid.
 	AccumulateCoOccurrence();
 
+	//F9.1 (ADR-0153): keep this frame's background grid for the sheet inference
+	//that runs once at save time.
+	RecordGridFrame();
+
+	//F9.5: close the OAM snapshot HdBuilderPpu filled in during this frame.
+	RecordOamFrame();
+
 	//A screen worth keeping is mostly drawn and holds still for a while
 	bool candidate = _bgPixels >= 256 * 240 / 2 && _frameRuns.size() >= 60;
 	if(candidate && _frameHash == _prevFrameHash) {
@@ -813,6 +653,373 @@ void HdPackBuilder::OnFrameEnd()
 	_frameRuns.clear();
 	_lastRunY = -1;
 	std::fill(_frameBg.begin(), _frameBg.end(), 0);
+}
+
+//F9.1 (ADR-0153 §5): turn this frame's background runs into a compact
+//GridFrame. Ported from the spike's frame_grid (scripts/spike_tile_sheets.py):
+//run starts sit on tile boundaries, so the most common (x % 8) among non-zero
+//run starts is the frame's fine x scroll, and cells are laid out relative to
+//it - two frames of the same screen at different sub-tile offsets then compare
+//equal. Consecutive duplicates collapse into RepeatCount and the stream is
+//capped at kMaxSheetFrames, so a long session costs late-game vocabulary,
+//never correctness.
+void HdPackBuilder::RecordGridFrame()
+{
+	if(_frameRuns.empty() || _gridFrames.size() >= MesenSheets::kMaxSheetFrames) {
+		return;
+	}
+
+	uint32_t fineCounts[8] = {};
+	for(const ScreenRun& run : _frameRuns) {
+		if(run.X != 0) {
+			fineCounts[run.X & 7]++;
+		}
+	}
+	uint8_t fine = 0;
+	for(uint8_t i = 1; i < 8; i++) {
+		if(fineCounts[i] > fineCounts[fine]) {
+			fine = i;
+		}
+	}
+
+	MesenSheets::GridFrame frame;
+	frame.FineX = fine;
+	for(size_t i = 0; i < _frameRuns.size(); i++) {
+		const ScreenRun& run = _frameRuns[i];
+		if((run.Y & 7) != 0) {
+			continue;
+		}
+		uint32_t row = (uint32_t)run.Y >> 3;
+		if(row >= MesenSheets::kGridRows) {
+			continue;
+		}
+		//The run ends where the next run on the same scanline starts
+		uint32_t xEnd = (i + 1 < _frameRuns.size() && _frameRuns[i + 1].Y == run.Y) ? _frameRuns[i + 1].X : 256;
+		int32_t offset = ((int32_t)run.X - (int32_t)fine) % 8;
+		if(offset < 0) {
+			offset += 8;
+		}
+		uint32_t cx = offset == 0 ? run.X : run.X + (8 - offset);
+		MesenSheets::ShapeId shape = ShapeIdFor(run.Tile);
+		if(shape == MesenSheets::kEmptyCell) {
+			continue;
+		}
+		for(; cx + 8 <= 256 && cx < xEnd; cx += 8) {
+			int32_t col = ((int32_t)cx - (int32_t)fine) / 8;
+			if(col >= 0 && col < (int32_t)MesenSheets::kGridCols) {
+				frame.Cells[row][col] = shape;
+			}
+		}
+	}
+
+	if(!_gridFrames.empty() && _gridFrames.back().FineX == frame.FineX && _gridFrames.back().SameCells(frame)) {
+		_gridFrames.back().RepeatCount++;
+		return;
+	}
+	frame.FrameNumber = (uint32_t)_gridFrames.size();
+	_gridFrames.push_back(frame);
+}
+
+//F9.5 (ADR-0153 §2): one on-screen sprite. The shape id comes from the same
+//space as the background grid's, so a single TileLookup serves every sheet -
+//and because HdBuilderPpu applies the OAM flip bits to TileData before calling
+//in, the left and right halves of a mirrored figure are distinct shapes and can
+//sit side by side on the sheet instead of collapsing into one cell.
+void HdPackBuilder::RecordSprite(uint8_t x, uint8_t y, HdPpuTileInfo& tile)
+{
+	if(!_captureScreens || _oamFrames.size() >= MesenSheets::kMaxSheetFrames || _frameOam.Entries.size() >= 128) {
+		return;
+	}
+	MesenSheets::ShapeId shape = ShapeIdFor(tile);
+	if(shape == MesenSheets::kEmptyCell) {
+		return;
+	}
+	MesenSheets::OamEntry entry;
+	entry.Shape = shape;
+	entry.X = x;
+	entry.Y = y;
+	_frameOam.Entries.push_back(entry);
+}
+
+//De-duplication mirrors RecordGridFrame: a screen that holds still must not
+//manufacture the evidence the grouping criterion asks for.
+void HdPackBuilder::RecordOamFrame()
+{
+	if(_frameOam.Entries.empty()) {
+		return;
+	}
+	if(_oamFrames.size() >= MesenSheets::kMaxSheetFrames) {
+		_frameOam.Entries.clear();
+		return;
+	}
+	if(!_oamFrames.empty() && _oamFrames.back().SameEntries(_frameOam)) {
+		_oamFrames.back().RepeatCount++;
+	} else {
+		_frameOam.FrameNumber = (uint32_t)_oamFrames.size();
+		_frameOam.RepeatCount = 1;
+		_oamFrames.push_back(_frameOam);
+	}
+	_frameOam.Entries.clear();
+}
+
+//Shape id (palette wildcarded, first-sight order) for a recorded tile; the
+//first exact variant seen becomes the shape's drawable art.
+MesenSheets::ShapeId HdPackBuilder::ShapeIdFor(const HdPpuTileInfo& tile)
+{
+	HdTileKey shapeKey = tile.GetKey(true);
+	auto it = _shapeIds.find(shapeKey);
+	if(it != _shapeIds.end()) {
+		return it->second;
+	}
+	if(_shapeTiles.size() >= MesenSheets::kEmptyCell) {
+		return MesenSheets::kEmptyCell;
+	}
+	MesenSheets::SheetTileKey art;
+	memcpy(art.TileData, tile.TileData, 16);
+	art.PaletteColors = tile.PaletteColors;
+	MesenSheets::ShapeId id = (MesenSheets::ShapeId)_shapeTiles.size();
+	_shapeTiles.push_back(art);
+	_shapeHashes.push_back(shapeKey.GetHashCode());
+	_shapeIds[shapeKey] = id;
+	return id;
+}
+
+//ADR-0153 §7: the recorded grid stream in the text format
+//scripts/spike_tile_sheets.py parses, written once at save time so threshold
+//tuning can iterate offline without rebuilding the core.
+void HdPackBuilder::WriteGridDump(const string& path) const
+{
+	ofstream dump(path, ios::out);
+	if(!dump) {
+		return;
+	}
+	std::vector<bool> emitted(_shapeTiles.size(), false);
+	for(const MesenSheets::GridFrame& frame : _gridFrames) {
+		for(uint32_t repeat = 0; repeat < frame.RepeatCount; repeat++) {
+			dump << "F " << frame.FrameNumber << std::endl;
+			for(uint32_t row = 0; row < MesenSheets::kGridRows; row++) {
+				for(uint32_t col = 0; col < MesenSheets::kGridCols; col++) {
+					MesenSheets::ShapeId id = frame.Cells[row][col];
+					if(id == MesenSheets::kEmptyCell || id >= _shapeTiles.size()) {
+						continue;
+					}
+					if(!emitted[id]) {
+						emitted[id] = true;
+						dump << "K " << id << " ";
+						for(int b = 0; b < 16; b++) {
+							dump << HexUtilities::ToHex(_shapeTiles[id].TileData[b]);
+						}
+						dump << " " << HexUtilities::ToHex(_shapeTiles[id].PaletteColors) << std::endl;
+					}
+					dump << (col * 8 + frame.FineX) << " " << (row * 8) << " " << id << std::endl;
+				}
+			}
+		}
+	}
+}
+
+void HdPackBuilder::WriteSheetFiles(const string& folder, const string& baseName, const MesenSheets::SheetImage& image, MesenSheets::SheetJsonDoc& doc, const MesenSheets::TileLookup& lookup)
+{
+	if(image.Width == 0 || image.Height == 0) {
+		return;
+	}
+	doc.SheetFile = baseName + ".png";
+	doc.ReferenceFile = _writeReferences ? baseName + ".orig.png" : "";
+
+	//The .png ships at the pack scale (the canvas the artist paints on); the
+	//F5.4d .orig.png twin stays 1:1, and the sidecar JSON keeps 1x logical
+	//coordinates so mep_build.py can slice either one.
+	MesenSheets::SheetImage scaled = MesenSheets::Upscale(image, _hdData.Scale);
+	PNGHelper::WritePNG(FolderUtilities::CombinePath(folder, doc.SheetFile), scaled.Pixels.data(), scaled.Width, scaled.Height, 32);
+	if(_writeReferences) {
+		MesenSheets::SheetImage reference = image;
+		PNGHelper::WritePNG(FolderUtilities::CombinePath(folder, doc.ReferenceFile), reference.Pixels.data(), reference.Width, reference.Height, 32);
+	}
+
+	ofstream json(FolderUtilities::CombinePath(folder, baseName + ".json"), ios::out);
+	json << MesenSheets::SerializeSheet(doc, lookup);
+}
+
+//F9.1-F9.3 (ADR-0153): the whole sheet inference, once, at save time.
+void HdPackBuilder::BuildSheets()
+{
+	if(_sheetsBuilt || _gridFrames.empty()) {
+		return;
+	}
+	_sheetsBuilt = true;
+
+	const char* dumpPath = std::getenv("MESEN_SHEET_GRID_DUMP");
+	if(dumpPath && *dumpPath) {
+		WriteGridDump(dumpPath);
+	}
+
+	MesenSheets::TileLookup lookup = [this](MesenSheets::ShapeId id) -> const MesenSheets::SheetTileKey* {
+		return id < _shapeTiles.size() ? &_shapeTiles[id] : nullptr;
+	};
+
+	MesenSheets::Vocabulary vocab = MesenSheets::BuildVocabulary(_gridFrames, lookup);
+	if(vocab.Entries.empty()) {
+		return;
+	}
+
+	string folder = FolderUtilities::CombinePath(_saveFolder, "sheets");
+	FolderUtilities::CreateFolder(folder);
+
+	WriteContextSheets(folder, vocab, lookup);
+	WriteMapSheets(folder, vocab, lookup);
+	WriteObjectSheets(folder, vocab, lookup);
+	WriteSpriteSheets(folder, lookup);
+
+	MessageManager::Log("[HD Pack Builder] sheets: grid unit " + std::to_string(vocab.Grid.Unit) +
+		" (phase " + std::to_string(vocab.Grid.PhaseX) + "," + std::to_string(vocab.Grid.PhaseY) +
+		", consistency " + std::to_string(vocab.Grid.ChosenConsistency) + " vs 8x8 " + std::to_string(vocab.Grid.Alt8x8) +
+		"), " + std::to_string(vocab.Entries.size()) + " metatiles from " + std::to_string(vocab.DistinctScreens) +
+		" distinct screens, HUD rows " + std::to_string(vocab.HudRows) + "/" + std::to_string(vocab.HudBottomRows) +
+		", " + std::to_string(_spriteSheetCount) + " sprite groups from " + std::to_string(_oamFrames.size()) + " OAM frames");
+}
+
+//metatiles / hud / font / misc, split by context so a rupee counter never
+//sits between two trees (ADR-0153 §3).
+void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup)
+{
+	static const std::pair<MesenSheets::SheetContext, const char*> kSheets[] = {
+		{ MesenSheets::SheetContext::Scene, "metatiles" },
+		{ MesenSheets::SheetContext::Hud, "hud" },
+		{ MesenSheets::SheetContext::Font, "font" },
+		{ MesenSheets::SheetContext::Misc, "misc" },
+	};
+
+	for(const auto& sheet : kSheets) {
+		vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < vocab.Entries.size(); i++) {
+			if(vocab.Entries[i].Context == sheet.first) {
+				indexes.push_back(i);
+			}
+		}
+		if(indexes.empty()) {
+			continue;
+		}
+		//One subject, one cell (ADR-0153 §3, F9.7): entries that render to the
+		//same pixels are the same drawing under a bank-swapped key, and paying
+		//for them twice is what made half of some sheets redundant.
+		vector<vector<uint32_t>> aliases;
+		indexes = MesenSheets::CollapseAliases(vocab, indexes, lookup, _palette, MesenSheets::kSheetAliasTolerance, aliases);
+		if(indexes.empty()) {
+			continue;
+		}
+		//Cell order is the vocabulary's own (count descending, ADR-0153 §3), so
+		//an artist reading the sheet cold meets the blocks the game is actually
+		//built out of before the one-off title-screen art.
+		uint32_t columns = MesenSheets::PreferredColumns(indexes.size());
+		MesenSheets::SheetJsonDoc doc;
+		MesenSheets::SheetImage image = MesenSheets::BuildContactSheet(vocab, indexes, lookup, _palette, columns, doc.Cells);
+		for(size_t i = 0; i < doc.Cells.size() && i < aliases.size(); i++) {
+			doc.Cells[i].Aliases = aliases[i];
+			for(uint32_t alias : aliases[i]) {
+				doc.Cells[i].AliasKeys.push_back(vocab.Entries[alias].Key);
+			}
+		}
+		doc.Kind = sheet.second;
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = columns;
+		WriteSheetFiles(folder, sheet.second, image, doc, lookup);
+	}
+}
+
+//Stitched maps: paint surfaces, never a runtime layer (ADR-0153 §6).
+void HdPackBuilder::WriteMapSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup)
+{
+	uint32_t distinct = 0;
+	vector<const MesenSheets::GridFrame*> screens = MesenSheets::SelectStableScreens(_gridFrames, StableFramesNeeded, distinct);
+	vector<MesenSheets::StitchedMap> maps = MesenSheets::BuildMaps(_gridFrames, screens, vocab);
+
+	uint32_t index = 0;
+	for(const MesenSheets::StitchedMap& map : maps) {
+		if(map.Placements.empty()) {
+			continue;
+		}
+		MesenSheets::SheetImage image = MesenSheets::RenderMap(map, vocab, lookup, _palette);
+		char buf[32];
+		snprintf(buf, sizeof(buf), "map-%03u", index++);
+		MesenSheets::SheetJsonDoc doc;
+		doc.Kind = "map";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Gutter = 0;
+		doc.Columns = map.Width / std::max(1u, vocab.Grid.Unit);
+		doc.IsMap = true;
+		doc.Mode = map.Mode;
+		doc.HudRows = map.HudRows;
+		doc.Placements = map.Placements;
+		WriteSheetFiles(folder, buf, image, doc, lookup);
+		for(const string& line : map.Log) {
+			MessageManager::Log("[HD Pack Builder] " + string(buf) + ": " + line);
+		}
+	}
+}
+
+//Objects: mutual predictability, not raw counts (ADR-0153 §2).
+void HdPackBuilder::WriteObjectSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup)
+{
+	vector<MesenSheets::SheetGroup> groups = MesenSheets::BuildObjects(vocab);
+	uint32_t index = 0;
+	for(const MesenSheets::SheetGroup& group : groups) {
+		MesenSheets::SheetJsonDoc doc;
+		MesenSheets::SheetImage image = MesenSheets::RenderGroup(group, vocab, lookup, _palette, doc.Cells);
+		if(image.Width == 0) {
+			continue;
+		}
+		char buf[32];
+		snprintf(buf, sizeof(buf), "obj%03u", index++);
+		doc.Kind = "object";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = group.Columns;
+		doc.Edges = group.Edges;
+		WriteSheetFiles(folder, buf, image, doc, lookup);
+
+		//The shapes an object is made of are the only ones that still earn an
+		//inert "# inferred" tileNearby candidate (see BuildObjectSheets).
+		for(const MesenSheets::SheetCell& cell : doc.Cells) {
+			for(MesenSheets::ShapeId shape : cell.Key.Tiles) {
+				if(shape != MesenSheets::kEmptyCell && shape < _shapeHashes.size()) {
+					_sheetObjectShapes.insert(_shapeHashes[shape]);
+				}
+			}
+		}
+	}
+	_sheetObjectCount = index;
+}
+
+//Sprites: the same mutual-predictability test over OAM offsets (ADR-0153 §2,
+//F9.5). Its vocabulary is its own - one 8x8 OAM shape per cell at grid unit 8 -
+//so a sprite cell never competes with a background metatile for an index.
+void HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup)
+{
+	_spriteSheetCount = 0;
+	if(_oamFrames.empty()) {
+		return;
+	}
+	MesenSheets::Vocabulary vocab = MesenSheets::BuildSpriteVocabulary(_oamFrames);
+	vector<MesenSheets::SheetGroup> groups = MesenSheets::BuildSprites(_oamFrames, vocab);
+	for(const MesenSheets::SheetGroup& group : groups) {
+		MesenSheets::SheetJsonDoc doc;
+		//OAM colour 0 is the backdrop, so a sprite cell is drawn with it punched
+		//out - the figure ships on transparency, per ADR-0153 §3.
+		MesenSheets::SheetImage image = MesenSheets::RenderGroup(group, vocab, lookup, _palette, doc.Cells, true);
+		if(image.Width == 0) {
+			continue;
+		}
+		char buf[32];
+		snprintf(buf, sizeof(buf), "spr%03u", _spriteSheetCount++);
+		doc.Kind = "sprite";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = group.Columns;
+		doc.Edges = group.Edges;
+		WriteSheetFiles(folder, buf, image, doc, lookup);
+	}
 }
 
 void HdPackBuilder::CaptureScreen()
@@ -1043,6 +1250,10 @@ void HdPackBuilder::SaveHdPack()
 		}
 	}
 	savePng(-1);
+
+	//F9.1-F9.3 (ADR-0153): metatile vocabulary, stitched maps and objects, all
+	//written under textures/sheets/ - the artist surface this pack is edited from.
+	BuildSheets();
 
 	//F5.4e: cluster the co-occurrence graph into per-object editable sheets and
 	//emit "# inferred" tileNearby candidates. Runs before the conditions loop so

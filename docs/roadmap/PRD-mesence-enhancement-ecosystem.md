@@ -11,7 +11,8 @@ expressed as parts of one file instead of two files.
 
 Part A is the pack/core roadmap: vision and legal principles, standards,
 the shipped record, and the pending slices (Phase 5/6, repo hygiene, input
-tester, Phase 8 border layer). Part B is the default-GUI roadmap: player
+tester, Phase 8 border layer, Phase 9 artist-legible sheets). Part B is the
+default-GUI roadmap: player
 chrome, Advanced GUI, pack identity (`pack_id`/`content_id`/version),
 duplicates, the pack picker, and the quick-enhancements panel. The two
 Parts intentionally do not duplicate each other's prose: each holds its own
@@ -246,8 +247,122 @@ does not exist.
   `docs/specs/golden/mep-nes/`; `validate-specs.py` runs `mep_lint` over both
   goldens (`lint_golden_packs`); `test_mep_compare_auto_palettes.py` uses the
   golden; `test_mep_compare_render_dispatch.py` added.
+- **Phase 9 F9.0–F9.4 — artist-legible texture sheets** (ADR-0153, accepted
+  and amended 2026-09-05): five host-free modules under `Core/NES/HdPacks/`
+  (`TileSheetTypes.h`, `MetatileVocabulary`, `ScreenStitcher`, `SheetGrouping`,
+  `SheetRender`) fed by a de-duplicated per-frame background grid recorded in
+  `HdPackBuilder`; `BuildObjectSheets`' union-find retired, its inert
+  `# inferred … tileNearby` contract kept; `mep_build.py` slices painted sheets
+  back into `hires.txt` with the painted-cell precedence rule; `core_unit_tests`
+  Bloco P (11 cases). Three of the ADR's rules were replaced by measurement
+  before it shipped — grid criterion, `misc`, HUD rows — see its amendment.
+  Also fixed the trap that had made every scripted headless recording useless:
+  `headless_record` never plugged a controller into port 1, so `input=<script>`
+  was silently dropped and every recording sat in the attract loop.
+  **Applied to the 30-ROM NES library 2026-09-05**, twice: the second run
+  followed a third amendment to §3 (a status-bar row needs a *quorum* of the
+  screens, not unanimity — a recording holds title cards and menus that share
+  no row with the playfield, and one of them was enough to erase every HUD
+  band). 30/30 written, 0 failures. HUD detection went from 1 game to **10**
+  with a non-empty `hud` sheet and from 2 to **9** with a non-empty `font`
+  sheet; Punch-Out!! alone resolves 46 HUD and 110 font cells that used to
+  pollute `metatiles.png`. The noise budget did **not** improve: 23/30 inside
+  it against 25/30 before (over: Double Dragon 36.6 %, Lemmings 28.3 %,
+  Gauntlet 27.4 %, Bubble Bobble 23.0 %, Dr. Mario 22.0 %, SMB3 20.5 %,
+  Zelda II 16.0 %). Recordings are not deterministic between runs, so this is
+  not attributable to the amendment either way — F9.7 below is the change that
+  actually addresses it. The non-determinism was then measured rather than
+  assumed: Excitebike recorded twice from the same binary and the same input
+  script yields 1233 vs 1153 `hires.txt` entries, 10 vs 6 captured background
+  screens, 27 vs 31 sprite groups and a map sheet 230 KB vs 198 KB. What is
+  *stable* across the two runs is the vocabulary-level output — `metatiles`,
+  `font`, `hud` and `obj000` come out byte-identical, and every background
+  screen present in both is byte-identical too. So a diff of two packs measures
+  coverage (how far the run got, which frames it happened to sample), never a
+  code change; only the vocabulary artefacts can be compared before/after. Any
+  regression claim about capture must be made on those, or on a fixture through
+  `core_unit_tests`, not on a pack diff.
+  A **third** run of the library, with F9.5/F9.7/F9.8 all in, first failed
+  30/30 with a segfault in `MesenSheets::RenderGroup` at the end of every
+  300-second recording. The cause was not any of those slices: the makefile
+  does not track header dependencies, `SheetCell` had gained two `std::vector`
+  members, and `SheetGrouping.o` was still the object compiled against the old
+  layout — so one translation unit handed the other a `SheetGroup` reporting
+  `Cells.size() == 14757395258967641294`. A clean rebuild fixed it and
+  ADR-0155 proposes `-MMD -MP` so the trap cannot fire again. Worth stating
+  plainly because the failure mode is the expensive kind: silent at build
+  time, delayed to the last second of a five-minute recording, and pointing at
+  the render code rather than at the stale object.
+  The third run then completed **30/30, 0 failures**, and is the library the
+  shipped code produces. Alias pass across all 30 packs: **10165 vocabulary
+  cells collapse to 8684 subjects (1481 aliases, 15 %)** — well under the
+  spike's 46 %, because the spike was measuring the area-based budget that
+  turned out to be over-collapsing. The heaviest are Tetris 2 (485 -> 134),
+  Ninja Gaiden (477 -> 263) and Gauntlet (420 -> 305). Noise budget 24/30
+  (over: Gauntlet 68.9 %, Dr. Mario 28.9 %, Double Dragon 28.6 %, Bubble
+  Bobble 26.2 %, SMB3 22.4 %, Zelda II 16.4 %); `hud` non-empty on 8 games and
+  `font` on 7, against 10 and 9 on the previous run — inside the run-to-run
+  coverage spread measured above, not a regression signal either way.
+  **Maps fell to 7 games**, and that is F9.8 working as designed rather than a
+  loss: a map now needs adjacency evidence, so Punch-Out!! gets no map instead
+  of five collages, and what does get written is a real sequence. The cost is
+  that a game whose scrolling the recording never caught now ships no map
+  surface at all; F9.9 is what should cover those, by routing their static
+  screens to `<background>`.
+  Validation panel spot checks: map recognisability passes on Metroid
+  (Brinstar corridor), Super Mario Bros. (1-1) and Excitebike, whose tuned
+  input script produces a genuinely continuous 8224 px track — a repeat census
+  of the placement list found only 20 of 482 twelve-column windows occurring
+  twice and none three times, so the stitch is a real sequence and not a
+  duplicated loop. Cold-read passes at the top of each sheet and degrades
+  further down into title text. Known false positive: a frozen scenery band
+  (Excitebike's crowd stand) passes the status-bar test and lands a cell on
+  `hud.png`; the cost is bounded and no cheap test separates it from a real
+  HUD without tracking scroll per row. Not done: F9.6 (AI repaint) and the two
+  Zelda titles, whose name-registration screen no generic input script gets
+  past — the way out there is a GUI save state, not a script.
 
-### 4. Roadmap — pending work, by slice
+- **Phase 9 scrutiny against a target mockup (2026-09-05).** The pipeline was
+  audited against an artist's HD reimagining of Punch-Out!! (redrawn crowd,
+  ring and canvas, both fighters as single figures, a re-laid-out HUD with
+  portraits and bars) to answer one question: *is the captured material
+  organised enough to reach that?* Partly. What already works is the part
+  that looked hardest — mutual-predictability grouping isolates **Glass Joe,
+  Little Mac's front and Little Mac's back as three coherent objects**, and
+  both fighters are reachable at all because Punch-Out!! draws them in the
+  background layer (verified in the captured screens), not in OAM. Five
+  problems block the rest; each became a slice below.
+
+  1. **One subject arrives under many keys.** Measured by
+     `scripts/spike_sheet_dedup.py` over all 30 packs: **6906 vocabulary
+     cells collapse to 3733 subjects (46 %)**, and much of that is *exact*
+     pixel duplication, not near-duplication — Ninja Gaiden 226 cells to 67
+     exactly-distinct, Gauntlet 361 to 105, Tetris 2 414 to 105. A repaint
+     budget is counted in subjects; today the artist repaints the same drawing
+     three or four times. → **F9.7**
+  2. **Maps are collages on games that do not scroll.** Punch-Out!!'s
+     `map-000.png` glues a fighter profile card, a "DON'T CRY, MAC" text
+     screen, a round-number card and the ring into one 1024 px strip, and the
+     game emits five such maps despite never scrolling. The screen-mode
+     stitcher anchors on the last placed screen and appends without requiring
+     evidence that the two are neighbours. → **F9.8**
+  3. **No positional repaint.** The mockup paints one large logo across the
+     ring canvas; in the ROM that canvas is a single metatile repeated (top-3
+     cells are 39-71 % of every map's placements, the dominant one seen 2908
+     times). A `hires.txt` tile entry is position-independent, so painting the
+     canvas cell paints it everywhere. ADR-0050 already captures static
+     screens as `<background>` layers, which *is* the positional surface —
+     the pipeline just never routes to it. → **F9.9**
+  4. **Sprites are absent from the sheets.** Punch-Out!! is lucky; most games
+     put their protagonist in OAM, and nothing in `sheets/` covers it. →
+     **F9.5**, already in flight.
+  5. **The pack still ships the unreadable layer first.** 12993 CHR-order
+     `Chr_XX_N.png` fragments sit next to the sheets (7.1 MB for Punch-Out!!),
+     and F9.0 deferred their fate. They cannot simply be deleted — `hires.txt`
+     renders from them — but they should not be what an artist meets when the
+     folder opens. → **F9.10**
+
+### 4. Roadmap — pending work, by slice### 4. Roadmap — pending work, by slice
 
 #### Phase 6 — Community pack auto-install (MEP Recipe v1) — **priority**
 
@@ -438,6 +553,123 @@ per-console border art (a border is a pack asset, not an engine feature).
 
 Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; F8.4 (apply `scale_mode`, honour the console aspect in the default viewport, letterbox inside the viewport) is optional and unscheduled.
 
+#### Phase 9 — Artist-legible texture sheets (bootstrap output redesign)
+
+**Problem.** The bootstrap `auto/` pack emits `Chr_N.png` sheets in CHR
+order: thousands of 8×8 fragments with no neighbourhood — half a logo,
+one corner of a rock, a run of font glyphs. An artist opening `mep/` of a
+hand-made pack (Zelda 1 reference) sees whole bushes, trees, a stitched
+overworld; opening `auto/` sees noise. F5.4e was meant to bridge this
+(objects from spatial co-occurrence) but its global union-find over
+"≥2 sightings" edges collapses any contiguous scene into one component,
+so `textures/sheets/object*.png` was **never** emitted on real games.
+Spike 2026-09-04 (`scripts/spike_tile_sheets.py`, env-gated grid dump in
+`HdPackBuilder::OnFrameEnd`, evidence under `runs/spike-sheets/`, not
+versioned): Zelda 1 — 59/59 shapes in one component (F5.4e), versus 62
+aligned 16×16 metatiles (bush, tree, rock, sand, forest edge) and 5
+screens stitched into one map with the metatile/PMI approach; Excitebike —
+132/132 in one component, versus a 23 712 px continuous strip with ramps.
+
+**Goal.** The bootstrap writes, next to the ROM, sheets an artist can read
+cold and paint over: a **metatile vocabulary** (one cell per in-game
+building block, aligned to the game's grid), **stitched maps** (screens
+assembled as the player sees them) and **object sheets** (multi-block
+figures that always appear together), each round-tripping through
+`mep_build.py` back into `hires.txt`. Success criterion is Phase 5's
+("publishable pack in < 1 h editing only PNG/OGG") made concrete by the
+validation protocol below.
+
+**Principles.**
+- Presentation is for humans: transparent background, 1-cell gutters,
+  labels in a sidecar JSON (never baked into the PNG), sheets split by
+  context (HUD / font / scene) so a rupee counter never sits between two
+  trees.
+- Grouping is by **mutual predictability**, not raw counts: A and B join
+  when P(B east of A) and P(A west of B) both clear a threshold with a
+  minimum count — sand next to everything is not an object; a 2×2 boss
+  door is.
+- The unit is the game's grid: 16×16 aligned to the attribute grid when
+  the game uses one, 8×8 only when the recording is too thin in aligned
+  placements to justify 16. Detection is automatic and reported; the artist
+  never picks. *Measured 2026-09-05: both golden games select unit 16 — the
+  spike's "Excitebike falls back to 8×8" claim did not survive the amended
+  criterion; what separates them is `hasGrid` (Zelda 0.34, Excitebike 0.03).*
+- Nothing inferred can break rendering (F5.4e rule kept): sheets add art
+  for tiles already keyed by `hires.txt`; wrong grouping only costs
+  legibility, never a missing tile.
+- Vanilla-looking output stays in `auto/`; community art is never masked
+  (ADR-0049/0050/0147).
+
+**Non-goals.** A tile-map editor; a game-specific level format; changing
+`hires.txt` semantics (MEP textures stay an envelope over HD Pack per
+ADR-0005); AI generation inside the emulator (stays an external script,
+see "Deferred / optional").
+
+| Slice | Deliverable | Decision |
+|---|---|---|
+| F9.0 | **ADR** amending ADR-0050 / retiring F5.4e's union-find: metatile vocabulary as the artist unit, mutual-predictability grouping, stitched maps as an artist surface (not a runtime layer), sidecar JSON schema, sheet naming under `textures/sheets/` (`metatiles.png`, `map-NNN.png`, `objNNN.png`, `*.json`). Also decides where the spike's env-gated dump goes (removed vs kept as a debug flag) | **shipped** 2026-09-05 — ADR-0153, amended the same day (§1 grid criterion, §3 `misc`/`hud` rules, §4 schema) after the first real recordings contradicted it |
+| F9.1 | **Metatile vocabulary** in `HdPackBuilder`: per-frame bg grid (exists) → stable-screen filter (hash ignoring HUD rows; ≥N identical frames) → grid detection (phase advantage over the other three parities, ADR-0153 §1 as amended) → vocabulary with counts and palette variants → `sheets/metatiles.png` (+ `.orig.png` twin, F5.4d convention) + `metatiles.json` (cell → tile keys, count, contexts, grid unit). HUD/font/scene split by screen region and by co-occurrence with static rows | **shipped** 2026-09-05 — `Core/NES/HdPacks/MetatileVocabulary.{h,cpp}` |
+| F9.2 | **Screen stitching**: screen-based (scroll direction inferred from the early-transition frame, anchor on the last placed screen, re-anchor on revisiting a known screen) and continuous (accumulated per-frame shift) → `sheets/map-NNN.png` per connected region, one new map after each unmatched cut. Maps are paint surfaces: `mep_build.py` slices them back into metatiles by the sidecar's placement list; the runtime still uses `<background>`/`<tile>` (no new HD Pack construct) | **shipped** 2026-09-05 — `Core/NES/HdPacks/ScreenStitcher.{h,cpp}`, one map per connected component |
+| F9.3 | **Object sheets** replacing `BuildObjectSheets`'s criterion: DSU over metatile pairs passing the mutual-predictability test (both directions, `--min-prob`/`--min-count` defaults from the spike: 0.8 / 3), layout at dominant offsets with gutters, ≤32 cells → `sheets/objNNN.png` + JSON. F5.4e's `# inferred` `tileNearby` candidates keep their inert contract | **shipped** 2026-09-05 — `Core/NES/HdPacks/SheetGrouping.{h,cpp}` |
+| F9.4 | **Round-trip** in `scripts/mep_build.py`: sheets + JSON → per-tile crops → `textures/hires.txt`; identity round-trip (untouched sheets) reproduces the captured screens pixel-exactly under `scripts/headless_record`; `HdPackPreviewWindow` shows each new sheet beside its `.orig.png`. `scripts/test_mep_build.py` gains a fixture with metatiles/map/object sheets | **shipped** 2026-09-05 — `scripts/mep_build.py` sheet slicing + painted-cell precedence (ADR-0153 §4); 38 tests in `scripts/test_mep_build.py` |
+| F9.5 | **Sprite (OAM) grouping**: the same predictability test over OAM entries that move together frame to frame → `sheets/sprNNN.png` (Link's 2×2, Excitebike's bike + rider) | **shipped** 2026-09-05 — `Core/NES/HdPacks/SpriteGrouping.{h,cpp}`, OAM snapshot in `HdBuilderPpu::OnBeforeSendFrame`, `sheets/sprNNN.png`. Criterion: one dominant relative offset per ordered OAM pair, denominator = *appearances of A* (the literal `out(A)` reading fails a 2x2 figure outright, since each tile has three partners per frame). Verified on a real Excitebike recording: bike + rider come out as one figure across 25 pose groups |
+| F9.6 | **Optional AI repaint, external** (`scripts/`, never in the emulator — consistent with "Deferred / optional"): structure-guided upscale of `map-NNN.png` / `metatiles.png` with the original as control image, palette variants by recolour of one generation (same silhouette), alpha preserved, seam pass along cell borders; output written to `auto/` and labelled as generated in `pack.json`, never eligible for the community catalog as an artist pack. Own ADR (model/tooling choice, licensing, labelling) | after F9.4; go/no-go by the user |
+| F9.7 | **Alias pass — one cell per subject.** Vocabulary entries that render to the same pixels are the same drawing arriving under different keys (CHR bank swaps, CHR-RAM re-uploads). The contact sheet collapses them to one cell carrying `aliases[]` (index + tile keys) in the sidecar; `mep_build.py` fans the painted crop back out over every alias, so duplicates cannot drift apart the way hand-painting them separately made them drift. The *vocabulary* is not renumbered — maps and object groups keep addressing entries by their original index | **shipped** 2026-09-05 — `MesenSheets::CollapseAliases`, `kSheetAliasTolerance` 0.10, sidecar `aliases[]`, `mep_build.py` fan-out, `core_unit_tests` Bloco P (6 cases, mutation-checked). Measured on fresh recordings with the shipped binary: Ninja Gaiden 465 -> 154 metatile cells, Excitebike 96 -> 91. The first budget rule was wrong and the recording caught it: a share of the *cell area* makes every mostly-background metatile an alias of every other one, so one near-empty cell absorbed 335 of Ninja Gaiden's 465 entries. The budget is now a share of the **ink** of the richer of the two cells (pixels that are not its most common colour), which leaves a blank cell able to absorb only an exact duplicate of itself — Ninja Gaiden's largest surviving group is 255 entries that all render solid black under palette `0F0F0F0F`, which is the duplication the slice exists to remove |
+| F9.8 | **Adjacency evidence before stitching.** A screen joins an existing map only on positive evidence (a matched scroll shift, or a shared border band above a ratio); otherwise it starts a new map. Without it a non-scrolling game produces a collage — Punch-Out!! glued a profile card, a text screen, a round card and the ring into one 1024 px strip, five times over | **shipped** 2026-09-05 — a screen joins a map only when a probed transition frame carries a shared border band read through the scroll: `kStitchBandMatch` 0.60 and, the load-bearing half, `kStitchBandLead` 0.25 over the share of the *same cells the anchor already carried* (a bare band ratio rubber-stamps a collage, because a screen made mostly of one backdrop matches every other screen's edge). Three spread probes replace the single `gap/4` guess; `BestShiftX` now breaks ties toward the smallest displacement and needs `kStitchStillMargin` 0.02 to move at all. A component of one screen is dropped rather than written, since it would only duplicate `backgrounds/screenNNN.png`. 356 -> 362 cases; the collage test fails with `kStitchBandLead` zeroed, so the guard is not vacuous. The thresholds are read off the recorded Zelda link scores (0.73-0.77 whole-frame at 5-8 cell shifts), not tuned on a sweep |
+| F9.9 | **Route static screens to the whole-screen surface.** The `<background>` layer already exists and is already emitted, condition-gated on three `tileAtPosition` anchors — it is the only positional surface in the format, and the only place an element spanning many repeats of one tile (a logo across a ring canvas) can exist. The pipeline should route a static screen there and leave only the moving subjects to tiles. This is also the right target for F9.6's generative backend: a 256x240 scene, not a 16x16 metatile | planned |
+| F9.10 | **Relegate the CHR-order layer.** 12993 `Chr_XX_N.png` fragments ship next to the sheets (7.1 MB on Punch-Out!!) and are what an artist meets when the folder opens. They cannot be deleted — `hires.txt` renders from them — so move them into a subfolder and let `sheets/` be the front door | planned |
+
+**Validation — qualitative and intuitive.** The deliverable is legibility,
+which no pixel metric captures, so each slice is judged by a fixed panel
+of tasks run by a person who did **not** build the feature (the artist
+persona — a developer may stand in but must not have seen the sheets
+before). Golden games: Zelda 1 (16×16 grid, screen scrolling), Excitebike
+(no grid, continuous scrolling), Mega Man 3 (CHR ROM), Contra (CHR RAM);
+GB/SMS follow once NES passes. Each run records the `auto/` folder, the
+answers and elapsed times as a short `runs/` log (not versioned) and one
+summary line in this PRD's shipped record.
+
+1. **Cold-read test** (F9.1, F9.3, F9.5). Open `sheets/*.png` for the first
+   time, 60 s per sheet, name aloud what each cell is. Pass: ≥ 80 % of
+   scene metatiles / objects named correctly ("bush", "tree", "Link"); HUD
+   and font sheets recognised as such at a glance; no cell described as
+   "half of something".
+2. **Side-by-side with the artist pack** (F9.1–F9.3). Zelda 1 `auto/`
+   sheets next to the community `mep/` sheets: every subject the artist
+   drew as one figure appears as one cell/object in `auto/`. Pass: no
+   subject the artist treated as a unit is split across cells in ours;
+   list the exceptions.
+3. **Find-and-edit test** (F9.4). Task card: "make every bush purple",
+   "put a face on the rock", "draw a road marking on the ramp". From
+   opening the folder to seeing the change in the emulator: pass when
+   < 10 min with no editor other than an image editor and
+   `mep_build.py`, and the person never had to open `hires.txt`.
+4. **Seam test** (F9.2, F9.4). Paint a continuous diagonal stripe and a
+   checkerboard across `map-NNN.png`, rebuild, play the stitched region.
+   Pass: the stripe is continuous across every metatile boundary and
+   every screen transition; no doubled or missing column at the seams
+   (headless screenshots along the route, eyeballed, plus a diff against
+   the untouched-sheet run to prove only the paint changed).
+5. **Map recognisability** (F9.2). Show `map-NNN.png` alone. Pass: the
+   person points to where the game starts and traces the route they
+   would take; for Excitebike, identifies the ramps and the finish line.
+6. **Nothing-lost test** (all). Identity round-trip renders every
+   captured screen pixel-exactly (automated, `headless_record`), and the
+   F5.4d coverage line reports the same tiles-with-art count before and
+   after the redesign for a 5-min play.
+7. **Noise budget** (F9.1, F9.3). Count cells with count = 1 or flagged
+   "unaligned"; pass when they sit in a separate `misc` sheet and make
+   up < 15 % of scene cells (Zelda spike: count-1 cells were GAME OVER
+   text — correct to isolate, wrong to interleave).
+8. **AI blind A/B** (F9.6 only). Five screens, artist pack vs AI repaint,
+   unlabelled; three reviewers. Pass to keep the slice: the AI output is
+   preferred or tied on ≥ 2 of 5 screens **and** fails seam test 4 on
+   none; any visible alpha loss on sprites fails the slice regardless.
+
+Tests 3, 4 and 6 have automatable halves (rebuild, headless run, diff)
+that go into `make doc-checks`/`scripts/test_mep_build.py`; the judgement
+calls (1, 2, 5, 7, 8) stay human and are repeated per golden game.
+
 ### 5. Order of execution
 
 1. ~~F6.2 → F6.3 → F6.3b → F6.4a → F6.4b → F6.4c → F6.5 → F6.6~~ shipped 2026-08-28/29; F6.7 core shipped 2026-09-01, cleanup pending (= D6).
@@ -454,6 +686,7 @@ Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; 
    P.7 (quick-toggle panel + welcome/Continue cards) is independent of
    Phase 8 below — it ships without a Border toggle and adds one later.
 6. ~~**Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance~~ shipped 2026-09-02, F8.3 normative closure + tests the same day.
+7. **Phase 9 (artist-legible sheets)** — F9.0 (ADR) first; F9.1 → F9.2 ‖ F9.3 → F9.4; F9.5 after F9.3; F9.6 only on an explicit go. Independent of Part B.
 
 ### 6. ADR map
 
@@ -475,6 +708,8 @@ Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; 
 | 0123, 0125, 0128 | accepted 2026-08-29 | H5 UI-logic firewall parity scan (all five checklist items); H6 public test-facing helpers (Option A); H7 CheatTypeDetector ThrowsAny (GB/SMS product decision still deferred) |
 | 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
 | 0147 | accepted (2026-09-01) | sibling pack folders `auto/` (recorder) + `mep/` (edited MEP pack); catalog install materializes to `<sibling>/mep` with a central fallback (amends ADR-0138 §4); hd-legacy packs are MEP-ized on install; Restore action (baseline registry); update never silently clobbers a local edit (baseline `content_id`) |
+| ADR-0153 — artist-legible sheets | accepted (2026-09-05), amended the same day | Phase 9 slice F9.0: metatile vocabulary as the artist unit, mutual-predictability grouping, stitched maps as an artist surface, sidecar JSON schema, five host-free modules. F9.1–F9.4 shipped 2026-09-05; `core_unit_tests` Bloco P covers the four modules. The amendment replaced §1's saturating self-consistency metric with phase advantage, made `misc` about isolation rather than rarity, and made a HUD row "mostly frozen" rather than byte-identical — all three from measurement, not review |
+| Phase 9 AI repaint (F9.6) | **not yet written** — allocate via `/adr` | decides the external AI-repaint tooling/labelling, only if the user gives a go |
 | player-shell identity + chrome | ADR-0139/0140/0141 accepted (2026-08-28) | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in Part B §9; `UiMode` still without an ADR |
 
 ### 7. Risks
@@ -488,6 +723,7 @@ Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; 
 | Catalog-shaping decisions recorded only in issue comments or commit messages (the 2026-08-31 audio-only NEA removal) | every such decision gets an ADR or a PRD line the same day; D4 backfills the one already made |
 | ADR files deleted by an unrelated commit go unnoticed (0130/0131/0136/0137, 2026-08-28) | D1 restores them; `make doc-checks` should fail on a dangling `ADR-NNNN` reference (add to D1's acceptance) |
 | Scope explosion | phases independent; GitHub is the only backend; no telemetry |
+| Phase 9 judged by pixel metrics instead of legibility (F5.4e "shipped" green while emitting no sheet on any real game) | the human validation panel in Phase 9 is the acceptance gate; a slice is not "shipped" until its cold-read / find-and-edit rows are logged for at least two golden games |
 
 ### 8. References
 
