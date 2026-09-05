@@ -212,6 +212,41 @@
       "validated_at": "2026-09-05T01:20:46Z",
       "verdict": "accepted",
       "votes": 1
+    },
+    {
+      "content_id": "a2d644ff4994c8c5bc7e40eebfe754744c3fdcbc0dc87798e91d726b673f6dc7",
+      "errata": {
+        "declared_by": "MesenCE validation",
+        "known_missing": [
+          {
+            "manifest": "hires.txt",
+            "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/137",
+            "tag": "background",
+            "target": "Stage1.png"
+          }
+        ]
+      },
+      "game": "Contra (USA)",
+      "issue": 137,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "pack:known-missing",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Contra (USA) \u2014 community submission",
+      "pack_id": "tastichacks/contra80s",
+      "rom": {
+        "crc32": "F6035030",
+        "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF"
+      },
+      "sha256": "b174830de2f9a59a766d532b9ee1d1e6d6f5d341e92c2e3e7ebc908dd945ff9e",
+      "system": "nes",
+      "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
+      "validated_at": "2026-09-05T01:49:59Z",
+      "verdict": "accepted",
+      "votes": 1
     }
   ],
   "updated": "2026-09-05"
