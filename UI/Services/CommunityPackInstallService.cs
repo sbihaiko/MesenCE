@@ -32,9 +32,19 @@ namespace Mesen.Services
 		//UI; local-only packs have no entry and sort by name (votes 0).
 		private static readonly Dictionary<string, int> _catalogVotesByPackId = new(StringComparer.OrdinalIgnoreCase);
 
+		//ADR-0152: known-missing declarations from the last catalog fetch, keyed
+		//by pack_id. Display-only, like the votes above - a `miss` changes nothing
+		//in the installed tree, it only makes a reviewed gap legible in the picker.
+		private static readonly Dictionary<string, CommunityPackErrata> _catalogErrataByPackId = new(StringComparer.OrdinalIgnoreCase);
+
 		public static int GetVotes(string packId)
 		{
 			return _catalogVotesByPackId.TryGetValue(packId, out int votes) ? votes : 0;
+		}
+
+		public static CommunityPackErrata? GetErrata(string packId)
+		{
+			return _catalogErrataByPackId.TryGetValue(packId, out CommunityPackErrata? errata) ? errata : null;
 		}
 
 		//ADR-0147: explicit user action - discard local edits to the installed
@@ -120,6 +130,14 @@ namespace Mesen.Services
 				if(!string.IsNullOrWhiteSpace(fetched.Entry.PackId) && fetched.Entry.Votes is int votes) {
 					lock(_catalogVotesByPackId) {
 						_catalogVotesByPackId[fetched.Entry.PackId] = votes;
+					}
+				}
+
+				//ADR-0152: same for the entry's known-missing declarations, so the
+				//picker can name the gap and who declared it.
+				if(!string.IsNullOrWhiteSpace(fetched.Entry.PackId) && fetched.Entry.Errata is CommunityPackErrata errata && errata.Count > 0) {
+					lock(_catalogErrataByPackId) {
+						_catalogErrataByPackId[fetched.Entry.PackId] = errata;
 					}
 				}
 

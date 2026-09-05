@@ -224,7 +224,8 @@ namespace Mesen.ViewModels
 			//then by name - local-only packs (votes 0) fall back to name order.
 			PlayerPackChoices = resolution.Candidates
 				.Select(c => new PlayerPackChoice(c, entriesByContainer.TryGetValue(c.Container, out MepPackListEntry? entry) ? entry : null,
-					CommunityPackInstallService.GetVotes(PackPreferenceResolver.DerivePackId(c))))
+					CommunityPackInstallService.GetVotes(PackPreferenceResolver.DerivePackId(c)),
+					CommunityPackInstallService.GetErrata(PackPreferenceResolver.DerivePackId(c))))
 				.OrderByDescending(c => c.Votes)
 				.ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
 				.ToList();
@@ -483,8 +484,13 @@ namespace Mesen.ViewModels
 		public int Votes { get; }
 		//One-line metadata row for the picker: "v1.0 · Author · textures, audio · MIT"
 		public string Detail { get; }
+		//ADR-0152: the picker's known-missing line, e.g. "1 known-missing asset —
+		//declared by MesenCE validation, not by the author". Empty when the row's
+		//artifact carries no errata, which is the normal case.
+		public string KnownMissingNote { get; }
+		public bool HasKnownMissing => KnownMissingNote.Length > 0;
 
-		public PlayerPackChoice(PackPreferenceResolver.Candidate candidate, MepPackListEntry? entry, int votes = 0)
+		public PlayerPackChoice(PackPreferenceResolver.Candidate candidate, MepPackListEntry? entry, int votes = 0, CommunityPackErrata? errata = null)
 		{
 			Container = candidate.Container;
 			PackId = PackPreferenceResolver.DerivePackId(candidate);
@@ -509,6 +515,18 @@ namespace Mesen.ViewModels
 				detail.Add(License);
 			}
 			Detail = string.Join(" · ", detail);
+			KnownMissingNote = BuildKnownMissingNote(errata);
+		}
+
+		private static string BuildKnownMissingNote(CommunityPackErrata? errata)
+		{
+			int count = errata?.Count ?? 0;
+			if(count == 0) {
+				return "";
+			}
+			string who = string.IsNullOrWhiteSpace(errata!.DeclaredBy) ? "MesenCE validation" : errata.DeclaredBy!;
+			string assets = count == 1 ? "asset" : "assets";
+			return count + " known-missing " + assets + " — declared by " + who + ", not by the author";
 		}
 
 		public override string ToString() => Name;

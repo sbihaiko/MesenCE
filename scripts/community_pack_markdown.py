@@ -66,7 +66,20 @@ def console_from_labels(labels):
     return "?"
 
 
-def build_row(issue_number, status, details, form):
+#ADR-0152: a row whose artifact carries reviewed known-missing declarations is
+#marked in the table rather than given a column of its own -- the case is rare,
+#and an almost-empty column would cost every reader more than it tells them.
+ERRATA_MARK = " †"
+ERRATA_NOTE = (
+    "† This pack references one or more files it does not ship. The gap was\n"
+    "checked and declared by MesenCE validation — **not by the pack's author** —\n"
+    "so the pack is listed and installs normally; the emulator skips the missing\n"
+    "entries at load. `docs/community-packs.json` names each one, with a link to\n"
+    "where it was reviewed."
+)
+
+
+def build_row(issue_number, status, details, form, errata_count=0):
     """Builds a Markdown catalog row from the caller-derived issue number/
     Status and the fetched issue details + Issue Form fields.
 
@@ -79,7 +92,7 @@ def build_row(issue_number, status, details, form):
     """
     if issue_number is None:
         return {"jogo": "(no issue)", "console": "?", "autor": "?",
-                "data": "?", "url": "", "thumbs_up": 0}
+                "data": "?", "url": "", "thumbs_up": 0, "errata_count": 0}
     credits = (form.get("credits") or "").strip() or "?"
     return {
         "jogo": escape_table_cell(form["game"]),
@@ -88,6 +101,7 @@ def build_row(issue_number, status, details, form):
         "data": (details.get("createdAt") or "?")[:10],
         "url": details.get("url") or "",
         "thumbs_up": thumbs_up_count(details),
+        "errata_count": errata_count,
     }
 
 
@@ -103,10 +117,13 @@ def render_table(rows):
         # standalone Link column): a reader who wants to vote lands exactly
         # where the reaction is added.
         votes = f"[👍 {row['thumbs_up']}]({row['url']})" if row["url"] else f"👍 {row['thumbs_up']}"
+        mark = ERRATA_MARK if row.get("errata_count") else ""
         lines.append(
-            f"| {row['jogo']} | {row['console']} | {row['autor']} | "
+            f"| {row['jogo']}{mark} | {row['console']} | {row['autor']} | "
             f"{row['data']} | {votes} |"
         )
+    if any(row.get("errata_count") for row in rows):
+        lines.extend(["", ERRATA_NOTE])
     return "\n".join(lines)
 
 

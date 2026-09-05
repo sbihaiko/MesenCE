@@ -99,9 +99,14 @@ def _render(c):
     """
     issue, status, form, details = c["issue_number"], c["status"], c["form"], c["details"]
     system = (form["console"] or "?").strip().lower()
+    #ADR-0152: the table marks a row whose artifact carries reviewed
+    #known-missing declarations, so a reader is never told a pack is complete
+    #when the project's own validation recorded that it is not.
+    errata = entry_mod.errata_field(c["pack_hash"]) or {}
+    n_missing = len(errata.get("known_missing") or [])
     if not entry_mod.mei_entry_preconditions_ok(c["pack_url"], c["pack_hash"], system):
         _warn(f"issue #{issue}: missing/invalid Pack URL/Hash, or no MEI system ({system!r}); omitting JSON entry.")
-        return markdown.build_row(issue, status, details, form), None
+        return markdown.build_row(issue, status, details, form, n_missing), None
     rom_sha1 = c["rom_sha1"]
     rom_crc32 = None
     target = rom_target.resolve_rom_target(form["game"])
@@ -117,14 +122,14 @@ def _render(c):
         if extras:
             # MEI v1.2 §2.4: additive exact-match alternates (No-Intro revisions/
             # alt dumps of the resolved title), never repeating rom.sha1.
-            # The document declares MEI 1.3.0 (mei_catalog_entry.MEI_VERSION).
+            # The document declares MEI 1.4.0 (mei_catalog_entry.MEI_VERSION).
             entry.setdefault("rom", {})["sha1s"] = extras
     if mismatch:
         _warn(f"issue #{issue}: mep-meta source_sha256 disagrees with Pack Hash; omitting deps/recipe.")
     if not mei_entry_conforms(entry, entry.get("kind")):
         _warn(f"issue #{issue}: kind 'mep' but no mep-meta pack.version/mep; omitting its JSON entry.")
-        return markdown.build_row(issue, status, details, form), None
-    return markdown.build_row(issue, status, details, form), entry
+        return markdown.build_row(issue, status, details, form, n_missing), None
+    return markdown.build_row(issue, status, details, form, n_missing), entry
 
 
 def main():

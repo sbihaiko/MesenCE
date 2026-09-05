@@ -357,7 +357,8 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   checks its 40-hex shape (reusing `mei_rules.SHA1_UPPER`) before it is
   copied into `rom.sha1`, omitting it on a mismatch. For a `kind == "mep"`
   entry, `build_pack_entry` reads `pack.version`/`pack.mep` out of
-  mep-meta's embedded `recipe.pack` (`pack_version_fields`); when the
+  mep-meta's embedded `recipe.pack` (`mei_rules.pack_version_fields`,
+  re-exported here under its old name for the facade's callers); when the
   recipe is absent/refused and those fields can't be sourced,
   `build_catalog` self-checks every entry through this module's own
   `mei_entry_conforms(entry, kind)` before it is kept (§28) and drops it
@@ -389,6 +390,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   `mei_catalog_entry`); `build_row` takes the caller-derived
   `issue_number`/`status` directly rather than a raw Project item, so it
   never needs the facade's `item_*` helpers.
+  `mep_errata.py` (ADR-0152) is the single reader of the known-missing
+  errata files under `docs/community-packs/errata/<artifact-sha256>.json`:
+  `mep_lint.py` imports it, `smoke_pack_headless.sh` shells out to its
+  `covers` subcommand, and `mei_catalog_entry.build_pack_entry` calls
+  `mei_errata_field` for the row's `errata` object. Both gates go through
+  the one parser on purpose — two implementations agreeing on a format is
+  the shape that produced bug #155; `scripts/test_mep_errata.py` asserts
+  structurally that neither gate grew its own. A declared target is
+  downgraded to an info line naming MesenCE validation (not the author) as
+  the source; every undeclared unresolvable target stays an ADR-0151 error,
+  and a declaration matching nothing fails the pack.
   `scripts/checks/verify_mei_catalog_generator.py` is the offline, no-`gh`
   checker for the original F6.3 deliverable (AC-2): structural checks
   assert the generator writes `docs/community-packs.json`, uses

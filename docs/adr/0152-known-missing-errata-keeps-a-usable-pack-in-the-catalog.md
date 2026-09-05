@@ -1,8 +1,8 @@
 # ADR-0152: A repo-side `miss` errata lets a pack with a known-unresolvable manifest target stay in the catalog
 
-- Status: accepted (both policy questions answered 2026-09-04; implementation is a pending slice, PRD Part A F6.8)
+- Status: accepted (both policy questions answered 2026-09-04; implemented 2026-09-04, PRD Part A F6.8)
 - Date: 2026-09-04
-- Related: ADR-0151, ADR-0148, ADR-0146, ADR-0147, ADR-0139, ADR-0138 §4/§37/§41, MEP-v1 §2.1/§5, `scripts/mep_lint.py`, `scripts/smoke_pack_headless.sh`, `.github/workflows/community-pack-validate.yml`, issue #139
+- Related: ADR-0151, ADR-0148, ADR-0146, ADR-0147, ADR-0139, ADR-0138 §4/§37/§41, MEP-v1 §2.1/§5, `scripts/mep_lint.py`, `scripts/smoke_pack_headless.sh`, `.github/workflows/community-pack-validate.yml`, MEI-v1 §2.6, issue #139
 - Supersedes / amends: narrows ADR-0151 — an unresolvable texture target stays a `mep_lint` error, except for the exact targets a reviewed errata declares known-missing
 
 ## Context
@@ -118,8 +118,9 @@ unresolvable target stays an error under ADR-0151. If only one gate honoured
 errata, this ADR would recreate the lint-vs-runtime divergence that was bug #155.
 
 **Provenance is user-visible.** A row covered by an errata carries the
-declaration through to the surfaces a user reads: a field in
-`docs/community-packs.json`, a marker in the `docs/community-packs.md` table,
+declaration through to the surfaces a user reads: the `errata` field of
+`docs/community-packs.json` (MEI v1.4 §2.6, additive and non-normative — never
+an install decision), a marker in the `docs/community-packs.md` table,
 and a line in the Player's pack picker of the form
 *"1 known-missing asset — declared by MesenCE validation, not by the author"*,
 linking to the reviewing PR. Silence here would be the failure mode: the errata
@@ -168,10 +169,12 @@ the moment the author republishes, the errata stops applying.
   dumping ground — every awkward pack acquires an errata and the gate stops
   meaning anything. The friction is deliberate and must not be filed off later:
   exact targets, mandatory reason, reviewed PR, hash-scoped expiry.
-- Two implementations must agree on the errata format, in Python
-  (`mep_lint.py`) and in shell/log-matching (`smoke_pack_headless.sh`) — the
-  same duplication ADR-0151 was written to close, now deliberate and needing a
-  parity check in `make doc-checks`.
+- The two gates share **one** parser, `scripts/mep_errata.py`: `mep_lint.py`
+  imports it, `smoke_pack_headless.sh` shells out to its `covers` subcommand.
+  This ADR originally anticipated two implementations agreeing on a format —
+  that is the shape that produced bug #155, so it was dropped during
+  implementation. `scripts/test_mep_errata.py` (wired into `make`) asserts the
+  parity structurally: neither gate may grow its own reader of the format.
 - A row can be live while knowingly incomplete. That is a real change to what
   `docs/community-packs.json` asserts, and the reason the user-visible marker is
   part of the decision rather than a nicety.

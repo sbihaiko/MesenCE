@@ -186,6 +186,40 @@ def check_identity_fields_reject_bad_shapes():
     ok("mei_identity_field_errors rejects empty/uppercase/short/local: ids, non-lowercase-64-hex content_id, negative/non-int/bool votes")
 
 
+def check_errata_field_accepts_a_reviewed_declaration():
+    """MEI v1.4 §2.6 (ADR-0152): the shape the generator really emits."""
+    good = {"errata": {"known_missing": [
+        {"manifest": "hires.txt", "tag": "background", "target": "selectscreen.png",
+         "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139"}],
+        "declared_by": "MesenCE validation"}}
+    errors = mei_rules.mei_errata_field_errors(good)
+    if errors:
+        fail(f"a well-formed errata was rejected: {errors}")
+        return
+    if mei_rules.mei_errata_field_errors({}):
+        fail("an entry without an errata was rejected (the field is MAY)")
+        return
+    ok("mei_errata_field_errors accepts a reviewed declaration and an absent field")
+
+
+def check_errata_field_rejects_bad_shapes():
+    bad = [
+        {"errata": {}},
+        {"errata": {"known_missing": []}},
+        {"errata": {"known_missing": [{"manifest": "hires.txt", "tag": "background"}]}},
+        {"errata": {"known_missing": [{"manifest": "hires.txt", "tag": "bgm", "target": "a.ogg"}]}},
+        {"errata": {"known_missing": [{"manifest": "hires.txt", "tag": "img", "target": "select*.png"}]}},
+        {"errata": {"known_missing": [{"manifest": "*", "tag": "img", "target": "a.png"}]}},
+        {"errata": {"known_missing": [{"manifest": "hires.txt", "tag": "img", "target": "a.png"}], "declared_by": ""}},
+        {"errata": "MesenCE validation"},
+    ]
+    for entry in bad:
+        if not mei_rules.mei_errata_field_errors(entry):
+            fail(f"malformed errata accepted: {entry!r}")
+            return
+    ok("mei_errata_field_errors rejects empty/missing-field/wrong-tag/wildcard declarations")
+
+
 def main():
     check_constants_shape()
     check_required_fields_hd_legacy_omits_version_mep()
@@ -199,6 +233,8 @@ def main():
     check_status_to_kind_matches_resolve_kind_fallback()
     check_identity_fields_accept_real_shapes()
     check_identity_fields_reject_bad_shapes()
+    check_errata_field_accepts_a_reviewed_declaration()
+    check_errata_field_rejects_bad_shapes()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1

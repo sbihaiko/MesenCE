@@ -125,3 +125,60 @@ def mei_identity_field_errors(entry):
         if isinstance(votes, bool) or not isinstance(votes, int) or votes < 0:
             errors.append(f"votes must be a non-negative integer, got {votes!r}")
     return errors
+
+
+def pack_version_fields(recipe):
+    """Extracts `pack.version`/`pack.mep` from a mep-meta recipe's `pack`
+    object (MEP-recipe-v1 §3.1); each None when absent/malformed.
+    """
+    pack = recipe.get("pack") if isinstance(recipe, dict) else None
+    if not isinstance(pack, dict):
+        return None, None
+    return pack.get("version"), pack.get("mep")
+
+
+# MEI v1.4 §2.6 `errata` (ADR-0152): reviewed known-missing manifest targets of
+# the listed artifact, declared by the index maintainer's validation. Only tags
+# whose target is a file the artifact fails to ship can be declared; a present
+# but broken file is a different defect and is never declarable.
+ERRATA_TAGS = {"img", "background"}
+
+
+def mei_errata_field_errors(entry):
+    """MEI v1.4 §2.6 shape checks for one `packs[]` entry's optional `errata`.
+
+    Absent is the normal case. When present it must name exact targets: a
+    wildcard would let one reviewed line absolve defects nobody looked at,
+    which is the failure mode ADR-0152 guards against. Returns a list of
+    human-readable messages, empty when the entry conforms.
+    """
+    if "errata" not in entry:
+        return []
+    errors = []
+    errata = entry["errata"]
+    if not isinstance(errata, dict):
+        return ["errata must be an object"]
+    declared_by = errata.get("declared_by")
+    if declared_by is not None and not (isinstance(declared_by, str) and declared_by.strip()):
+        errors.append("errata.declared_by must be a non-empty string when present")
+    items = errata.get("known_missing")
+    if not isinstance(items, list) or not items:
+        return errors + ["errata.known_missing must be a non-empty list"]
+    for i, item in enumerate(items):
+        where = f"errata.known_missing[{i}]"
+        if not isinstance(item, dict):
+            errors.append(f"{where} must be an object")
+            continue
+        for field in ("manifest", "tag", "target"):
+            value = item.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{where}.{field} is required and must be a non-empty string")
+        if isinstance(item.get("tag"), str) and item["tag"] not in ERRATA_TAGS:
+            errors.append(f"{where}.tag must be one of {', '.join(sorted(ERRATA_TAGS))}")
+        for field in ("manifest", "target"):
+            if isinstance(item.get(field), str) and any(ch in item[field] for ch in "*?["):
+                errors.append(f"{where}.{field} must be an exact name, no wildcards")
+        reviewed = item.get("reviewed_in")
+        if reviewed is not None and not (isinstance(reviewed, str) and reviewed.strip()):
+            errors.append(f"{where}.reviewed_in must be a non-empty string when present")
+    return errors

@@ -73,6 +73,12 @@ namespace Mesen.Logic
 		[JsonPropertyName("labels")] public string[]? Labels { get; set; }
 		[JsonPropertyName("recipe_hash")] public string? RecipeHash { get; set; }
 		[JsonPropertyName("recipe_ok")] public bool? RecipeOk { get; set; }
+		//ADR-0152: manifest targets this artifact does not ship, checked and
+		//declared by MesenCE validation rather than by the author. Non-normative
+		//like the rest of this block - it never gates an install (the emulator
+		//already drops such an entry at load); the client displays it so a known
+		//gap is legible instead of silent.
+		[JsonPropertyName("errata")] public CommunityPackErrata? Errata { get; set; }
 
 		//`kind` defaults to "mep" when absent (§2.2/§2.3).
 		[JsonIgnore] public string EffectiveKind => string.IsNullOrEmpty(Kind) ? "mep" : Kind;
@@ -80,6 +86,28 @@ namespace Mesen.Logic
 		[JsonIgnore] public CommunityPackSource Source => new CommunityPackSource(Url, Sha256, Size);
 		//§2.2: "an absent field is read as 'unknown'".
 		[JsonIgnore] public string LicenseOrUnknown => string.IsNullOrWhiteSpace(License) ? "unknown" : License;
+	}
+
+	//`errata` object (ADR-0152): the reviewed known-missing declarations for
+	//this exact artifact. `DeclaredBy` names the source of the declaration -
+	//shown verbatim, because the whole point is that the gap is attributed to
+	//MesenCE validation and not to the pack's author.
+	public class CommunityPackErrata
+	{
+		[JsonPropertyName("known_missing")] public CommunityPackKnownMissing[]? KnownMissing { get; set; }
+		[JsonPropertyName("declared_by")] public string? DeclaredBy { get; set; }
+
+		[JsonIgnore] public int Count => KnownMissing?.Length ?? 0;
+	}
+
+	//One `errata.known_missing[]` item: the exact manifest target that is
+	//absent, and where the declaration was reviewed.
+	public class CommunityPackKnownMissing
+	{
+		[JsonPropertyName("manifest")] public string Manifest { get; set; } = "";
+		[JsonPropertyName("tag")] public string Tag { get; set; } = "";
+		[JsonPropertyName("target")] public string Target { get; set; } = "";
+		[JsonPropertyName("reviewed_in")] public string? ReviewedIn { get; set; }
 	}
 
 	//`rom` object (MEI-v1.md §2.2/§2.3). `Sha1` is a single 40-uppercase-hex

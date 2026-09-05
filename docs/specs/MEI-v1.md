@@ -1,6 +1,6 @@
-# MEI v1.3 — MesenCE Enhancement Index
+# MEI v1.4 — MesenCE Enhancement Index
 
-**Status:** v1.3 (stable) — 1.1: `kind`, optional `rom.sha1`, `deps[]`, `recipe`; 1.2: additive `rom.sha1s[]` (§2.4); 1.3: additive `pack_id`, `content_id`, `votes` (§2.5) ·
+**Status:** v1.4 (stable) — 1.1: `kind`, optional `rom.sha1`, `deps[]`, `recipe`; 1.2: additive `rom.sha1s[]` (§2.4); 1.3: additive `pack_id`, `content_id`, `votes` (§2.5); 1.4: additive `errata` (§2.6) ·
 **License for this spec:** CC0-1.0 (public domain) ·
 **Versioning:** semver — new optional field = minor; semantic change = major ·
 **Golden file:** [`golden/mei/manifest.json`](golden/mei/manifest.json) ·
@@ -24,7 +24,7 @@ content circulates outside the index, in its own hubs.
 
 ```json
 {
-  "mei": "1.3.0",
+  "mei": "1.4.0",
   "name": "Índice oficial MesenCE",
   "maintainer": "sbihaiko",
   "updated": "2026-08-24",
@@ -112,6 +112,7 @@ hash (another revision of the same game) that the same pack also matches
 | `pack_id` | MAY (v1.3) | product identity of the pack across revisions (ADR-0140/0143): lowercase slug, `owner/repo[:game-slug]` or `issue-N`; see §2.5 |
 | `content_id` | MAY (v1.3) | ADR-0139 canonical hash of the pack's loaded tree, 64 **lowercase** hex; the client's update trigger (ADR-0141); see §2.5 |
 | `votes` | MAY (v1.3) | non-negative integer, community 👍 count of the submission; non-normative like `issue` — a sort key, never an install decision; see §2.5 |
+| `errata` | MAY (v1.4) | reviewed known-missing manifest targets of this exact artifact, declared by the index maintainer's validation and never by the pack's author; non-normative — never an install decision, and clients SHOULD display it; see §2.6 |
 | `issue`, `verdict`, `validated_at`, `labels`, `recipe_hash`, `recipe_ok` | MAY (v1.1) | producer provenance: issue number (integer), triage verdict string, ISO-8601 validation date, list of label strings, SHA-256 hex of the `recipe` document, boolean recipe dry-run result. Non-normative — clients MUST ignore them for install decisions and MAY display them |
 
 Unknown fields MUST be ignored.
@@ -280,6 +281,51 @@ in `scripts/mei_rules.py` (`PACK_ID`, `CONTENT_ID_HEX`,
 `UI/Logic/PackPreferenceResolver.cs` (`pack_id` preference and `content_id`
 merge) and the Player picker in `UI/ViewModels/MainWindowViewModel.cs`
 (`votes` ordering).
+
+### 2.6 `errata` (v1.4)
+
+An entry MAY carry an `errata` object recording manifest targets the listed
+artifact does **not** ship, which the index maintainer's validation checked and
+declared:
+
+```json
+"errata": {
+  "known_missing": [
+    {
+      "manifest": "hires.txt",
+      "tag": "background",
+      "target": "selectscreen.png",
+      "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139"
+    }
+  ],
+  "declared_by": "MesenCE validation"
+}
+```
+
+- `known_missing` MUST be a non-empty list; each item MUST carry `manifest`,
+  `tag` (`"img"` or `"background"`) and `target` as exact names — no wildcards
+  and no line numbers — and SHOULD carry `reviewed_in`, the URL where the
+  declaration was reviewed. `declared_by` names the source of the declaration.
+- The object is **provenance, not an install instruction**: nothing in the
+  artifact is added, removed or rewritten because of it, so an entry's
+  `content_id` is the same with or without one. A client MUST NOT treat it as
+  a reason to refuse an install, and SHOULD surface it to the user attributed
+  to `declared_by` — a known gap presented as the author's claim would be a
+  misattribution.
+- It is scoped to the entry's `sha256`. When the author republishes, the
+  artifact hash changes and any declaration written against the old one stops
+  applying; producers MUST NOT carry an `errata` across a `sha256` change.
+- Clients unaware of the field ignore it (§2.2); a v1.3 document stays valid
+  under v1.4 rules.
+
+The reference producer is `scripts/mep_errata.py` (`mei_errata_field`, called
+from `scripts/mei_catalog_entry.py`), reading the reviewed declaration files
+under `docs/community-packs/errata/<artifact-sha256>.json`; the same module is
+the single reader for both validation gates (`scripts/mep_lint.py` and
+`scripts/smoke_pack_headless.sh`), which downgrade exactly the declared targets
+and keep every other unresolvable target an error (ADR-0151/ADR-0152). Reference
+consumers: `UI/Logic/CommunityPackCatalog.cs` (deserialization) and the Player
+pack picker in `UI/ViewModels/MainWindowViewModel.cs` (the known-missing line).
 
 ## 3. Trust model (normative — ADR-0006)
 

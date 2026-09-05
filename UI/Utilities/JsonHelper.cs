@@ -44,6 +44,8 @@ namespace Mesen.Utilities
 [JsonSerializable(typeof(CommunityPackRom))]
 [JsonSerializable(typeof(CommunityPackSource))]
 [JsonSerializable(typeof(CommunityPackDep))]
+[JsonSerializable(typeof(CommunityPackErrata))]
+[JsonSerializable(typeof(CommunityPackKnownMissing))]
 [JsonSourceGenerationOptions(
 	WriteIndented = true,
 	IgnoreReadOnlyProperties = true,

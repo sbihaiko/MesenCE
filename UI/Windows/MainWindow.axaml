@@ -165,6 +165,11 @@
 									<StackPanel Spacing="2">
 										<TextBlock FontWeight="Bold" Text="{Binding Name}" />
 										<TextBlock FontSize="11" Opacity="0.7" Text="{Binding Detail}" />
+										<!-- ADR-0152: a reviewed known-missing declaration is shown on the
+										     row it belongs to, naming MesenCE validation as its source so the
+										     gap is never read as the author's claim. Collapsed when absent. -->
+										<TextBlock FontSize="11" Opacity="0.7" TextWrapping="Wrap"
+											IsVisible="{Binding HasKnownMissing}" Text="{Binding KnownMissingNote}" />
 									</StackPanel>
 								</Button>
 							</DataTemplate>

@@ -17,9 +17,10 @@ stdlib only.
 from __future__ import annotations
 
 import mei_rules
+import mep_errata  # ADR-0152 known-missing declarations, keyed on the artifact hash
 import pack_id_rules
 
-MEI_VERSION = "1.3.0"
+MEI_VERSION = "1.4.0"
 CATALOG_NAME = "MesenCE community packs"
 MAINTAINER = "sbihaiko"
 
@@ -37,6 +38,7 @@ def kind_from_status(status):
 # The §28 conformance predicate lives in the leaf; re-exported here so the
 # generator facade and its checkers keep one name for one function.
 mei_entry_conforms = mei_rules.mei_entry_conforms
+pack_version_fields = mei_rules.pack_version_fields
 
 
 def _dep_entry(dep):
@@ -132,16 +134,6 @@ def _apply_mep_meta_passthrough(entry, mep_meta):
             entry[key] = mep_meta[key]
 
 
-def pack_version_fields(recipe):
-    """Extracts `pack.version`/`pack.mep` from a mep-meta recipe's `pack`
-    object (MEP-recipe-v1 §3.1); each None when absent/malformed.
-    """
-    pack = recipe.get("pack") if isinstance(recipe, dict) else None
-    if not isinstance(pack, dict):
-        return None, None
-    return pack.get("version"), pack.get("mep")
-
-
 def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, rom_sha1, status, mep_meta, votes=0, crc32=None):
     """Assembles one MEI v1.3 packs[] entry (§26/§27). `kind` from
     `mei_rules.resolve_kind` (§29); `votes` the community 👍 count (P.2,
@@ -161,11 +153,17 @@ def build_pack_entry(issue_number, game, system, license_, pack_url, pack_hash, 
     if recipe_ok is not None:
         entry["recipe_ok"] = recipe_ok
     if kind == "mep":
-        version, mep_version = pack_version_fields(recipe)
+        version, mep_version = mei_rules.pack_version_fields(recipe)
         if version:
             entry["version"] = version
         if mep_version:
             entry["mep"] = mep_version
+    #ADR-0152: a row whose artifact carries reviewed known-missing declarations
+    #says so in the catalog. The client and the Markdown table read this to tell
+    #the user the gap was declared by MesenCE validation, not by the author.
+    errata = mep_errata.mei_errata_field(pack_hash)
+    if errata:
+        entry["errata"] = errata
     _apply_mep_meta_passthrough(entry, mep_meta)
     pack_id_rules.apply_mei_identity(entry, pack_url, issue_number, mep_meta, votes)
     for f in [f for f in ("pack_id", "content_id", "votes") if f in entry and mei_rules.mei_identity_field_errors({f: entry[f]})]:

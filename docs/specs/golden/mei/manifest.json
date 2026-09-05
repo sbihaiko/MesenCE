@@ -1,6 +1,6 @@
 {
-  "mei": "1.3.0",
-  "name": "Índice de exemplo canônico (golden da spec MEI v1.3)",
+  "mei": "1.4.0",
+  "name": "Índice de exemplo canônico (golden da spec MEI v1.4)",
   "maintainer": "MesenCE",
   "updated": "2026-08-24",
   "packs": [
@@ -44,6 +44,17 @@
           "license": "CC0-1.0"
         }
       ],
+      "errata": {
+        "known_missing": [
+          {
+            "manifest": "hires.txt",
+            "tag": "background",
+            "target": "selectscreen.png",
+            "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139"
+          }
+        ],
+        "declared_by": "MesenCE validation"
+      },
       "recipe_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "recipe_ok": true,
       "recipe": {
