@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "NES/HdPacks/HdData.h"
 #include "NES/HdPacks/TileSheetTypes.h"
+#include "NES/HdPacks/ScreenStitcher.h"
 #include "NES/HdPacks/SheetRender.h"
 #include "NES/HdPacks/SpriteGrouping.h"
 #include "NES/NesTypes.h"
@@ -96,7 +97,32 @@ private:
 	unordered_set<uint32_t> _screensSeen;
 	static constexpr uint32_t StableFramesNeeded = 15;
 	static constexpr uint32_t MaxScreensPerSession = 300;
+	//Issue #164: how many rarity-ranked candidates a screen carries to save
+	//time. The selection itself looks at kAnchorCandidateCap of them; the rest
+	//are there for the spread constraint to fall back on.
+	static constexpr uint32_t MaxAnchorCandidates = 160;
 	void CaptureScreen();
+
+	//Issue #164: a screen whose PNG is written but whose tileAtPosition
+	//conditions are not chosen yet. They cannot be chosen at capture time: a
+	//screen is captured the first time it holds still, so every later variant of
+	//it is still in the future, and an anchor that lands on the cell a variant
+	//changes kills the whole <background> (and, since ADR-0156, leaves the cells
+	//routed to it rendering vanilla). FinalizeScreenAnchors picks them at save
+	//time from the retained grid stream and appends the conditions and the
+	//<background> entry then.
+	struct PendingScreen
+	{
+		string BaseName;
+		string RelPath;
+		size_t BitmapIndex = 0;      //into _hdData.BackgroundFileData
+		size_t GridFrameIndex = 0;   //the frame the PNG was written from
+		bool HasGridFrame = false;   //false past the kMaxSheetFrames retention cap
+		vector<ScreenRun> Candidates;                       //condition payload
+		vector<MesenSheets::AnchorCandidate> Cells;         //1:1 grid coordinates
+	};
+	vector<PendingScreen> _pendingScreens;
+	void FinalizeScreenAnchors();
 
 	//F5.4e: spatial co-occurrence → object grouping. During screen capture the
 	//per-frame background tile grid (_frameTileGrid/_frameTileSet) accumulates,

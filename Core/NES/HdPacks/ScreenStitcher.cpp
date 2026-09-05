@@ -784,3 +784,178 @@ namespace MesenSheets
 		return screenMaps;
 	}
 }
+
+//---- issue #164: anchors a variant of the captured screen does not break ----
+
+namespace MesenSheets
+{
+	namespace
+	{
+		//Same screen, something changed on it. Empty cells count as cells: a
+		//variant that blanks half the frame is a different screen. The count
+		//gives up as soon as the verdict is settled - this runs once per
+		//(captured screen x retained frame) pair, up to 300 x kMaxSheetFrames,
+		//and the overwhelming majority of those pairs are unrelated frames that
+		//disqualify themselves in the first rows.
+		bool IsScreenVariant(const GridFrame& a, const GridFrame& b)
+		{
+			uint32_t cells = kGridRows * kGridCols;
+			uint32_t budget = cells - (uint32_t)(kAnchorVariantAgree * (double)cells);
+			uint32_t different = 0;
+			for(uint32_t r = 0; r < kGridRows; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					if(a.Cells[r][c] != b.Cells[r][c] && ++different > budget) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		bool AnchorFarEnough(const AnchorCandidate& candidate, const std::vector<const AnchorCandidate*>& picked)
+		{
+			for(const AnchorCandidate* other : picked) {
+				uint32_t dx = candidate.Col > other->Col ? candidate.Col - other->Col : other->Col - candidate.Col;
+				uint32_t dy = candidate.Row > other->Row ? candidate.Row - other->Row : other->Row - candidate.Row;
+				if((dx + dy) * 8 < kAnchorMinSpread) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		//Greedy over `pool` (already rarity-ordered): at every step take the
+		//candidate that leaves the fewest rival frames still matching, ties
+		//going to the rarer tile. Discrimination stays the objective - that is
+		//what stops the stable-cell filter from anchoring every screen on the
+		//frame border they all share.
+		AnchorChoice GreedyAnchors(const GridFrame* screen, const std::vector<const GridFrame*>& rivals, const std::vector<AnchorCandidate>& candidates, const std::vector<size_t>& pool)
+		{
+			AnchorChoice choice;
+			std::vector<size_t> left = pool;
+			std::vector<const AnchorCandidate*> picked;
+			std::vector<const GridFrame*> alive = rivals;
+			while(choice.Picked.size() < kAnchorCount && !left.empty()) {
+				size_t bestPos = left.size();
+				uint32_t bestSurvivors = 0;
+				for(size_t pos = 0; pos < left.size(); pos++) {
+					const AnchorCandidate& candidate = candidates[left[pos]];
+					if(!AnchorFarEnough(candidate, picked)) {
+						continue;
+					}
+					uint32_t survivors = 0;
+					if(screen) {
+						ShapeId wanted = screen->Cells[candidate.Row][candidate.Col];
+						for(const GridFrame* rival : alive) {
+							survivors += rival->Cells[candidate.Row][candidate.Col] == wanted ? 1 : 0;
+						}
+					}
+					if(bestPos == left.size() || survivors < bestSurvivors) {
+						bestPos = pos;
+						bestSurvivors = survivors;
+					}
+				}
+				if(bestPos == left.size()) {
+					break;
+				}
+				const AnchorCandidate& chosen = candidates[left[bestPos]];
+				if(screen) {
+					ShapeId wanted = screen->Cells[chosen.Row][chosen.Col];
+					std::vector<const GridFrame*> kept;
+					for(const GridFrame* rival : alive) {
+						if(rival->Cells[chosen.Row][chosen.Col] == wanted) {
+							kept.push_back(rival);
+						}
+					}
+					alive = kept;
+				}
+				picked.push_back(&chosen);
+				choice.Picked.push_back(left[bestPos]);
+				left.erase(left.begin() + bestPos);
+			}
+			choice.Rivals = choice.Picked.empty() ? (uint32_t)rivals.size() : (uint32_t)alive.size();
+			return choice;
+		}
+	}
+
+	AnchorChoice SelectScreenAnchors(const std::vector<GridFrame>& frames, size_t capturedIndex, const std::vector<AnchorCandidate>& candidates)
+	{
+		AnchorChoice empty;
+		if(candidates.empty()) {
+			return empty;
+		}
+
+		std::vector<size_t> order;
+		for(size_t i = 0; i < candidates.size(); i++) {
+			if(candidates[i].Row < kGridRows && candidates[i].Col < kGridCols) {
+				order.push_back(i);
+			}
+		}
+		std::stable_sort(order.begin(), order.end(), [&candidates](size_t a, size_t b) {
+			return candidates[a].Usage < candidates[b].Usage;
+		});
+		if(order.size() > kAnchorCandidateCap) {
+			order.resize(kAnchorCandidateCap);
+		}
+
+		const GridFrame* screen = capturedIndex < frames.size() ? &frames[capturedIndex] : nullptr;
+		std::vector<const GridFrame*> variants;
+		std::vector<const GridFrame*> rivals;
+		if(screen) {
+			for(size_t i = 0; i < frames.size(); i++) {
+				//A frame recorded under another fine scroll is not comparable
+				//here: the grid is cut relative to FineX, so its cell (r, c) is
+				//not the pixel a tileAtPosition condition would read.
+				if(i == capturedIndex || frames[i].FineX != screen->FineX) {
+					continue;
+				}
+				if(IsScreenVariant(*screen, frames[i])) {
+					variants.push_back(&frames[i]);
+				} else {
+					rivals.push_back(&frames[i]);
+				}
+			}
+		}
+
+		std::vector<size_t> stable;
+		for(size_t index : order) {
+			const AnchorCandidate& candidate = candidates[index];
+			if(!screen) {
+				stable.push_back(index);
+				continue;
+			}
+			ShapeId wanted = screen->Cells[candidate.Row][candidate.Col];
+			if(wanted == kEmptyCell) {
+				continue;
+			}
+			bool survives = true;
+			for(const GridFrame* variant : variants) {
+				if(variant->Cells[candidate.Row][candidate.Col] != wanted) {
+					survives = false;
+					break;
+				}
+			}
+			if(survives) {
+				stable.push_back(index);
+			}
+		}
+
+		AnchorChoice choice = GreedyAnchors(screen, rivals, candidates, stable);
+		if(choice.Picked.size() == kAnchorCount && choice.Rivals == 0) {
+			return choice;
+		}
+
+		//The stable region cannot tell this screen from another one (or cannot
+		//fill three conditions at all). A wrong screen drawn whole is worse
+		//than a screen that misses a variant, so widen the pool rather than
+		//ship an ambiguous condition set.
+		AnchorChoice wide = GreedyAnchors(screen, rivals, candidates, order);
+		if(wide.Picked.size() > choice.Picked.size() || wide.Rivals < choice.Rivals) {
+			for(size_t index : wide.Picked) {
+				wide.UsedVolatileCell |= std::find(stable.begin(), stable.end(), index) == stable.end();
+			}
+			return wide;
+		}
+		return choice;
+	}
+}

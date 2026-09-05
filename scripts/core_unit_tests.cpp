@@ -2530,6 +2530,63 @@ namespace
 			"bottom=" + std::to_string(bottom));
 	}
 
+	//Issue #162: a status bar deeper than the old fixed cap was truncated to it,
+	//so its remaining rows stayed in the playfield - and the stitcher, which
+	//crops a map to exactly this band, repeated them once per stitched screen.
+	//Zelda 1's bar is 8 rows / 64 px, the cap was 6.
+	void TestSheetHudRowsKeepAWholeStatusBar()
+	{
+		std::vector<GridFrame> screens;
+		for(uint32_t i = 0; i < 4; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 61);
+			for(uint32_t r = 0; r < 8; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = (ShapeId)(800 + r * 32 + c); //frozen bar
+				}
+				//A rupee counter and a heart row change while the labels do not.
+				frame.Cells[r][30] = (ShapeId)(1300 + i);
+				frame.Cells[r][31] = (ShapeId)(1400 + i);
+			}
+			screens.push_back(frame);
+		}
+		std::vector<const GridFrame*> pointers;
+		for(size_t i = 0; i < screens.size(); i++) { pointers.push_back(&screens[i]); }
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(pointers, top, bottom);
+		Check(top == 8, "BlocoP: an 8-row status bar is detected whole, not truncated to a cap",
+			"top=" + std::to_string(top));
+		Check(bottom == 0, "BlocoP: a varying playfield contributes no bottom HUD rows to a top bar",
+			"bottom=" + std::to_string(bottom));
+	}
+
+	void TestSheetHudRowsRejectAFrozenPictureInsteadOfTruncatingIt()
+	{
+		//The other half of the same rule: a band this deep is not a status bar,
+		//it is a picture that does not move (a Punch-Out!! card, a boss room's
+		//ceiling). Truncating it to a fixed depth would hand the sheets a
+		//meaningless band *and* leave the rest of it in the playfield.
+		std::vector<GridFrame> screens;
+		for(uint32_t i = 0; i < 4; i++) {
+			GridFrame frame = SheetNoiseScreen(i + 71);
+			for(uint32_t r = 0; r < 12; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = (ShapeId)(1500 + r * 32 + c);
+				}
+			}
+			screens.push_back(frame);
+		}
+		std::vector<const GridFrame*> pointers;
+		for(size_t i = 0; i < screens.size(); i++) { pointers.push_back(&screens[i]); }
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(pointers, top, bottom);
+		Check(top == 0, "BlocoP: a frozen band deeper than a status bar is dropped, not truncated",
+			"top=" + std::to_string(top));
+	}
+
 	void TestSheetGridPhaseAdvantageSeparatesGridFromNoise()
 	{
 		std::vector<GridFrame> gridded;
@@ -2785,6 +2842,68 @@ namespace
 				"BlocoP: the joined map is exactly two screens wide",
 				"width=" + std::to_string(maps[0].Width));
 		}
+	}
+
+	//Issue #162, end to end: a stitched map is a picture of the *world*, so the
+	//frozen status bar belongs on hud.png once, never welded into the map once
+	//per screen. The Zelda 1 shape: two genuinely adjacent overworld windows
+	//under an 8-row bar. The geometry has to stay self-consistent - the map is
+	//as tall as the playfield and every placement's y is measured from the first
+	//playfield row - because the sidecar's placements[] is what mep_build.py
+	//slices the painted map back through.
+	void TestSheetStitchedMapLeavesTheStatusBarOut()
+	{
+		const uint32_t barRows = 8;
+		std::vector<GridFrame> frames;
+		const int32_t offsets[] = { 0, 8, 16, 24, 32 };
+		for(size_t i = 0; i < 5; i++) {
+			GridFrame frame = SheetWorldWindow(offsets[i]);
+			for(uint32_t r = 0; r < barRows; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = (ShapeId)(900 + r * 32 + c);
+				}
+				frame.Cells[r][31] = (ShapeId)(1200 + i); //the rupee counter ticks
+			}
+			frames.push_back(frame);
+		}
+		std::vector<const GridFrame*> screens;
+		screens.push_back(&frames[0]);
+		screens.push_back(&frames[4]);
+
+		uint32_t top = 0;
+		uint32_t bottom = 0;
+		DetectHudRows(screens, top, bottom);
+		Check(top == barRows, "BlocoP: the stitcher is handed the whole status bar, not part of it",
+			"top=" + std::to_string(top));
+
+		Vocabulary vocab = SheetStitchVocabulary(frames);
+		vocab.HudRows = top;
+		vocab.HudBottomRows = bottom;
+		std::vector<StitchedMap> maps = BuildMaps(frames, screens, vocab);
+		Check(maps.size() == 1, "BlocoP: the two overworld screens still make one map",
+			"maps=" + std::to_string(maps.size()));
+		if(maps.size() != 1) {
+			return;
+		}
+		Check(maps[0].Height == (kGridRows - barRows) * 8,
+			"BlocoP: a stitched map is as tall as the playfield, not as tall as the frame",
+			"height=" + std::to_string(maps[0].Height));
+
+		//No placement may resolve to a metatile built out of status-bar shapes,
+		//at any y: one copy per screen is exactly the defect.
+		uint32_t barCells = 0;
+		for(size_t i = 0; i < maps[0].Placements.size(); i++) {
+			const SheetPlacement& placement = maps[0].Placements[i];
+			if(placement.Cell >= vocab.Entries.size()) {
+				continue;
+			}
+			const MetatileKey& key = vocab.Entries[placement.Cell].Key;
+			for(size_t t = 0; t < key.Tiles.size(); t++) {
+				barCells += key.Tiles[t] >= 900 && key.Tiles[t] < 1300 ? 1 : 0;
+			}
+		}
+		Check(barCells == 0, "BlocoP: the status bar is never welded into a stitched map",
+			"barCells=" + std::to_string(barCells));
 	}
 
 	void TestSheetStitchRefusesScreensWithoutAdjacencyEvidence()
@@ -3334,6 +3453,151 @@ namespace
 			"routed=" + std::to_string(routedBand));
 	}
 
+
+	//--- issue #164: anchors a variant of the captured screen does not break ---
+	//
+	//A <background> is gated on three tileAtPosition conditions (ADR-0050). If
+	//one of them sits on the cell a variant of the same screen changes - a
+	//score digit, a blink - the screen stops drawing altogether, and since
+	//ADR-0156 the cells routed onto it then render vanilla beside painted art.
+	//SelectScreenAnchors picks them from the retained grid stream instead, at
+	//save time, where both the variants and the rest of the recording are known.
+
+	bool AnchorPicked(const AnchorChoice& choice, size_t index)
+	{
+		return std::find(choice.Picked.begin(), choice.Picked.end(), index) != choice.Picked.end();
+	}
+
+	std::vector<AnchorCandidate> AnchorCandidates()
+	{
+		//Rarity order (ADR-0050 ranks the rarest tile first), spread apart.
+		return { { 2, 4, 1 }, { 20, 4, 2 }, { 10, 20, 3 }, { 26, 28, 4 } };
+	}
+
+	void TestAnchorAvoidsACellAVariantChanges()
+	{
+		//The bug, in the smallest form that reproduces it: the rarest tile on
+		//the frame is the score digit, and the very next frame of the same
+		//screen shows the next digit.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		screen.Cells[2][4] = 900;  //the digit: drawn once, so ranked first
+		screen.Cells[20][4] = 901; //a rare badge that never changes
+		GridFrame variant = screen;
+		variant.Cells[2][4] = 902;
+		variant.FrameNumber = 1;
+		std::vector<GridFrame> frames = { screen, variant };
+
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, AnchorCandidates());
+		Check(choice.Picked.size() == kAnchorCount,
+			"BlocoP: a captured screen still gets its three anchors",
+			"picked=" + std::to_string(choice.Picked.size()));
+		Check(!AnchorPicked(choice, 0),
+			"BlocoP: the cell a variant of the screen changes is not made an anchor");
+		Check(AnchorPicked(choice, 1),
+			"BlocoP: the rarest cell no variant changes is preferred");
+	}
+
+	void TestAnchorPrefersCellsThatTellTheScreenApart()
+	{
+		//Stability alone is the wrong lever, and this is why: what holds still
+		//across variants is the frame every other screen shares. Measured on
+		//the 30-pack library, a stability-first pick drives false matches on
+		//unrelated screens from 4.4 % to 20.1 % (scripts/spike_anchor_stability.py),
+		//and a false match draws the wrong screen whole.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		GridFrame rival = screen;
+		for(uint32_t r = 20; r < 26; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				rival.Cells[r][c] = (ShapeId)(700 + r * 32 + c); //a fifth of the frame: not a variant
+			}
+		}
+		rival.Cells[15][20] = 903; //...and the one candidate that separates them
+		rival.FrameNumber = 1;
+		std::vector<GridFrame> frames = { screen, rival };
+
+		//A, B and C are rarer, and all three are on cells the rival also has.
+		std::vector<AnchorCandidate> candidates = { { 2, 5, 1 }, { 14, 5, 2 }, { 26, 5, 3 }, { 15, 20, 4 } };
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, candidates);
+		Check(choice.Rivals == 0,
+			"BlocoP: the anchors separate the screen from the frames that are not variants of it",
+			"rivals=" + std::to_string(choice.Rivals));
+		Check(AnchorPicked(choice, 3),
+			"BlocoP: the discriminating cell is picked over three rarer ones that match another screen");
+		Check(!choice.UsedVolatileCell,
+			"BlocoP: a screen whose stable cells discriminate is not reported as volatile");
+	}
+
+	void TestAnchorFallsBackWhenNoStableCellDiscriminates()
+	{
+		//A combinatorial screen (a Tetris board): the only cell that tells this
+		//screen from the next one is also the cell its variants change. A wrong
+		//screen drawn whole is worse than a screen that misses a variant, so
+		//the pick widens instead of shipping an ambiguous condition set.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		screen.Cells[15][20] = 900;
+
+		GridFrame variant = screen;
+		variant.Cells[15][20] = 901; //the board moved
+		variant.FrameNumber = 1;
+
+		GridFrame rival = screen;
+		for(uint32_t r = 20; r < 26; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				rival.Cells[r][c] = (ShapeId)(700 + r * 32 + c);
+			}
+		}
+		rival.Cells[15][20] = 902; //the rival differs exactly where the variants do
+		rival.FrameNumber = 2;
+		std::vector<GridFrame> frames = { screen, variant, rival };
+
+		std::vector<AnchorCandidate> candidates = { { 2, 5, 1 }, { 14, 5, 2 }, { 26, 5, 3 }, { 15, 20, 4 } };
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, candidates);
+		Check(choice.Rivals == 0 && AnchorPicked(choice, 3),
+			"BlocoP: when no stable cell discriminates, the volatile one is used rather than an ambiguous screen",
+			"rivals=" + std::to_string(choice.Rivals));
+		Check(choice.UsedVolatileCell,
+			"BlocoP: a pick that had to use a cell a variant may change says so");
+	}
+
+	void TestAnchorsStaySpreadApartAndCapAtThree()
+	{
+		//ADR-0050's other two invariants, which this rule does not get to relax:
+		//at most three conditions, at least 64 px apart.
+		std::vector<GridFrame> frames = { SheetBlockScreen(0, 3) };
+		std::vector<AnchorCandidate> candidates = {
+			{ 10, 10, 1 }, { 10, 11, 2 }, { 10, 12, 3 }, { 20, 20, 4 }, { 2, 2, 5 }, { 28, 30, 6 }
+		};
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, candidates);
+		//The literal is ADR-0050's, not kAnchorCount's: three is the number
+		//that makes a false match unlikely, and a fourth condition is another
+		//cell that can change out from under the screen.
+		Check(choice.Picked.size() == 3,
+			"BlocoP: the anchor pick stops at three conditions",
+			"picked=" + std::to_string(choice.Picked.size()));
+		bool spread = true;
+		for(size_t a = 0; a < choice.Picked.size(); a++) {
+			for(size_t b = a + 1; b < choice.Picked.size(); b++) {
+				const AnchorCandidate& ca = candidates[choice.Picked[a]];
+				const AnchorCandidate& cb = candidates[choice.Picked[b]];
+				uint32_t dx = ca.Col > cb.Col ? ca.Col - cb.Col : cb.Col - ca.Col;
+				uint32_t dy = ca.Row > cb.Row ? ca.Row - cb.Row : cb.Row - ca.Row;
+				spread &= (dx + dy) * 8 >= kAnchorMinSpread;
+			}
+		}
+		Check(spread, "BlocoP: two anchors are never closer than 64 px");
+	}
+
+	void TestAnchorWithoutAGridFrameKeepsTheRarityPick()
+	{
+		//Past the kMaxSheetFrames retention cap a captured screen has no grid
+		//frame, so there is no evidence to read and the rule degrades to
+		//ADR-0050's plain rarity-and-spread greedy rather than to no anchors.
+		std::vector<GridFrame> none;
+		AnchorChoice choice = SelectScreenAnchors(none, 0, AnchorCandidates());
+		Check(choice.Picked.size() == kAnchorCount && choice.Picked[0] == 0,
+			"BlocoP: with no retained grid frame the rarest candidates are still anchored",
+			"picked=" + std::to_string(choice.Picked.size()));
+	}
 
 	void TestSheetContactSheetGeometry()
 	{
@@ -4110,6 +4374,8 @@ int main()
 	TestSheetHudRowsSurviveAChangingScore();
 	TestSheetHudRowsIgnoreAnAllSkyScreen();
 	TestSheetHudRowsSurviveATitleScreenInTheRecording();
+	TestSheetHudRowsKeepAWholeStatusBar();
+	TestSheetHudRowsRejectAFrozenPictureInsteadOfTruncatingIt();
 	TestSheetGridPhaseAdvantageSeparatesGridFromNoise();
 	TestSheetVocabularyCountsAndIsolationRule();
 	TestSheetIsolatedMetatilesAreMisc();
@@ -4117,6 +4383,7 @@ int main()
 	TestSheetObjectsAreLaidOutFromPredictiveEdges();
 	TestSheetBestShiftRecoversTheScroll();
 	TestSheetStitchJoinsScreensThatShareABorderBand();
+	TestSheetStitchedMapLeavesTheStatusBarOut();
 	TestSheetStitchRefusesScreensWithoutAdjacencyEvidence();
 	TestSheetStitchKeepsAContinuousScrollInOneMap();
 	TestSheetStitchEndsARegionWhenTheWorldIsReplaced();
@@ -4130,6 +4397,11 @@ int main()
 	TestSheetRoutingIsWithheldWhenItWouldTakeTheWholeSheet();
 	TestSheetRoutingIsWithheldWhenTooLittleWouldBeLeftToPaint();
 	TestSheetResidencyLeavesTheHudSheetAlone();
+	TestAnchorAvoidsACellAVariantChanges();
+	TestAnchorPrefersCellsThatTellTheScreenApart();
+	TestAnchorFallsBackWhenNoStableCellDiscriminates();
+	TestAnchorsStaySpreadApartAndCapAtThree();
+	TestAnchorWithoutAGridFrameKeepsTheRarityPick();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();
 	TestSheetJsonCarriesTheGridDecision();
@@ -4153,6 +4425,7 @@ int main()
 	TestHeadlessEngineReRegistersWhenAGameLoads();
 	TestHeadlessEngineKeepsTheOldScriptWhenANewOneIsRejected();
 	TestHeadlessEngineReplaysAWholeSequence();
+
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

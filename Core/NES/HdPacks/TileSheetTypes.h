@@ -164,6 +164,43 @@ namespace MesenSheets
 	//scroller nothing. Unmeasured, for the same reason as kStitchBandMatch.
 	constexpr double kStitchStillMargin = 0.02;
 
+	//---- issue #164: anchors a variant of the screen does not break ---------
+	//
+	//ADR-0050 gates every backgrounds/screenNNN.png on three tileAtPosition
+	//conditions, picked as the rarest non-flat tiles on the frame. Rarity is
+	//what makes a false match on some *other* screen unlikely - and it is also
+	//the property of a score digit, a timer, a blinking prompt. When one of the
+	//three changes, the whole <background> stops drawing, and since ADR-0156
+	//the cells routed off metatiles.png onto that screen then render vanilla.
+	//
+	//Measured on the 30-pack library by scripts/spike_anchor_stability.py
+	//(pixel-exact, against the captured screens on disk): 1558 of 3487 shipped
+	//anchors (44.7 %) sit on a cell some variant of their own screen changes,
+	//and 21424 of 29218 variant pairs (73.3 %) therefore fail to draw.
+	//
+	//The fix is *not* "prefer stable cells", though: the same measurement says
+	//a stability-first pick alone drives false matches on unrelated screens
+	//from 3563/80902 (4.4 %) to 16237/80902 (20.1 %), because what stays put
+	//across variants is the shared frame every other screen also has - and a
+	//false match draws the wrong screen whole, which is worse than a gap.
+	//Stability is therefore a *filter* and discrimination stays the objective:
+	//among the cells no variant touches, take the ones that tell this screen
+	//apart from the rest of the recording, and fall back to the volatile ones
+	//only when the stable region cannot. That pick measures 3911/29218 (13.4 %)
+	//misses and 709/80902 (0.88 %) false matches - both better than shipped.
+
+	//Two frames are variants of one screen when they agree on this share of the
+	//960 cells. 0.90 is the midpoint of the range the spike was run over; the
+	//result is not sensitive to it (0.85 -> 30.4 % misses after vs 77.1 %
+	//before, 0.95 -> 9.5 % vs 72.1 %, both with false matches down 5x).
+	constexpr double kAnchorVariantAgree = 0.90;
+	//How deep into the rarity ranking the discrimination search looks. The
+	//search is O(cap x picks x frames) per screen, once, at save time.
+	constexpr uint32_t kAnchorCandidateCap = 40;
+	//ADR-0050: three conditions, at least 64 px apart (Manhattan).
+	constexpr uint32_t kAnchorCount = 3;
+	constexpr uint32_t kAnchorMinSpread = 64;
+
 	constexpr uint32_t kGridCols = 32;
 	constexpr uint32_t kGridRows = 30;
 

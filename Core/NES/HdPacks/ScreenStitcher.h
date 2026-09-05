@@ -62,4 +62,40 @@ namespace MesenSheets
 	//The whole F9.2 pass: runs the screen stitcher first and falls back to the
 	//continuous one per ADR-0153 §6. One StitchedMap per connected region.
 	std::vector<StitchedMap> BuildMaps(const std::vector<GridFrame>& frames, const std::vector<const GridFrame*>& screens, const Vocabulary& vocab);
+
+	//---- issue #164: choosing a captured screen's tileAtPosition anchors ----
+
+	//One cell the builder is willing to condition a <background> on: where it
+	//sits in the captured frame's grid, and how often the recording drew that
+	//tile anywhere (ADR-0050 ranks the rarest first). The builder keeps the
+	//pixel/palette/index detail on its own side - this module only reasons
+	//about positions and shape ids.
+	struct AnchorCandidate
+	{
+		uint32_t Row = 0;
+		uint32_t Col = 0;
+		uint32_t Usage = 0;
+	};
+
+	struct AnchorChoice
+	{
+		//Indices into the candidate list, in condition order.
+		std::vector<size_t> Picked;
+		//Recorded frames that are *not* variants of this screen and still
+		//satisfy all of the picked conditions - i.e. frames where this screen
+		//would be drawn over content it is not a picture of.
+		uint32_t Rivals = 0;
+		//No stable triple could tell the screen apart, so the pick fell back to
+		//cells a variant may change (a combinatorial screen: a Tetris board).
+		bool UsedVolatileCell = false;
+	};
+
+	//The F9.9 follow-up to ADR-0050's anchor rule (see TileSheetTypes.h for the
+	//measurement): prefer cells no variant of this screen changes, and inside
+	//that set pick the cells that most sharply separate the screen from the
+	//rest of the recording. `capturedIndex` is the frame the screen PNG was
+	//written from; out of range (no retained grid frame for it) degrades to
+	//ADR-0050's plain rarity-and-spread greedy, which is also what an empty
+	//stream yields.
+	AnchorChoice SelectScreenAnchors(const std::vector<GridFrame>& frames, size_t capturedIndex, const std::vector<AnchorCandidate>& candidates);
 }

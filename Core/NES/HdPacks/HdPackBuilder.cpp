@@ -1140,8 +1140,12 @@ void HdPackBuilder::CaptureScreen()
 		PNGHelper::WritePNG(FolderUtilities::CombinePath(_saveFolder, "backgrounds/" + baseName + ".orig.png"), orig.data(), 256 * scale, 240 * scale, 32);
 	}
 
-	//Anchors: the rarest non-flat tiles on screen, spread apart (3 tileAtPosition
-	//conditions make a false match on another screen very unlikely)
+	//Anchor *candidates*: the non-flat tiles on screen, rarest first (ADR-0050).
+	//Which three become conditions is decided at save time, once the whole grid
+	//stream is known - see FinalizeScreenAnchors and issue #164. Deciding here
+	//is what the bug is: a screen is captured the first time it holds still, so
+	//at this point every later variant of it - the next score digit, the other
+	//half of a blink - is still in the future.
 	auto isFlat = [](HdTileKey& k) {
 		for(int i = 1; i < 16; i++) {
 			if(k.TileData[i] != k.TileData[0]) {
@@ -1152,9 +1156,13 @@ void HdPackBuilder::CaptureScreen()
 	};
 	vector<ScreenRun*> ranked;
 	for(ScreenRun& run : _frameRuns) {
-		if(!isFlat(run.Tile)) {
-			ranked.push_back(&run);
+		//A candidate has to land on a whole grid cell: RecordGridFrame only keeps
+		//runs that start on a tile boundary and on a tile-aligned scanline, and a
+		//candidate the grid does not hold is one whose stability cannot be read.
+		if(isFlat(run.Tile) || (run.Y & 7) != 0 || run.X + 8 > 256) {
+			continue;
 		}
+		ranked.push_back(&run);
 	}
 	std::stable_sort(ranked.begin(), ranked.end(), [this](ScreenRun* a, ScreenRun* b) {
 		auto ua = _tileUsageCount.find(a->Tile.GetKey(false));
@@ -1163,54 +1171,103 @@ void HdPackBuilder::CaptureScreen()
 		uint32_t cb = ub == _tileUsageCount.end() ? 0 : ub->second;
 		return ca < cb;
 	});
-	vector<ScreenRun*> anchors;
+
+	PendingScreen pending;
+	pending.BaseName = baseName;
+	pending.RelPath = relPath;
+	pending.HasGridFrame = _gridFrameLive && !_gridFrames.empty();
+	pending.GridFrameIndex = pending.HasGridFrame ? _gridFrames.size() - 1 : 0;
+	uint8_t fineX = pending.HasGridFrame ? _gridFrames.back().FineX : 0;
 	for(ScreenRun* run : ranked) {
-		bool farEnough = true;
-		for(ScreenRun* a : anchors) {
-			if(std::abs((int)a->X - (int)run->X) + std::abs((int)a->Y - (int)run->Y) < 64) {
-				farEnough = false;
-				break;
-			}
-		}
-		if(farEnough) {
-			anchors.push_back(run);
-		}
-		if(anchors.size() == 3) {
+		if(pending.Candidates.size() >= MaxAnchorCandidates) {
 			break;
 		}
+		int32_t offset = (int32_t)run->X - (int32_t)fineX;
+		if(pending.HasGridFrame && (offset < 0 || (offset & 7) != 0)) {
+			continue;
+		}
+		MesenSheets::AnchorCandidate cell;
+		cell.Row = (uint32_t)run->Y >> 3;
+		cell.Col = (uint32_t)(pending.HasGridFrame ? offset >> 3 : run->X >> 3);
+		if(cell.Row >= MesenSheets::kGridRows || cell.Col >= MesenSheets::kGridCols) {
+			continue;
+		}
+		auto usage = _tileUsageCount.find(run->Tile.GetKey(false));
+		cell.Usage = usage == _tileUsageCount.end() ? 0 : usage->second;
+		pending.Cells.push_back(cell);
+		pending.Candidates.push_back(*run);
 	}
-	if(anchors.empty()) {
+	if(pending.Candidates.empty()) {
+		//No tile on this frame can carry a condition, so there is nothing to gate
+		//a <background> on. Same outcome as before: the PNG stays, the line does
+		//not, and OnFrameEnd will not flag the grid frame as captured.
 		return;
 	}
 
 	unique_ptr<HdPackBitmapInfo> bitmap(new HdPackBitmapInfo());
 	bitmap->PngName = relPath;
-	HdBackgroundInfo bg = {};
-	bg.Data = bitmap.get();
-	bg.Brightness = 255;
-	bg.HorizontalScrollRatio = 0;
-	bg.VerticalScrollRatio = 0;
-	bg.Priority = 20; //BehindFgSpritesPriority: covers the tiles, stays under the sprites
-	bg.Left = 0;
-	bg.Top = 0;
-	bg.BlendMode = HdPackBlendMode::Alpha;
-	const char* suffix = "ABC";
-	for(size_t i = 0; i < anchors.size(); i++) {
-		HdPackTileAtPositionCondition* cond = new HdPackTileAtPositionCondition();
-		cond->Name = baseName + "_" + suffix[i];
-		string tileData;
-		if(_isChrRam) {
-			for(int j = 0; j < 16; j++) {
-				tileData += HexUtilities::ToHex(anchors[i]->Tile.TileData[j]);
-			}
-		}
-		cond->Initialize(anchors[i]->X, anchors[i]->Y, anchors[i]->Tile.PaletteColors, anchors[i]->Tile.TileIndex, tileData, false);
-		bg.Conditions.push_back(cond);
-		_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
-	}
+	pending.BitmapIndex = _hdData.BackgroundFileData.size();
 	_hdData.BackgroundFileData.push_back(std::move(bitmap));
-	_hdData.BackgroundsByPriority[bg.Priority].push_back(bg);
-	MessageManager::Log("[HDPack] bootstrap: static screen captured -> " + relPath + " (" + std::to_string(anchors.size()) + " anchor tile(s))");
+	_pendingScreens.push_back(std::move(pending));
+	MessageManager::Log("[HDPack] bootstrap: static screen captured -> " + relPath);
+}
+
+//Issue #164 (ADR-0050 anchors, F9.9): a <background> is gated on three
+//tileAtPosition conditions, and on a *variant* of the captured screen - the
+//next score digit, the other half of a blink, a palette-swapped frame - a
+//condition that landed on the changing cell fails and the screen does not
+//draw at all. Since ADR-0156 the cells routed onto that screen then render
+//vanilla in the middle of painted art, which is what made the old miss
+//visible. The recorder already holds the evidence (the retained grid stream
+//is what did and did not change across frames), it just was not available at
+//capture time, so the pick happens here instead: once, at save time, over the
+//whole stream. See TileSheetTypes.h for the measurement and for why "prefer
+//stable cells" on its own is the wrong lever.
+void HdPackBuilder::FinalizeScreenAnchors()
+{
+	uint32_t volatileScreens = 0;
+	uint32_t ambiguousScreens = 0;
+	for(PendingScreen& pending : _pendingScreens) {
+		size_t captured = pending.HasGridFrame ? pending.GridFrameIndex : _gridFrames.size();
+		MesenSheets::AnchorChoice choice = MesenSheets::SelectScreenAnchors(_gridFrames, captured, pending.Cells);
+		if(choice.Picked.empty() || pending.BitmapIndex >= _hdData.BackgroundFileData.size()) {
+			continue;
+		}
+		volatileScreens += choice.UsedVolatileCell ? 1 : 0;
+		ambiguousScreens += choice.Rivals > 0 ? 1 : 0;
+
+		HdBackgroundInfo bg = {};
+		bg.Data = _hdData.BackgroundFileData[pending.BitmapIndex].get();
+		bg.Brightness = 255;
+		bg.HorizontalScrollRatio = 0;
+		bg.VerticalScrollRatio = 0;
+		bg.Priority = 20; //BehindFgSpritesPriority: covers the tiles, stays under the sprites
+		bg.Left = 0;
+		bg.Top = 0;
+		bg.BlendMode = HdPackBlendMode::Alpha;
+		const char* suffix = "ABC";
+		for(size_t i = 0; i < choice.Picked.size(); i++) {
+			const ScreenRun& run = pending.Candidates[choice.Picked[i]];
+			HdPackTileAtPositionCondition* cond = new HdPackTileAtPositionCondition();
+			cond->Name = pending.BaseName + "_" + suffix[i];
+			string tileData;
+			if(_isChrRam) {
+				for(int j = 0; j < 16; j++) {
+					tileData += HexUtilities::ToHex(run.Tile.TileData[j]);
+				}
+			}
+			cond->Initialize(run.X, run.Y, run.Tile.PaletteColors, run.Tile.TileIndex, tileData, false);
+			bg.Conditions.push_back(cond);
+			_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
+		}
+		_hdData.BackgroundsByPriority[bg.Priority].push_back(bg);
+	}
+	if(!_pendingScreens.empty()) {
+		MessageManager::Log("[HDPack] bootstrap: " + std::to_string(_pendingScreens.size()) + " screen(s) anchored (" +
+			std::to_string(volatileScreens) + " on a cell a variant may change, " +
+			std::to_string(ambiguousScreens) + " still matching another recorded screen)");
+	}
+	_pendingScreens.clear();
 }
 
 void HdPackBuilder::SaveHdPack()
@@ -1344,6 +1401,12 @@ void HdPackBuilder::SaveHdPack()
 		}
 	}
 	savePng(-1);
+
+	//Issue #164: the captured screens' tileAtPosition conditions, chosen now
+	//that the whole grid stream is known. Runs before BuildSheets so the
+	//<background> lines are serialized in screen order, exactly where the
+	//capture-time pick used to put them.
+	FinalizeScreenAnchors();
 
 	//F9.1-F9.3 (ADR-0153): metatile vocabulary, stitched maps and objects, all
 	//written under textures/sheets/ - the artist surface this pack is edited from.
