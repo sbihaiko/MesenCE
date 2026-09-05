@@ -683,8 +683,38 @@ namespace MesenSheets
 		}
 	}
 
+	//ADR-0156 routing floor. "Every sighting is explained" is trivially true of
+	//a recording that never left one screen, and such a run would route its
+	//whole scene vocabulary and ship an almost empty metatiles.png. Two of the
+	//four clauses of scripts/gameplay_probe.py answer "did this reach
+	//gameplay?" from what the builder already has here; the thresholds are that
+	//script's, and its calibration.
+	static bool LooksLikeGameplay(const Vocabulary& vocab)
+	{
+		if(vocab.Grid.Alt8x8 < kGameplayTileStructure) {
+			return false; //one-off compositions, not a tiled playfield
+		}
+		if(vocab.Entries.empty()) {
+			return false;
+		}
+		uint32_t misc = 0;
+		for(size_t i = 0; i < vocab.Entries.size(); i++) {
+			if(vocab.Entries[i].Context == SheetContext::Misc) { misc++; }
+		}
+		//A menu is drawn at text granularity, so its cells land off the grid
+		//with no adjacency support.
+		return (double)misc / (double)vocab.Entries.size() < kGameplayMiscShare;
+	}
+
 	void MarkScreenResidentCells(const std::vector<GridFrame>& frames, Vocabulary& vocab)
 	{
+		if(!LooksLikeGameplay(vocab)) {
+			//Withheld, not "nothing to route": the two are the same cell count.
+			//Costing the artist a fatter sheet is the cheap error here; costing
+			//them the sheet is not.
+			vocab.RoutingWithheld = true;
+			return;
+		}
 		std::set<Sighting> explained;
 		std::set<uint32_t> shown;
 		CollectCapturedSightings(frames, vocab, explained, shown);

@@ -892,7 +892,10 @@ void HdPackBuilder::BuildSheets()
 		"), " + std::to_string(vocab.Entries.size()) + " metatiles from " + std::to_string(vocab.DistinctScreens) +
 		" distinct screens, HUD rows " + std::to_string(vocab.HudRows) + "/" + std::to_string(vocab.HudBottomRows) +
 		", " + std::to_string(_spriteSheetCount) + " sprite groups from " + std::to_string(_oamFrames.size()) + " OAM frames" +
-		", " + std::to_string(_screenResidentCells) + " cells routed to the captured screens");
+		", " + (vocab.RoutingWithheld
+			//F9.9 floor: say which of the two zeroes this is.
+			? string("routing withheld - the recording does not look like gameplay")
+			: std::to_string(_screenResidentCells) + " cells routed to the captured screens"));
 }
 
 //metatiles / hud / font / misc, split by context so a rupee counter never

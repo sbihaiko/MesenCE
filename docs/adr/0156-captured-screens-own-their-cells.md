@@ -123,6 +123,40 @@ ADR-0153 §5 and ADR-0127. `GridFrame::Captured` and
 `_hdData.BackgroundFileData`, and `WriteContextSheets` reads the second.
 Cases in `scripts/core_unit_tests.cpp` Bloco P (`make core-unit-tests`).
 
+### 5. The routing floor
+
+Routing is **withheld entirely** unless the recording looks like gameplay.
+"Every sighting is explained" is trivially true of a run that never left one
+screen — it captures that screen, sees nothing else, and routes its whole scene
+vocabulary — and the pack it ships is then strictly worse than the one before
+this decision: an almost empty `metatiles.png`, indistinguishable from a game
+that really is one screen.
+
+The floor is two of the four clauses of `scripts/gameplay_probe.py` (F9.13),
+picked because they need only what the builder already holds at save time, with
+that script's thresholds and its calibration (86 hand-labelled packs over three
+runs of a 30-ROM library; 17 of 20 menu-only recordings caught, no false
+alarms):
+
+- **tile structure** — `GridDetection::Alt8x8`, how deterministically the
+  frames reuse the same 2x2 tuples. Below `kGameplayTileStructure` (0.86) the
+  run drew one-off compositions, which is what a logo, a menu frame or a
+  portrait is.
+- **misc share** — the share of the vocabulary that landed off the grid with no
+  adjacency support. At or above `kGameplayMiscShare` (0.32) the screen was
+  drawn at text granularity, not on the game's grid.
+
+The asymmetry is deliberate: a false "this is not gameplay" costs the artist a
+fatter contact sheet, which is exactly what they had before F9.9. A false "this
+is gameplay" costs them the sheet. `Vocabulary::RoutingWithheld` keeps the two
+zeroes apart in the builder's log — "withheld" and "nothing to route" are the
+same cell count and not the same event.
+
+The probe's own blind spot carries over: a password or option screen that is
+*itself* tiled wallpaper (Punch-Out!!'s, Mega Man 2's, Dr. Mario's) clears both
+clauses. Those runs are caught downstream instead, where
+`bootstrap_auto_packs.sh` reports `MENU` and the pack is not trusted.
+
 ## Consequences
 
 - **Measured, offline, on the 30-pack library** by

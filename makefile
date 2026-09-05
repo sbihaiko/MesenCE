@@ -243,6 +243,9 @@ doc-checks: check-manifest
 	./scripts/verify-fase0-1-dox.sh
 	./scripts/verify-ui-logic-firewall.sh
 	./scripts/check-file-loc.sh Core/Shared/Audio/MidiExporter.cpp 200
+	./scripts/check-file-loc.sh scripts/gameplay_probe.py 200
+	./scripts/check-file-loc.sh scripts/sheet_report.py 200
+	./scripts/check-file-loc.sh scripts/bootstrap_auto_packs.sh 200
 	./scripts/checks/verify_pack_host_allowlist_embed.sh
 	./scripts/checks/verify_core_no_http_client.sh
 	./scripts/checks/verify_fetcher_no_filesystem_allowlist_load.sh
@@ -299,6 +302,9 @@ doc-checks: check-manifest
 	#no model, no weights, no network (its diffusion backend is exercised only
 	#against a loopback stub and through its unavailable paths).
 	python3 scripts/test_sheet_repaint.py
+	#F9.13: the "did this recording reach gameplay?" criterion, on synthetic
+	#packs written to a temp dir -- no emulator, no ROM, no recorded library.
+	python3 scripts/test_gameplay_probe.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
 	python3 scripts/validate-specs.py

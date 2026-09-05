@@ -3,13 +3,15 @@
 
 This is the automatable half of the PRD Phase 9 validation panel: it reports
 what a pack's `textures/sheets/` actually contains (grid unit and how it was
-decided, cells per context, object and map sizes) and computes validation
-test 7, the noise budget - `misc` cells must stay under 15 % of scene cells.
+decided, cells per context, object and map sizes), computes validation test 7,
+the noise budget - `misc` cells must stay under 15 % of scene cells - and runs
+the F9.13 gameplay probe (`scripts/gameplay_probe.py`), which answers whether
+the recording got past the menus and says why when it did not.
 The judgement calls (cold read, side-by-side with the artist pack, map
 recognisability) stay human; this only tells a person where to look.
 
 Usage:
-  scripts/sheet_report.py <pack-or-library> [--json] [--fail-noise]
+  scripts/sheet_report.py <pack-or-library> [--json] [--fail-noise] [--fail-menu-only]
 
 <pack-or-library> may be a pack folder (containing sheets/ or textures/sheets/)
 or a ROM library, in which case every <Game>/auto/textures/sheets is reported.
@@ -18,6 +20,9 @@ import argparse
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gameplay_probe  # noqa: E402  - the F9.13 "did it reach gameplay?" criterion
 
 NOISE_BUDGET = 0.15  # ADR-0153 / PRD Phase 9 validation test 7
 
@@ -67,6 +72,8 @@ def summarize(sheet_dir):
     denominator = scene + misc
     return {
         "path": sheet_dir,
+        "gameplay": gameplay_probe.evaluate(
+            sheets, os.path.join(os.path.dirname(sheet_dir), "backgrounds")),
         "errors": {n: d["error"] for n, d in sheets.items() if "error" in d},
         "gridUnit": grid.get("gridUnit") if grid else None,
         "gridConsistency": grid.get("gridConsistency") if grid else None,
@@ -87,6 +94,9 @@ def print_summary(summary):
     if summary["errors"]:
         for sheet, err in summary["errors"].items():
             print("   ERROR %s: %s" % (sheet, err))
+    probe = summary["gameplay"]
+    print("   gameplay  : %s%s" % (probe["verdict"],
+                                   (" - " + "; ".join(probe["reasons"])) if probe["reasons"] else ""))
     if summary["gridUnit"] is None:
         print("   no metatiles.json - nothing to read")
         return
@@ -111,6 +121,8 @@ def main():
     parser.add_argument("target")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--fail-noise", action="store_true", help="exit 1 when any pack blows the noise budget")
+    parser.add_argument("--fail-menu-only", action="store_true",
+                        help="exit 1 when any pack's recording never got past the menus (F9.13)")
     args = parser.parse_args()
 
     dirs = find_sheet_dirs(args.target)
@@ -128,6 +140,9 @@ def main():
 
     if args.fail_noise and any(not s["noiseOk"] for s in summaries if s["gridUnit"] is not None):
         print("noise budget exceeded (PRD Phase 9 validation test 7)", file=sys.stderr)
+        return 1
+    if args.fail_menu_only and any(s["gameplay"]["verdict"] == "menu-only" for s in summaries):
+        print("at least one recording never reached gameplay (F9.13)", file=sys.stderr)
         return 1
     return 0
 

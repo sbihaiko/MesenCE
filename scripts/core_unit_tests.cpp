@@ -3168,6 +3168,47 @@ namespace
 			"resident=" + std::to_string(SheetResidentCount(vocab)));
 	}
 
+	void TestSheetRoutingIsWithheldWhenTheRecordingIsNotGameplay()
+	{
+		//The failure mode ADR-0156 names: a run that never left one screen has
+		//every sighting explained by construction, so the rule would route the
+		//whole scene vocabulary and the pack would ship an almost empty
+		//metatiles.png. The floor is two clauses of scripts/gameplay_probe.py -
+		//tile structure and misc share - and a noise screen fails the first:
+		//it is a one-off composition, which is what a logo or a menu frame is.
+		//A menu frame over a tiled backdrop: the bottom half is a real grid, so
+		//there are scene cells with something to lose, and the top half is
+		//drawn at text granularity, which is what the misc share measures.
+		std::vector<GridFrame> frames;
+		for(uint32_t i = 0; i < 2; i++) {
+			GridFrame frame = SheetBlockScreen(i, 3);
+			GridFrame text = SheetNoiseScreen(i + 1);
+			for(uint32_t r = 0; r < kGridRows / 2; r++) {
+				for(uint32_t c = 0; c < kGridCols; c++) {
+					frame.Cells[r][c] = text.Cells[r][c];
+				}
+			}
+			frame.RepeatCount = 30;
+			frame.FrameNumber = i;
+			frame.Captured = true;
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		Check(vocab.RoutingWithheld && SheetResidentCount(vocab) == 0,
+			"BlocoP: a recording that does not look like gameplay routes nothing",
+			"withheld=" + std::to_string(vocab.RoutingWithheld ? 1 : 0) +
+			" resident=" + std::to_string(SheetResidentCount(vocab)));
+
+		//And the floor does not fire on the recording that motivated the rule:
+		//"withheld" must stay distinguishable from "there was nothing to route".
+		std::vector<GridFrame> played = SheetScreenRecording(true);
+		Vocabulary ok = BuildVocabulary(played, SheetLookup());
+		Check(!ok.RoutingWithheld && SheetResidentCount(ok) > 0,
+			"BlocoP: a tiled playfield clears the routing floor",
+			"withheld=" + std::to_string(ok.RoutingWithheld ? 1 : 0) +
+			" resident=" + std::to_string(SheetResidentCount(ok)));
+	}
+
 	void TestSheetResidencyLeavesTheHudSheetAlone()
 	{
 		//A status bar sits inside every captured screen, so the residency test
@@ -3523,6 +3564,7 @@ int main()
 	TestSheetACellSeenOffTheScreenStaysOnTheSheet();
 	TestSheetAScrolledSightingIsNotExplained();
 	TestSheetNothingIsRoutedWithoutACapturedScreen();
+	TestSheetRoutingIsWithheldWhenTheRecordingIsNotGameplay();
 	TestSheetResidencyLeavesTheHudSheetAlone();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();

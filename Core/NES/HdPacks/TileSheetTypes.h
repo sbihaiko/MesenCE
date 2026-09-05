@@ -316,6 +316,35 @@ namespace MesenSheets
 	//Directed adjacency counts between vocabulary entries, keyed (A, B).
 	using AdjacencyMap = std::map<std::pair<uint32_t, uint32_t>, uint32_t>;
 
+	//---- F9.9 routing floor (ADR-0156) -------------------------------------
+	//
+	//"Every sighting is explained" is trivially true of a recording that never
+	//left one screen: the screen is captured, nothing else is ever seen, and
+	//the whole scene vocabulary routes off metatiles.png. The pack that ships
+	//is then worse than the one before the rule - an almost empty contact
+	//sheet, and no way to tell it from a game that really is one screen.
+	//
+	//So routing is withheld unless the recording looks like gameplay. These are
+	//two of the four clauses of scripts/gameplay_probe.py, chosen because they
+	//need only what the builder already has at save time; the thresholds are
+	//that script's, calibrated over 86 packs from three runs of a 30-ROM
+	//library (17 of 20 hand-labelled menu-only recordings caught, no false
+	//alarms).
+	//
+	//  - tile structure: how deterministically the frames reuse the same 2x2
+	//    tuples. A tiled playfield saturates near 1.0; a run that only drew
+	//    one-off compositions - a logo, a menu, a portrait - never accumulates
+	//    repeats. Menu-only 0.76-0.87, gameplay >= 0.89.
+	//  - misc share: cells off the detected grid with no adjacency support. A
+	//    menu is drawn at text granularity, not on the game's grid. Gameplay
+	//    <= 0.262; a Gauntlet run stuck in its menu, 0.635.
+	//
+	//Deliberately conservative in one direction only: a false "this is not
+	//gameplay" costs the artist a fatter sheet, which is what they had before
+	//F9.9. A false "this is gameplay" costs them the sheet.
+	constexpr double kGameplayTileStructure = 0.86;
+	constexpr double kGameplayMiscShare = 0.32;
+
 	struct Vocabulary
 	{
 		GridDetection Grid;
@@ -330,6 +359,10 @@ namespace MesenSheets
 		AdjacencyMap South;
 		uint32_t StableScreens = 0;
 		uint32_t DistinctScreens = 0;
+		//F9.9: set when the routing floor above refused the recording, so the
+		//builder can say "withheld" rather than let it read as "nothing to
+		//route" - the two look identical in a cell count.
+		bool RoutingWithheld = false;
 
 		int32_t Find(const MetatileKey& key) const
 		{

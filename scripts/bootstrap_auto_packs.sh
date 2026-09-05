@@ -16,9 +16,14 @@
 # golden games); otherwise the generic script below, which mashes Start/A for the
 # first ~25 s to get through title and menu screens and then only moves, so it
 # does not pause the game it just started. It reaches gameplay on many NES
-# titles and on some it does not - scripts/sheet_report.py is how you tell which.
+# titles and on some it does not, so each finished pack is run through the
+# F9.13 criterion (scripts/gameplay_probe.py): a recording that never got past
+# the menus is reported as MENU with the reason, never as OK. The criterion has
+# a declared blind spot - see that script's docstring - so MENU is trustworthy
+# and OK is "nothing caught it", not a guarantee.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+ROOT=$(pwd)
 
 LIB=${1:?usage: bootstrap_auto_packs.sh <roms-dir> [seconds] [jobs] [stage-dir]}
 SECONDS_PER_ROM=${2:-300}
@@ -74,13 +79,22 @@ record_one() {
 	mkdir -p "$folder/auto"
 	cp -R "$out" "$folder/auto/textures"
 
-	local sheets=0 screens=0
+	local sheets=0 screens=0 probe verdict
 	[ -d "$out/sheets" ] && sheets=$(/usr/bin/find "$out/sheets" -name '*.png' | grep -cv '\.orig\.png$' || true)
 	[ -d "$out/backgrounds" ] && screens=$(/usr/bin/find "$out/backgrounds" -name 'screen*.png' | grep -cv '\.orig\.png$' || true)
-	echo "OK     $name (sheets $sheets, screens $screens)"
+
+	# F9.13: "sheets N, screens N" says nothing about whether the run got past
+	# the menus, so ask the criterion and print its reason when it says no.
+	probe=$(python3 "$ROOT/scripts/gameplay_probe.py" "$out" 2>/dev/null | head -1 || true)
+	verdict=$(printf '%s' "$probe" | cut -f1)
+	if [ "$verdict" = "menu-only" ]; then
+		echo "MENU   $name (sheets $sheets, screens $screens) - $(printf '%s' "$probe" | cut -f3)"
+	else
+		echo "OK     $name (sheets $sheets, screens $screens)"
+	fi
 }
 export -f record_one
-export RECORDER
+export RECORDER ROOT
 
 echo "library : $LIB"
 echo "staging : $STAGE"
