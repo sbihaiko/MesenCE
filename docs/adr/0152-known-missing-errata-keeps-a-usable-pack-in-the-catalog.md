@@ -178,6 +178,18 @@ the moment the author republishes, the errata stops applying.
 - A row can be live while knowingly incomplete. That is a real change to what
   `docs/community-packs.json` asserts, and the reason the user-visible marker is
   part of the decision rather than a nicety.
-- `issue-139` is the first candidate: one errata entry returns a working
+- `issue-139` was the first candidate: one errata entry returns a working
   ~11k-asset pack to the catalog without altering, forking or rehosting the
-  author's artifact.
+  author's artifact. The sweep that followed found two more (`issue-137`
+  Contra 80s v1.1, `issue-138` — no; `issue-148` Metroid HD), so three of the
+  ten live rows now carry a declaration. That ratio is high enough to watch:
+  it reflects a one-off backlog created by ADR-0151 rather than a steady rate,
+  and if new submissions keep needing errata at anything like it, the hatch is
+  doing work the gate should be doing.
+- A board label, `pack:known-missing`, marks a row whose artifact carries a
+  declaration. It is set by the `apply-verdict` step of
+  `community-pack-validate.yml` from the Pack Hash the pipeline computed, and
+  explicitly not by the classify step: classify's inputs are
+  submitter-controlled, and the entry route above exists precisely so a
+  submitter cannot declare an errata over somebody else's pack. The same step
+  removes the label when nothing resolves, so it expires with the errata.
