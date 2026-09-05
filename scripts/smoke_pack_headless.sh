@@ -42,7 +42,7 @@
 #
 # Usage:
 #   scripts/smoke_pack_headless.sh <installed-pack-dir> <rom> [--seconds N]
-#       [--work DIR] [--allow-missing-audio]
+#       [--work DIR] [--allow-missing-audio] [--errata FILE]
 #
 #   <installed-pack-dir>   the pack folder as installed (post-recipe: has
 #                          hires.txt — at the root or at the textures section
@@ -51,6 +51,13 @@
 #   --seconds N            boot seconds (default 2)
 #   --work DIR             scratch dir (default .cache/smoke-pack-headless/<rom>)
 #   --allow-missing-audio  report missing <bgm>/<sfx> OGGs as SKIPPED, not FAIL
+#   --errata FILE          ADR-0152 known-missing declarations; the named
+#                          <img>/<background> targets report as DECLARED
+#                          instead of FAIL. Auto-resolved from the installed
+#                          .mep-install.json's SourceSha256 when not given.
+#                          Read through scripts/mep_errata.py — the same parser
+#                          mep_lint.py uses, so the two gates cannot drift
+#                          (which is what bug #155 was).
 #
 # Exit: 0 = PASS (or PASS with SKIPPED audio), 1 = FAIL.
 set -euo pipefail
@@ -62,9 +69,13 @@ PY="${PYTHON:-python3}"
 SECONDS_BOOT=2
 ALLOW_MISSING_AUDIO=0
 WORK=""
+ERRATA=""
 
+#The header block above is the usage text; USAGE_END tracks its last line
+#so adding an option never silently truncates --help.
+USAGE_END=62
 usage() {
-	sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+	sed -n "2,${USAGE_END}p" "${BASH_SOURCE[0]}" | sed -E 's/^# ?//'
 	exit 2
 }
 
@@ -75,6 +86,7 @@ while [[ $# -gt 0 ]]; do
 		--seconds) [[ $# -ge 2 ]] || usage; SECONDS_BOOT="$2"; shift 2 ;;
 		--work) [[ $# -ge 2 ]] || usage; WORK="$2"; shift 2 ;;
 		--allow-missing-audio) ALLOW_MISSING_AUDIO=1; shift ;;
+		--errata) [[ $# -ge 2 ]] || usage; ERRATA="$2"; shift 2 ;;
 		--help|-h) usage ;;
 		-*) echo "error: unknown option $1" >&2; usage ;;
 		*) POSITIONAL+=("$1"); shift ;;
@@ -108,6 +120,40 @@ print((sys.argv[2] + '/' + path + '/hires.txt') if path else (sys.argv[2] + '/hi
 	fi
 }
 MANIFEST="$(resolve_manifest)"
+
+# ADR-0152: resolve the known-missing errata for this pack. Explicit --errata
+# wins; otherwise the installed .mep-install.json names the artifact it came
+# from (SourceSha256), which is the errata's file name. A pack installed by
+# hand has no stamp and simply gets no errata.
+if [[ -z "$ERRATA" && -f "$PACK_DIR/.mep-install.json" ]]; then
+	SRC_SHA="$("$PY" -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print(''); raise SystemExit
+# The install stamp writes source.sha256 (43); the install registry outside
+# mep/ writes SourceSha256. Accept both so either shape resolves an errata.
+src = d.get('source') or {}
+print(str(src.get('sha256') or d.get('SourceSha256') or '').strip())
+" "$PACK_DIR/.mep-install.json")"
+	if [[ -n "$SRC_SHA" ]]; then
+		ERRATA="$("$PY" "$REPO_ROOT/scripts/mep_errata.py" resolve "$REPO_ROOT/docs/community-packs/errata" "$SRC_SHA" || true)"
+	fi
+fi
+if [[ -n "$ERRATA" ]]; then
+	[[ -f "$ERRATA" ]] || { echo "FAIL: errata file not found: $ERRATA" >&2; exit 1; }
+	"$PY" "$REPO_ROOT/scripts/mep_errata.py" validate "$ERRATA" >/dev/null || {
+		echo "FAIL: errata file is invalid: $ERRATA" >&2; exit 1; }
+fi
+
+# Is this missing target declared known-missing? Delegates to the same parser
+# mep_lint.py imports, so a target the lint pardons and this gate fails (or the
+# reverse) is not expressible - that divergence was bug #155.
+declared() {
+	[[ -n "$ERRATA" ]] || return 1
+	"$PY" "$REPO_ROOT/scripts/mep_errata.py" covers "$ERRATA" "$MANIFEST" "$1" "$2"
+}
 [[ -f "$MANIFEST" ]] || { echo "FAIL: no hires.txt manifest (looked at $MANIFEST)" >&2; exit 1; }
 
 ROM_BASE="$(basename "$ROM")"
@@ -135,6 +181,7 @@ set -e
 # --- assert against the loader log ---
 fail_lines=()
 skipped_lines=()
+declared_lines=()
 
 if [[ "$HARNESS_EXIT" -ne 0 ]]; then
 	fail_lines+=("boot: headless_record exited $HARNESS_EXIT (hard crash / load failure?)")
@@ -166,7 +213,25 @@ fi
 # non-gate loader diagnostic (e.g. the <patch> tag), surfaced as info.
 while IFS= read -r line; do
 	msg="${line##*] }"
-	if [[ "$line" == *"could not be read"* || "$line" == *"Error while loading background"* || "$line" == *"Invalid bitmap index"* || "$line" == *"PNG file"*"is invalid"* ]]; then
+	if [[ "$line" == *"Error while loading background"* ]]; then
+		target="${msg##*: }"
+		if declared background "$target"; then
+			declared_lines+=("<background> $target")
+		else
+			fail_lines+=("missing target: $msg")
+		fi
+	elif [[ "$line" == *"could not be read"* ]]; then
+		# "Error loading HDPack: PNG file <src> could not be read."
+		target="${msg#*PNG file }"; target="${target% could not be read.}"
+		if declared img "$target"; then
+			declared_lines+=("<img> $target")
+		else
+			fail_lines+=("missing target: $msg")
+		fi
+	elif [[ "$line" == *"Invalid bitmap index"* || "$line" == *"PNG file"*"is invalid"* ]]; then
+		# Not a missing target: the file is present and wrong. An errata says
+		# "we checked, it is absent", which would be a false statement here, so
+		# these are never declarable (mep_errata.KNOWN_TAGS).
 		fail_lines+=("missing target: $msg")
 	elif [[ "$line" == *"OGG file not found"* ]]; then
 		if [[ "$ALLOW_MISSING_AUDIO" == "1" ]]; then
@@ -187,12 +252,19 @@ done
 for l in ${skipped_lines[@]+"${skipped_lines[@]}"}; do
 	echo "  SKIP: $l"
 done
+for l in ${declared_lines[@]+"${declared_lines[@]}"}; do
+	echo "  DECLARED: $l — known-missing per $(basename "$ERRATA") (ADR-0152)"
+done
 
 if [[ ${#fail_lines[@]} -eq 0 ]]; then
+	suffix=""
+	if [[ ${#declared_lines[@]} -gt 0 ]]; then
+		suffix=", ${#declared_lines[@]} known-missing target(s) declared by errata"
+	fi
 	if [[ ${#skipped_lines[@]} -gt 0 ]]; then
-		echo "PASS (${#skipped_lines[@]} user-supplied OGG(s) skipped — not supplied locally)"
+		echo "PASS (${#skipped_lines[@]} user-supplied OGG(s) skipped — not supplied locally$suffix)"
 	else
-		echo "PASS: boots with no missing img/tile/background/bgm/sfx targets"
+		echo "PASS: boots with no missing img/tile/background/bgm/sfx targets$suffix"
 	fi
 	exit 0
 fi

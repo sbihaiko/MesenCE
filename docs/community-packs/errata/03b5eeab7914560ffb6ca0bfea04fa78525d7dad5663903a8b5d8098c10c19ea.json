@@ -1,0 +1,14 @@
+{
+  "artifact_sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
+  "issue": 139,
+  "pack": "Zelda: Remastered 1.3 — The Legend of Zelda (USA)",
+  "known_missing": [
+    {
+      "manifest": "hires.txt",
+      "tag": "background",
+      "target": "selectscreen.png",
+      "reason": "Dead entry, verified against the shipped assets. selectscreen1..6.png are 512x480, 100% opaque and differ from one another by ~0.1% of their pixels: six frames of one full-screen image, driven at priority 1 by <condition>ZeldaSelectScreenframeN,frameRange,60,{50,40,30,20,10,0}, which covers the whole 60-frame cycle so one is always active. selectscreentop.png (12.4% opaque) draws over them at priority 39. A priority-10 full-screen layer between the two would cancel the animation, so this line reads as a leftover from a pre-animation build. HdPackLoader::ProcessBackgroundTag drops the entry at load, making the rendered screen identical with or without it.",
+      "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139"
+    }
+  ]
+}

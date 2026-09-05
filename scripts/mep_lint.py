@@ -57,6 +57,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import mep_content_id  # ADR-0139 tree content_id of the discovered pack root
+import mep_errata  # ADR-0152 reviewed known-missing declarations, shared with the smoke gate
 import pack_id_rules  # ADR-0140 source (1): SLUG shape of the MEP root `id`
 
 SECTION_PATHS = {"textures": "textures", "audio": "audio", "synth": "synth/preset.cfg", "border": "border"}
@@ -177,8 +178,12 @@ class Source:
 
 
 class Report:
-    def __init__(self):
+    def __init__(self, errata=None):
         self.items = []
+        #ADR-0152: the reviewed known-missing declarations for this exact
+        #artifact, or None. Only the targets it names are downgraded; every
+        #other unresolvable target keeps the ADR-0151 error.
+        self.errata = errata
         # Lower-cased paths of the ROM patches the manifest actually wires
         # (`<patch>` tags, pack.json `patches[]`), filled while linting so
         # scan_bundled_patches can tell a wired patch from one that merely
@@ -196,6 +201,18 @@ class Report:
 
     def info(self, where, msg):
         self.add("info", where, msg)
+
+    def missing_target(self, where, manifest, tag, target, msg):
+        #Single funnel for "the manifest references a file the artifact does
+        #not ship" (ADR-0151). Routing every such site through here is what
+        #keeps a future check from silently bypassing the errata contract.
+        if self.errata is not None and self.errata.covers(manifest, tag, target):
+            entry = self.errata.entry_for(manifest, tag, target)
+            self.info(where, f"<{tag}> {target} does not exist — declared known-missing by "
+                             f"MesenCE validation, not by the author (ADR-0152; {entry['reviewed_in']}): "
+                             f"{entry['reason']}")
+            return
+        self.error(where, msg)
 
     @property
     def errors(self):
@@ -866,7 +883,7 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
                     rep.warning(where, f"<img> {params} only exists as '{real.split('/')[-1]}' — fails on Linux")
                     imgs[len(imgs)] = png_size(src.read(real))
                 else:
-                    rep.error(where, f"<img> does not exist: {params}")
+                    rep.missing_target(where, rel, "img", params, f"<img> does not exist: {params}")
                     imgs[len(imgs)] = None
             else:
                 size = png_size(src.read(path))
@@ -1016,7 +1033,8 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     # case-mismatched-but-present target stays a warning (it does load on
     # macOS/Windows).
     for name, lines in sorted(missing.items(), key=lambda kv: -len(kv[1])):
-        rep.error(f"{rel}:{lines[0]}", f"<background> {name} does not exist — {len(lines)} entry/entries would be dropped at load (HdPackLoader::ProcessBackgroundTag)")
+        rep.missing_target(f"{rel}:{lines[0]}", rel, "background", name,
+                           f"<background> {name} does not exist — {len(lines)} entry/entries would be dropped at load (HdPackLoader::ProcessBackgroundTag)")
     for (ref, real), lines in badcase.items():
         rep.warning(f"{rel}:{lines[0]}", f"<background> {ref} only exists as '{real}' — loads on macOS/Windows, fails on Linux ({len(lines)} entry/entries)")
     if dups:
@@ -1063,7 +1081,7 @@ def lint_gbsms_hires(src: Source, rel: str, rep: Report):
         elif tag == "img":
             path = folder + params
             if not src.exists(path):
-                rep.error(where, f"<img> does not exist: {params}")
+                rep.missing_target(where, rel, "img", params, f"<img> does not exist: {params}")
                 imgs[len(imgs)] = None
             else:
                 imgs[len(imgs)] = png_size(src.read(path))
@@ -1204,12 +1222,17 @@ def main(argv):
     content_id_only = "--content-id" in argv
     list_games = "--list-games" in argv
     root_prefix = None
+    errata_path = None
     positional = []
     i = 1
     while i < len(argv):
         arg = argv[i]
         if arg == "--root" and i + 1 < len(argv) and not argv[i + 1].startswith("--"):
             root_prefix = argv[i + 1].rstrip("/")
+            i += 2
+            continue
+        if arg == "--errata" and i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+            errata_path = argv[i + 1]
             i += 2
             continue
         if not arg.startswith("--"):
@@ -1221,7 +1244,23 @@ def main(argv):
         print(f"error: {target} does not exist")
         return 2
     src = Source(target)
-    rep = Report()
+
+    #ADR-0152: an explicit --errata wins; otherwise, when the target is the
+    #downloaded artifact itself, look one up by its sha256. A directory has no
+    #artifact hash, so the CI path (which always lints the .zip) resolves
+    #automatically while a local run on an extracted tree must pass --errata.
+    errata = None
+    if errata_path is None and target.is_file():
+        found = mep_errata.resolve_for_artifact(target)
+        errata_path = str(found) if found else None
+    if errata_path is not None:
+        try:
+            errata = mep_errata.load(errata_path)
+        except mep_errata.ErrataError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    rep = Report(errata)
 
     if list_games:
         # ADR-0143: enumerate the distinct game pack roots so the pipeline
@@ -1316,6 +1355,16 @@ def main(argv):
                 lint_hires(src, hires, rep)
 
     scan_bundled_patches(src, rep)
+
+    if errata is not None:
+        rep.info("errata", f"{errata.path.name}: {len(errata.entries)} known-missing declaration(s) applied (ADR-0152)")
+        for manifest, tag, target_name in errata.unused:
+            #A declaration that matched nothing does not describe this artifact.
+            #Left as a warning it would rot into a blanket pardon nobody rereads,
+            #so it fails the pack that carries it.
+            rep.error("errata", f"{errata.path.name} declares <{tag}> {target_name} in {manifest} "
+                                f"as known-missing, but no such unresolvable target was found — "
+                                f"the declaration does not describe this artifact")
 
     for level, where, msg in rep.items:
         # The bundled-patch lines are the ADR-0144 signal the classifier
