@@ -135,6 +135,18 @@ game that reads uninitialised memory take a different path, and two runs over
 identical frames still differ. The harness zeroes it, as the core's own
 deterministic replay harness already does (`RecordedRomTest::Run`).
 
+Deterministic power-on RAM is therefore **part of this decision, not an
+implementation detail**, and it has a cost worth stating plainly: a game that
+seeds its RNG from uninitialised memory now behaves *identically in every
+recording*. Where a recording library previously got some free variety by
+running the same ROM more than once — different enemy patterns, different
+random level furniture, and therefore different tiles captured — it now gets
+the same run every time. Variety has to come from the script instead. If a
+future slice wants spread across recordings, the way to get it is an explicit,
+recorded seed (a `ramseed=` argument selecting a fixed pattern per run), never
+a return to `RamState::Random`, which would trade the reproducibility of
+section 4 away to buy it.
+
 **3. The headless path is a runtime mode, not a compile-time one.** No
 `#ifdef` in `Core/`. The libretro fork spreads `#ifdef LIBRETRO` through
 `Emulator.{h,cpp}`, `KeyManager`, `SoundMixer`, `WaveRecorder` and
