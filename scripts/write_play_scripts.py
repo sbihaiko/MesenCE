@@ -123,7 +123,33 @@ def excitebike(seconds):
     return _repeat_until(intro, cycle, seconds)
 
 
+def double_dragon(seconds):
+    # SELECT is what leaves the title screen (issue #163). Start does nothing
+    # there - 75 s of Start, held or pulsed, ends on the copyright screen, and
+    # the title never falls through to an attract demo either, which is what
+    # made this look like a hung game. SELECT opens MODE A/B x 1/2 PLAYER with
+    # the cursor already on "MODE A 1PLAYER"; Start then confirms it and stage
+    # 1 begins. Both facts came from probes, not from memory of the game.
+    intro = ["3 -", "0.2 S", "0.5 -", "0.2 T", "3 -"]
+    # B punches, A kicks. Right-heavy because the street scrolls right, but the
+    # scroll is locked until the on-screen enemies are down, so the attacks are
+    # what actually moves the recording through the stage; the occasional Left
+    # is for the enemies that walk in from behind.
+    fight = ["0.8 R", "0.15 B", "0.2 -", "0.15 B", "0.25 -", "0.6 R",
+             "0.15 A", "0.3 -", "0.5 R", "0.15 B", "0.2 -", "0.4 L",
+             "0.15 B", "0.25 -", "0.8 R", "0.15 A", "0.3 -", "0.6 R",
+             "0.15 B", "0.4 -"]
+    # Start *pairs* only, never a lone Start: in game Start pauses, so a single
+    # one every N seconds would leave the recording paused half the time. A
+    # pair is a no-op during play and answers the CONTINUE prompt after a
+    # game over (the cursor starts on CONTINUE), at the cost of the run being
+    # paused until the next pair comes round.
+    cycle = fight * 3 + ["0.2 T", "0.5 -", "0.2 T", "0.5 -"]
+    return _repeat_until(intro, cycle, seconds)
+
+
 SCRIPTS = {
+    "Double Dragon (1988) (Technos)": double_dragon,
     "Excitebike (1984) (Nintendo)": excitebike,
     "Mike Tyson's Punch-Out!! (1987) (Nintendo)": punch_out,
     "The Legend of Zelda (1987) (Nintendo)": zelda,
@@ -132,14 +158,9 @@ SCRIPTS = {
 
 # Games known to need a script that does not exist yet. Recorded here so the
 # next person does not re-derive the diagnosis.
-KNOWN_UNSOLVED = {
-    "Double Dragon (1988) (Technos)":
-        "the title screen never advances - 75 s of Start, A, B and Select "
-        "each leave it on the copyright screen, and it never falls through "
-        "to an attract demo either. Not diagnosed: a bad dump and an "
-        "emulation fault look the same from here. Needs a human with a "
-        "reference build. Tracked as issue #163.",
-}
+# Double Dragon lived here until issue #163 was closed: the diagnosis was
+# never an emulation fault, it was the wrong button - see double_dragon().
+KNOWN_UNSOLVED = {}
 
 
 def main(argv=None):
