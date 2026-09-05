@@ -5,7 +5,34 @@
 #include "Shared/MessageManager.h"
 #include "Shared/NotificationManager.h"
 
-HeadlessInputProvider::HeadlessInputProvider(Emulator* emu)
+namespace
+{
+	//The live control device, seen through the engine's narrow interface.
+	//Stack-allocated once per frame; holds no state of its own.
+	class ControlDeviceTarget : public IHeadlessInputTarget
+	{
+	private:
+		BaseControlDevice* _device = nullptr;
+
+	public:
+		ControlDeviceTarget(BaseControlDevice* device) { _device = device; }
+
+		uint8_t GetPort() override { return _device->GetPort(); }
+
+		vector<HeadlessButtonName> GetButtonNames() override
+		{
+			vector<HeadlessButtonName> names;
+			for(DeviceButtonName& button : _device->GetKeyNameAssociations()) {
+				names.push_back({ button.Name, button.ButtonId, button.IsNumeric });
+			}
+			return names;
+		}
+
+		void PressButton(int buttonId) override { _device->SetBitValue((uint8_t)buttonId, true); }
+	};
+}
+
+HeadlessInputProvider::HeadlessInputProvider(Emulator* emu) : _engine(this)
 {
 	_emu = emu;
 }
@@ -18,91 +45,53 @@ void HeadlessInputProvider::Init()
 
 bool HeadlessInputProvider::LoadScript(const string& text, double frameRate, string& error)
 {
-	vector<HeadlessInputStep> steps;
-	if(!HeadlessInputScript::Parse(text, frameRate, steps, error)) {
-		return false;
-	}
-
-	auto lock = _lock.AcquireSafe();
-	_steps = steps;
-	return true;
+	return _engine.LoadScript(text, frameRate, error);
 }
 
 void HeadlessInputProvider::SetPauseFrame(uint32_t frame)
 {
-	auto lock = _lock.AcquireSafe();
-	_pauseFrame = frame;
-	_pauseRequested = false;
+	_engine.SetPauseFrame(frame);
 }
 
 uint32_t HeadlessInputProvider::GetScriptFrameCount()
 {
-	auto lock = _lock.AcquireSafe();
-	return HeadlessInputScript::GetFrameCount(_steps);
-}
-
-void HeadlessInputProvider::ApplyToDevice(BaseControlDevice* device, const HeadlessInputStep& step)
-{
-	if(step.Buttons.empty()) {
-		return;
-	}
-
-	//Resolved by name rather than by bit index: the same script letter is a
-	//different bit on a NES pad, a GB pad and a SMS pad, and a name the loaded
-	//device does not expose simply never matches.
-	for(DeviceButtonName& button : device->GetKeyNameAssociations()) {
-		if(button.IsNumeric) {
-			continue;
-		}
-		for(const string& name : step.Buttons) {
-			if(name == button.Name) {
-				device->SetBitValue((uint8_t)button.ButtonId, true);
-				break;
-			}
-		}
-	}
+	return _engine.GetScriptFrameCount();
 }
 
 bool HeadlessInputProvider::SetInput(BaseControlDevice* device)
 {
-	uint32_t frame = _emu->GetFrameCount();
-
-	auto lock = _lock.AcquireSafe();
-
-	//The harness drives port 1 only (it forces a standard controller there -
-	//without a control device the whole provider chain is never consulted).
-	if(device->GetPort() == 0) {
-		const HeadlessInputStep* step = HeadlessInputScript::GetStep(_steps, frame);
-		if(step) {
-			ApplyToDevice(device, *step);
-		}
-	}
-
-	//The run's end, decided inside the frame it lands on rather than by a host
-	//timer that fires whenever the OS gets round to it. Pause() only sets a
-	//flag; the emulation thread parks after finishing this frame, so the run
-	//covers exactly [0, _pauseFrame) frames on every host.
-	if(!_pauseRequested && frame >= _pauseFrame) {
-		_pauseRequested = true;
-		if(_emu->IsDebugging()) {
-			//Emulator::Pause() steps the debugger instead of setting the flag,
-			//which is not something to do from the emulation thread.
-			MessageManager::Log("[Headless] frame " + std::to_string(frame) + " reached, but the debugger is attached - not pausing");
-		} else {
-			_emu->Pause();
-		}
-	}
-
-	//Overlay on top of whatever the physical input produced, never replace it
-	return false;
+	ControlDeviceTarget target(device);
+	return _engine.ApplyFrame(target);
 }
 
 void HeadlessInputProvider::ProcessNotification(ConsoleNotificationType type, void* parameter)
 {
 	if(type == ConsoleNotificationType::GameLoaded) {
-		//A new console - and with it a new control manager, holding no
-		//providers - is created on every game load. This is the root of the
-		//"input= is silently a no-op" trap the harness used to work around.
-		_emu->RegisterInputProvider(this);
+		_engine.OnGameLoaded();
 	}
+}
+
+uint32_t HeadlessInputProvider::GetFrameCount()
+{
+	return _emu->GetFrameCount();
+}
+
+bool HeadlessInputProvider::IsDebugging()
+{
+	return _emu->IsDebugging();
+}
+
+void HeadlessInputProvider::Pause()
+{
+	_emu->Pause();
+}
+
+void HeadlessInputProvider::RegisterInputProvider()
+{
+	_emu->RegisterInputProvider(this);
+}
+
+void HeadlessInputProvider::Log(const string& message)
+{
+	MessageManager::Log(message);
 }

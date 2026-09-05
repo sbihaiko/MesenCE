@@ -1,9 +1,8 @@
 #pragma once
 #include "pch.h"
-#include "Shared/HeadlessInputScript.h"
+#include "Shared/HeadlessInputEngine.h"
 #include "Shared/Interfaces/IInputProvider.h"
 #include "Shared/Interfaces/INotificationListener.h"
-#include "Utilities/SimpleLock.h"
 
 class BaseControlDevice;
 class Emulator;
@@ -24,23 +23,33 @@ class Emulator;
 //frames the script declares, which is what makes two runs byte-identical
 //(ADR-0157 section 4).
 //
+//H9 (ADR-0127): the decisions above no longer live here. This class is the
+//stateful partner of Core/Shared/HeadlessInputEngine.{h,cpp} - it binds the
+//live Emulator and the live BaseControlDevice to the engine's two narrow
+//interfaces and forwards. Everything the engine decides is covered without a
+//ROM by scripts/core_unit_tests.cpp (Bloco R); what is left here is the
+//binding itself, which only a real core can exercise.
+//
 //Prior art: zerkz/MesenCE's Core/Shared/InputOverrideProvider.{h,cpp} (GPLv3,
 //same licence as this tree) - the IInputProvider shape, resolving buttons by
 //name through GetKeyNameAssociations(), overlaying instead of replacing, and
 //the GameLoaded re-registration. This version differs where it matters for
 //F9.14: it holds the whole script in absolute frame numbers rather than one
 //override expiring N frames from "now", which is what makes it reproducible.
-class HeadlessInputProvider : public IInputProvider, public INotificationListener, public std::enable_shared_from_this<HeadlessInputProvider>
+//The fake-core test model is prior art too: lusid/MesenCE's UI.Tests/Mcp/
+//(GPLv3), which drives an automation surface through a faked emulator API.
+class HeadlessInputProvider : public IInputProvider, public INotificationListener, private IHeadlessInputHost, public std::enable_shared_from_this<HeadlessInputProvider>
 {
 private:
 	Emulator* _emu = nullptr;
-	SimpleLock _lock;
+	HeadlessInputEngine _engine;
 
-	vector<HeadlessInputStep> _steps;
-	uint32_t _pauseFrame = UINT32_MAX;
-	bool _pauseRequested = false;
-
-	void ApplyToDevice(BaseControlDevice* device, const HeadlessInputStep& step);
+	//IHeadlessInputHost - the Emulator, reduced to what the engine asks of it.
+	uint32_t GetFrameCount() override;
+	bool IsDebugging() override;
+	void Pause() override;
+	void RegisterInputProvider() override;
+	void Log(const string& message) override;
 
 public:
 	HeadlessInputProvider(Emulator* emu);

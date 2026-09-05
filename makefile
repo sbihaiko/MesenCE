@@ -343,6 +343,7 @@ core-unit-tests:
 	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \
 	  Core/Shared/EnhancementPacks/MepContentId.cpp \
 	  Core/Shared/HeadlessInputScript.cpp \
+	  Core/Shared/HeadlessInputEngine.cpp \
 	  Core/Shared/MessageManager.cpp \
 	  Core/Shared/Video/BorderLayout.cpp \
 	  Core/NES/HdPacks/OggMixer.cpp \

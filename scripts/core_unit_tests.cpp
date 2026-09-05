@@ -30,7 +30,12 @@
 //grids - status-bar detection, grid phase advantage, vocabulary counts and the
 //`misc` isolation rule, mutual-predictability grouping over background
 //adjacency and (F9.5) over OAM offsets, scroll matching, and
-//SheetRender's geometry and sidecar JSON. Run from the repo root so the golden paths
+//SheetRender's geometry and sidecar JSON. Bloco Q (ADR-0157, F9.14) covers
+//HeadlessInputScript, the parser that turns a play script into absolute frame
+//ranges; Bloco R (H9) covers HeadlessInputEngine, the stateful half, driven
+//against a fake host and a fake control device - frame boundaries, overlay
+//semantics, the GameLoaded re-registration and the stop frame, with no
+//Emulator and no ROM. Run from the repo root so the golden paths
 //and the `python3 scripts/mep_recipe.py` shell-out resolve.
 #include "Shared/Audio/ChannelRoleClassifier.h"
 #include "Shared/Audio/EnhancedSynthEngine.h"
@@ -42,6 +47,7 @@
 #include "Shared/MessageManager.h"
 #include "Shared/Video/BorderLayout.h"
 #include "Shared/Video/AspectRatioMath.h"
+#include "Shared/HeadlessInputEngine.h"
 #include "Shared/HeadlessInputScript.h"
 #include "Shared/ShortcutKeyRules.h"
 #include "NES/HdPacks/MetatileVocabulary.h"
@@ -3659,6 +3665,362 @@ namespace
 		Check(has(steps[0], "b") && has(steps[0], "one"), "BlocoQ: \"B\" is \"b\" and \"one\"");
 		Check(has(steps[1], "start") && has(steps[1], "pause"), "BlocoQ: \"T\" is \"start\" and the SMS \"pause\"");
 	}
+
+	//--- Bloco R: headless input engine (H9, ADR-0127/ADR-0157) --------------
+	//The stateful half of the headless harness, driven against a fake core:
+	//HeadlessInputEngine plus a fake host (the Emulator's frame counter, pause
+	//and re-registration) and a fake target (a control device's named
+	//buttons). Until H9 the only thing that exercised any of this was a
+	//40-300 s recording with a real ROM, which is why an input regression used
+	//to cost whole recordings before anyone noticed.
+	//
+	//Test model borrowed from lusid/MesenCE's UI.Tests/Mcp/ (GPLv3, same
+	//licence): fake the core at a seam narrow enough to be honest, then drive
+	//the surface through realistic frame sequences rather than single calls.
+
+	class FakeHeadlessHost : public IHeadlessInputHost
+	{
+	public:
+		uint32_t Frame = 0;
+		bool Debugging = false;
+
+		int PauseCalls = 0;
+		uint32_t PausedOnFrame = UINT32_MAX;
+		int RegisterCalls = 0;
+		std::vector<std::string> Logs;
+
+		uint32_t GetFrameCount() override { return Frame; }
+		bool IsDebugging() override { return Debugging; }
+		void Pause() override { PauseCalls++; PausedOnFrame = Frame; }
+		void RegisterInputProvider() override { RegisterCalls++; }
+		void Log(const std::string& message) override { Logs.push_back(message); }
+	};
+
+	//A fake control device. Button ids mirror an NES pad's layout; what
+	//matters is that the engine resolves by name, never by index.
+	class FakeHeadlessPad : public IHeadlessInputTarget
+	{
+	public:
+		uint8_t Port = 0;
+		std::vector<HeadlessButtonName> Names;
+		std::vector<int> Pressed;
+		int GetButtonNamesCalls = 0;
+
+		uint8_t GetPort() override { return Port; }
+
+		std::vector<HeadlessButtonName> GetButtonNames() override
+		{
+			GetButtonNamesCalls++;
+			return Names;
+		}
+
+		void PressButton(int buttonId) override { Pressed.push_back(buttonId); }
+
+		bool IsPressed(int buttonId) const
+		{
+			return std::find(Pressed.begin(), Pressed.end(), buttonId) != Pressed.end();
+		}
+
+		//The frame's pressed set, as button names, sorted - a readable
+		//per-frame signature to compare a whole run against.
+		std::string Signature() const
+		{
+			std::vector<std::string> names;
+			for(int id : Pressed) {
+				for(const HeadlessButtonName& button : Names) {
+					if(button.ButtonId == id) {
+						names.push_back(button.Name);
+						break;
+					}
+				}
+			}
+			std::sort(names.begin(), names.end());
+			std::string result;
+			for(const std::string& name : names) {
+				result += (result.empty() ? "" : "+") + name;
+			}
+			return result.empty() ? "-" : result;
+		}
+	};
+
+	FakeHeadlessPad MakeFakeNesPad()
+	{
+		FakeHeadlessPad pad;
+		pad.Names = {
+			{ "a", 0, false }, { "b", 1, false }, { "select", 2, false }, { "start", 3, false },
+			{ "up", 4, false }, { "down", 5, false }, { "left", 6, false }, { "right", 7, false },
+			//A numeric entry, as the keyboard-ish devices expose: the engine
+			//must skip it rather than match a script letter against a key code.
+			{ "1", 8, true },
+		};
+		return pad;
+	}
+
+	//Runs frames [0, frameCount) and returns one signature per frame, with a
+	//fresh target each frame - exactly as the real chain does.
+	std::vector<std::string> RunHeadlessFrames(HeadlessInputEngine& engine, FakeHeadlessHost& host, uint32_t frameCount, bool& everReplaced)
+	{
+		std::vector<std::string> timeline;
+		everReplaced = false;
+		for(uint32_t frame = 0; frame < frameCount; frame++) {
+			host.Frame = frame;
+			FakeHeadlessPad pad = MakeFakeNesPad();
+			if(engine.ApplyFrame(pad)) {
+				everReplaced = true;
+			}
+			timeline.push_back(pad.Signature());
+		}
+		return timeline;
+	}
+
+	std::string JoinHeadlessTimeline(const std::vector<std::string>& timeline)
+	{
+		std::string joined;
+		for(const std::string& frame : timeline) {
+			joined += (joined.empty() ? "" : " ") + frame;
+		}
+		return joined;
+	}
+
+	void TestHeadlessEngineStepOwnsItsStartFrameAndIsGoneAtItsEnd()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		Check(engine.LoadScript("3f A\n2f -\n2f B\n", HeadlessInputScript::NtscFrameRate, error),
+			"BlocoR: the script loads", error);
+		Check(engine.GetScriptFrameCount() == 7, "BlocoR: the loaded script is 7 frames long");
+
+		bool everReplaced = false;
+		std::vector<std::string> timeline = RunHeadlessFrames(engine, host, 9, everReplaced);
+
+		//Half-open ranges: [0,3) is A, [3,5) is nothing, [5,7) is B, and past
+		//the end of the script the provider presses nothing at all.
+		std::vector<std::string> expected = { "a", "a", "a", "-", "-", "b", "b", "-", "-" };
+		Check(timeline == expected, "BlocoR: every frame of the run carries exactly the step that owns it",
+			JoinHeadlessTimeline(timeline));
+
+		//The two boundaries, named on their own so a one-frame slip says which
+		//end moved.
+		Check(timeline[2] == "a" && timeline[3] == "-",
+			"BlocoR: a step owns its last frame and is gone on its end frame");
+		Check(timeline[4] == "-" && timeline[5] == "b",
+			"BlocoR: the next step starts on its own start frame, not one late");
+	}
+
+	void TestHeadlessEngineOverlaysRatherThanReplaces()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		Check(engine.LoadScript("4f A\n", HeadlessInputScript::NtscFrameRate, error),
+			"BlocoR: the overlay script loads", error);
+
+		bool everReplaced = false;
+		RunHeadlessFrames(engine, host, 6, everReplaced);
+		Check(!everReplaced, "BlocoR: ApplyFrame always returns false - the script overlays physical input, never replaces it");
+
+		//The physical input already pressed Right this frame; the script adds
+		//A on top of it and takes nothing away.
+		FakeHeadlessPad pad = MakeFakeNesPad();
+		pad.Pressed.push_back(7);
+		host.Frame = 1;
+		engine.ApplyFrame(pad);
+		Check(pad.IsPressed(7) && pad.IsPressed(0), "BlocoR: a button the physical input pressed survives the overlay");
+	}
+
+	void TestHeadlessEngineDrivesPortOneOnly()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		engine.LoadScript("4f A\n", HeadlessInputScript::NtscFrameRate, error);
+
+		FakeHeadlessPad pad = MakeFakeNesPad();
+		pad.Port = 1;
+		host.Frame = 0;
+		engine.ApplyFrame(pad);
+		Check(pad.Pressed.empty(), "BlocoR: a device on port 2 is left alone");
+
+		pad.Port = 0;
+		engine.ApplyFrame(pad);
+		Check(pad.IsPressed(0), "BlocoR: the same device on port 1 gets the step");
+	}
+
+	void TestHeadlessEngineResolvesButtonsByName()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+		std::string error;
+
+		//A device that exposes none of the script's names is simply never
+		//touched - that is what lets one script drive NES, GB and SMS.
+		FakeHeadlessPad exotic;
+		exotic.Names = { { "paddle", 0, false } };
+		engine.LoadScript("2f A\n", HeadlessInputScript::NtscFrameRate, error);
+		host.Frame = 0;
+		engine.ApplyFrame(exotic);
+		Check(exotic.Pressed.empty(), "BlocoR: a name the loaded device does not expose is never applied");
+
+		//An empty step ("-") does not even ask the device for its names.
+		FakeHeadlessPad nes = MakeFakeNesPad();
+		engine.LoadScript("2f -\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.ApplyFrame(nes);
+		Check(nes.Pressed.empty() && nes.GetButtonNamesCalls == 0, "BlocoR: an empty step presses nothing");
+
+		//A numeric association is a key code, not a button name, so it is
+		//skipped rather than matched against a script letter.
+		nes = MakeFakeNesPad();
+		engine.LoadScript("2f S\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.ApplyFrame(nes);
+		Check(nes.IsPressed(2) && !nes.IsPressed(8), "BlocoR: numeric key associations are skipped");
+	}
+
+	void TestHeadlessEngineStopsOnExactlyTheStopFrame()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		engine.LoadScript("60f -\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.SetPauseFrame(10);
+
+		for(uint32_t frame = 0; frame < 10; frame++) {
+			host.Frame = frame;
+			FakeHeadlessPad early = MakeFakeNesPad();
+			engine.ApplyFrame(early);
+		}
+		Check(host.PauseCalls == 0, "BlocoR: frames before the stop frame do not pause the run");
+
+		host.Frame = 10;
+		FakeHeadlessPad pad = MakeFakeNesPad();
+		engine.ApplyFrame(pad);
+		Check(host.PauseCalls == 1 && host.PausedOnFrame == 10,
+			"BlocoR: the run pauses from inside frame 10, the frame it was told to stop on");
+
+		for(uint32_t frame = 11; frame < 20; frame++) {
+			host.Frame = frame;
+			FakeHeadlessPad more = MakeFakeNesPad();
+			engine.ApplyFrame(more);
+		}
+		Check(host.PauseCalls == 1, "BlocoR: the stop fires once, not once per frame after it");
+
+		//With no stop frame set (UINT32_MAX) a run is never paused, however
+		//long it goes on.
+		FakeHeadlessHost quiet;
+		HeadlessInputEngine idle(&quiet);
+		idle.LoadScript("5f -\n", HeadlessInputScript::NtscFrameRate, error);
+		bool everReplaced = false;
+		RunHeadlessFrames(idle, quiet, 200, everReplaced);
+		Check(quiet.PauseCalls == 0, "BlocoR: with no stop frame set the run is never paused");
+	}
+
+	void TestHeadlessEngineStopSurvivesASkippedFrame()
+	{
+		//The frame counter is the core's, and the provider is not promised to
+		//see every value of it: a loaded state or a run-ahead frame can jump
+		//it. The stop must fire on the first frame that reaches it.
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		engine.LoadScript("60f -\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.SetPauseFrame(10);
+
+		FakeHeadlessPad pad = MakeFakeNesPad();
+		host.Frame = 3;
+		engine.ApplyFrame(pad);
+		host.Frame = 25;
+		engine.ApplyFrame(pad);
+		Check(host.PauseCalls == 1 && host.PausedOnFrame == 25,
+			"BlocoR: a frame counter that jumps past the stop frame still stops the run");
+
+		//Re-arming: a new stop frame after a run has already stopped works,
+		//which is what makes a second recording in the same process possible.
+		engine.SetPauseFrame(40);
+		host.Frame = 39;
+		engine.ApplyFrame(pad);
+		Check(host.PauseCalls == 1, "BlocoR: setting a new stop frame re-arms the latch rather than firing it");
+		host.Frame = 40;
+		engine.ApplyFrame(pad);
+		Check(host.PauseCalls == 2 && host.PausedOnFrame == 40, "BlocoR: the re-armed latch fires on the new stop frame");
+	}
+
+	void TestHeadlessEngineDoesNotPauseUnderTheDebugger()
+	{
+		FakeHeadlessHost host;
+		host.Debugging = true;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		engine.LoadScript("60f -\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.SetPauseFrame(4);
+
+		bool everReplaced = false;
+		RunHeadlessFrames(engine, host, 8, everReplaced);
+		Check(host.PauseCalls == 0, "BlocoR: with the debugger attached the run is not paused from the emulation thread");
+		Check(host.Logs.size() == 1 && host.Logs[0].find("frame 4") != std::string::npos,
+			"BlocoR: it says so once, naming the frame it reached");
+	}
+
+	void TestHeadlessEngineReRegistersWhenAGameLoads()
+	{
+		//A new console - and with it a new control manager, holding no
+		//providers - is created on every game load. Forgetting this is the
+		//"input= is silently a no-op" trap, and it costs a whole recording.
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		Check(host.RegisterCalls == 0, "BlocoR: constructing the engine registers nothing");
+		engine.OnGameLoaded();
+		Check(host.RegisterCalls == 1, "BlocoR: a game load re-registers the provider");
+		engine.OnGameLoaded();
+		engine.OnGameLoaded();
+		Check(host.RegisterCalls == 3, "BlocoR: every game load re-registers, not just the first");
+	}
+
+	void TestHeadlessEngineKeepsTheOldScriptWhenANewOneIsRejected()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		Check(engine.LoadScript("2f A\n", HeadlessInputScript::NtscFrameRate, error), "BlocoR: the first script loads", error);
+		Check(!engine.LoadScript("3 A\n", HeadlessInputScript::NtscFrameRate, error), "BlocoR: a bare-count script is rejected");
+		Check(!error.empty(), "BlocoR: the rejection carries an error message");
+
+		bool everReplaced = false;
+		std::vector<std::string> timeline = RunHeadlessFrames(engine, host, 3, everReplaced);
+		Check(engine.GetScriptFrameCount() == 2 && timeline[0] == "a" && timeline[2] == "-",
+			"BlocoR: a rejected script leaves the loaded one running, it does not blank the run");
+	}
+
+	void TestHeadlessEngineReplaysAWholeSequence()
+	{
+		//The realistic shape: a script a person would actually write, run
+		//frame by frame to its declared stop, checked as a whole timeline.
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+
+		std::string error;
+		Check(engine.LoadScript("# boot\n2f -\n\n3f T\n2f R\n1f A\n", HeadlessInputScript::NtscFrameRate, error),
+			"BlocoR: a commented, blank-line-bearing script loads", error);
+		uint32_t frames = engine.GetScriptFrameCount();
+		Check(frames == 8, "BlocoR: the whole sequence is 8 frames");
+
+		engine.SetPauseFrame(frames);
+
+		bool everReplaced = false;
+		std::vector<std::string> timeline = RunHeadlessFrames(engine, host, frames + 2, everReplaced);
+		std::vector<std::string> expected = { "-", "-", "start", "start", "start", "right", "right", "a", "-", "-" };
+		Check(timeline == expected, "BlocoR: the run replays the script exactly, frame for frame",
+			JoinHeadlessTimeline(timeline));
+		Check(host.PauseCalls == 1 && host.PausedOnFrame == frames,
+			"BlocoR: it stops on the frame after the script's last, so the run covers exactly the declared frames");
+	}
 }
 
 int main()
@@ -3780,6 +4142,17 @@ int main()
 	TestHeadlessScriptStepsAreAbsoluteAndContiguous();
 	TestHeadlessScriptResolvesTheFrameBoundary();
 	TestHeadlessScriptButtonNamesCoverEveryConsole();
+
+	TestHeadlessEngineStepOwnsItsStartFrameAndIsGoneAtItsEnd();
+	TestHeadlessEngineOverlaysRatherThanReplaces();
+	TestHeadlessEngineDrivesPortOneOnly();
+	TestHeadlessEngineResolvesButtonsByName();
+	TestHeadlessEngineStopsOnExactlyTheStopFrame();
+	TestHeadlessEngineStopSurvivesASkippedFrame();
+	TestHeadlessEngineDoesNotPauseUnderTheDebugger();
+	TestHeadlessEngineReRegistersWhenAGameLoads();
+	TestHeadlessEngineKeepsTheOldScriptWhenANewOneIsRejected();
+	TestHeadlessEngineReplaysAWholeSequence();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;
