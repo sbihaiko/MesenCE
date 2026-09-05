@@ -118,6 +118,44 @@ namespace MesenSheets
 	//evenly spread probes cover both shapes, and every probe still has to
 	//clear the full evidence bar on its own.
 	constexpr uint32_t kStitchTransitionProbes = 3;
+	//---- F9.12: a continuous region ends when the world is replaced ---------
+	//
+	//Continuous mode had no notion of "this is a different place". Its only cut
+	//was a whole-frame match below kMinMatch (0.5), and 0.5 is unreachable for a
+	//screen swap that keeps the terrain: Super Mario Bros.' title screen is
+	//drawn on top of the very start of world 1-1 - same hill, same bushes, same
+	//ground - with a logo panel and a menu stamped into the sky. So the
+	//title-to-level step reports dx == 0 ("the camera did not move") at a high
+	//score, no cut fires, and PaintFrame's first-writer-wins bakes the logo,
+	//"ONE PLUMBER / TWO PLUMBERS" and "TOP- 000000" into the level map's sky.
+	//There is no seam in map-000.png because there is no offset: the two
+	//screens are superimposed on the same world columns.
+	//
+	//The rule: a step that does *not* claim the camera moved is a claim that
+	//both frames show the same place, so the whole playfield has to agree.
+	//Below this share it did not - the content was replaced, not continued -
+	//and the region ends. A step that does claim a shift is judged exactly as
+	//before (kMinMatch), so a genuine scroller is not touched by this rule at
+	//all: that is the Excitebike guard, by construction rather than by tuning.
+	//
+	//Measured, not swept, and not on a fresh recording - this slice may not
+	//relink the capture tool. The numbers come off the 21 stable screens the
+	//Super Mario Bros. recording installed under
+	//`auto/textures/backgrounds/screen*.orig.png`, compared cell by cell (8x8,
+	//pixel-exact) at the shift the stitcher accepts:
+	//  - title screen vs the level's first screen: 0.700 agreement at dx == 0,
+	//    i.e. 30 % of the playfield is title art the level does not have. It
+	//    scores 0.699-0.700 against every one of the 19 level screens.
+	//  - level screen vs the next level screen (camera still): 0.996-0.999.
+	//  - Excitebike's screen001 vs screen002 (two unrelated non-scrolling
+	//    screens): 0.746.
+	//0.85 is the midpoint of that gap (0.848), so it sits ~0.15 above the
+	//overlay case and ~0.15 below the tightest genuine same-place step. The
+	//pixel-exact comparison is a proxy for the recorder's palette-agnostic
+	//shape ids, and it can only *under*-count agreement (two cells that differ
+	//only in palette read as different here and as equal in the stitcher), so
+	//the genuine-step figures are a lower bound.
+	constexpr double kStitchWorldAgree = 0.85;
 	//Continuous mode: accept a non-zero x shift only when it beats "the camera
 	//did not move" by this much. On near-uniform content every offset scores
 	//alike and the argmax is arbitrary - that is how a still game grows a
@@ -165,6 +203,11 @@ namespace MesenSheets
 		//recorder collapses duplicates, so "the screen held still for N frames"
 		//reads as RepeatCount >= N instead of a run length in the stream.
 		uint32_t RepeatCount = 1;
+		//F9.9 (ADR-0156): this frame was written out as
+		//backgrounds/screenNNN.png, so a `<background>` layer covers it at
+		//render time. Set by HdPackBuilder when CaptureScreen succeeds; the
+		//inference reads it to decide which cells the screen surface owns.
+		bool Captured = false;
 
 		GridFrame() { Clear(); }
 		void Clear()
@@ -260,6 +303,14 @@ namespace MesenSheets
 		uint32_t Count = 0;
 		SheetContext Context = SheetContext::Scene;
 		bool Aligned = true; //false when only ever seen off the chosen phase
+		//F9.9 (ADR-0156): every sighting of this cell, in the whole recorded
+		//stream, sat where a captured screen already shows it, under the same
+		//fine scroll. A `<background>` therefore covers it wherever it appears,
+		//so its tile art is never the pixel that reaches the screen and a cell
+		//spent on it in metatiles.png is dead paint. Kept in the vocabulary
+		//(indexes are addresses - maps, objects and sprites cite them), left
+		//off the contact sheet.
+		bool ScreenResident = false;
 	};
 
 	//Directed adjacency counts between vocabulary entries, keyed (A, B).

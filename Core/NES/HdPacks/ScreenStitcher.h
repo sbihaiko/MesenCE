@@ -42,8 +42,21 @@ namespace MesenSheets
 	//both have something to say.
 	StitchedMap StitchScreens(const std::vector<GridFrame>& frames, const std::vector<const GridFrame*>& screens, const Vocabulary& vocab);
 
-	//Continuous stitching: accumulated per-frame x shift, a cut below 0.5 match
-	//starts a new region.
+	//Continuous stitching: accumulated per-frame x shift, a cut starts a new
+	//region.
+	//
+	//F9.12 - the cut bar depends on what the step claims. A step that claims a
+	//shift is cut below kMinMatch, as before. A step that does *not* - dx == 0,
+	//or an argmax that cannot beat standing still (F9.8) - is a claim that both
+	//frames show the same place, so it is cut below kStitchWorldAgree, measured
+	//on "the camera did not move" rather than on the argmax. Without that, a
+	//title/menu/cutscene screen that shares the level's terrain is welded into
+	//the level map at offset zero: Super Mario Bros.' title screen is 1-1's
+	//first screen with a logo panel and a menu stamped into the sky, agrees
+	//with it over 0.700 of the playfield, and its logo, "ONE PLUMBER / TWO
+	//PLUMBERS" and "TOP- 000000" ended up in map-000.png as level art. The rule
+	//deliberately leaves scrolling steps alone, which is what keeps
+	//Excitebike's continuous track in one piece (see TileSheetTypes.h).
 	std::vector<StitchedMap> StitchContinuous(const std::vector<GridFrame>& frames, const Vocabulary& vocab, uint32_t frameStep);
 
 	//The whole F9.2 pass: runs the screen stitcher first and falls back to the

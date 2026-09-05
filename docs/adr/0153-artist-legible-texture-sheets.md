@@ -11,7 +11,9 @@
   `BuildObjectSheets`' clustering while keeping its inert
   `# inferred … tileNearby` output contract; **amended 2026-09-05** (§1 grid
   criterion, §3 `misc`/`hud` rules, §4 schema) after the first measurements on
-  real recordings contradicted the criterion this ADR was accepted with
+  real recordings contradicted the criterion this ADR was accepted with;
+  **amended 2026-09-05** again (§6 continuous cut rule, F9.12) after a title
+  screen was found welded into a level map
 
 ## Context
 
@@ -277,6 +279,38 @@ spans more than 512 px, the continuous result is emitted instead; a cut always
 starts a new `map-NNN.png`. Either way the map is a *paint surface*: nothing in
 `hires.txt` references it, and `mep_build.py` slices it back into per-tile
 crops via `placements[]`. The runtime keeps using `<tile>`/`<background>` only.
+
+*Amended 2026-09-05 (F9.12).* "Cut on a match below 0.5" is not a sufficient
+end-of-region rule, and this clause is replaced by a two-tier bar. 0.5 is
+unreachable for the case that actually broke: Super Mario Bros.' title screen is
+drawn on top of the very start of world 1-1 — same hill, same bushes, same
+ground — with a logo panel and a menu stamped into the sky. Measured on the 21
+stable screens that recording installed under
+`auto/textures/backgrounds/screen*.orig.png`, compared cell by cell (8×8,
+pixel-exact) at the shift the stitcher accepts, the title screen agrees with the
+level's first screen over **0.700** of the playfield at `dx == 0` — the camera
+genuinely did not move — while two consecutive level screens agree over
+**0.996–0.999**. So no cut fired, `cum` stayed 0, and `PaintFrame`'s
+first-writer-wins baked the logo, "ONE PLUMBER / TWO PLUMBERS" and
+"TOP- 000000" into the level map's sky. There was no seam in `map-000.png`
+because there was no offset: the two screens were superimposed on the same world
+columns.
+
+The rule is therefore: a step that **claims a shift** (a non-zero `dx` that
+beats standing still by `kStitchStillMargin`, F9.8) is cut below `kMinMatch`
+(0.5), exactly as before; a step that **does not** is a claim that both frames
+show the same place, and is cut when the *still* score — the whole playfield at
+`dx == 0` — falls below `kStitchWorldAgree` (**0.85**, the midpoint 0.848 of the
+measured gap above, read off recorded evidence and not swept). A closed region
+narrower than 512 px is dropped as before, so an overlay screen that is cut
+loose disappears instead of becoming its own map.
+
+Scrolling steps are deliberately left alone: that is what keeps Excitebike's
+continuous track in one piece, by construction rather than by tuning. The
+consequence is that a screen swap which *does* fabricate a plausible non-zero
+shift is still governed by `kMinMatch` alone; no frame-level data exists to set a
+second bar for that case without risking the one genuine continuous track on
+record.
 
 ### 7. The spike's grid dump stays, as a debug flag
 

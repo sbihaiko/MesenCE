@@ -4,6 +4,8 @@
 //continuous stitcher starts a new map instead of leaving a gap in the old one.
 //F9.8 adds the rule the spike never had: a screen joins a map only on positive
 //adjacency evidence, and a recording that produces none produces no map.
+//F9.12 adds the continuous half of the same idea: a region ends when a step
+//that did not move the camera stops showing the same place.
 #include "NES/HdPacks/ScreenStitcher.h"
 
 #include <algorithm>
@@ -711,23 +713,36 @@ namespace MesenSheets
 			if(prev != nullptr) {
 				double stillScore = 0;
 				ShiftMatch match = BestShiftX(*prev, frame, vocab.HudRows, vocab.HudBottomRows, kContinuousMaxDx, stillScore);
-				if(match.Score < kMinMatch) {
+				//F9.8: an offset that cannot beat "the camera did not move" is
+				//not a measurement, so the frame is painted where the previous
+				//one was. F9.12 reads the same test the other way round: a step
+				//that does not claim a shift claims *the same place*, and is
+				//judged on the still score against the stricter bar.
+				bool moved = match.Dx != 0 && match.Score >= stillScore + kStitchStillMargin;
+				double score = moved ? match.Score : stillScore;
+				double bar = moved ? kMinMatch : kStitchWorldAgree;
+				if(score < bar) {
 					if(unsupported > 0) {
 						log.push_back(Format("%u frame(s) shifted no better than standing still, painted in place", unsupported));
 						unsupported = 0;
 					}
-					log.push_back(Format("frame %u: match %.2f < 0.5, cut -> new region", frame.FrameNumber, match.Score));
+					//F9.12: the two messages are worth telling apart in the run
+					//log - one is "the camera outran the sampling", the other is
+					//"this is not the same place any more".
+					if(moved) {
+						log.push_back(Format("frame %u: match %.2f < %.2f, cut -> new region", frame.FrameNumber, score, bar));
+					} else {
+						log.push_back(Format("frame %u: standing still but only %.2f of the playfield agrees, world replaced, cut -> new region", frame.FrameNumber, score));
+					}
 					maps.push_back(CloseRegion(world, vocab, log));
 					world.clear();
 					log.clear();
 					cum = 0;
-				} else if(match.Dx != 0 && match.Score < stillScore + kStitchStillMargin) {
-					//F9.8: the offset is not better than standing still, so the
-					//camera cannot be shown to have moved. Painting the frame
-					//at the same place is what keeps a static game from growing
-					//a strip out of an arbitrary argmax. Counted, not logged
-					//per frame - a long still stretch would drown the log.
-					unsupported++;
+				} else if(!moved) {
+					//Counted, not logged per frame - a long still stretch would
+					//drown the log. Only an argmax that was disbelieved is worth
+					//counting; a plain dx == 0 is just a still frame.
+					unsupported += match.Dx != 0 ? 1 : 0;
 				} else {
 					cum += match.Dx;
 				}
