@@ -3,8 +3,10 @@
 # declares the assets:external content-index label (ADR-0138 §12/§6, additive
 # — never a third verdict state), the pack:needs-review origin-binding label
 # (P.2, PRD §3.3 — additive, human triage only), the pack:split label
-# (ADR-0143 — one issue per game for multi-game submissions), and the full
-# 14-entry label set is intact. Per ADR-0035, a deliverable enumerating N
+# (ADR-0143 — one issue per game for multi-game submissions), the
+# pack:known-missing errata label (ADR-0152 — set from the artifact hash by
+# the validation run, not by classify), and the full 15-entry label set is
+# intact. Per ADR-0035, a deliverable enumerating N
 # items needs a count-based check, not one representative grep for the new
 # entry alone.
 set -euo pipefail
@@ -15,7 +17,7 @@ SCRIPT="$REPO_ROOT/scripts/ensure_community_pack_labels.sh"
 EXPECTED_NAMES=(
   community-pack pack:valid pack:invalid assets:textures assets:audio
   patch:ips patch:bps console:nes console:gb console:gbc console:sms
-  assets:external pack:needs-review pack:split
+  assets:external pack:needs-review pack:split pack:known-missing
 )
 # Derived from the name set above so the two cannot drift within this file;
 # the set itself stays an independent expectation (never parsed from the target).

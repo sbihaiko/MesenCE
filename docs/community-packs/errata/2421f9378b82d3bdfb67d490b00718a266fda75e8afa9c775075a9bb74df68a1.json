@@ -1,0 +1,14 @@
+{
+  "artifact_sha256": "2421f9378b82d3bdfb67d490b00718a266fda75e8afa9c775075a9bb74df68a1",
+  "issue": 148,
+  "pack": "Metroid HD — Metroid (USA)",
+  "known_missing": [
+    {
+      "manifest": "hires.txt",
+      "tag": "background",
+      "target": "LavaAirGlow0.png",
+      "reason": "Null layer, verified against the shipped assets. LavaAirGlow0.png is the first step of a five-frame additive heat-haze ramp over Norfair and Ridley; the four frames that do ship are 512x480 with mean alpha 0, 5, 10 and 15 respectively, so LavaAirGlow1.png -- the step directly above the missing one -- is already fully transparent in every pixel. All 12 references use the Add blend mode, where an alpha-0 source is the identity, so the frame below an already-invisible frame contributes nothing by construction. HdPackLoader::ProcessBackgroundTag drops the 12 entries at load and the rendered frame is bit-identical.",
+      "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/148"
+    }
+  ]
+}

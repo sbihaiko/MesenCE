@@ -28,6 +28,7 @@ LABELS=(
   "assets:external|FBCA04|Pack declares external_assets (split-distribution content-index) dependencies"
   "pack:needs-review|C5DEF5|Pack claims an existing pack_id from a different origin — human triage (PRD §3.3)"
   "pack:split|C5DEF5|Multi-game submission split into one issue per game (ADR-0143)"
+  "pack:known-missing|D4C5F9|References files it does not ship; gap declared by MesenCE validation (ADR-0152)"
 )
 
 for entry in "${LABELS[@]}"; do

@@ -1,0 +1,14 @@
+{
+  "artifact_sha256": "b174830de2f9a59a766d532b9ee1d1e6d6f5d341e92c2e3e7ebc908dd945ff9e",
+  "issue": 137,
+  "pack": "Contra 80s v1.1 — Contra (USA)",
+  "known_missing": [
+    {
+      "manifest": "hires.txt",
+      "tag": "background",
+      "target": "Stage1.png",
+      "reason": "Unshipped screen slot the author already treats as empty elsewhere. The two references (the background pass at priority 6 and the foreground pass at priority 30) are the only ones addressing the stage-1 screen0F slot; every other stage-1 screen, 00 through 0E, is painted by the shipped Stage1a.png and Stage1Foreground.png. The author gave the identical stage-5 slot the same outcome by hand: the analogous [hud&stage5&screen0F] Stage5.png lines are commented out in this same manifest. Neither Stage1.png nor Stage5.png exists in the archive, so both slots fall through to the emulated frame; HdPackLoader::ProcessBackgroundTag drops the two live entries at load and reaches the state the author chose explicitly for stage 5.",
+      "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/137"
+    }
+  ]
+}

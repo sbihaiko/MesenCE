@@ -903,6 +903,19 @@ jobs:
           # flips the verdict must drop the previous one (#159).
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL" --remove-label "$STALE_LABEL"
           APPLIED_LABELS="$LABEL"
+          # ADR-0152: pack:known-missing marks a row whose artifact carries a
+          # reviewed known-missing errata. Decided here from the hash the
+          # pipeline computed, never from classify -- classify reads the
+          # submitter's own text, and a submitter must not be able to label
+          # somebody else's pack as pardoned. The errata is keyed on the
+          # artifact sha256, so the label expires with it: republishing changes
+          # the hash, nothing resolves, and the next run removes the label.
+          if python3 scripts/mep_errata.py resolve docs/community-packs/errata "$PACK_SHA256" >/dev/null 2>&1; then
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:known-missing
+            APPLIED_LABELS="$APPLIED_LABELS pack:known-missing"
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label pack:known-missing
+          fi
           # assets:external (ADR-0138 §6/§13): applied only when the
           # deterministic assembly step actually built a recipe with at
           # least one external dependency — never derived from classify's
