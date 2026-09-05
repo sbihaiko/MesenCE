@@ -175,3 +175,5 @@ No SDL2, no full core, results in seconds. It's not full-core coverage — it's 
 ## Credits & license
 
 Built on [Mesen2](https://github.com/SourMesen/Mesen2) by Sour and [MesenCE](https://github.com/nesdev-org/MesenCE) by the nesdev.org community. GPL v3 — full text: <http://www.gnu.org/licenses/gpl-3.0.en.html>. Copyright (C) 2014-2026 Sour, 2026 contributors. Open specs in `docs/specs/` are CC0.
+
+Thanks to the wider MesenCE fork network, whose work we read while building this fork — all GPLv3, like this repo. [zerkz/MesenCE](https://github.com/zerkz/MesenCE)'s `InputOverrideProvider` is the prior art behind our frame-bounded headless input (frame-scoped overrides, buttons resolved by name, re-registration on `GameLoaded`). [lusid/MesenCE](https://github.com/lusid/MesenCE)'s in-memory frame capture and [ky12138/MesenCE](https://github.com/ky12138/MesenCE)'s PRG/CHR bank-mapping tracker are recorded as prior art in `docs/roadmap/` for slices not yet built.
