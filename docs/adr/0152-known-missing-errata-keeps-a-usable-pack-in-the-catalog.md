@@ -181,8 +181,10 @@ the moment the author republishes, the errata stops applying.
 - `issue-139` was the first candidate: one errata entry returns a working
   ~11k-asset pack to the catalog without altering, forking or rehosting the
   author's artifact. The sweep that followed found two more (`issue-137`
-  Contra 80s v1.1, `issue-138` — no; `issue-148` Metroid HD), so three of the
-  ten live rows now carry a declaration. That ratio is high enough to watch:
+  Contra 80s v1.1 and `issue-148` Metroid HD), so three of the eleven live
+  rows now carry a declaration. `issue-138` was examined in the same sweep and
+  is *not* an errata case: its rejection was a discovery defect of ours
+  (bug #161), and it returned to the catalog on the fix alone. That ratio is high enough to watch:
   it reflects a one-off backlog created by ADR-0151 rather than a steady rate,
   and if new submissions keep needing errata at anything like it, the hatch is
   doing work the gate should be doing.
