@@ -25,45 +25,6 @@
       "votes": 1
     },
     {
-      "content_id": "57af4f124c149893fdb65f77a4a7583953dfda8e5da65029a86176d52561f9b8",
-      "errata": {
-        "declared_by": "MesenCE validation",
-        "known_missing": [
-          {
-            "manifest": "hires.txt",
-            "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139",
-            "tag": "background",
-            "target": "selectscreen.png"
-          }
-        ]
-      },
-      "game": "The Legend of Zelda (USA)",
-      "issue": 139,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "The Legend of Zelda (USA) \u2014 community submission",
-      "pack_id": "issue-139",
-      "rom": {
-        "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
-        "sha1s": [
-          "A12D74C73A0481599A5D832361D168F4737BBCF6",
-          "BE2F5DC8C5BA8EC1A344A71F9FB204750AF24FE7"
-        ]
-      },
-      "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
-      "system": "nes",
-      "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
-      "validated_at": "2026-09-05T01:15:13Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
       "content_id": "7ba6421d839ceb0f61bbcbeb564c935b468771bfde2e53fd47a6a6071ea21627",
       "game": "Pac-Man (Namco, US, 1993)",
       "issue": 140,
@@ -306,6 +267,46 @@
       "system": "nes",
       "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
       "validated_at": "2026-09-05T02:23:16Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "57af4f124c149893fdb65f77a4a7583953dfda8e5da65029a86176d52561f9b8",
+      "errata": {
+        "declared_by": "MesenCE validation",
+        "known_missing": [
+          {
+            "manifest": "hires.txt",
+            "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/139",
+            "tag": "background",
+            "target": "selectscreen.png"
+          }
+        ]
+      },
+      "game": "The Legend of Zelda (USA)",
+      "issue": 139,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "pack:known-missing",
+        "assets:textures",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "The Legend of Zelda (USA) \u2014 community submission",
+      "pack_id": "issue-139",
+      "rom": {
+        "sha1": "DAB79C84934F9AA5DB4E7DAD390E5D0C12443FA2",
+        "sha1s": [
+          "A12D74C73A0481599A5D832361D168F4737BBCF6",
+          "BE2F5DC8C5BA8EC1A344A71F9FB204750AF24FE7"
+        ]
+      },
+      "sha256": "03b5eeab7914560ffb6ca0bfea04fa78525d7dad5663903a8b5d8098c10c19ea",
+      "system": "nes",
+      "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
+      "validated_at": "2026-09-05T02:29:56Z",
       "verdict": "accepted",
       "votes": 1
     }
