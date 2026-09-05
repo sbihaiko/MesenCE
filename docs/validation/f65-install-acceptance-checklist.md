@@ -300,10 +300,27 @@ Both defects were fixed and re-tested in the same session:
 | #156 — dep recovery within one session | PASS | first load: `depPaths=0 pendingDeps=1`, `mep/audio/` absent. Dep dropped into `.cache/downloads` under a deliberately wrong name (`totally-wrong-name.bin`, matched by sha256). Second **ROM load in the same process** (no restart): `depPaths=1 pendingDeps=0`, `InstallMepRecipe returned success=True resultText=1\n`, `mep/audio/zelda-hd-audio.ogg` (1.6M) on disk. Before the fix this second load logged `skipped: already attempted this session` |
 | #155 — gate alignment | PASS (both gates now reject the same row) | `mep_lint.py` exit 1 with `error hires.txt:6124 <background> selectscreen.png does not exist …`; `smoke_pack_headless.sh` exit 1 with `FAIL: missing target: Error while loading background: selectscreen.png`. Same line, same file, same verdict (ADR-0151) |
 
-Consequence to carry forward: catalog row `issue-139` no longer passes
-validation. It is live and auto-installed today; the next `/revalidate` (manual
-or via the daily drift check) will fail it, and ADR-0148's de-listing path
-applies until the manifest or the artifact is corrected.
+Consequence, carried out the same day: catalog row `issue-139` no longer passes
+validation. `/revalidate` (run 33930994497) rejected it — lint failed, so classify
+never ran — the board item moved to "Inválido", and regenerating the catalog
+(`5d0fe999`) took `docs/community-packs.json` from 11 to 10 rows with `issue-139`
+removed, so the client no longer auto-installs it (ADR-0146 keys on a live row).
+The issue stays open: unlike the ADR-0148 de-listings of 2026-08-31, this defect
+is fixable from the pack side.
+
+The fix is not available to us. `hires.txt:6124`
+(`[ZeldaSelectScreen1]<background>selectscreen.png,1,0,0,10`) is a dead line: the
+same screen is fully painted by `selectscreen1.png` … `selectscreen6.png`
+(512x480, 100% opaque, ~0.1% pixel difference between frames, priority 1, cycled
+by `<condition>ZeldaSelectScreenframeN,frameRange,60,{50,40,30,20,10,0}` so one is
+always active) plus `selectscreentop.png` (12.4% opaque, priority 39). A
+priority-10 full-screen layer between them would draw *over* the animation, which
+is why the line reads as a leftover from a pre-animation build. Deleting it is the
+correct fix and costs nothing on screen — but MEP-recipe-v1's ops are
+`copy`/`glob`/`rename`/`rewrite-paths` (`scripts/mep_recipe.py`), none of which
+edit manifest content, and re-publishing an edited copy of a third party's pack is
+not something the catalog does. v1.3 is still the author's latest release, so a
+re-download does not solve it either. Analysis posted on issue #139 for the author.
 
 Note on the checklist's own steps: the "reload the ROM" step above was driven by
 re-launching the binary with the ROM as `argv[1]` — `SingleInstance` forwards it
