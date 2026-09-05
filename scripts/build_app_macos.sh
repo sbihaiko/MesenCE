@@ -85,8 +85,8 @@ echo "==> building native core (make core)"
 make core
 
 if [[ "$RUN_TESTS" == "1" ]]; then
-	echo "==> running core unit tests (make core-unit-tests)"
-	make core-unit-tests
+	echo "==> running core unit tests (make -j core-unit-tests)"
+	make -j"$(getconf _NPROCESSORS_ONLN)" core-unit-tests
 fi
 
 echo "==> publishing release .app (make ui DEBUG=0)"

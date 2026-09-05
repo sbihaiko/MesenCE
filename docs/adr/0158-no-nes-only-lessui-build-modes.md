@@ -136,15 +136,16 @@ attacks the one column that is already the smallest.
 
 Recorded here so H8 is not re-proposed from the same premise:
 
-- **`make core-unit-tests` is one serial `clang++` invocation.** All 23 TUs
-  compile in a single command with no `-j`, taking 39.3 s single-threaded on
-  a machine with 8 idle cores. Splitting it into per-object rules would let
-  `make -j` take it to roughly 6–10 s — the only real, measured CI saving in
-  this neighbourhood, worth about four times what the fork's modes could
-  offer, at no cost in source fences. It compiles the same sources into the
-  same binary, so it needs no build mode and no ADR of its own; it is left
-  out of this change only because `makefile` and `scripts/core_unit_tests.cpp`
-  are under concurrent edit.
+- **`make core-unit-tests` was one serial `clang++` invocation — now done.**
+  All its TUs compiled in a single command with no `-j`, taking 39.3 s
+  single-threaded on a machine with 8 idle cores. It is now one object per
+  translation unit (`%.cut.o`, `-MMD -MP` header deps as in ADR-0155) plus a
+  link step, so `make -j` applies: **9.7 s cold, 6.0 s after a one-file edit**,
+  same 491 cases, same binary. Both callers pass `-j`
+  (`.github/workflows/unit-tests.yml`, `scripts/build_app_macos.sh`). That is
+  about four times what the fork's modes could have offered, at no cost in
+  source fences — it compiles the same sources into the same binary, so it
+  needed no build mode and no ADR of its own.
 - **`ccache` locally.** CI has it; a developer machine without it pays the
   full 149.5 s on any clean build. That is a bigger single-developer win than
   the 38 s the non-NES cores cost, and it costs one `brew install`.
@@ -170,8 +171,9 @@ price: they are product. Anyone revisiting this should re-run the table above
 first — the decision is a function of those numbers, and it would change if a
 console were ever dropped from the product again.
 
-The `core-unit-tests` parallelisation above is left on the table as a
-follow-up, and it is where the next person looking for build time should go.
+The `core-unit-tests` parallelisation above shipped with this decision: it is
+the only build time H8 actually bought, and it came from measuring rather than
+from importing a mode.
 
 ## Alternatives
 

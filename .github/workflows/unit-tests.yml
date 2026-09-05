@@ -42,7 +42,7 @@ jobs:
         run: dotnet test UI.Tests/UI.Tests.csproj --nologo
 
       - name: Run core unit tests
-        run: make core-unit-tests
+        run: make -j$(nproc) core-unit-tests
 
   # ADR-0150 (accepted 2026-09-03): headless Avalonia XAML-wiring tests in a
   # separate project that references UI/UI.csproj. Kept as its own job - NOT a

@@ -332,31 +332,51 @@ core: check-manifest InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 #artist-legible sheet pipeline (ADR-0153). No `core` prerequisite - links
 #only the listed .cpp files, not MesenCore/SDL - runs on any OS. Builds and
 #then runs the binary; a failing case exits non-zero.
-core-unit-tests:
-	$(CXX) -std=c++17 -O2 -w -I . -I Core -I Utilities scripts/core_unit_tests.cpp \
-	  Core/Shared/Audio/ChannelRoleClassifier.cpp \
-	  Core/Shared/Audio/EnhancedSynthEngine.cpp \
-	  Core/Shared/Audio/EnhancedSynthPreset.cpp \
-	  Core/Shared/Audio/SmfWriter.cpp \
-	  Core/Shared/EnhancementPacks/AudioFingerprint.cpp \
-	  Core/Shared/EnhancementPacks/MepPack.cpp \
-	  Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp \
-	  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \
-	  Core/Shared/EnhancementPacks/MepContentId.cpp \
-	  Core/Shared/HeadlessInputScript.cpp \
-	  Core/Shared/HeadlessInputEngine.cpp \
-	  Core/Shared/MessageManager.cpp \
-	  Core/Shared/Video/BorderLayout.cpp \
-	  Core/Shared/Video/FrameCapture.cpp \
-	  Core/NES/HdPacks/OggMixer.cpp \
-	  Core/NES/HdPacks/MetatileVocabulary.cpp \
-	  Core/NES/HdPacks/ScreenStitcher.cpp \
-	  Core/NES/HdPacks/SheetGrouping.cpp \
-	  Core/NES/HdPacks/SheetRender.cpp \
-	  Core/NES/HdPacks/SpriteGrouping.cpp \
-	  Utilities/JsonReader.cpp Utilities/FolderUtilities.cpp Utilities/UTF8Util.cpp \
-	  Utilities/sha256.cpp Utilities/SimpleLock.cpp Utilities/Timer.cpp Utilities/miniz.cpp \
-	  -o scripts/core_unit_tests
+#Compiled as one object per translation unit so `make -j` can use every core
+#(the single-command form was serial, and no -j could help it), and so a one-file
+#edit relinks instead of recompiling all of them. Header deps come from -MMD -MP,
+#the same mechanism ADR-0155 put on the core build.
+CUTFLAGS := -std=c++17 -O2 -w -I . -I Core -I Utilities
+CUTSRC := \
+  scripts/core_unit_tests.cpp \
+  Core/Shared/Audio/ChannelRoleClassifier.cpp \
+  Core/Shared/Audio/EnhancedSynthEngine.cpp \
+  Core/Shared/Audio/EnhancedSynthPreset.cpp \
+  Core/Shared/Audio/SmfWriter.cpp \
+  Core/Shared/EnhancementPacks/AudioFingerprint.cpp \
+  Core/Shared/EnhancementPacks/MepPack.cpp \
+  Core/Shared/EnhancementPacks/MepRecipeInstaller.cpp \
+  Core/Shared/EnhancementPacks/MepRecipeOps.cpp \
+  Core/Shared/EnhancementPacks/MepContentId.cpp \
+  Core/Shared/HeadlessInputScript.cpp \
+  Core/Shared/HeadlessInputEngine.cpp \
+  Core/Shared/MessageManager.cpp \
+  Core/Shared/Video/BorderLayout.cpp \
+  Core/Shared/Video/FrameCapture.cpp \
+  Core/NES/HdPacks/OggMixer.cpp \
+  Core/NES/HdPacks/MetatileVocabulary.cpp \
+  Core/NES/HdPacks/ScreenStitcher.cpp \
+  Core/NES/HdPacks/SheetGrouping.cpp \
+  Core/NES/HdPacks/SheetRender.cpp \
+  Core/NES/HdPacks/SpriteGrouping.cpp \
+  Utilities/JsonReader.cpp \
+  Utilities/FolderUtilities.cpp \
+  Utilities/UTF8Util.cpp \
+  Utilities/sha256.cpp \
+  Utilities/SimpleLock.cpp \
+  Utilities/Timer.cpp \
+  Utilities/miniz.cpp
+CUTOBJ := $(CUTSRC:.cpp=.cut.o)
+
+%.cut.o: %.cpp
+	$(CXX) $(CUTFLAGS) -MMD -MP -c $< -o $@
+
+-include $(CUTOBJ:.o=.d)
+
+scripts/core_unit_tests: $(CUTOBJ)
+	$(CXX) $(CUTOBJ) -o $@
+
+core-unit-tests: scripts/core_unit_tests
 	scripts/core_unit_tests
 
 #F5.4g level-2 validation harness (channel roles / SFX classifier) - see scripts/roles_probe.cpp
@@ -422,3 +442,4 @@ clean:
 	rm -r -f $(LUAOBJ)
 	rm -r -f $(MACOSOBJ)
 	rm -r -f $(DLLOBJ)
+	rm -r -f $(CUTOBJ) $(CUTOBJ:.o=.d) scripts/core_unit_tests
