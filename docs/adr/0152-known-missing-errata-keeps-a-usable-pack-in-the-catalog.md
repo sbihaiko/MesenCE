@@ -1,6 +1,6 @@
 # ADR-0152: A repo-side `miss` errata lets a pack with a known-unresolvable manifest target stay in the catalog
 
-- Status: proposed (two policy questions below are unanswered; no PRD slice yet)
+- Status: accepted (both policy questions answered 2026-09-04; implementation is a pending slice, PRD Part A F6.8)
 - Date: 2026-09-04
 - Related: ADR-0151, ADR-0148, ADR-0146, ADR-0147, ADR-0139, ADR-0138 §4/§37/§41, MEP-v1 §2.1/§5, `scripts/mep_lint.py`, `scripts/smoke_pack_headless.sh`, `.github/workflows/community-pack-validate.yml`, issue #139
 - Supersedes / amends: narrows ADR-0151 — an unresolvable texture target stays a `mep_lint` error, except for the exact targets a reviewed errata declares known-missing
@@ -140,16 +140,26 @@ so honouring it needs a lookup inside the existing `Lint pack structure` step
 (`community-pack-validate.yml`), keyed on the hash computed by
 `Compute & record pack hash`. No step reordering.
 
-### Open questions (why this is `proposed`)
+### Policy (decided 2026-09-04)
 
-1. **Is an errata always applied, or may a user opt out** and install the raw
-   artifact with the gate's verdict intact?
-2. **Which packs qualify?** Any pack, or only where the author is unreachable or
-   unresponsive after some period? Absolving a defect over an active author's
-   head is a different act from rescuing an abandoned pack.
+**An errata is always applied; there is no opt-out setting.** A `miss` changes
+nothing in the installed tree, so a user who opted out would receive byte-identical
+content — the toggle would not change what runs on their machine, only whether the
+row is reachable at all. A setting that cannot alter the outcome is not a choice,
+it is a switch that only takes packs away. Transparency is carried by the
+user-visible marker instead.
 
-Both are policy, not engineering, and this ADR stays `proposed` until they are
-answered.
+**Any pack is eligible, gated by PR review rather than by the author's status.**
+No waiting period and no "abandoned pack" test: the friction that keeps the hatch
+honest is a human reading the exact target and the stated reason. Requiring proof
+of a null on-screen effect was rejected — it would remove the property that makes
+`miss` the low-risk option, namely that it is available precisely when the visual
+effect *cannot* be measured confidently.
+
+The consequence accepted with this: an errata may absolve a defect over the head
+of an author who would have preferred to fix it. Mitigated, not eliminated, by the
+marker naming the project's validation as the source and by hash-scoped expiry —
+the moment the author republishes, the errata stops applying.
 
 ## Consequences
 
