@@ -172,6 +172,28 @@ recordings:
   because it is a status bar" from "frozen because it is a repeating backdrop"
   without tracking scroll per row, which §1 deliberately does not do.
 
+- **A band is a status bar or it is nothing — it is never truncated**
+  (*amended 2026-09-05*, issue #162). The implementation capped each band at
+  6 rows so that a picture which never moves could not read as an all-HUD
+  frame. Truncating is the worse half of both answers: the rows the cap leaves
+  behind are still status bar, so they stay in the playfield, and §6 crops a
+  map to exactly this band — so they were welded into the map once per stitched
+  screen. The Legend of Zelda's bar is 8 rows / 64 px; the cap reported 6, and
+  its rupee counter, item boxes and heart row were repeated at the top of every
+  screen of `map-000.png`, while `hud.png` got three quarters of a status bar.
+  The bound is now 8 rows per side — the deepest genuine bar on the measured
+  30-ROM library, just over a quarter of the frame — and a band deeper than
+  that is dropped whole, exactly like the "nothing ever moves" case above.
+  Measured offline against the captured screens of the 2026-09-05 library
+  (`screen*.orig.png`, cell-by-cell at the §3 ratios; pixel-exact identity
+  stands in for the recorder's shape ids, so it can only *under*-count
+  agreement): the builder logged the cap value 6 on seven games — Zelda 1,
+  Castlevania, Contra, Mega Man, Mega Man 2, Punch-Out!! and Super Mario
+  Bros. 3 — i.e. saturation, which is the cap deciding rather than the data.
+  Zelda 1 measures exactly 8 top rows, and the two cases that measure far
+  deeper are the ones the bound is meant to reject, not to trim (Punch-Out!!
+  8/21, Mega Man 12/0). Nothing shallower than 7 changes.
+
 Each sheet gets its pixel-exact `*.orig.png` twin under the existing F5.4d
 `_writeReferences` convention. `misc` exists so the noise budget (PRD Phase 9
 validation test 7) is *measurable*: scene sheets stay clean, singletons are
@@ -340,7 +362,9 @@ The hot path keeps no dump code.
   failure mode is a larger, flatter vocabulary — legibility, never rendering.
 - `hud.png` and `font.png` come out **empty on both golden games**: Zelda's HUD
   is 3 rows and a unit-16 metatile covers 2, so its third row leaks out of the
-  band, and the `font` rule is HUD-region-scoped, so playfield text (Zelda's
+  band (*stale as of 2026-09-05*: that 3 was measured before the quorum
+  amendment and the §3 truncation fix — Zelda's bar is 8 rows and now reaches
+  the band whole), and the `font` rule is HUD-region-scoped, so playfield text (Zelda's
   story crawl, Super Mario Bros.' title logo) stays in `metatiles.png`. The
   most-seen-first ordering keeps that text at the bottom of the sheet rather
   than interleaved with the terrain, which was judged good enough for Phase 9;

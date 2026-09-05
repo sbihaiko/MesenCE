@@ -11,7 +11,12 @@ namespace MesenSheets
 	//The spike's --min-stable default: a quarter second of held picture.
 	static constexpr uint32_t kDefaultMinStableFrames = 15;
 	//A whole-screen static image would otherwise make the entire frame "HUD".
-	static constexpr uint32_t kMaxHudRows = 6;
+	//A status bar is a minority of the picture: the deepest one on the measured
+	//NES library is The Legend of Zelda's, 8 rows / 64 px, just over a quarter
+	//of the frame. Past that depth "frozen" no longer says "status bar", it says
+	//"this picture does not move", so the band is dropped whole rather than
+	//truncated - see DetectHudRows for why truncating is the worse of the two.
+	static constexpr uint32_t kMaxHudBandRows = 8;
 	//Fallback vocabulary source when the game never holds still.
 	static constexpr size_t kMaxFallbackScreens = 64;
 	//A screen must have at least half the playfield drawn to be worth keeping.
@@ -184,8 +189,18 @@ namespace MesenSheets
 			return; //nothing ever moves: a static image, not a HUD
 		}
 		uint32_t bottom = CountFrozenRows(screens, (int32_t)kGridRows - 1, -1);
-		top = std::min(top, kMaxHudRows);
-		bottom = std::min(bottom, kMaxHudRows);
+		//Issue #162: a band used to be *truncated* to a fixed depth, which is the
+		//worse half of both answers. The rows the truncation left behind are
+		//still status bar, so they stayed in the playfield - and the stitcher,
+		//which crops a map to exactly this band (ADR-0153 §6), then welded them
+		//into every screen of the map. Zelda 1's bar is 8 rows deep, the cap was
+		//6, and its bottom two rows - the rupee counter, the two item boxes and
+		//the hearts - were repeated at the top of each stitched screen, while
+		//hud.png got three quarters of a status bar. So a band is either a
+		//status bar or it is not: deeper than kMaxHudBandRows it is a picture
+		//that does not move, and that side reports nothing at all.
+		top = top > kMaxHudBandRows ? 0 : top;
+		bottom = bottom > kMaxHudBandRows ? 0 : bottom;
 		if(top + bottom >= kGridRows) {
 			return;
 		}
