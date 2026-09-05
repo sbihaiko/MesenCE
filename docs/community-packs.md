@@ -17,6 +17,7 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/147) |
 | Contra (USA) † | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/137) |
 | Metroid (USA) † | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/148) |
+| Mega Man (USA) | NES | AxlRocks | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/138) |
 
 † This pack references one or more files it does not ship. The gap was
 checked and declared by MesenCE validation — **not by the pack's author** —
