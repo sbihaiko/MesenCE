@@ -1,6 +1,6 @@
 # ADR-0155: The makefile tracks header dependencies (`-MMD -MP`) instead of relying on a manual clean rebuild
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-05
 - Related: ADR-0007 (Core source-manifest drift guard), ADR-0126/ADR-0131 (unit-test wiring), ADR-0153 (artist-legible sheets)
 
@@ -59,6 +59,16 @@ Generate and consume dependency files:
 `-MMD` (not `-MD`) deliberately ignores system headers: a toolchain upgrade
 should not invalidate every object, and the failure mode this ADR exists to
 prevent is a *project* header changing shape.
+
+## Verification
+
+Proven on the tree this ADR was written against: after a clean rebuild,
+`touch Core/NES/HdPacks/TileSheetTypes.h` followed by `make capture-tool`
+recompiles the six HdPacks translation units that include it — including
+`SheetGrouping.cpp`, the object that was stale when the library segfaulted —
+plus the three transitive consumers (`NesConsole.cpp`, `NesPpu.cpp`,
+`InteropDLL/EmuApiWrapper.cpp`) and nothing else. Before this change the same
+`touch` recompiled nothing at all.
 
 ## Consequences
 

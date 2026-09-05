@@ -114,9 +114,9 @@ ifeq ($(MESENOS),osx)
 	LINKOPTIONS += -framework Foundation -framework Cocoa -framework GameController -framework CoreHaptics -Wl,-rpath,/opt/local/lib
 endif
 
-CXXFLAGS = -fPIC -Wall --std=c++17 $(MESENFLAGS) $(SDL2INC) -I $(realpath ./) -I $(realpath ./Core) -I $(realpath ./Utilities) -I $(realpath ./Sdl) -I $(realpath ./Linux) -I $(realpath ./MacOS)
+CXXFLAGS = -fPIC -Wall --std=c++17 -MMD -MP $(MESENFLAGS) $(SDL2INC) -I $(realpath ./) -I $(realpath ./Core) -I $(realpath ./Utilities) -I $(realpath ./Sdl) -I $(realpath ./Linux) -I $(realpath ./MacOS)
 OBJCXXFLAGS = $(CXXFLAGS)
-CFLAGS = -fPIC -Wall $(MESENFLAGS)
+CFLAGS = -fPIC -Wall -MMD -MP $(MESENFLAGS)
 
 OBJFOLDER := obj.$(MESENPLATFORM)
 DEBUGFOLDER := bin/$(MESENPLATFORM)/Debug
@@ -381,6 +381,13 @@ pgohelper: InteropDLL/$(OBJFOLDER)/$(SHAREDLIB)
 %.o: %.mm
 	$(CXX) $(OBJCXXFLAGS) -c $< -o $@
 
+#ADR-0155: -MMD writes a .d beside every object listing the headers it read;
+#-include feeds them back, so editing a header rebuilds exactly the translation
+#units that include it. Without this a header change rebuilds nothing and two
+#objects can disagree on a struct layout - see the ADR for the crash that cost.
+ALLOBJ = $(SEVENZIPOBJ) $(LUAOBJ) $(UTILOBJ) $(COREOBJ) $(SDLOBJ) $(LIBEVDEVOBJ) $(LINUXOBJ) $(DLLOBJ) $(MACOSOBJ)
+-include $(ALLOBJ:.o=.d)
+
 InteropDLL/$(OBJFOLDER)/$(SHAREDLIB): $(SEVENZIPOBJ) $(LUAOBJ) $(UTILOBJ) $(COREOBJ) $(SDLOBJ) $(LIBEVDEVOBJ) $(LINUXOBJ) $(DLLOBJ) $(MACOSOBJ)
 	mkdir -p bin
 	mkdir -p InteropDLL/$(OBJFOLDER)
@@ -395,6 +402,7 @@ run:
 	$(OUTFOLDER)/$(MESENPLATFORM)/publish/Mesen
 
 clean:
+	rm -r -f $(ALLOBJ:.o=.d)
 	rm -r -f $(COREOBJ)
 	rm -r -f $(UTILOBJ)
 	rm -r -f $(LINUXOBJ) $(LIBEVDEVOBJ)

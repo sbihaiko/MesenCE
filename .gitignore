@@ -53,6 +53,7 @@ build/
 
 # Libretro build files
 *.o
+*.d
 
 # Visual C++ cache files
 ipch/
