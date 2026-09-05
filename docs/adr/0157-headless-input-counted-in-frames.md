@@ -1,8 +1,33 @@
-# ADR-0157: Headless input is counted in emulated frames, and the harness drives the core frame by frame
+# ADR-0157: Headless input is counted in emulated frames, resolved from inside the frame
 
 - Status: accepted
 - Date: 2026-09-05
+- Amended: 2026-09-05
 - Related: ADR-0013 (same axis, exporter side), ADR-0050, ADR-0153, ADR-0156, PRD Part A Phase 9 (F9.13, F9.14), `scripts/headless_record.cpp`, `scripts/bootstrap_auto_packs.sh`, `scripts/gameplay_probe.py`
+
+## Amended 2026-09-05
+
+Section 2 originally required the harness to **drive** the core frame by frame:
+a single-frame InteropDLL entry point, a null-`_frameLimiter` guard in
+`ProcessEndOfFrame`, a hand-called `ControlManager::ProcessEndOfFrame`, and the
+override pushed through `UpdateInputState()` before each frame. Reading
+`zerkz/MesenCE`'s `Core/Shared/InputOverrideProvider.{h,cpp}` — the prior art
+the PRD's fork survey pointed at — showed that the property the slice exists
+for is already reachable from inside the core, at a fraction of the surface.
+
+An `IInputProvider` registered on the emulator has `SetInput()` called from
+*inside* the frame, once per frame, on the emulation thread. A provider that
+holds the **whole script in absolute frame numbers** therefore answers "which
+buttons are held on frame N" as a pure function of the script and
+`Emulator::GetFrameCount()` — no external thread has to wake up on time, or at
+all. The harness does not need to own pacing to own the result. Section 2 below
+is rewritten to that design; the frame-stepping approach moved to Alternatives
+as rejected-for-now, because it costs new InteropDLL surface and a change to
+the threading model to buy a property the provider already gives.
+
+Sections 1, 3 and 4 are unchanged, apart from one dangling phrase in section
+3 ("the frame-stepping path" -> "the headless path"); the rule it states — no
+`#ifdef` in `Core/` — is untouched.
 
 ## Context
 
@@ -66,30 +91,56 @@ rounded to the nearest frame. After parsing, the harness knows only frames, so
 a script's meaning never depends on host load regardless of which unit it was
 written in.
 
-**2. The harness drives the core frame by frame.** `headless_record` stops
-sleeping against `steady_clock` and stops relying on the emulator's own `Run()`
-loop. Per frame it applies the script's override for the current frame, then
-steps exactly one frame, then advances its frame cursor. This requires, in
-order:
+**2. The script is resolved from inside the frame, and the run ends on an
+absolute frame count.** A `HeadlessInputProvider` — an `IInputProvider` plus an
+`INotificationListener` — holds the parsed script and is registered on the
+emulator. `BaseControlManager::UpdateInputState()` calls `SetInput()` on it once
+per frame, on the emulation thread (`NesPpu` at `InputScanline`,
+`SmsConsole`/`Gameboy` at end of frame), so the provider resolves the step
+covering `Emulator::GetFrameCount()` and applies it. Concretely:
 
-- an InteropDLL entry point that runs a single frame, so the harness — not the
-  frame limiter — decides when the next frame happens;
-- `Emulator::ProcessEndOfFrame` tolerating a null `_frameLimiter`, which only
-  exists while `Run()` is executing;
-- `_console->GetControlManager()->ProcessEndOfFrame()` called explicitly on
-  that path;
-- the override applied through `GetControlManager()->UpdateInputState()`
-  before the frame runs, never after — the stale-input frame of latency above.
+- buttons are resolved **by name** through `BaseControlDevice::
+  GetKeyNameAssociations()` and set with `SetBitValue`, so one script drives a
+  NES, GB and SMS pad without knowing which is loaded;
+- `SetInput` returns `false`, so the script **overlays** physical input instead
+  of replacing it;
+- the provider **re-registers itself on `ConsoleNotificationType::GameLoaded`**.
+  A new console — and with it a new control manager, holding no providers — is
+  created on every game load. That is the structural root of our documented
+  "`input=` is silently a no-op" trap;
+- the run's **end** goes through the same hook: the provider is given an
+  absolute stop frame and calls `Emulator::Pause()` from inside the first frame
+  that reaches it. `Pause()` only sets a flag, so the emulation thread parks
+  after finishing exactly that frame. A host timer that fires whenever the OS
+  gets round to it would have covered a host-dependent number of frames;
+- the same mechanism fixes the *start*: the harness stops the run on frame 1
+  before starting any recorder, so what a recording is started on is a fixed
+  frame rather than "whatever the emulation thread reached while this thread
+  was calling into the DLL".
 
-The recording length argument (`<seconds>`) is likewise converted to a frame
-count at startup, so a run is a fixed number of frames.
+The harness therefore never drives frames. It parses, hands the provider one
+list of absolute ranges, resumes, and waits. The recording length argument
+(`<seconds>`) is converted to a frame count at startup, so a run is a fixed
+number of frames.
+
+Because nothing in the result depends on when frames happen, **speed is a free
+variable**: the frame limiter is turned off (`EmulationSpeed = 0`), which makes
+a 300 s recording finish in a fraction of that without changing a byte of its
+output. A `realtime` flag puts the limiter back for anyone who wants to watch
+one go by.
+
+One non-obvious consequence found while verifying section 4: covering the same
+frames is necessary but not sufficient. `RamState::Random` power-on RAM makes a
+game that reads uninitialised memory take a different path, and two runs over
+identical frames still differ. The harness zeroes it, as the core's own
+deterministic replay harness already does (`RecordedRomTest::Run`).
 
 **3. The headless path is a runtime mode, not a compile-time one.** No
 `#ifdef` in `Core/`. The libretro fork spreads `#ifdef LIBRETRO` through
 `Emulator.{h,cpp}`, `KeyManager`, `SoundMixer`, `WaveRecorder` and
 `VideoDecoder`; that cost is permanent and it means the headless harness and
 the shipped GUI no longer exercise the same code. The core is one binary, and
-the frame-stepping path is selected at runtime.
+the headless path is selected at runtime.
 
 **4. Verification.** Recording the same ROM twice with the same script and the
 same binary must produce byte-identical `auto/` output. That check is the
@@ -106,17 +157,31 @@ against a game's behaviour, where "0.2 s" was a guess about scheduling.
 
 The costs are real. Every existing `input=` script and every `<Game>.play.txt`
 in the recorder library has to be migrated (mechanical: append `s`), and the
-parse error is deliberately noisy so none is missed silently. Driving frames
-from the harness means the harness now owns pacing that the frame limiter used
-to own, so a recording runs as fast as the host allows rather than in real
-time — wall-clock run durations in existing docs and scripts stop being
+parse error is deliberately noisy so none is missed silently. Turning the frame
+limiter off means a recording runs as fast as the host allows rather than in
+real time — wall-clock run durations in existing docs and scripts stop being
 predictive, and anything that assumed a 300 s recording takes 300 s needs
-re-reading. The single-frame entry point is new public surface on the
-InteropDLL, mirrored in the C# interop declarations like every other export.
+re-reading. The new InteropDLL surface is four thin exports over the provider
+(load script, set stop frame, read either frame count); no core invariant is
+relaxed and no thread changes owner.
 
 This ADR decides the *harness*. Interactive playback in the GUI is untouched.
 
 ## Alternatives
+
+**Drive the core frame by frame from the harness** — the design this ADR
+originally decided (see the amendment note): a single-frame InteropDLL entry
+point, `Emulator::ProcessEndOfFrame` tolerating the null `_frameLimiter` that
+only exists while `Run()` executes, `_console->GetControlManager()->
+ProcessEndOfFrame()` called by hand, and the override pushed through
+`UpdateInputState()` before each frame (the stale-input frame of latency the
+libretro fork's `41e0b517` records). Rejected for now: it buys the same
+property the provider already gives — input resolved against the core's frame
+counter, and a run that ends on an absolute frame — at the cost of new public
+InteropDLL surface, a guard on a core invariant that holds today, and a
+threading model where the harness owns pacing. It stays the right answer if we
+ever need to *interleave* work between frames (read memory at frame N, decide
+frame N+1), which nothing here does.
 
 **Keep the emulation thread and poll `Emulator::GetFrameCount()`**, applying
 the next override when the counter reaches the step's target. Cheaper — no new
@@ -126,6 +191,8 @@ deliver the property the slice exists for: the override still lands one or two
 frames off depending on when the polling loop wakes, so two runs of the same
 script still produce different output and the byte-identical check in §4 is
 unobtainable. It buys most of the robustness and none of the reproducibility.
+Note that this is *polling from outside*; §2 as amended resolves the script
+from inside the frame, which is what removes the last frame of slack.
 
 **Use the existing movie system** (`Core/Shared/Movies`, `MesenMovie` /
 `MovieRecorder`), which already stores input per frame and replays it

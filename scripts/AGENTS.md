@@ -66,6 +66,17 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
+- `headless_record.cpp` counts a run in **emulated frames**, never in host
+  seconds (ADR-0157/F9.14). Its `<seconds>` argument keeps its meaning and is
+  converted to a frame count at startup; an `input=<script>` line is
+  `<count>f <buttons>` or `<count>s <buttons>` and a bare count is a parse
+  error. The script itself is parsed and played core-side
+  (`Core/Shared/HeadlessInputScript`, `Core/Shared/HeadlessInputProvider`),
+  which is why `core_unit_tests` Bloco Q can cover the parser without an
+  emulator. The frame limiter is off by default (pass `realtime` to keep it)
+  and power-on RAM is zeroed: two runs of the same ROM, script and binary
+  must produce byte-identical output. `write_play_scripts.py` and
+  `bootstrap_auto_packs.sh` emit frame-counted scripts.
 - `rom_target.py` — versioned map from catalog game name to No-Intro /
   CheatDb / `GetMepRomSha1` hashes (`sha1` + optional `alt_sha1`/`crc32`).
   Extra ROM revisions go here so auto-install can match; the catalog

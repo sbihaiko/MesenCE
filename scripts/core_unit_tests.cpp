@@ -42,6 +42,7 @@
 #include "Shared/MessageManager.h"
 #include "Shared/Video/BorderLayout.h"
 #include "Shared/Video/AspectRatioMath.h"
+#include "Shared/HeadlessInputScript.h"
 #include "Shared/ShortcutKeyRules.h"
 #include "NES/HdPacks/MetatileVocabulary.h"
 #include "NES/HdPacks/ScreenStitcher.h"
@@ -3508,6 +3509,130 @@ namespace
 			"BlocoP: a cell carries the exact hires.txt keys of its tiles");
 		Check(SerializeSheet(doc, SheetLookup()) == json, "BlocoP: serialisation is deterministic");
 	}
+
+	//--- Bloco Q: headless input script (ADR-0157, F9.14) --------------------
+	//The parser that turns a hand-written play script into absolute emulated
+	//frame ranges, and the lookup the provider runs once per frame. Pure logic
+	//- no Emulator, no control device, no host clock (see
+	//Core/Shared/HeadlessInputScript.h).
+
+	void TestHeadlessScriptUnitsAreExplicit()
+	{
+		std::vector<HeadlessInputStep> steps;
+		std::string error;
+
+		Check(HeadlessInputScript::Parse("12f T\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a frame step parses", error);
+		Check(steps.size() == 1 && steps[0].StartFrame == 0 && steps[0].EndFrame == 12,
+			"BlocoQ: \"12f\" is twelve frames");
+
+		Check(HeadlessInputScript::Parse("2s R\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a seconds step parses", error);
+		Check(steps.size() == 1 && steps[0].EndFrame == 120,
+			"BlocoQ: 2 s is 120 NTSC frames (round(2 * 60.0988))");
+
+		Check(HeadlessInputScript::Parse("2s R\n", HeadlessInputScript::PalFrameRate, steps, error),
+			"BlocoQ: the same step parses under PAL", error);
+		Check(steps.size() == 1 && steps[0].EndFrame == 100,
+			"BlocoQ: 2 s is 100 PAL frames - the region decides, at parse time");
+
+		//Rounding is to nearest, not truncation: 0.9 s is 54.09 frames and
+		//0.008 s is 0.48 frames, which is not a step at all.
+		Check(HeadlessInputScript::Parse("0.9s -\n", HeadlessInputScript::NtscFrameRate, steps, error) &&
+			steps[0].EndFrame == 54, "BlocoQ: 0.9 s rounds to 54 frames");
+		Check(HeadlessInputScript::Parse("0.999s -\n", HeadlessInputScript::NtscFrameRate, steps, error) &&
+			steps[0].EndFrame == 60, "BlocoQ: 0.999 s rounds up to 60 frames, it does not truncate to 59");
+		Check(!HeadlessInputScript::Parse("0.008s -\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a step that rounds to zero frames is rejected");
+	}
+
+	void TestHeadlessScriptBareNumberIsAnError()
+	{
+		std::vector<HeadlessInputStep> steps;
+		std::string error;
+
+		//The pre-F9.14 library wrote bare numbers meaning seconds. Reading one
+		//as a frame count would silently rescale every hand-tuned sequence, so
+		//it is a loud failure instead (ADR-0157 section 1).
+		Check(!HeadlessInputScript::Parse("0.9 -\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a bare number is a parse error, never a silent default");
+		Check(error.find("line 1") != std::string::npos && error.find("0.9 -") != std::string::npos,
+			"BlocoQ: the error names the offending line and quotes it", error);
+
+		Check(!HeadlessInputScript::Parse("12f T\n3 A\n", HeadlessInputScript::NtscFrameRate, steps, error) &&
+			error.find("line 2") != std::string::npos,
+			"BlocoQ: the line number counts every line, not just the good ones", error);
+		Check(!HeadlessInputScript::Parse("12f Z\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: an unknown button letter is an error, not an ignored character");
+		Check(!HeadlessInputScript::Parse("1.5f T\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a fractional frame count is an error");
+		Check(!HeadlessInputScript::Parse("f T\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a unit with no number is an error");
+		Check(!HeadlessInputScript::Parse("12f\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a step with no buttons field is an error");
+
+		steps.clear();
+		Check(HeadlessInputScript::Parse("# a comment\n\n   \n12f A\n", HeadlessInputScript::NtscFrameRate, steps, error) &&
+			steps.size() == 1, "BlocoQ: comments and blank lines are skipped", error);
+	}
+
+	void TestHeadlessScriptStepsAreAbsoluteAndContiguous()
+	{
+		std::vector<HeadlessInputStep> steps;
+		std::string error;
+		Check(HeadlessInputScript::Parse("60f -\n12f T\n2s R\n", HeadlessInputScript::NtscFrameRate, steps, error),
+			"BlocoQ: a three-step script parses", error);
+		Check(steps.size() == 3 &&
+			steps[0].StartFrame == 0 && steps[0].EndFrame == 60 &&
+			steps[1].StartFrame == 60 && steps[1].EndFrame == 72 &&
+			steps[2].StartFrame == 72 && steps[2].EndFrame == 192,
+			"BlocoQ: steps are absolute frame ranges laid end to end");
+		Check(HeadlessInputScript::GetFrameCount(steps) == 192,
+			"BlocoQ: the script's length is its last step's end frame");
+	}
+
+	void TestHeadlessScriptResolvesTheFrameBoundary()
+	{
+		std::vector<HeadlessInputStep> steps;
+		std::string error;
+		HeadlessInputScript::Parse("60f -\n12f T\n120f R\n", HeadlessInputScript::NtscFrameRate, steps, error);
+
+		//This is the whole point of the slice: which buttons are held on frame
+		//N is a pure function of the script, so a harness thread that wakes up
+		//late cannot move a step.
+		Check(HeadlessInputScript::GetStep(steps, 0)->Buttons.empty(),
+			"BlocoQ: frame 0 holds nothing");
+		Check(HeadlessInputScript::GetStep(steps, 59)->Buttons.empty(),
+			"BlocoQ: the release step still owns its last frame");
+		const HeadlessInputStep* start = HeadlessInputScript::GetStep(steps, 60);
+		Check(start && !start->Buttons.empty() && start->Buttons[0] == "start",
+			"BlocoQ: the next step owns the boundary frame itself");
+		Check(HeadlessInputScript::GetStep(steps, 71)->Buttons[0] == "start",
+			"BlocoQ: Start is held through frame 71");
+		Check(HeadlessInputScript::GetStep(steps, 72)->Buttons[0] == "right",
+			"BlocoQ: and is gone on frame 72 - ranges are half-open");
+		Check(HeadlessInputScript::GetStep(steps, 191) != nullptr &&
+			HeadlessInputScript::GetStep(steps, 192) == nullptr,
+			"BlocoQ: past the end of the script nothing is held");
+	}
+
+	void TestHeadlessScriptButtonNamesCoverEveryConsole()
+	{
+		std::vector<HeadlessInputStep> steps;
+		std::string error;
+		HeadlessInputScript::Parse("1f AB\n1f T\n", HeadlessInputScript::NtscFrameRate, steps, error);
+
+		//Resolved by name against BaseControlDevice::GetKeyNameAssociations(),
+		//and the same face button is called something else on the SMS pad. A
+		//name the loaded device does not expose is simply never applied, so
+		//emitting both is what lets one script drive NES, GB and SMS.
+		auto has = [](const HeadlessInputStep& step, const char* name) {
+			return std::find(step.Buttons.begin(), step.Buttons.end(), std::string(name)) != step.Buttons.end();
+		};
+		Check(has(steps[0], "a") && has(steps[0], "two"), "BlocoQ: \"A\" is the NES/GB \"a\" and the SMS \"two\"");
+		Check(has(steps[0], "b") && has(steps[0], "one"), "BlocoQ: \"B\" is \"b\" and \"one\"");
+		Check(has(steps[1], "start") && has(steps[1], "pause"), "BlocoQ: \"T\" is \"start\" and the SMS \"pause\"");
+	}
 }
 
 int main()
@@ -3622,6 +3747,12 @@ int main()
 	TestSpriteOffsetGroupingRejectsADrifter();
 	TestSpriteGroupIsLaidOutAtItsOamOffsets();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
+
+	TestHeadlessScriptUnitsAreExplicit();
+	TestHeadlessScriptBareNumberIsAnError();
+	TestHeadlessScriptStepsAreAbsoluteAndContiguous();
+	TestHeadlessScriptResolvesTheFrameBoundary();
+	TestHeadlessScriptButtonNamesCoverEveryConsole();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

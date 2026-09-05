@@ -11,8 +11,15 @@ demand:
     python3 scripts/write_play_scripts.py --list
 
 Script format, read by `scripts/headless_record`'s `input=<file>`: one
-`<seconds> <buttons>` step per line, buttons drawn from `UDLRABST`
-(Select/sTart) or `-` for nothing held.
+`<count>f <buttons>` step per line, counted in **emulated frames**
+(ADR-0157/F9.14 - a step is a position in a menu sequence, and counting it in
+host seconds made it land on a different frame on a loaded machine). Buttons
+are drawn from `UDLRABST` (Select/sTart), or `-` for nothing held.
+
+The sequences below are still authored in seconds, because that is the unit
+the probes that found them were read in; `_frames()` converts each step to
+frames at the NTSC rate on the way out, and nothing but frames reaches the
+file. A bare number in a script file is a parse error, by design.
 
 Every menu sequence below was found empirically, by recording a short probe
 with `screenshot` and looking at the frame it ended on - not from memory of
@@ -26,6 +33,19 @@ import os
 import sys
 
 Step = str
+
+# NES NTSC frame rate, the same constant scripts/headless_record resolves an
+# "<n>s" step with (ADR-0157 section 1). Every game covered here is NTSC.
+NTSC_FPS = 60.0988
+
+
+def _frames(step):
+    """"0.9 R" (seconds, as authored) -> "54f R" (emulated frames)."""
+    seconds, buttons = step.split(None, 1)
+    count = round(float(seconds) * NTSC_FPS)
+    if count < 1:
+        raise ValueError(f"step {step!r} rounds to zero frames")
+    return f"{count}f {buttons}"
 
 
 def _repeat_until(intro, cycle, seconds):
@@ -168,10 +188,13 @@ def main(argv=None):
             skipped += 1
             continue
         steps = build(args.seconds)
-        with open(path, "w") as handle:
-            handle.write("\n".join(steps) + "\n")
         total = sum(float(s.split()[0]) for s in steps)
-        print(f"wrote  {name}.play.txt ({len(steps)} steps, {total:.0f}s)")
+        frames = [_frames(step) for step in steps]
+        with open(path, "w") as handle:
+            handle.write("\n".join(frames) + "\n")
+        print(f"wrote  {name}.play.txt ({len(frames)} steps, "
+              f"{sum(int(f.split('f')[0]) for f in frames)} frames "
+              f"~ {total:.0f}s)")
         written += 1
     print(f"\n{written} written, {skipped} skipped, "
           f"{len(KNOWN_UNSOLVED)} known unsolved")

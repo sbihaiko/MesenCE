@@ -12,6 +12,11 @@
 #
 # Usage: scripts/bootstrap_auto_packs.sh <roms-dir> [seconds] [jobs] [stage-dir]
 #
+# Input scripts are counted in emulated frames (ADR-0157, F9.14): a "<n>f" step
+# covers exactly n frames of the emulated console on any host load. The run also
+# stops on a frame count, so [seconds] below sets a number of frames and the
+# wall-clock time a batch takes is unrelated to it (the frame limiter is off).
+#
 # Input: <lib>/<Game>/<Game>.play.txt wins when present (hand-tuned play for the
 # golden games); otherwise the generic script below, which mashes Start/A for the
 # first ~25 s to get through title and menu screens and then only moves, so it
@@ -36,17 +41,21 @@ mkdir -p "$STAGE"
 
 GENERIC="$STAGE/generic.play.txt"
 {
+	# Steps are in emulated frames (ADR-0157): a step is a position in a menu
+	# sequence, and counting it in host seconds made it land on a different
+	# frame on a loaded machine. The counts below are the pre-F9.14 seconds at
+	# the NTSC rate (0.2 s = 12f, 0.9 s = 54f, ...).
 	# intro phase: work through title screens, file select and option menus
 	for _ in $(seq 1 12); do
-		echo "0.9 -"; echo "0.2 T"; echo "0.5 -"; echo "0.2 A"; echo "0.3 D"
+		echo "54f -"; echo "12f T"; echo "30f -"; echo "12f A"; echo "18f D"
 	done
 	# play phase: movement and actions, with a lone Start every ~12 s - enough to
 	# leave a pause/inventory subscreen the intro phase may have opened, rare
 	# enough not to keep pausing a game that is actually running
 	for _ in $(seq 1 80); do
-		echo "2 R"; echo "0.6 A"; echo "1.5 R"; echo "0.6 B"; echo "1.5 U"
-		echo "0.6 A"; echo "1.5 L"; echo "0.6 B"; echo "1.5 D"; echo "0.6 A"
-		echo "0.2 T"; echo "1 -"
+		echo "120f R"; echo "36f A"; echo "90f R"; echo "36f B"; echo "90f U"
+		echo "36f A"; echo "90f L"; echo "36f B"; echo "90f D"; echo "36f A"
+		echo "12f T"; echo "60f -"
 	done
 } > "$GENERIC"
 

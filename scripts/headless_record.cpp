@@ -7,6 +7,16 @@
 //Build:   make capture-tool
 //Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>]
 //
+//F9.14 (ADR-0157): a run is a number of *emulated frames*, never a number of
+//host seconds. <seconds> keeps its name and its meaning for the caller, but is
+//converted to a frame count here, at the region's nominal frame rate, and the
+//run stops when the core's own frame counter reaches it - both ends of the
+//recording are decided from inside the frame (HeadlessInputProvider), so two
+//runs of the same ROM, script and binary cover exactly the same frames on any
+//host load. The frame limiter is therefore pointless and is turned off
+//(EmulationSpeed 0): speed is a free variable that no longer changes what a
+//recording contains. Pass "realtime" to keep it on.
+//
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
 //ever fed). With the "hdpack" flag it records an HD pack skeleton instead
@@ -59,16 +69,8 @@ struct ExecuteShortcutParamsAbi
 	void* ParamPtr;
 };
 
-//Mirror of Core/Debugger/DebugTypes.h DebugControllerState (14 bools) - that
-//header drags pch.h in; the layout is trivially stable.
-struct DebugControllerState
-{
-	bool A, B, X, Y, L, R, U, D, Up, Down, Left, Right, Select, Start;
-};
-
 extern "C"
 {
-	void SetInputOverrides(uint32_t index, DebugControllerState state);
 	void LoadStateFile(char* filepath);
 	TimingInfoAbi GetTimingInfo(uint8_t cpuType);
 	void InitDll();
@@ -79,7 +81,13 @@ extern "C"
 	void SetGameboyConfig(GameboyConfig config);
 	void SetEnhancementPackConfig(EnhancementPackConfig config);
 	void SetVideoConfig(VideoConfig config);
+	void SetEmulationConfig(EmulationConfig config);
 	void SetMepPackEnabled(const char* containerName, bool enabled);
+	//F9.14 (ADR-0157) - InteropDLL/EmuApiWrapperHeadless.cpp
+	bool HeadlessLoadInputScript(const char* scriptText, double frameRate, char* outError, uint32_t maxErrorLength);
+	void HeadlessSetPauseFrame(uint32_t frame);
+	uint32_t HeadlessGetScriptFrameCount();
+	uint32_t HeadlessGetFrameCount();
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
 	void TakeScreenshot();
@@ -90,6 +98,8 @@ extern "C"
 	void VgmStop();
 	bool VgmIsRecording();
 	bool IsRunning();
+	void Resume();
+	bool IsPaused();
 	void GetLog(char* outBuffer, uint32_t maxLength);
 	void Stop();
 	void Release();
@@ -124,7 +134,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [log] [bootstrap] [filter=<name>] [mep-off]\n"
 			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
-			"       [state=<file.mss>] [input=<script>]  (spike: scripted play)\n", argv[0]);
+			"       [state=<file.mss>] [input=<script>] [realtime]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -140,9 +150,13 @@ int main(int argc, char** argv)
 	mep.BootstrapEnhancementFolder = false; //opt-in headless ("bootstrap" flag) - it writes beside the ROM
 	std::string mepDisable;
 	std::string stateFile;
-	//input script: lines "<seconds> <buttons>", buttons in U D L R A B S(elect) T(start) or "-"
-	struct InputStep { double seconds; DebugControllerState state; };
-	std::vector<InputStep> inputScript;
+	//input script: lines "<count>f <buttons>" or "<count>s <buttons>", buttons
+	//in U D L R A B S(elect) T(start) or "-". A bare count is a parse error
+	//(ADR-0157 section 1). Parsed core-side by HeadlessInputScript, which is
+	//also what scripts/core_unit_tests.cpp covers.
+	std::string inputScriptText;
+	std::string inputScriptPath;
+	bool realtime = false;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
@@ -191,39 +205,20 @@ int main(int argc, char** argv)
 		} else if(strncmp(argv[i], "state=", 6) == 0) {
 			stateFile = argv[i] + 6;
 		} else if(strncmp(argv[i], "input=", 6) == 0) {
-			FILE* f = fopen(argv[i] + 6, "r");
+			inputScriptPath = argv[i] + 6;
+			FILE* f = fopen(inputScriptPath.c_str(), "rb");
 			if(!f) {
-				fprintf(stderr, "cannot open input script: %s\n", argv[i] + 6);
+				fprintf(stderr, "cannot open input script: %s\n", inputScriptPath.c_str());
 				return 1;
 			}
-			char line[256];
-			while(fgets(line, sizeof(line), f)) {
-				double secs = 0;
-				char buttons[64] = {};
-				if(sscanf(line, "%lf %63s", &secs, buttons) < 2 || line[0] == '#') {
-					continue;
-				}
-				InputStep step = {};
-				step.seconds = secs;
-				//The debugger applies an override only when some button is set; X has
-				//no NES mapping, so "-" (release) sets X to force all NES buttons off.
-				step.state.X = true;
-				for(char* c = buttons; *c; c++) {
-					switch(*c) {
-						case 'U': step.state.Up = true; break;
-						case 'D': step.state.Down = true; break;
-						case 'L': step.state.Left = true; break;
-						case 'R': step.state.Right = true; break;
-						case 'A': step.state.A = true; break;
-						case 'B': step.state.B = true; break;
-						case 'S': step.state.Select = true; break;
-						case 'T': step.state.Start = true; break;
-						default: break;
-					}
-				}
-				inputScript.push_back(step);
+			char buffer[4096];
+			size_t read;
+			while((read = fread(buffer, 1, sizeof(buffer), f)) > 0) {
+				inputScriptText.append(buffer, read);
 			}
 			fclose(f);
+		} else if(strcmp(argv[i], "realtime") == 0) {
+			realtime = true;
 		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {
 			mepDisable = argv[i] + 12;
 		}
@@ -262,6 +257,12 @@ int main(int argc, char** argv)
 	//overrides (SetInputOverrides, used by "input=<script>") are dropped on the
 	//floor because NesDebugger/SmsDebugger only write into a device that exists.
 	sms.Port1.Type = ControllerType::SmsController;
+	//Power-on RAM defaults to RamState::Random, which is a second source of
+	//run-to-run variation on top of the one F9.14 removed: a game that reads
+	//uninitialised RAM takes a different path, and the recording differs even
+	//when both runs cover the same frames. The core's own deterministic replay
+	//harness zeroes it for the same reason (RecordedRomTest::Run).
+	sms.RamPowerOnState = RamState::AllZeros;
 	SetSmsConfig(sms);
 
 	NesConfig nes = GetNesConfig();
@@ -290,6 +291,7 @@ int main(int argc, char** argv)
 	//See the SmsConfig note above: without a standard controller in port 1 an
 	//input script has nothing to drive.
 	nes.Port1.Type = ControllerType::NesController;
+	nes.RamPowerOnState = RamState::AllZeros; //see the SmsConfig note above
 	SetNesConfig(nes);
 
 	//Pin the GB model to the ROM extension so the HD pack capture path
@@ -301,6 +303,7 @@ int main(int argc, char** argv)
 	//filter's output exactly (GbcAdjustColors/BlendFrames both recolor pixels)
 	gameboy.GbcAdjustColors = false;
 	gameboy.BlendFrames = false;
+	gameboy.RamPowerOnState = RamState::AllZeros; //see the SmsConfig note above
 	SetGameboyConfig(gameboy);
 
 	//The screenshot pipeline (BaseVideoFilter::TakeScreenshot) runs the
@@ -311,18 +314,73 @@ int main(int argc, char** argv)
 	video.VideoFilter = videoFilter;
 	SetVideoConfig(video);
 
+	//F9.14: the frame limiter only decides how long a run takes on the wall
+	//clock, which is now nothing the output depends on. Off by default so a
+	//300 s recording does not cost 300 s; "realtime" puts it back for anyone
+	//who wants to watch one go by.
+	EmulationConfig emulation = {};
+	if(!realtime) {
+		emulation.EmulationSpeed = 0;
+	}
+	SetEmulationConfig(emulation);
+
 	SetEnhancementPackConfig(mep);
 	if(!mepDisable.empty()) {
 		SetMepPackEnabled(mepDisable.c_str(), false);
 	}
 
+	//The script's own unit is the frame; 's' steps and the <seconds> argument
+	//are resolved at the region's nominal rate (ADR-0157 section 1). This is
+	//the region the flags force, not the console's exact fps - the console is
+	//not loaded yet, and the provider has to be registered before it is (the
+	//control manager that holds it is created by the game load itself).
+	const double frameRate = pal ? 50.0070 : 60.0988;
+	uint32_t totalFrames = (uint32_t)std::max(1.0, std::round(seconds * frameRate));
+
+	if(!inputScriptPath.empty()) {
+		char scriptError[1024] = {};
+		if(!HeadlessLoadInputScript(inputScriptText.c_str(), frameRate, scriptError, (uint32_t)sizeof(scriptError))) {
+			fprintf(stderr, "%s: %s\n", inputScriptPath.c_str(), scriptError);
+			return 1;
+		}
+		printf("input script: %s (%u frames)\n", inputScriptPath.c_str(), HeadlessGetScriptFrameCount());
+	}
+
+	//Freeze the run on its first frame, so what the recorders are started on
+	//is a fixed frame rather than "whatever the emulation thread reached while
+	//this thread was calling into the DLL".
+	HeadlessSetPauseFrame(1);
+
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
 		fprintf(stderr, "failed to load ROM: %s\n", rom.c_str());
 		return 1;
 	}
+
+	//Wall-clock deadline for the whole run. Nothing about the *output* depends
+	//on it - it exists so a hung emulator cannot hang CI forever.
+	const double safetyTimeout = 120.0 + seconds * 3.0;
+	auto t0 = std::chrono::steady_clock::now();
+	auto elapsed = [&t0]() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+	auto waitForPause = [&](const char* what) {
+		while(!IsPaused()) {
+			if(!IsRunning()) {
+				fprintf(stderr, "emulation stopped unexpectedly while %s\n", what);
+				return false;
+			}
+			if(elapsed() > safetyTimeout) {
+				fprintf(stderr, "SAFETY TIMEOUT after %.1fs of wall clock while %s (frame %u) - the emulator is not advancing\n", elapsed(), what, HeadlessGetFrameCount());
+				return false;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		}
+		return true;
+	};
+
+	if(!waitForPause("waiting for the first frame")) {
+		return 1;
+	}
+
 	if(!stateFile.empty()) {
-		//Let the emulation thread come up before the state swap
-		std::this_thread::sleep_for(std::chrono::milliseconds(300));
 		LoadStateFile((char*)stateFile.c_str());
 		printf("state loaded: %s\n", stateFile.c_str());
 	}
@@ -340,8 +398,9 @@ int main(int argc, char** argv)
 		options.ChrRamBankSize = 0x1000;
 		ExecuteShortcut({ EmulatorShortcut::ExportRomTilesHdPack, 0, &options });
 		printf("static tile export: hdpack=%s\n", packFolder.c_str());
-		//short grace period so the emulation thread is fully up before Stop()
-		seconds = std::min(seconds, 0.5);
+		//The export is synchronous and needs no gameplay - stop on the frame
+		//the run is already paused on.
+		totalFrames = 1;
 	} else if(hdPack) {
 		HdPackBuilderOptions options = {};
 		options.SaveFolder = (char*)packFolder.c_str();
@@ -351,42 +410,24 @@ int main(int argc, char** argv)
 		ExecuteShortcut({ EmulatorShortcut::StartRecordHdPack, 0, &options });
 		printf("recording: hdpack=%s\n", packFolder.c_str());
 	} else if(screenshot) {
-		printf("running %.1fs for a final screenshot\n", seconds);
+		printf("running %u frames for a final screenshot\n", totalFrames);
 	} else {
 		MidiRecord((char*)mid.c_str());
 		VgmRecord((char*)vgm.c_str());
 		printf("recording: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
 	}
 
-	auto t0 = std::chrono::steady_clock::now();
-	size_t inputIndex = 0;
-	double inputStepStart = 0;
-	bool inputApplied = false;
-	while(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(inputScript.empty() ? 250 : 50));
-		if(inputIndex < inputScript.size()) {
-			double now = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-			if(!inputApplied) {
-				SetInputOverrides(0, inputScript[inputIndex].state);
-				inputStepStart = now;
-				inputApplied = true;
-			} else if(now - inputStepStart >= inputScript[inputIndex].seconds) {
-				inputIndex++;
-				inputApplied = false;
-				if(inputIndex >= inputScript.size()) {
-					DebugControllerState release = {};
-					release.X = true;
-					SetInputOverrides(0, release);
-				}
-			}
-		}
-		if(!IsRunning()) {
-			fprintf(stderr, "emulation stopped unexpectedly\n");
-			break;
-		}
-	}
+	//The run itself: resume, and let the provider stop it from inside the
+	//frame it was told to stop on. Nothing here decides how many frames run.
+	HeadlessSetPauseFrame(totalFrames);
+	Resume();
+	bool reachedTarget = waitForPause("recording");
 
 	if(screenshot) {
+		//The video decoder runs on its own thread; give it a moment to drain
+		//so the PNG is the paused frame and not the one before it. This is a
+		//display-pipeline settle, not part of the run length.
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		TakeScreenshot();
 		printf("screenshot saved in %s\n", (home / "Screenshots").string().c_str());
 	}
@@ -397,7 +438,7 @@ int main(int argc, char** argv)
 		MidiStop();
 		VgmStop();
 	}
-	printf("capture finished (%.1fs)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+	printf("capture finished: %u frames (target %u), %.1fs of wall clock%s\n", HeadlessGetFrameCount(), totalFrames, elapsed(), reachedTarget ? "" : " - INCOMPLETE");
 	if(dumpLog) {
 		std::string log(65536, '\0');
 		GetLog(log.data(), (uint32_t)log.size());
@@ -406,5 +447,7 @@ int main(int argc, char** argv)
 	}
 	Stop();
 	Release();
-	return 0;
+	//A run that did not reach its frame target is a failed capture, not a
+	//short one - the caller (bootstrap_auto_packs.sh) must see it.
+	return reachedTarget ? 0 : 1;
 }
