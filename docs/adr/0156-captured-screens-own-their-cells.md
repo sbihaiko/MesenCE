@@ -152,6 +152,31 @@ is gameplay" costs them the sheet. `Vocabulary::RoutingWithheld` keeps the two
 zeroes apart in the builder's log — "withheld" and "nothing to route" are the
 same cell count and not the same event.
 
+#### The sampling cap
+
+The two clauses above answer "was this a menu?". They cannot answer the
+question that the re-recorded library actually raised, because the recordings
+in question *were* gameplay: **residency is proved against the retained frames,
+which are a sample** (`kMaxSheetFrames`). For a game whose screen space is
+combinatorial — Tetris, where every board state is another screen — that sample
+says "every sighting is covered" when what it means is "the recording did not
+last long enough to see otherwise".
+
+Measured as a share of the scene vocabulary over the 30-ROM library re-recorded
+on 2026-09-05: Mario Bros. 106 of 106 (and no `metatiles.png` written at all),
+Tennis 206/207, Tetris 648/651, Donkey Kong 171/172, Golf 184/186, Tetris 2
+376/386 — six games at 0.974–1.000, each leaving a sheet of one to ten cells.
+The next game down is Zelda 1 at 0.879, which still leaves 28 usable cells, and
+below it the field is continuous (Lifeforce 0.770, Mega Man 2 0.754,
+Punch-Out!! 0.637, Super Mario Bros. 0.106).
+
+So: above `kMaxRoutedSceneShare` (**0.93**, the midpoint of that gap) nothing is
+routed. The value is a measured gap, not a swept parameter, and the asymmetry
+is the same one as above — an artist with a fat sheet is where F9.9 found them.
+Combined with the anchor gap (issue #164) the alternative is the worst outcome
+the pipeline can produce: no sheet to paint, and screens that do not draw on
+any variant the recording missed.
+
 The probe's own blind spot carries over: a password or option screen that is
 *itself* tiled wallpaper (Punch-Out!!'s, Mega Man 2's, Dr. Mario's) clears both
 clauses. Those runs are caught downstream instead, where
