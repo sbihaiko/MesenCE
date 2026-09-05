@@ -247,6 +247,42 @@
       "validated_at": "2026-09-05T01:49:59Z",
       "verdict": "accepted",
       "votes": 1
+    },
+    {
+      "content_id": "848f0f7ce0e7c73f08bc1087e931b46649598f9db7ea04227efe013a341fb59e",
+      "errata": {
+        "declared_by": "MesenCE validation",
+        "known_missing": [
+          {
+            "manifest": "hires.txt",
+            "reviewed_in": "https://github.com/sbihaiko/MesenCE/issues/148",
+            "tag": "background",
+            "target": "LavaAirGlow0.png"
+          }
+        ]
+      },
+      "game": "Metroid (USA)",
+      "issue": 148,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "pack:known-missing",
+        "assets:textures",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "Metroid (USA) \u2014 community submission",
+      "pack_id": "issue-148",
+      "rom": {
+        "sha1": "FDBFC7871962F72A1EF57E5A7E456164FB93430B"
+      },
+      "sha256": "2421f9378b82d3bdfb67d490b00718a266fda75e8afa9c775075a9bb74df68a1",
+      "system": "nes",
+      "url": "https://www.mediafire.com/file/c2ve8zcek72w21e/Metroid_HD.zip/file",
+      "validated_at": "2026-09-05T01:56:30Z",
+      "verdict": "accepted",
+      "votes": 1
     }
   ],
   "updated": "2026-09-05"
