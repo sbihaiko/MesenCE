@@ -17,6 +17,13 @@ overwritten by `.github/workflows/community-pack-catalog.yml`.
 | Ninja Gaiden (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/145) |
 | Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/147) |
 | Metroid (USA) | NES | ? | 2026-08-31 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/148) |
+| The Legend of Zelda (USA) † | NES | ? | 2026-08-29 | [👍 1](https://github.com/sbihaiko/MesenCE/issues/139) |
+
+† This pack references one or more files it does not ship. The gap was
+checked and declared by MesenCE validation — **not by the pack's author** —
+so the pack is listed and installs normally; the emulator skips the missing
+entries at load. `docs/community-packs.json` names each one, with a link to
+where it was reviewed.
 
 Packs are ranked by community 👍 votes. Try a pack, and if you like it, give
 it a 👍 — your vote helps others discover the community’s favorites. Every
