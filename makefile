@@ -293,6 +293,7 @@ doc-checks: check-manifest
 	python3 scripts/test_classify_pack_brief.py
 	python3 scripts/test_mep_build.py
 	python3 scripts/test_mep_lint_border.py
+	python3 scripts/test_mep_audio_patch_resolution.py
 	#F5.5 golden refresh: the MEP/MEI goldens under docs/specs/golden/ must stay
 	#in sync with the emit code and the specs, or these gates fail.
 	python3 scripts/validate-specs.py

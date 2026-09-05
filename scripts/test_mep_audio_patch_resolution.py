@@ -15,7 +15,7 @@ patch IS present into pack:invalid:
      "no patch".
 
 Both fixes are verified here: case-insensitive ref resolution (mirroring
-the existing <img> behavior) and a `bundled patch: <name> (present)` info
+the existing <img> behavior) and a `bundled patch: <name> (present, ...)` info
 line in the lint report.
 
 Usage: python3 scripts/test_mep_audio_patch_resolution.py
@@ -101,7 +101,7 @@ def check_audio_track_case_insensitive():
 def check_bundled_patch_reported():
     """AC-3 (bug B): the lint report lists the .ips/.bps patches present in
     the archive (even when hires.txt never references them) as
-    'bundled patch: <name> (present)', so the classifier can apply the
+    'bundled patch: <name> (present, ...)', so the classifier can apply the
     ADR-0144 audio exception without re-reading the raw archive."""
     hires = b"<ver>105\n<bgm>0,1,ogg/bgm-main.ogg\n"
     src = mep_lint.Source.from_zip_bytes(
@@ -134,8 +134,14 @@ def check_bundled_patch_inside_nested_zip():
     rep = mep_lint.Report()
     mep_lint.scan_bundled_patches(inner, rep)
     present = [m for _, _, m in rep.items if "bundled patch:" in m]
-    if present != ["bundled patch: MusicPatch.ips (present)"]:
+    #Assert on the stable head of the message, not the whole line: the
+    #wired/NOT-wired suffix was added by ADR-0148 and an exact match here is
+    #what let this check rot into a permanent failure.
+    if len(present) != 1 or not present[0].startswith("bundled patch: MusicPatch.ips (present"):
         fail(f"nested patch not reported correctly; got {present!r}")
+        return
+    if "NOT wired" not in present[0]:
+        fail(f"an unreferenced nested patch must be reported as NOT wired; got {present[0]!r}")
         return
     ok("a patch inside a nested game zip is reported as present")
 
@@ -180,7 +186,7 @@ def check_main_prints_bundled_patch():
         if code != 0:
             fail(f"main() returned {code}; stdout:\n{out.getvalue()}")
             return
-        if "bundled patch: NEA-Game.bps (present)" not in out.getvalue():
+        if "bundled patch: NEA-Game.bps (present" not in out.getvalue():
             fail(f"main() --quiet report lacks the bundled-patch line; stdout:\n{out.getvalue()}")
             return
     finally:
