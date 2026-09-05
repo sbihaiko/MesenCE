@@ -365,11 +365,28 @@ namespace MesenSheets
 	//nothing is routed - the same asymmetry as the clauses above.
 	constexpr double kMaxRoutedSceneShare = 0.93;
 
+	//The share above is the wrong axis on its own, and the library said so on
+	//the second measurement: the gap it was cut from (0.879 to 0.974 in one run)
+	//did not reproduce - the next run put Bomberman at 0.899, Zelda 1 at 0.900
+	//and Pac-Man at 0.901, straight through the middle of it. A share moves with
+	//the size of the vocabulary and with the luck of the recording.
+	//
+	//So the second floor is on the artefact the artist actually opens: what is
+	//left on the contact sheet. Below this many scene cells it is not a contact
+	//sheet, it is a leftover - those three packs kept 13, 21 and 23 cells, which
+	//is the very failure kMaxRoutedSceneShare exists to prevent, arriving from
+	//underneath. Measured on the 2026-09-05 re-record, where the remaining
+	//sheets run 13, 21, 23, then 37, 42, 46, 55 - but the number is deliberately
+	//not read off a gap this time: it is a floor on usefulness, which is why it
+	//is an absolute count and not a ratio.
+	constexpr uint32_t kMinSceneSheetCells = 30;
+
 	enum class RoutingWithhold
 	{
 		None = 0,
 		NotGameplay = 1, //the two gameplay clauses above
 		SamplingCap = 2, //kMaxRoutedSceneShare
+		SheetTooThin = 3, //kMinSceneSheetCells
 	};
 
 	struct Vocabulary

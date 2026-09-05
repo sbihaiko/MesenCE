@@ -177,6 +177,29 @@ Combined with the anchor gap (issue #164) the alternative is the worst outcome
 the pipeline can produce: no sheet to paint, and screens that do not draw on
 any variant the recording missed.
 
+#### The sheet floor
+
+The share above is the wrong axis on its own, and the library said so on the
+second measurement. The gap 0.93 was cut from — 0.879 to 0.974 in the first
+re-record — **did not reproduce**: the next run put Bomberman at 0.899, Zelda 1
+at 0.900 and Pac-Man at 0.901, straight through the middle of it, keeping
+sheets of 13, 21 and 23 cells. That is the failure the cap exists to prevent,
+arriving from underneath it. A share moves with the size of the vocabulary and
+with the luck of a recording; the thing the artist opens does not.
+
+So routing is also withheld when it would leave fewer than
+`kMinSceneSheetCells` (**30**) cells on the scene sheet. Below that it is not a
+contact sheet, it is a leftover. The number is deliberately **not** read off a
+gap this time — that method already failed once here — it is a floor on
+usefulness, which is why it is an absolute count and not a ratio. The remaining
+sheets in the run it was set against run 13, 21, 23, then 37, 42, 46, 55.
+
+`RoutingWithhold` names which of the three floors fired, because they are not
+the same event and a log that blames the recording for a sampling cap sends
+whoever reads it to fix the wrong thing: Tetris is gameplay by any reading — 26
+distinct screens, the game running — and was still capped, for routing 648 of
+its 651 scene cells.
+
 The probe's own blind spot carries over: a password or option screen that is
 *itself* tiled wallpaper (Punch-Out!!'s, Mega Man 2's, Dr. Mario's) clears both
 clauses. Those runs are caught downstream instead, where

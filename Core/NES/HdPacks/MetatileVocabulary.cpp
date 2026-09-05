@@ -739,13 +739,17 @@ namespace MesenSheets
 			resident += entry.ScreenResident ? 1 : 0;
 		}
 
-		//The sampling floor: a rule that takes the whole scene sheet has stopped
-		//describing the game and started describing the length of the recording.
-		if(scene > 0 && (double)resident / (double)scene > kMaxRoutedSceneShare) {
+		//The sampling floors. A rule that takes the whole scene sheet has stopped
+		//describing the game and started describing the length of the recording;
+		//and whatever the share says, a sheet the artist cannot work from is not
+		//a sheet.
+		bool tooMuch = scene > 0 && (double)resident / (double)scene > kMaxRoutedSceneShare;
+		bool tooThin = scene > 0 && scene - resident < kMinSceneSheetCells;
+		if(tooMuch || tooThin) {
 			for(size_t i = 0; i < vocab.Entries.size(); i++) {
 				vocab.Entries[i].ScreenResident = false;
 			}
-			vocab.Withheld = RoutingWithhold::SamplingCap;
+			vocab.Withheld = tooMuch ? RoutingWithhold::SamplingCap : RoutingWithhold::SheetTooThin;
 		}
 	}
 

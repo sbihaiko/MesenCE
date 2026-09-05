@@ -3052,7 +3052,11 @@ namespace
 	//Two static screens, each held far past StableFramesNeeded, with a figure
 	//standing on the first one. `captured` is what the recorder would set after
 	//CaptureScreen wrote the PNG.
-	std::vector<GridFrame> SheetScreenRecording(bool captured)
+	//`elsewhereBlocks` sizes the part of the recording no captured screen
+	//covers, which is what decides how much stays on the contact sheet. The
+	//default keeps the sheet clear of kMinSceneSheetCells, so the residency
+	//tests measure the residency rule and not the floors underneath it.
+	std::vector<GridFrame> SheetScreenRecording(bool captured, uint32_t elsewhereBlocks = 40)
 	{
 		std::vector<GridFrame> frames;
 		for(uint32_t i = 0; i < 2; i++) {
@@ -3076,7 +3080,7 @@ namespace
 				//A disjoint shape space on purpose: reusing SheetBlockScreen's
 				//would put the captured screens' own cells at positions no
 				//screen explains, and disqualify the very cells under test.
-				uint32_t block = ((r / 2) * 7u + (c / 2)) % 5u;
+				uint32_t block = ((r / 2) * 7u + (c / 2)) % elsewhereBlocks;
 				elsewhere.Cells[r][c] = (ShapeId)(500 + block * 4 + (r % 2) * 2 + (c % 2));
 			}
 		}
@@ -3256,6 +3260,28 @@ namespace
 			"BlocoP: routing that would take the whole scene sheet is withheld, and says so",
 			"scene=" + std::to_string(SheetSceneCount(vocab)) +
 			" withheld=" + std::to_string((int)vocab.Withheld) +
+			" resident=" + std::to_string(SheetResidentCount(vocab)));
+	}
+
+	void TestSheetRoutingIsWithheldWhenTooLittleWouldBeLeftToPaint()
+	{
+		//The share cap misses this from underneath. Measured: Bomberman routed
+		//0.899 of its scene vocabulary and kept 13 cells, Pac-Man 0.901 and 21,
+		//Zelda 1 0.900 and 23 - all under the cap, all leaving a sheet nobody
+		//can work from. A share moves with the size of the vocabulary; what the
+		//artist opens does not.
+		//Two blocks' worth of world outside the screens: the share stays under
+		//kMaxRoutedSceneShare, so the *sheet* floor is the binding one and this
+		//test cannot pass for the cap's reasons.
+		std::vector<GridFrame> frames = SheetScreenRecording(true, 2);
+		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
+		uint32_t scene = SheetSceneCount(vocab);
+		Check(scene > 0 && scene < MesenSheets::kMinSceneSheetCells,
+			"BlocoP: the fixture is small enough for the sheet floor to be the binding one",
+			"scene=" + std::to_string(scene));
+		Check(vocab.Withheld == RoutingWithhold::SheetTooThin && SheetResidentCount(vocab) == 0,
+			"BlocoP: routing that would leave too little to paint is withheld, and says so",
+			"withheld=" + std::to_string((int)vocab.Withheld) +
 			" resident=" + std::to_string(SheetResidentCount(vocab)));
 	}
 
@@ -3740,6 +3766,7 @@ int main()
 	TestSheetNothingIsRoutedWithoutACapturedScreen();
 	TestSheetRoutingIsWithheldWhenTheRecordingIsNotGameplay();
 	TestSheetRoutingIsWithheldWhenItWouldTakeTheWholeSheet();
+	TestSheetRoutingIsWithheldWhenTooLittleWouldBeLeftToPaint();
 	TestSheetResidencyLeavesTheHudSheetAlone();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();

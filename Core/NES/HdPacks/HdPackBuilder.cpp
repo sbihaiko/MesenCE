@@ -898,6 +898,8 @@ void HdPackBuilder::BuildSheets()
 			? string("routing withheld - the recording does not look like gameplay")
 			: vocab.Withheld == MesenSheets::RoutingWithhold::SamplingCap
 				? string("routing withheld - it would have taken the whole scene sheet")
+				: vocab.Withheld == MesenSheets::RoutingWithhold::SheetTooThin
+					? string("routing withheld - it would have left too little to paint")
 				: std::to_string(_screenResidentCells) + " cells routed to the captured screens"));
 }
 
