@@ -147,7 +147,10 @@ Cases in `scripts/core_unit_tests.cpp` Bloco P (`make core-unit-tests`).
   vanilla — visibly flatter than the painted neighbours around them. The rule
   cannot see this: it tests positions, not whether the conditions hold. Bounded
   to variants of screens the recording did capture, but real, and the cheapest
-  fix if it bites is to widen the anchor choice, not to widen the rule.
+  fix if it bites is to widen the anchor choice, not to widen the rule. Tracked
+  as issue #164 so it is triaged on its own merits rather than carried as a
+  perpetual caveat here — note the anchors could always miss; F9.9 only makes
+  the miss visible, by putting painted art beside the gap.
 - **A thin recording routes too much.** A session that never leaves one screen
   captures it, sees nothing else, and routes its whole vocabulary — the pack
   then ships an almost empty `metatiles.png`. `scripts/sheet_report.py` is how a
