@@ -25,208 +25,6 @@
       "votes": 1
     },
     {
-      "content_id": "4c2be30070bfe2dc74c5ab185e45ee4bb1d8a667d8252ec187471174325d4812",
-      "game": "Pac-Man (Namco, US, 1993)",
-      "issue": 140,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
-      "pack_id": "pepcodes/hdnes-graphics-pac:pac-man-namco-us-1993",
-      "rom": {
-        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
-        "sha1s": [
-          "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08"
-        ]
-      },
-      "sha256": "0d4e9d794149f8ea889ad962b4baea218812d9bd5bf49dc7575078a867e47a96",
-      "system": "nes",
-      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
-      "validated_at": "2026-08-29T21:58:49Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "68a21dce48c865df7083fbcfb28637aec6f5f27768afd4fb6925701499df8f39",
-      "game": "Zelda II: The Adventure of Link (USA)",
-      "issue": 141,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Zelda II: The Adventure of Link (USA) \u2014 community submission",
-      "pack_id": "modernretrodesign/zii-mesen:zelda-ii-the-adventure-of-link-usa",
-      "rom": {},
-      "sha256": "779ec4b37de3b307dd3968b296b9bf199ed58f5413d4a4e9018e2ce096b2b1e9",
-      "system": "nes",
-      "url": "https://github.com/ModernRetroDesign/ZII-mesen/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T22:00:28Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "ab971a624bd30c5599a7d90c201bd4f08ff5d0d54b2d4fbb0fbb8b4cb9062354",
-      "game": "Mega Man (USA)",
-      "issue": 138,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Mega Man (USA) \u2014 community submission",
-      "pack_id": "axlrocks/megaman-super:mega-man-usa",
-      "rom": {
-        "crc32": "6EE4BB0A",
-        "sha1": "6047E52929DFE8ED4708D325766CCB8D3D583C7D"
-      },
-      "sha256": "666bdeae79a721cc6c9ff38e4613c144e0b971f271dd13a7b39780eb6fe557bc",
-      "system": "nes",
-      "url": "https://github.com/AxlRocks/Megaman-Super/archive/refs/heads/main.zip",
-      "validated_at": "2026-08-29T22:00:34Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "a2d644ff4994c8c5bc7e40eebfe754744c3fdcbc0dc87798e91d726b673f6dc7",
-      "game": "Contra (USA)",
-      "issue": 137,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "console:nes",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Contra (USA) \u2014 community submission",
-      "pack_id": "tastichacks/contra80s:contra-usa",
-      "rom": {
-        "crc32": "F6035030",
-        "sha1": "979494E7869AC7AB4815FDBD1DC99F893F713FBF"
-      },
-      "sha256": "b174830de2f9a59a766d532b9ee1d1e6d6f5d341e92c2e3e7ebc908dd945ff9e",
-      "system": "nes",
-      "url": "https://github.com/TasticHacks/Contra80s/releases/download/1.1/Contra80s.zip",
-      "validated_at": "2026-08-29T22:02:05Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "b49bead9a33a319230c24908911da6a7b6cab59106b2310b392d96c75e13e5e2",
-      "game": "Castlevania (USA)",
-      "issue": 143,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures",
-        "assets:audio",
-        "patch:ips"
-      ],
-      "license": "unknown",
-      "name": "Castlevania (USA) \u2014 community submission",
-      "pack_id": "issue-143",
-      "rom": {
-        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD",
-        "sha1s": [
-          "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A"
-        ]
-      },
-      "sha256": "20cef2694cc02ab7d25cc0186d366bedc746fdeaf8ac29db7b0243fb65ad73d0",
-      "system": "nes",
-      "url": "https://www.mediafire.com/file/8zaqei9lmvel048/Castlevania_Mesen_HD_Music_and_Graphics.zip/file",
-      "validated_at": "2026-08-30T20:59:57Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "608e3172049aa33613b858092bf5c3f967d6a008343231b26bfa9a039bd955cc",
-      "game": "Donkey Kong (JU)",
-      "issue": 144,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Donkey Kong (JU) \u2014 community submission",
-      "pack_id": "issue-144",
-      "rom": {
-        "sha1": "D222DBBA5BD3716BBF62CA91167C6A9D15C60065",
-        "sha1s": [
-          "2C4B1D653194DF0996D54D9DE9188B270D0337D9"
-        ]
-      },
-      "sha256": "dc3f61d6b1dd1418398add4b8dca0f8eb660cb3443d5f5b3646451f042d763fd",
-      "system": "nes",
-      "url": "https://www.mediafire.com/file/5xgz6dr0tyiqm6g/Donkey_Kong_%28JU%29_HD_Pack.zip/file",
-      "validated_at": "2026-08-31T00:13:13Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "553cfe6be090565c85a424fd156b3f223bc5fa71de721a8ae8783b5f20c3957b",
-      "game": "Ninja Gaiden (USA)",
-      "issue": 145,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Ninja Gaiden (USA) \u2014 community submission",
-      "pack_id": "issue-145",
-      "rom": {
-        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
-        "sha1s": [
-          "15F245161179AB1959B7DC20E82ADD024D23AA3D"
-        ]
-      },
-      "sha256": "04d1678ff3c0a60cb8a2d972cd44b7d7347e1bc2f307c4a826a304730b2bb668",
-      "system": "nes",
-      "url": "https://drive.google.com/uc?export=download&id=1W5F3omSYMBNOkjouMjdXrVlG0FM5bcMx",
-      "validated_at": "2026-08-31T00:16:44Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
-      "content_id": "369fb4b8917cd87f8a825611fe38c5ff18b1f546b2399d7f768e820718669148",
-      "game": "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin)",
-      "issue": 147,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Super Mario Bros (JU) (PRG0) [!] Paper Version (Paper Mario Bros reskin) \u2014 community submission",
-      "pack_id": "issue-147",
-      "rom": {
-        "sha1": "FACEE9C577A5262DBE33AC4930BB0B58C8C037F7",
-        "sha1s": [
-          "B606D2CF1EC5E8732B8748D272417B7FECB4EEF7",
-          "FEFA1097449A3A11EBF8C6199E905996C5DC8FBD"
-        ]
-      },
-      "sha256": "d72fa67fe8d956bf2aeb1bd11f9abf0002137e94469a70ab05aec0f78e897335",
-      "system": "nes",
-      "url": "https://www.mediafire.com/file/fl3rk77d6nuv7fl/Super_Mario_Bros._%28JU%29_%28PRG0%29_%5B%21%5D_Paper_Version.zip/file",
-      "validated_at": "2026-08-31T00:35:38Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
       "content_id": "848f0f7ce0e7c73f08bc1087e931b46649598f9db7ea04227efe013a341fb59e",
       "game": "Metroid (USA)",
       "issue": 148,
@@ -286,6 +84,83 @@
       "system": "nes",
       "url": "https://drive.google.com/file/d/1mYMLbmR4gLIS-IRXM7P1GaGQnmoF1rsa/view?usp=sharing",
       "validated_at": "2026-09-05T01:15:13Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "7ba6421d839ceb0f61bbcbeb564c935b468771bfde2e53fd47a6a6071ea21627",
+      "game": "Pac-Man (Namco, US, 1993)",
+      "issue": 140,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
+      "pack_id": "pepcodes/hdnes-graphics-pac",
+      "rom": {
+        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
+        "sha1s": [
+          "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08"
+        ]
+      },
+      "sha256": "7e0f669e1cf577364b27ef57b648649b11f5dc7d03ece5f4f8a994255490d84a",
+      "system": "nes",
+      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/refs/heads/master.zip",
+      "validated_at": "2026-09-05T01:19:19Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "b49bead9a33a319230c24908911da6a7b6cab59106b2310b392d96c75e13e5e2",
+      "game": "Castlevania (USA)",
+      "issue": 143,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "Castlevania (USA) \u2014 community submission",
+      "pack_id": "issue-143",
+      "rom": {
+        "sha1": "EE09B857C90916EDD92A20C463485A610B0A76FD",
+        "sha1s": [
+          "3DCB69A8C861C041AEB56C04E39ADF6D332EDA3A"
+        ]
+      },
+      "sha256": "20cef2694cc02ab7d25cc0186d366bedc746fdeaf8ac29db7b0243fb65ad73d0",
+      "system": "nes",
+      "url": "https://www.mediafire.com/file/8zaqei9lmvel048/Castlevania_Mesen_HD_Music_and_Graphics.zip/file",
+      "validated_at": "2026-09-05T01:19:49Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "553cfe6be090565c85a424fd156b3f223bc5fa71de721a8ae8783b5f20c3957b",
+      "game": "Ninja Gaiden (USA)",
+      "issue": 145,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Ninja Gaiden (USA) \u2014 community submission",
+      "pack_id": "issue-145",
+      "rom": {
+        "sha1": "EAD83487D9BE2F1D16C1D0B438A361A06508CD85",
+        "sha1s": [
+          "15F245161179AB1959B7DC20E82ADD024D23AA3D"
+        ]
+      },
+      "sha256": "04d1678ff3c0a60cb8a2d972cd44b7d7347e1bc2f307c4a826a304730b2bb668",
+      "system": "nes",
+      "url": "https://drive.google.com/uc?export=download&id=1W5F3omSYMBNOkjouMjdXrVlG0FM5bcMx",
+      "validated_at": "2026-09-05T01:19:49Z",
       "verdict": "accepted",
       "votes": 1
     }
