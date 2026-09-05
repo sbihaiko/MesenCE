@@ -159,6 +159,7 @@ private:
 	void RecordGridFrame();
 	MesenSheets::ShapeId ShapeIdFor(const HdPpuTileInfo& tile);
 	void BuildSheets();
+	void EnforceCollapsedSheetFloor(MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
 	void WriteContextSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
 	void WriteMapSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
 	void WriteObjectSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);

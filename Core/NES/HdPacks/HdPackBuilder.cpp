@@ -881,6 +881,14 @@ void HdPackBuilder::BuildSheets()
 	string folder = FolderUtilities::CombinePath(_saveFolder, "sheets");
 	FolderUtilities::CreateFolder(folder);
 
+	//F9.9 (ADR-0156): the sheet floor is a claim about what the artist opens,
+	//and what they open is the *collapsed* sheet (F9.7). Measured on vocabulary
+	//entries it misses by exactly the collapse ratio - Mega Man 2 routed 101 of
+	//113 scene entries and the 12 that stayed rendered as 12 cells, well under
+	//the floor, without tripping it. So the floor is checked again here, where
+	//the collapse is known.
+	EnforceCollapsedSheetFloor(vocab, lookup);
+
 	WriteContextSheets(folder, vocab, lookup);
 	WriteMapSheets(folder, vocab, lookup);
 	WriteObjectSheets(folder, vocab, lookup);
@@ -905,6 +913,37 @@ void HdPackBuilder::BuildSheets()
 
 //metatiles / hud / font / misc, split by context so a rupee counter never
 //sits between two trees (ADR-0153 §3).
+void HdPackBuilder::EnforceCollapsedSheetFloor(MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup)
+{
+	if(vocab.Withheld != MesenSheets::RoutingWithhold::None) {
+		return; //already withheld, for a reason that is not this one
+	}
+	vector<uint32_t> indexes;
+	bool routedAny = false;
+	for(uint32_t i = 0; i < vocab.Entries.size(); i++) {
+		if(vocab.Entries[i].Context != MesenSheets::SheetContext::Scene) {
+			continue;
+		}
+		if(vocab.Entries[i].ScreenResident) {
+			routedAny = true;
+			continue;
+		}
+		indexes.push_back(i);
+	}
+	if(!routedAny) {
+		return; //nothing was routed, so nothing was taken off the sheet
+	}
+	vector<vector<uint32_t>> aliases;
+	indexes = MesenSheets::CollapseAliases(vocab, indexes, lookup, _palette, MesenSheets::kSheetAliasTolerance, aliases);
+	if(indexes.size() >= MesenSheets::kMinSceneSheetCells) {
+		return;
+	}
+	for(size_t i = 0; i < vocab.Entries.size(); i++) {
+		vocab.Entries[i].ScreenResident = false;
+	}
+	vocab.Withheld = MesenSheets::RoutingWithhold::SheetTooThin;
+}
+
 void HdPackBuilder::WriteContextSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup)
 {
 	static const std::pair<MesenSheets::SheetContext, const char*> kSheets[] = {
