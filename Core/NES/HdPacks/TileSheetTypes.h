@@ -365,6 +365,13 @@ namespace MesenSheets
 	//nothing is routed - the same asymmetry as the clauses above.
 	constexpr double kMaxRoutedSceneShare = 0.93;
 
+	enum class RoutingWithhold
+	{
+		None = 0,
+		NotGameplay = 1, //the two gameplay clauses above
+		SamplingCap = 2, //kMaxRoutedSceneShare
+	};
+
 	struct Vocabulary
 	{
 		GridDetection Grid;
@@ -379,10 +386,12 @@ namespace MesenSheets
 		AdjacencyMap South;
 		uint32_t StableScreens = 0;
 		uint32_t DistinctScreens = 0;
-		//F9.9: set when the routing floor above refused the recording, so the
-		//builder can say "withheld" rather than let it read as "nothing to
-		//route" - the two look identical in a cell count.
-		bool RoutingWithheld = false;
+		//F9.9: why nothing was routed, when nothing was. "Withheld" and
+		//"there was nothing to route" are the same cell count and not the same
+		//event - and the two floors are not the same event either: Tetris is
+		//gameplay by any reading, and was still capped for routing 648 of its
+		//651 scene cells.
+		RoutingWithhold Withheld = RoutingWithhold::None;
 
 		int32_t Find(const MetatileKey& key) const
 		{

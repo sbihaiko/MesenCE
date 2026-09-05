@@ -3213,18 +3213,18 @@ namespace
 			frames.push_back(frame);
 		}
 		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
-		Check(vocab.RoutingWithheld && SheetResidentCount(vocab) == 0,
+		Check(vocab.Withheld == RoutingWithhold::NotGameplay && SheetResidentCount(vocab) == 0,
 			"BlocoP: a recording that does not look like gameplay routes nothing",
-			"withheld=" + std::to_string(vocab.RoutingWithheld ? 1 : 0) +
+			"withheld=" + std::to_string((int)vocab.Withheld) +
 			" resident=" + std::to_string(SheetResidentCount(vocab)));
 
 		//And the floor does not fire on the recording that motivated the rule:
 		//"withheld" must stay distinguishable from "there was nothing to route".
 		std::vector<GridFrame> played = SheetScreenRecording(true);
 		Vocabulary ok = BuildVocabulary(played, SheetLookup());
-		Check(!ok.RoutingWithheld && SheetResidentCount(ok) > 0,
+		Check(ok.Withheld == RoutingWithhold::None && SheetResidentCount(ok) > 0,
 			"BlocoP: a tiled playfield clears the routing floor",
-			"withheld=" + std::to_string(ok.RoutingWithheld ? 1 : 0) +
+			"withheld=" + std::to_string((int)ok.Withheld) +
 			" resident=" + std::to_string(SheetResidentCount(ok)));
 	}
 
@@ -3248,10 +3248,13 @@ namespace
 			frames.push_back(frame);
 		}
 		Vocabulary vocab = BuildVocabulary(frames, SheetLookup());
-		Check(SheetSceneCount(vocab) > 0 && vocab.RoutingWithheld && SheetResidentCount(vocab) == 0,
-			"BlocoP: routing that would take the whole scene sheet is withheld",
+		//The reason matters, not just the zero: Tetris is gameplay by any
+		//reading and was still capped, so a builder that blamed the recording
+		//would be sending the artist to fix the wrong thing.
+		Check(SheetSceneCount(vocab) > 0 && vocab.Withheld == RoutingWithhold::SamplingCap && SheetResidentCount(vocab) == 0,
+			"BlocoP: routing that would take the whole scene sheet is withheld, and says so",
 			"scene=" + std::to_string(SheetSceneCount(vocab)) +
-			" withheld=" + std::to_string(vocab.RoutingWithheld ? 1 : 0) +
+			" withheld=" + std::to_string((int)vocab.Withheld) +
 			" resident=" + std::to_string(SheetResidentCount(vocab)));
 	}
 

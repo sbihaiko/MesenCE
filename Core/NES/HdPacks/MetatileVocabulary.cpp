@@ -712,7 +712,7 @@ namespace MesenSheets
 			//Withheld, not "nothing to route": the two are the same cell count.
 			//Costing the artist a fatter sheet is the cheap error here; costing
 			//them the sheet is not.
-			vocab.RoutingWithheld = true;
+			vocab.Withheld = RoutingWithhold::NotGameplay;
 			return;
 		}
 		std::set<Sighting> explained;
@@ -745,7 +745,7 @@ namespace MesenSheets
 			for(size_t i = 0; i < vocab.Entries.size(); i++) {
 				vocab.Entries[i].ScreenResident = false;
 			}
-			vocab.RoutingWithheld = true;
+			vocab.Withheld = RoutingWithhold::SamplingCap;
 		}
 	}
 

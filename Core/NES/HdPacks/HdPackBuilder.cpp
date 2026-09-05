@@ -892,10 +892,13 @@ void HdPackBuilder::BuildSheets()
 		"), " + std::to_string(vocab.Entries.size()) + " metatiles from " + std::to_string(vocab.DistinctScreens) +
 		" distinct screens, HUD rows " + std::to_string(vocab.HudRows) + "/" + std::to_string(vocab.HudBottomRows) +
 		", " + std::to_string(_spriteSheetCount) + " sprite groups from " + std::to_string(_oamFrames.size()) + " OAM frames" +
-		", " + (vocab.RoutingWithheld
-			//F9.9 floor: say which of the two zeroes this is.
+		//F9.9: say which of the three zeroes this is - nothing to route, a
+		//recording that never reached gameplay, or a sample too thin to trust.
+		", " + (vocab.Withheld == MesenSheets::RoutingWithhold::NotGameplay
 			? string("routing withheld - the recording does not look like gameplay")
-			: std::to_string(_screenResidentCells) + " cells routed to the captured screens"));
+			: vocab.Withheld == MesenSheets::RoutingWithhold::SamplingCap
+				? string("routing withheld - it would have taken the whole scene sheet")
+				: std::to_string(_screenResidentCells) + " cells routed to the captured screens"));
 }
 
 //metatiles / hud / font / misc, split by context so a rupee counter never
