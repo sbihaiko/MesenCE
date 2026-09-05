@@ -1,14 +1,8 @@
 #include "pch.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
-#include "Shared/MessageManager.h"
 #include "Shared/RewindManager.h"
 #include "Shared/Video/BaseVideoFilter.h"
-#include "Shared/Video/RotateFilter.h"
-#include "Shared/Video/ScaleFilter.h"
-#include "Shared/Video/ScanlineFilter.h"
-#include "Utilities/PNGHelper.h"
-#include "Utilities/FolderUtilities.h"
 
 const static double PI = 3.14159265358979323846;
 
@@ -42,11 +36,19 @@ void BaseVideoFilter::UpdateBufferSize()
 {
 	uint32_t newBufferSize = _frameInfo.Width * _frameInfo.Height;
 	if(_bufferSize != newBufferSize) {
-		_frameLock.Acquire();
-		delete[] _outputBuffer;
-		_bufferSize = newBufferSize;
-		_outputBuffer = new uint32_t[newBufferSize];
-		_frameLock.Release();
+		//Allocate first, then take the lock and swap: allocating from inside
+		//the lock meant a throwing `new` unwound with _outputBuffer already
+		//deleted, leaving every other holder of the lock - the screenshot and
+		//capture paths - reading freed memory (F9.15).
+		uint32_t* newBuffer = newBufferSize > 0 ? new uint32_t[newBufferSize] : nullptr;
+		uint32_t* oldBuffer = nullptr;
+		{
+			auto lock = _frameLock.AcquireSafe();
+			oldBuffer = _outputBuffer;
+			_outputBuffer = newBuffer;
+			_bufferSize = newBufferSize;
+		}
+		delete[] oldBuffer;
 	}
 }
 
@@ -172,78 +174,4 @@ void BaseVideoFilter::YiqToRgb(double y, double i, double q, double& r, double& 
 	r = std::max(0.0, std::min(1.0, (y + _yiqToRgbMatrix[0] * i + _yiqToRgbMatrix[1] * q)));
 	g = std::max(0.0, std::min(1.0, (y + _yiqToRgbMatrix[2] * i + _yiqToRgbMatrix[3] * q)));
 	b = std::max(0.0, std::min(1.0, (y + _yiqToRgbMatrix[4] * i + _yiqToRgbMatrix[5] * q)));
-}
-
-void BaseVideoFilter::TakeScreenshot(VideoFilterType filterType, string filename, std::stringstream* stream)
-{
-	uint32_t* pngBuffer;
-	FrameInfo frameInfo;
-	uint32_t* frameBuffer = nullptr;
-	{
-		auto lock = _frameLock.AcquireSafe();
-		if(_bufferSize == 0 || !GetOutputBuffer()) {
-			return;
-		}
-
-		frameBuffer = new uint32_t[_bufferSize];
-		memcpy(frameBuffer, GetOutputBuffer(), _bufferSize * sizeof(frameBuffer[0]));
-		frameInfo = _frameInfo;
-	}
-
-	pngBuffer = frameBuffer;
-
-	uint8_t scale = 1;
-
-	uint32_t screenRotation = _emu->GetSettings()->GetVideoConfig().ScreenRotation;
-	_emu->GetScreenRotationOverride(screenRotation);
-
-	unique_ptr<RotateFilter> rotateFilter(new RotateFilter(screenRotation));
-	if(screenRotation != 0) {
-		pngBuffer = rotateFilter->ApplyFilter(pngBuffer, frameInfo.Width, frameInfo.Height);
-		frameInfo = rotateFilter->GetFrameInfo(frameInfo);
-	}
-
-	unique_ptr<ScaleFilter> scaleFilter = ScaleFilter::GetScaleFilter(_emu, filterType);
-	if(scaleFilter) {
-		pngBuffer = scaleFilter->ApplyFilter(pngBuffer, frameInfo.Width, frameInfo.Height);
-		frameInfo = scaleFilter->GetFrameInfo(frameInfo);
-		scale = scaleFilter->GetScale();
-	}
-
-	ScanlineFilter::ApplyFilter(pngBuffer, frameInfo.Width, frameInfo.Height, _emu->GetSettings()->GetVideoConfig().ScanlineIntensity, scale);
-
-	if(!filename.empty()) {
-		PNGHelper::WritePNG(filename, pngBuffer, frameInfo.Width, frameInfo.Height);
-	} else {
-		PNGHelper::WritePNG(*stream, pngBuffer, frameInfo.Width, frameInfo.Height);
-	}
-
-	delete[] frameBuffer;
-}
-
-void BaseVideoFilter::TakeScreenshot(string romName, VideoFilterType filterType)
-{
-	string romFilename = FolderUtilities::GetFilename(romName, false);
-
-	int counter = 0;
-	string baseFilename = FolderUtilities::CombinePath(FolderUtilities::GetScreenshotFolder(), romFilename);
-	string ssFilename;
-	while(true) {
-		string counterStr = std::to_string(counter);
-		while(counterStr.length() < 3) {
-			counterStr = "0" + counterStr;
-		}
-		ssFilename = baseFilename + "_" + counterStr + ".png";
-		ifstream file(ssFilename, ios::in);
-		if(file) {
-			file.close();
-		} else {
-			break;
-		}
-		counter++;
-	}
-
-	TakeScreenshot(filterType, ssFilename);
-
-	MessageManager::DisplayMessage("ScreenshotSaved", FolderUtilities::GetFilename(ssFilename, true));
 }

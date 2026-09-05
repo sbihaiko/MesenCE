@@ -4,6 +4,7 @@
 #include "Utilities/AutoResetEvent.h"
 #include "Shared/SettingTypes.h"
 #include "Shared/RenderedFrame.h"
+#include "Shared/Video/FrameCapture.h"
 
 class BaseVideoFilter;
 class ScaleFilter;
@@ -52,6 +53,10 @@ public:
 	void DecodeFrame(bool synchronous = false);
 	void TakeScreenshot(string romName = "");
 	void TakeScreenshot(std::stringstream& stream);
+
+	//F9.15: the same screenshot, kept in memory. `out` is the caller's; the
+	//returned capture is empty when no filter/frame exists yet.
+	ScreenshotCapture CaptureScreenshot(vector<uint32_t>& out);
 
 	void ForceFilterUpdate() { _forceFilterUpdate = true; }
 

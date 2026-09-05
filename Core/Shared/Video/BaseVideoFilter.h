@@ -4,6 +4,7 @@
 #include "Shared/SettingTypes.h"
 #include "Shared/RenderedFrame.h"
 #include "Shared/Video/BlendFilter.h"
+#include "Shared/Video/FrameCapture.h"
 
 class Emulator;
 
@@ -49,6 +50,16 @@ public:
 	FrameInfo SendFrame(uint16_t* ppuOutputBuffer, uint32_t frameNumber, uint32_t videoPhase, void* frameData, bool enableOverscan = true, RenderedFrame frame = {});
 	void TakeScreenshot(string romName, VideoFilterType filterType);
 	void TakeScreenshot(VideoFilterType filterType, string filename, std::stringstream* stream = nullptr);
+
+	//F9.15: the same pipeline TakeScreenshot writes to a PNG, stopping one
+	//step earlier - the pixels land in a caller-owned vector instead of on
+	//disk. Returns an empty ScreenshotCapture (and clears `out`) when no
+	//frame has been decoded yet or the dimensions do not validate.
+	ScreenshotCapture CaptureScreenshot(VideoFilterType filterType, vector<uint32_t>& out);
+
+	//The unfiltered half of it: the filtered output buffer copied out under
+	//_frameLock, with the dimensions validated *before* `out` is resized.
+	ScreenshotCapture CopyOutputBuffer(vector<uint32_t>& out);
 
 	virtual HudScaleFactors GetScaleFactor() { return { 1.0, 1.0 }; }
 	virtual OverscanDimensions GetOverscan();

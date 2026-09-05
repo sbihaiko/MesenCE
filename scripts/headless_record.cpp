@@ -30,6 +30,12 @@
 //4x/6x/8x/10x); the default is "none", i.e. a 1:1 native-resolution frame.
 //A scaling filter multiplies the PNG dimensions by its scale factor - this is
 //what scripts/check_hq4x_screenshot.sh asserts for HQ4x (P.7).
+//With the "capture" flag the final frame is pulled into this process' memory
+//(HeadlessCaptureFrame/HeadlessReadCapturedPixels, F9.15) instead of - or as
+//well as - being written to a PNG, and its dimensions, frame number, FNV-1a
+//checksum and uniform border bands are printed. That is what turns a check a
+//human used to make by opening a screenshot (letterboxing, a card on screen)
+//into a line a shell script can assert on.
 //With the "log" flag the core message log is dumped to stdout at the end
 //(used by the F3 MEP tests to check "[MEP] ..." matching/rejection lines;
 //the MEP folder is <home>/EnhancementPacks/ inside the scratch home).
@@ -39,6 +45,7 @@
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
+#include "Core/Shared/Video/FrameCapture.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -88,6 +95,9 @@ extern "C"
 	void HeadlessSetPauseFrame(uint32_t frame);
 	uint32_t HeadlessGetScriptFrameCount();
 	uint32_t HeadlessGetFrameCount();
+	//F9.15 - in-memory frame capture (same wrapper file)
+	bool HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount);
+	uint32_t HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels);
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
 	void TakeScreenshot();
@@ -132,7 +142,7 @@ int main(int argc, char** argv)
 {
 	if(argc < 4) {
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
-			"       [screenshot] [log] [bootstrap] [filter=<name>] [mep-off]\n"
+			"       [screenshot] [capture] [log] [bootstrap] [filter=<name>] [mep-off]\n"
 			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
 			"       [state=<file.mss>] [input=<script>] [realtime]\n", argv[0]);
 		return 1;
@@ -144,6 +154,7 @@ int main(int argc, char** argv)
 	bool hdPack = false;
 	bool romTiles = false;
 	bool screenshot = false;
+	bool capture = false;
 	bool dumpLog = false;
 	VideoFilterType videoFilter = VideoFilterType::None;
 	EnhancementPackConfig mep = {};
@@ -166,6 +177,8 @@ int main(int argc, char** argv)
 			romTiles = true;
 		} else if(strcmp(argv[i], "screenshot") == 0) {
 			screenshot = true;
+		} else if(strcmp(argv[i], "capture") == 0) {
+			capture = true;
 		} else if(strncmp(argv[i], "filter=", 7) == 0) {
 			const char* name = argv[i] + 7;
 			if(strcmp(name, "none") == 0) { videoFilter = VideoFilterType::None; }
@@ -409,8 +422,8 @@ int main(int argc, char** argv)
 		options.ChrRamBankSize = 0x1000; //NES-only field
 		ExecuteShortcut({ EmulatorShortcut::StartRecordHdPack, 0, &options });
 		printf("recording: hdpack=%s\n", packFolder.c_str());
-	} else if(screenshot) {
-		printf("running %u frames for a final screenshot\n", totalFrames);
+	} else if(screenshot || capture) {
+		printf("running %u frames for a final %s\n", totalFrames, screenshot ? "screenshot" : "capture");
 	} else {
 		MidiRecord((char*)mid.c_str());
 		VgmRecord((char*)vgm.c_str());
@@ -423,18 +436,46 @@ int main(int argc, char** argv)
 	Resume();
 	bool reachedTarget = waitForPause("recording");
 
-	if(screenshot) {
+	if(screenshot || capture) {
 		//The video decoder runs on its own thread; give it a moment to drain
-		//so the PNG is the paused frame and not the one before it. This is a
-		//display-pipeline settle, not part of the run length.
+		//so what we read is the paused frame and not the one before it. This
+		//is a display-pipeline settle, not part of the run length.
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	}
+
+	if(screenshot) {
 		TakeScreenshot();
 		printf("screenshot saved in %s\n", (home / "Screenshots").string().c_str());
 	}
 
+	bool captureFailed = false;
+	if(capture) {
+		//F9.15: the frame never reaches the disk. Two calls, because the size
+		//of the capture is only known after it is taken and the pixels must
+		//come from *that* capture, not from a second one taken later.
+		uint32_t width = 0, height = 0, frameNumber = 0, pixelCount = 0;
+		if(!HeadlessCaptureFrame(&width, &height, &frameNumber, &pixelCount)) {
+			fprintf(stderr, "capture failed: the emulator has no decoded frame\n");
+			captureFailed = true;
+		} else {
+			std::vector<uint32_t> pixels(pixelCount);
+			uint32_t copied = HeadlessReadCapturedPixels(pixels.data(), pixelCount);
+			if(copied != pixelCount) {
+				fprintf(stderr, "capture failed: read %u of %u pixels\n", copied, pixelCount);
+				captureFailed = true;
+			} else {
+				FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), width, height);
+				printf("capture: %ux%u frame=%u pixels=%u checksum=0x%08X\n",
+					width, height, frameNumber, pixelCount, FrameCaptureMath::Checksum(pixels.data(), pixelCount));
+				printf("capture borders: left=%u right=%u top=%u bottom=%u colour=0x%08X blank=%d\n",
+					borders.Left, borders.Right, borders.Top, borders.Bottom, borders.Colour, borders.IsBlank ? 1 : 0);
+			}
+		}
+	}
+
 	if(hdPack) {
 		ExecuteShortcut({ EmulatorShortcut::StopRecordHdPack, 0, nullptr });
-	} else if(!screenshot) {
+	} else if(!screenshot && !capture) {
 		MidiStop();
 		VgmStop();
 	}
@@ -449,5 +490,5 @@ int main(int argc, char** argv)
 	Release();
 	//A run that did not reach its frame target is a failed capture, not a
 	//short one - the caller (bootstrap_auto_packs.sh) must see it.
-	return reachedTarget ? 0 : 1;
+	return reachedTarget && !captureFailed ? 0 : 1;
 }

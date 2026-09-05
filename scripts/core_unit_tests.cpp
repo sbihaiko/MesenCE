@@ -32,7 +32,10 @@
 //adjacency and (F9.5) over OAM offsets, scroll matching, and
 //SheetRender's geometry and sidecar JSON. Bloco Q (ADR-0157, F9.14) covers
 //HeadlessInputScript, the parser that turns a play script into absolute frame
-//ranges; Bloco R (H9) covers HeadlessInputEngine, the stateful half, driven
+//ranges; Bloco S (F9.15) covers FrameCapture, the host-free half of the
+//in-memory frame capture - the dimension validation that runs before anything
+//is allocated, and the uniform-band measurement that turns "is this frame
+//letterboxed?" into a number; Bloco R (H9) covers HeadlessInputEngine, the stateful half, driven
 //against a fake host and a fake control device - frame boundaries, overlay
 //semantics, the GameLoaded re-registration and the stop frame, with no
 //Emulator and no ROM. Run from the repo root so the golden paths
@@ -46,6 +49,7 @@
 #include "Shared/EnhancementPacks/MepZipExtract.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Video/BorderLayout.h"
+#include "Shared/Video/FrameCapture.h"
 #include "Shared/Video/AspectRatioMath.h"
 #include "Shared/HeadlessInputEngine.h"
 #include "Shared/HeadlessInputScript.h"
@@ -4287,6 +4291,170 @@ namespace
 	}
 }
 
+//--- Bloco S: FrameCapture (F9.15) ---------------------------------------
+//Host-free half of the in-memory frame capture: BaseVideoFilter owns the
+//frame lock and the filter pipeline, FrameCaptureMath owns every decision
+//that can be made from plain numbers. No Emulator, no PNG, no disk.
+
+namespace
+{
+	//A width x height frame filled with `background`, with an inner rect of
+	//`ink` starting at (x, y) - i.e. a picture inside a uniform band.
+	std::vector<uint32_t> MakeCaptureFrame(uint32_t width, uint32_t height, uint32_t background,
+		uint32_t x, uint32_t y, uint32_t rectWidth, uint32_t rectHeight, uint32_t ink)
+	{
+		std::vector<uint32_t> pixels((size_t)width * height, background);
+		for(uint32_t row = y; row < y + rectHeight; row++) {
+			for(uint32_t col = x; col < x + rectWidth; col++) {
+				pixels[(size_t)row * width + col] = ink;
+			}
+		}
+		return pixels;
+	}
+}
+
+void TestCaptureSizeAcceptsAMatchingBuffer()
+{
+	uint32_t pixelCount = 0;
+	Check(FrameCaptureMath::IsCaptureSizeValid(256, 240, 256 * 240, pixelCount),
+		"BlocoS: a 256x240 frame backed by 61440 pixels validates");
+	Check(pixelCount == 256 * 240, "BlocoS: the validated pixel count is width * height",
+		std::to_string(pixelCount));
+}
+
+void TestCaptureSizeRejectsAnEmptyFrame()
+{
+	uint32_t pixelCount = 123;
+	Check(!FrameCaptureMath::IsCaptureSizeValid(0, 240, 0, pixelCount), "BlocoS: a zero width never validates");
+	Check(!FrameCaptureMath::IsCaptureSizeValid(256, 0, 0, pixelCount), "BlocoS: a zero height never validates");
+	Check(pixelCount == 123, "BlocoS: a rejected size leaves the caller's pixel count untouched",
+		std::to_string(pixelCount));
+}
+
+void TestCaptureSizeRejectsABufferThatDoesNotMatch()
+{
+	uint32_t pixelCount = 0;
+	Check(!FrameCaptureMath::IsCaptureSizeValid(256, 240, 256 * 239, pixelCount),
+		"BlocoS: dimensions that do not describe the buffer are refused (a short read is not a capture)");
+	Check(!FrameCaptureMath::IsCaptureSizeValid(256, 240, 256 * 241, pixelCount),
+		"BlocoS: an oversized buffer is refused too - the mismatch is the bug, not its direction");
+}
+
+void TestCaptureSizeRejectsAnOverflowingProduct()
+{
+	//65536 * 65536 is 2^32: in 32-bit arithmetic it wraps to 0, which would
+	//match a zero-length buffer and authorise a copy of the wrong length.
+	uint32_t pixelCount = 7;
+	Check(!FrameCaptureMath::IsCaptureSizeValid(65536, 65536, 0, pixelCount),
+		"BlocoS: a width * height that overflows 32 bits is refused, not wrapped");
+	Check(pixelCount == 7, "BlocoS: the overflowing size writes nothing back");
+}
+
+void TestCaptureSizeRejectsAnAbsurdlyLargeFrame()
+{
+	uint32_t pixelCount = 0;
+	uint32_t huge = 16384; //16384 * 16384 = 268 Mpx, four times the ceiling
+	Check(!FrameCaptureMath::IsCaptureSizeValid(huge, huge, huge * huge, pixelCount),
+		"BlocoS: a frame past MaxCapturePixels is refused before anything is allocated");
+	//A 10x prescale of 256x240 is 6.1 Mpx and must stay inside the ceiling.
+	Check(FrameCaptureMath::IsCaptureSizeValid(2560, 2400, 2560 * 2400, pixelCount),
+		"BlocoS: the largest filter we ship (prescale 10x) is still a valid capture");
+}
+
+void TestBordersOnAUniformFrame()
+{
+	std::vector<uint32_t> pixels((size_t)64 * 32, 0xFF000000);
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), 64, 32);
+	Check(borders.IsBlank, "BlocoS: a frame of a single colour reports itself blank");
+	Check(borders.Left == 0 && borders.Right == 0 && borders.Top == 0 && borders.Bottom == 0,
+		"BlocoS: a blank frame reports no bands - there is no picture for one to frame");
+	Check(borders.Colour == 0xFF000000, "BlocoS: the band colour is the frame's own top-left pixel");
+}
+
+void TestBordersMeasureLetterboxing()
+{
+	//The 16:9 case the harness exists to assert on: a 4:3 picture centred on
+	//a 320x180 surface leaves 30 rows of black above and below it.
+	std::vector<uint32_t> pixels = MakeCaptureFrame(320, 180, 0xFF000000, 0, 30, 320, 120, 0xFF3050C0);
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), 320, 180);
+	Check(!borders.IsBlank, "BlocoS: a letterboxed frame is not blank");
+	Check(borders.Top == 30 && borders.Bottom == 30,
+		"BlocoS: letterboxing is measured as equal top and bottom bands",
+		std::to_string(borders.Top) + "/" + std::to_string(borders.Bottom));
+	Check(borders.Left == 0 && borders.Right == 0,
+		"BlocoS: a full-width picture leaves no side bands");
+}
+
+void TestBordersMeasurePillarboxing()
+{
+	std::vector<uint32_t> pixels = MakeCaptureFrame(320, 240, 0xFF000000, 40, 0, 240, 240, 0xFF3050C0);
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), 320, 240);
+	Check(borders.Left == 40 && borders.Right == 40,
+		"BlocoS: pillarboxing is measured as equal left and right bands",
+		std::to_string(borders.Left) + "/" + std::to_string(borders.Right));
+	Check(borders.Top == 0 && borders.Bottom == 0,
+		"BlocoS: a full-height picture leaves no top or bottom band");
+}
+
+void TestBordersMeasureAnOffCentrePicture()
+{
+	//Nothing here assumes the picture is centred: the bands are whatever the
+	//pixels say they are, which is how an off-by-one viewport gets caught.
+	std::vector<uint32_t> pixels = MakeCaptureFrame(100, 50, 0xFFFFFFFF, 10, 5, 80, 40, 0xFF102030);
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), 100, 50);
+	Check(borders.Left == 10 && borders.Right == 10 && borders.Top == 5 && borders.Bottom == 5,
+		"BlocoS: bands are measured independently on all four sides");
+	Check(borders.Colour == 0xFFFFFFFF, "BlocoS: a white band is a band like any other");
+
+	std::vector<uint32_t> shifted = MakeCaptureFrame(100, 50, 0xFFFFFFFF, 3, 5, 80, 40, 0xFF102030);
+	FrameBorders shiftedBorders = FrameCaptureMath::MeasureBorders(shifted.data(), 100, 50);
+	Check(shiftedBorders.Left == 3 && shiftedBorders.Right == 17,
+		"BlocoS: an off-centre picture reports unequal side bands",
+		std::to_string(shiftedBorders.Left) + "/" + std::to_string(shiftedBorders.Right));
+}
+
+void TestBordersOnAFrameThatFillsTheSurface()
+{
+	std::vector<uint32_t> pixels = MakeCaptureFrame(16, 16, 0xFF000000, 0, 0, 16, 16, 0xFF00FF00);
+	pixels[0] = 0xFF000000; //one stray pixel: the top-left is the band colour by definition
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(pixels.data(), 16, 16);
+	Check(!borders.IsBlank, "BlocoS: a picture reaching every edge is not blank");
+	Check(borders.Left == 0 && borders.Right == 0 && borders.Top == 0 && borders.Bottom == 0,
+		"BlocoS: a single stray pixel of the band colour is not a band");
+}
+
+void TestBordersHandleAnEmptyFrame()
+{
+	FrameBorders borders = FrameCaptureMath::MeasureBorders(nullptr, 0, 0);
+	Check(borders.IsBlank, "BlocoS: measuring nothing reports blank instead of reading memory");
+}
+
+void TestCaptureChecksumSeparatesFrames()
+{
+	std::vector<uint32_t> a = MakeCaptureFrame(32, 32, 0xFF000000, 4, 4, 8, 8, 0xFFAABBCC);
+	std::vector<uint32_t> b = a;
+	Check(FrameCaptureMath::Checksum(a.data(), (uint32_t)a.size()) == FrameCaptureMath::Checksum(b.data(), (uint32_t)b.size()),
+		"BlocoS: identical captures have identical checksums");
+
+	b[500] ^= 0x00000001;
+	Check(FrameCaptureMath::Checksum(a.data(), (uint32_t)a.size()) != FrameCaptureMath::Checksum(b.data(), (uint32_t)b.size()),
+		"BlocoS: a one-bit difference in one pixel changes the checksum");
+	Check(FrameCaptureMath::Checksum(nullptr, 0) == FrameCaptureMath::Checksum(a.data(), 0),
+		"BlocoS: an empty capture hashes to the FNV-1a basis either way");
+}
+
+void TestScreenshotCaptureReportsItsOwnEmptiness()
+{
+	ScreenshotCapture empty;
+	Check(empty.IsEmpty() && empty.PixelCount() == 0,
+		"BlocoS: a default ScreenshotCapture is the failure value - no frame, no pixels");
+
+	ScreenshotCapture capture { 256, 240, 3606 };
+	Check(!capture.IsEmpty() && capture.PixelCount() == 61440,
+		"BlocoS: a real capture carries its dimensions and its emulated frame number",
+		std::to_string(capture.FrameNumber));
+}
+
 int main()
 {
 	TestSilentChannelNotSfx();
@@ -4426,6 +4594,19 @@ int main()
 	TestHeadlessEngineKeepsTheOldScriptWhenANewOneIsRejected();
 	TestHeadlessEngineReplaysAWholeSequence();
 
+	TestCaptureSizeAcceptsAMatchingBuffer();
+	TestCaptureSizeRejectsAnEmptyFrame();
+	TestCaptureSizeRejectsABufferThatDoesNotMatch();
+	TestCaptureSizeRejectsAnOverflowingProduct();
+	TestCaptureSizeRejectsAnAbsurdlyLargeFrame();
+	TestBordersOnAUniformFrame();
+	TestBordersMeasureLetterboxing();
+	TestBordersMeasurePillarboxing();
+	TestBordersMeasureAnOffCentrePicture();
+	TestBordersOnAFrameThatFillsTheSurface();
+	TestBordersHandleAnEmptyFrame();
+	TestCaptureChecksumSeparatesFrames();
+	TestScreenshotCaptureReportsItsOwnEmptiness();
 
 	printf("\n%d/%d cases passed\n", gCases - gFailures, gCases);
 	return gFailures == 0 ? 0 : 1;

@@ -245,6 +245,15 @@ void VideoDecoder::TakeScreenshot(string romName)
 	}
 }
 
+ScreenshotCapture VideoDecoder::CaptureScreenshot(vector<uint32_t>& out)
+{
+	if(!_videoFilter) {
+		out.clear();
+		return {};
+	}
+	return _videoFilter->CaptureScreenshot(_videoFilterType, out);
+}
+
 void VideoDecoder::TakeScreenshot(std::stringstream& stream)
 {
 	if(_videoFilter) {

@@ -1,10 +1,12 @@
 #include "Common.h"
 #include "Core/Shared/Emulator.h"
 #include "Core/Shared/HeadlessInputProvider.h"
+#include "Core/Shared/Video/VideoDecoder.h"
 #include "Utilities/StringUtilities.h"
 
-//F9.14 (ADR-0157): the DLL surface scripts/headless_record needs to drive a
-//recording in emulated frames instead of wall-clock seconds. Sibling file to
+//F9.14 (ADR-0157) and F9.15: the DLL surface scripts/headless_record needs to
+//drive a recording in emulated frames instead of wall-clock seconds, and to
+//read the frame it stopped on without going through Screenshots/. Sibling file to
 //EmuApiWrapper.cpp (already at its 200-line-per-file guardrail, see
 //EmuApiWrapperMep.cpp for the same call), and all four exports are thin
 //marshaling over HeadlessInputProvider - no scheduling logic lives here.
@@ -15,6 +17,12 @@ extern unique_ptr<Emulator> _emu;
 //weak_ptr, so dropping this would silently unsubscribe the provider from
 //GameLoaded and reintroduce the "input= is a no-op after a game load" trap.
 static shared_ptr<HeadlessInputProvider> _headlessInput;
+
+//F9.15: the last capture taken by HeadlessCaptureFrame, kept here so the
+//harness can ask for its size and then read the pixels of *that* capture -
+//a second call into the emulator would answer about a different frame.
+static vector<uint32_t> _headlessCapture;
+static ScreenshotCapture _headlessCaptureInfo;
 
 static HeadlessInputProvider* GetHeadlessInput()
 {
@@ -58,5 +66,31 @@ extern "C"
 	DllExport uint32_t __stdcall HeadlessGetFrameCount()
 	{
 		return _emu->GetFrameCount();
+	}
+
+	//Capture the frame the emulator is currently showing into the DLL-side
+	//buffer, filtered exactly like a saved screenshot would be. Returns false
+	//when nothing has been decoded yet; the out parameters are always written.
+	DllExport bool __stdcall HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount)
+	{
+		_headlessCaptureInfo = _emu->GetVideoDecoder()->CaptureScreenshot(_headlessCapture);
+		if(outWidth) { *outWidth = _headlessCaptureInfo.Width; }
+		if(outHeight) { *outHeight = _headlessCaptureInfo.Height; }
+		if(outFrameNumber) { *outFrameNumber = _headlessCaptureInfo.FrameNumber; }
+		if(outPixelCount) { *outPixelCount = (uint32_t)_headlessCapture.size(); }
+		return !_headlessCaptureInfo.IsEmpty();
+	}
+
+	//Copy the pixels of the last HeadlessCaptureFrame into the caller's
+	//buffer, 0xAARRGGBB, row-major. Returns how many pixels were copied
+	//(never more than maxPixels, never more than the capture holds).
+	DllExport uint32_t __stdcall HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels)
+	{
+		if(!outPixels || _headlessCapture.empty()) {
+			return 0;
+		}
+		uint32_t count = std::min(maxPixels, (uint32_t)_headlessCapture.size());
+		memcpy(outPixels, _headlessCapture.data(), (size_t)count * sizeof(uint32_t));
+		return count;
 	}
 }
