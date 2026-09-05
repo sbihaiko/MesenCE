@@ -26,6 +26,11 @@
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 
+//F9.10: subfolder the CHR-order fragments are written to, relative to the pack
+//root. Only the builder needs the name - the loader reads whatever path the
+//<img> line carries, so packs written before this still load from the root.
+static constexpr const char* kChrFolder = "chr";
+
 HdPackBuilder::HdPackBuilder(Emulator* emu, PpuModel ppuModel, bool isChrRam, HdPackBuilderOptions options)
 {
 	_emu = emu;
@@ -1211,6 +1216,7 @@ void HdPackBuilder::CaptureScreen()
 void HdPackBuilder::SaveHdPack()
 {
 	FolderUtilities::CreateFolder(_saveFolder);
+	FolderUtilities::CreateFolder(FolderUtilities::CombinePath(_saveFolder, kChrFolder));
 
 	stringstream pngRows;
 	stringstream tileRows;
@@ -1240,11 +1246,20 @@ void HdPackBuilder::SaveHdPack()
 
 	auto savePng = [&tileRows, &pngRows, &ss, &pngBuffer, &pngDimension, &pngIndex, &pngBufferSize, &pngEmpty, &pngNumber, this](uint32_t chrBankId) {
 		if(!pngEmpty) {
+			//F9.10: the CHR-order fragments are a rendering layer, not an artist
+			//surface - one bank's 256 tiles in bank order, which is what a
+			//mapper decided and not what a game draws. There can be thousands
+			//of them (12993 across the library, 7.1 MB for Punch-Out!! alone),
+			//and at the pack root they are the first thing an artist meets when
+			//the folder opens, ahead of sheets/. They cannot be dropped -
+			//hires.txt renders from them - so they move one level down, and the
+			//<img> path follows them (the loader resolves an <img> relative to
+			//the pack root, as backgrounds/screenNNN.png already does).
 			string pngName;
 			if(_isChrRam) {
-				pngName = "Chr_" + std::to_string(pngNumber) + ".png";
+				pngName = string(kChrFolder) + "/Chr_" + std::to_string(pngNumber) + ".png";
 			} else {
-				pngName = "Chr_" + HexUtilities::ToHex(chrBankId) + "_" + std::to_string(pngNumber) + ".png";
+				pngName = string(kChrFolder) + "/Chr_" + HexUtilities::ToHex(chrBankId) + "_" + std::to_string(pngNumber) + ".png";
 			}
 
 			tileRows << std::endl;

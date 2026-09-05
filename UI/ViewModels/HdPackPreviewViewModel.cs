@@ -65,9 +65,12 @@ namespace Mesen.ViewModels
 
 		private static IEnumerable<HdPackImagePair> EnumeratePairs(string saveFolder)
 		{
-			//Sheets live at the pack root (Chr_*.png); screens under backgrounds/
-			//(screenNNN.png). Each processed PNG with a *.orig.png twin is a pair.
-			foreach(string dir in new[] { saveFolder, Path.Combine(saveFolder, "backgrounds") }) {
+			//CHR-order fragments live under chr/ (Chr_*.png, moved out of the pack
+			//root by F9.10); screens under backgrounds/ (screenNNN.png). The root
+			//itself is still scanned so a pack written before that move, or a
+			//hand-made one, keeps previewing. Each processed PNG with a
+			//*.orig.png twin is a pair.
+			foreach(string dir in new[] { saveFolder, Path.Combine(saveFolder, "chr"), Path.Combine(saveFolder, "backgrounds") }) {
 				if(!Directory.Exists(dir)) {
 					continue;
 				}
