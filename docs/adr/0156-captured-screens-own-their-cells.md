@@ -1,6 +1,6 @@
 # ADR-0156: A captured screen owns the cells it covers — they leave `metatiles.png`
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-05
 - Related: PRD Part A §4 "Phase 9" (slice F9.9, and the 2026-09-05 scrutiny
   against a target mockup), ADR-0050, ADR-0153 §3/§4/§5, ADR-0049, ADR-0005
@@ -204,6 +204,35 @@ The probe's own blind spot carries over: a password or option screen that is
 *itself* tiled wallpaper (Punch-Out!!'s, Mega Man 2's, Dr. Mario's) clears both
 clauses. Those runs are caught downstream instead, where
 `bootstrap_auto_packs.sh` reports `MENU` and the pack is not trusted.
+
+### 6. The thresholds are provisional, and what would move them
+
+`kMaxRoutedSceneShare` and `kMinSceneSheetCells` are **not** settled constants,
+and this ADR is accepted with that stated rather than implied. Both were
+revised inside a single day: 0.93 was cut from a gap between 0.879 and 0.974
+that the very next re-record walked through (0.899, 0.900, 0.901), and 30 was
+set from one run's distribution of remaining sheets. The rule — a captured
+screen owns the cells it covers — is what is being accepted here. The numbers
+are the current best reading of one library.
+
+They should be re-measured, and are expected to move, when any of these change:
+
+- **the library.** All calibration is 30 NES titles, heavy on first-party
+  Nintendo. A library of scrolling platformers or of board games would put the
+  mass somewhere else.
+- **the console.** GB/GBC/SMS have different screen sizes and different tile
+  economics; `gameplay_probe.py`'s screen clauses already degrade to abstention
+  off NES (its 256x240 assumption), and nothing here has been measured there.
+- **the recording length.** Residency is proved against retained frames, so a
+  600 s recording sees more of a combinatorial game than a 300 s one and routes
+  *less*. The floors are compensating for the sample, and a bigger sample needs
+  less compensation.
+- **`kMaxSheetFrames`,** for the same reason, directly.
+
+The failure mode to watch for is the one that motivated the floors: a pack whose
+`metatiles.png` is a leftover. `scripts/sheet_report.py` and the builder's log
+line (which names *which* floor fired) are how that is seen without opening the
+pack.
 
 ## Consequences
 

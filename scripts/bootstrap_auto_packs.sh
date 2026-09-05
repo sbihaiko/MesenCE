@@ -22,6 +22,10 @@
 # first ~25 s to get through title and menu screens and then only moves, so it
 # does not pause the game it just started. It reaches gameplay on many NES
 # titles and on some it does not, so each finished pack is run through the
+# Verdicts: OK, OK* (pack complete, recorder exited non-zero -- see issue #165),
+# MENU (the pack is real but the run never left the menus), EMPTY (no hires.txt)
+# and FAIL (no hires.txt and a non-zero exit).
+#
 # F9.13 criterion (scripts/gameplay_probe.py): a recording that never got past
 # the menus is reported as MENU with the reason, never as OK. The criterion has
 # a declared blind spot - see that script's docstring - so MENU is trustworthy
@@ -73,16 +77,25 @@ record_one() {
 	mkdir -p "$work"
 	cp "$rom" "$work/"
 
-	if ! "$RECORDER" "$work/$base" "$secs" "$work/out" bootstrap log "input=$script" > "$stage/$name.log" 2>&1; then
-		echo "FAIL   $name (see $stage/$name.log)"
-		return 0
-	fi
+	local rc=0
+	"$RECORDER" "$work/$base" "$secs" "$work/out" bootstrap log "input=$script" > "$stage/$name.log" 2>&1 || rc=$?
 
 	out="$work/$name/auto/textures"
 	if [ ! -f "$out/hires.txt" ]; then
-		echo "EMPTY  $name (bootstrap wrote no hires.txt)"
+		# No pack: the exit code is the only thing to report, and it matters.
+		if [ "$rc" -ne 0 ]; then
+			echo "FAIL   $name (exit $rc, see $stage/$name.log)"
+		else
+			echo "EMPTY  $name (bootstrap wrote no hires.txt)"
+		fi
 		return 0
 	fi
+	# The pack is on disk and complete. A non-zero exit after that is a real
+	# signal and is kept visible, but it is not a reason to throw away five
+	# minutes of recording: on 2026-09-05 eight of thirty runs exited non-zero
+	# with the pack fully written -- hires.txt, sheets and audio -- and all
+	# eight were byte-for-byte reproducible as clean runs afterwards. Judge the
+	# artefact, report the code.
 
 	rm -rf "$folder/auto/textures"
 	mkdir -p "$folder/auto"
@@ -96,8 +109,12 @@ record_one() {
 	# the menus, so ask the criterion and print its reason when it says no.
 	probe=$(python3 "$ROOT/scripts/gameplay_probe.py" "$out" 2>/dev/null | head -1 || true)
 	verdict=$(printf '%s' "$probe" | cut -f1)
+	local exited=""
+	[ "$rc" -ne 0 ] && exited=" [pack complete, but the recorder exited $rc]"
 	if [ "$verdict" = "menu-only" ]; then
-		echo "MENU   $name (sheets $sheets, screens $screens) - $(printf '%s' "$probe" | cut -f3)"
+		echo "MENU   $name (sheets $sheets, screens $screens) - $(printf '%s' "$probe" | cut -f3)$exited"
+	elif [ -n "$exited" ]; then
+		echo "OK*    $name (sheets $sheets, screens $screens)$exited"
 	else
 		echo "OK     $name (sheets $sheets, screens $screens)"
 	fi
