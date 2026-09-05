@@ -118,7 +118,7 @@ KNOWN_UNSOLVED = {
         "each leave it on the copyright screen, and it never falls through "
         "to an attract demo either. Not diagnosed: a bad dump and an "
         "emulation fault look the same from here. Needs a human with a "
-        "reference build.",
+        "reference build. Tracked as issue #163.",
 }
 
 
