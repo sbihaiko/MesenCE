@@ -205,7 +205,11 @@ jobs:
           ")
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body \
             "Host not allowed for pack_url. Accepted hosts: $ACCEPTED."
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid
+          # pack:valid and pack:invalid are mutually exclusive: a revalidation
+          # that now rejects a previously accepted pack must drop the stale
+          # label, or the issue carries both at once (#159). Removing a label
+          # that is not applied is a no-op.
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
@@ -231,7 +235,11 @@ jobs:
           set -euo pipefail
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body \
             "Could not download the pack within the 300MB cap (or the download failed)."
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid
+          # pack:valid and pack:invalid are mutually exclusive: a revalidation
+          # that now rejects a previously accepted pack must drop the stale
+          # label, or the issue carries both at once (#159). Removing a label
+          # that is not applied is a no-op.
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
@@ -343,7 +351,11 @@ jobs:
             echo "</details>"
           } > lint_fail_comment.txt
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file lint_fail_comment.txt
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid
+          # pack:valid and pack:invalid are mutually exclusive: a revalidation
+          # that now rejects a previously accepted pack must drop the stale
+          # label, or the issue carries both at once (#159). Removing a label
+          # that is not applied is a no-op.
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
           gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
@@ -865,8 +877,8 @@ jobs:
           fi
           CATEGORY=""
           case "$VERDICT" in
-            accepted) FINAL="$STATUS_ACEITO_PARCIAL"; CATEGORY="$CATEGORY_PARTIAL_HD"; LABEL="pack:valid" ;;
-            invalid) FINAL="$STATUS_INVALIDO"; LABEL="pack:invalid" ;;
+            accepted) FINAL="$STATUS_ACEITO_PARCIAL"; CATEGORY="$CATEGORY_PARTIAL_HD"; LABEL="pack:valid"; STALE_LABEL="pack:invalid" ;;
+            invalid) FINAL="$STATUS_INVALIDO"; LABEL="pack:invalid"; STALE_LABEL="pack:valid" ;;
             *)
               echo "::error::Unrecognized verdict '$VERDICT' from Classify pack structured_output." >&2
               exit 1
@@ -887,7 +899,9 @@ jobs:
             "$CATEGORY_PARTIAL_HD") KIND="hd-legacy" ;;
           esac
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file verdict_comment.txt
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
+          # The two verdict labels are mutually exclusive - a revalidation that
+          # flips the verdict must drop the previous one (#159).
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL" --remove-label "$STALE_LABEL"
           APPLIED_LABELS="$LABEL"
           # assets:external (ADR-0138 §6/§13): applied only when the
           # deterministic assembly step actually built a recipe with at
