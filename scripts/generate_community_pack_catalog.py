@@ -24,6 +24,7 @@ from datetime import date
 from pathlib import Path
 
 import community_pack_markdown as markdown
+import mep_errata  # ADR-0152 known-missing declarations, keyed on the artifact sha256
 import mei_catalog_entry as entry_mod
 import pack_id_rules
 import rom_target
@@ -102,7 +103,7 @@ def _render(c):
     #ADR-0152: the table marks a row whose artifact carries reviewed
     #known-missing declarations, so a reader is never told a pack is complete
     #when the project's own validation recorded that it is not.
-    errata = entry_mod.errata_field(c["pack_hash"]) or {}
+    errata = mep_errata.mei_errata_field(c["pack_hash"]) or {}
     n_missing = len(errata.get("known_missing") or [])
     if not entry_mod.mei_entry_preconditions_ok(c["pack_url"], c["pack_hash"], system):
         _warn(f"issue #{issue}: missing/invalid Pack URL/Hash, or no MEI system ({system!r}); omitting JSON entry.")

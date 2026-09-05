@@ -180,6 +180,33 @@ def main():
     else:
         ok("neither gate re-implements the errata format")
 
+    # --- module-qualified calls in the catalog generator really resolve ---
+    # The generator needs `gh` and the live Project to run, so nothing local
+    # executes it: moving a helper between modules once left a call to a name
+    # that no longer existed and only CI found it. This resolves every
+    # `<module>.<attr>(...)` it makes against the imported module itself.
+    import ast
+    import importlib
+
+    gen_path = REPO / "scripts" / "generate_community_pack_catalog.py"
+    tree = ast.parse(gen_path.read_text())
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                aliases[alias.asname or alias.name] = alias.name
+    unresolved = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name) and node.func.value.id in aliases):
+            module = importlib.import_module(aliases[node.func.value.id])
+            if not hasattr(module, node.func.attr):
+                unresolved.append(f"{node.func.value.id}.{node.func.attr} (line {node.lineno})")
+    if unresolved:
+        fail("generate_community_pack_catalog.py calls names that do not exist: " + ", ".join(unresolved))
+    else:
+        ok("every module-qualified call in generate_community_pack_catalog.py resolves")
+
     # --- the shipped errata files are valid ---
     shipped = sorted((REPO / "docs" / "community-packs" / "errata").glob("*.json"))
     for path in shipped:
