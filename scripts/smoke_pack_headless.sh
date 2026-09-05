@@ -178,6 +178,26 @@ set +e
 HARNESS_EXIT=$?
 set -e
 
+# The harness dumps MessageManager's in-memory log, a ring capped at 1000
+# entries (Core/Shared/MessageManager.cpp). A pack that logs more than that
+# while loading pushes its own earliest lines -- including the "[MEP] pack ...
+# matches ROM sha1" detection line, which is the very first message of the run
+# -- out of the dump before it is printed, so asserting against it reported a
+# working pack as undetected (#160: issue-148 Metroid HD, 8234 loader
+# messages). MessageManager also writes an uncapped <home>/mesen.log; when it
+# is there, assert against that instead, keeping the harness's own boot lines
+# (they are not core-log messages and appear only on stdout).
+ASSERT_LOG="$WORK/assert-log.txt"
+CORE_LOG="$WORK/out/mesen-home/mesen.log"
+if [[ -s "$CORE_LOG" ]]; then
+	sed -n '1,/^--- core log ---$/p' "$LOG" > "$ASSERT_LOG"
+	# mesen.log timestamps each line ("HH:MM:SS.mmm "); the dump does not, and
+	# every matcher below keys on the "[HDPack...]" prefix, so strip them.
+	sed -E 's/^[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} //' "$CORE_LOG" >> "$ASSERT_LOG"
+else
+	cp "$LOG" "$ASSERT_LOG"
+fi
+
 # --- assert against the loader log ---
 fail_lines=()
 skipped_lines=()
@@ -186,24 +206,31 @@ declared_lines=()
 if [[ "$HARNESS_EXIT" -ne 0 ]]; then
 	fail_lines+=("boot: headless_record exited $HARNESS_EXIT (hard crash / load failure?)")
 fi
-if ! grep -q "ROM loaded" "$LOG"; then
+if ! grep -q "ROM loaded" "$ASSERT_LOG"; then
 	fail_lines+=("boot: ROM did not load (no 'ROM loaded' line)")
 fi
-if grep -q "emulation stopped unexpectedly\|failed to load ROM" "$LOG"; then
+if grep -q "emulation stopped unexpectedly\|failed to load ROM" "$ASSERT_LOG"; then
 	fail_lines+=("boot: emulation died during the run")
 fi
 
 # The MEP sibling scan must have detected the pack; without this line the
 # smoke validated nothing (the pack was silently not loaded).
-if ! grep -q "\[MEP\] pack .* matches ROM sha1" "$LOG"; then
-	fail_lines+=("pack: no '[MEP] pack ... matches ROM sha1' line — the sibling pack was not detected")
+if ! grep -q "\[MEP\] pack .* matches ROM sha1" "$ASSERT_LOG"; then
+	# Fail closed, but never blame the pack for a capture we could not read:
+	# without mesen.log the dump may simply have been truncated (#160), and an
+	# absent line then proves nothing either way.
+	if [[ -s "$CORE_LOG" ]]; then
+		fail_lines+=("pack: no '[MEP] pack ... matches ROM sha1' line — the sibling pack was not detected")
+	else
+		fail_lines+=("pack: INCONCLUSIVE — no detection line, and no uncapped $CORE_LOG to rule out a truncated capture")
+	fi
 fi
-if grep -q "\[MEP\] rejected sibling folder\|has no textures/, audio/ or synth/ layer" "$LOG"; then
+if grep -q "\[MEP\] rejected sibling folder\|has no textures/, audio/ or synth/ layer" "$ASSERT_LOG"; then
 	fail_lines+=("pack: rejected or ignored by the MEP loader")
 fi
 
 # A declared section that never loads must fail, not pass vacuously.
-if grep -q "section has no loadable hires.txt" "$LOG"; then
+if grep -q "section has no loadable hires.txt" "$ASSERT_LOG"; then
 	fail_lines+=("missing target: a declared section never loaded (see diagnostics)")
 fi
 
@@ -240,11 +267,16 @@ while IFS= read -r line; do
 			fail_lines+=("missing target: $msg")
 		fi
 	fi
-done < <(grep -E "\[HDPack - Line [0-9]+\]|\[HDPack\] PNG file" "$LOG" || true)
+done < <(grep -E "\[HDPack - Line [0-9]+\]|\[HDPack\] PNG file" "$ASSERT_LOG" || true)
 
 # --- report ---
 echo "--- loader diagnostics ($(basename "$PACK_DIR")) ---"
-grep -E "\[HDPack|\[MEP\]" "$LOG" | sed 's/^/  /' || true
+# Collapsed: a large pack can log thousands of identical lines (8222
+# "Condition not found" for issue-148), which would bury the report.
+grep -E "\[HDPack|\[MEP\]" "$ASSERT_LOG" \
+	| sed -E 's/ - Line [0-9]+\]/]/' \
+	| sort | uniq -c | sort -rn \
+	| sed -E 's/^ *1 (.*)$/  \1/; s/^ *([0-9]+) (.*)$/  \2  [x\1]/' || true
 echo "--- result ---"
 for l in ${fail_lines[@]+"${fail_lines[@]}"}; do
 	echo "  FAIL: $l"
