@@ -131,6 +131,11 @@ void SaveStateManager::SaveVideoData(ostream& stream)
 bool SaveStateManager::GetVideoData(vector<uint8_t>& out, RenderedFrame& frame, istream& stream)
 {
 	uint32_t frameBufferSize = ReadValue(stream);
+	if(frameBufferSize > 1024 * 1024 * 2) {
+		//Video frame buffer is larger than 2mb, this is probably invalid
+		return false;
+	}
+
 	frame.Width = ReadValue(stream);
 	frame.Height = ReadValue(stream);
 	frame.Scale = ReadValue(stream) / 100.0;
@@ -198,6 +203,10 @@ bool SaveStateManager::LoadState(istream& stream)
 		}
 
 		uint32_t nameLength = ReadValue(stream);
+		if(nameLength > 1024 * 1024) {
+			//Rom filename longer than 1mb is invalid
+			return false;
+		}
 
 		vector<char> nameBuffer(nameLength);
 		stream.read(nameBuffer.data(), nameBuffer.size());
