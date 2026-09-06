@@ -181,6 +181,8 @@ adopted; the reason is recorded so they are not re-raised.
 | "Fix the file path `UI/Logic/CommunityPackInstallCoordinator.cs`" | review 2 | The plan never wrote that path; only the file name. The path `UI/Services/` is now spelled out to remove the ambiguity |
 | Treat `MouseManager.UpdateMainMenuVisibility()` as *the* source of truth and the ViewModel line as irrelevant | review 2 | Overstated: in Player both sites yield the same `false`. Adopted in reduced form — one helper consumed by both sites so they cannot drift |
 | Automate the real-fetch check as a regular test | plan v1 (implied) | External hosts, rate limits and outages make it non-deterministic; kept as an on-demand script |
+| Assert the 16:9 letterbox with the F9.15 frame capture (`MeasureBorders` on `headless_record … capture`) | wave 3 (2026-09-05) | Wrong instrument. The capture reads the video filter's output buffer, which is the picture at its base size — a `capture` run reports 256:240, never the 4:3 or 16:9 *screen* ratio. The letterbox is host-window layout, so the test would pass without exercising any 16:9 code. Closed instead by `UI/Logic/RendererViewportFit.cs` + `Avalonia.Headless` (wave 3) |
+| Assert "the OSD toast appeared" by diffing a capture's `Checksum` | wave 3 (2026-09-05) | Wrong instrument for the same reason: `SystemHud` draws into `_emuHudSurface`, a surface composited downstream of the buffer the capture reads, so a toast never changes a capture's checksum |
 
 ## Wave 2 — the rest of the project's manual/pending items
 
@@ -284,6 +286,8 @@ available") — clean `UI/obj` between RID switches.
 
 - **16:9** — the on-window letterbox fit (`RendererPanel_LayoutUpdated`,
   `FullscreenForceIntegerScale`). The aspect-ratio math itself is Bloco N.
+  **Closed by wave 3 below**; kept here as the record of what wave 2 left
+  open.
 - **F6.5** — the OS file-picker step (a human choosing the user-supplied
   file) and the OSD toast appearing. Everything upstream of the picker is
   now host-free and unit-tested.
@@ -292,3 +296,98 @@ available") — clean `UI/obj` between RID switches.
 - **Subjective audio** — timbre quality (F5.4g Block B), the audible
   SFX-during-OGG end-to-end (Block C item 9), the P.5 toast-noise
   judgement.
+
+## Wave 3 — the F9.15 frame capture, and the 16:9 residue (2026-09-05)
+
+Slice F9.15 shipped an in-memory frame capture
+(`Core/Shared/Video/FrameCapture.h` — `IsCaptureSizeValid`,
+`MeasureBorders`, `Checksum` — reachable as
+`scripts/headless_record <rom> <secs> <out> capture`). This wave asks the
+question the tool invites: does it close any of the items above?
+
+### Which instrument applies to which residue
+
+| Residue | Right instrument | Why |
+|---|---|---|
+| **16:9 on-window letterbox / integer scale** | `UI/Logic/` extraction + `UI.Tests`, plus one `Avalonia.Headless` wiring test (ADR-0150) | **Not the capture.** Done, see below |
+| **F6.5 OS file-picker step** | none — genuinely manual | The native `IStorageProvider` dialog is the OS's, not the app's; headless Avalonia has no picker to drive and a faked provider would assert the fake |
+| **F6.5 / P.5 OSD toast appearing** | none today — genuinely manual | **Not the capture**, see below |
+| **Installer GUI end-to-end** | none — genuinely manual | Same picker, plus a human confirming the prompt |
+| **Physical pad (I.2 polling half, I.3 end-to-end)** | hardware | Unchanged |
+| **Timbre / "click-free" listening / toast-noise judgement** | human ears | Unchanged; the *regression* halves are Blocos I, K, L |
+
+### Why the capture is the wrong instrument for the two it looks like it fits
+
+- **The letterbox is not in the frame.** `BaseVideoFilter::CopyOutputBuffer`
+  copies `_outputBuffer`, i.e. the video filter's output at the emulated
+  base size (times the scale filter). The aspect ratio is never applied
+  there: a `capture` run of `roms/Zelda.nes` reports `1024x960`, which is
+  4 × 256 by 4 × 240 — the raw 256:240 pixel ratio, not the 4:3 or 16:9
+  *screen* ratio. The letterbox exists only in the host window's layout,
+  where the panel is one shape and the picture another. Asserting
+  `MeasureBorders` on a capture would pass without exercising any of the
+  16:9 code — exactly the failure mode this note exists to avoid.
+- **The OSD toast is not in the frame either.** `SystemHud::Draw` renders
+  into `_rendererHud`, which `VideoRenderer::ProcessFrame` rasterises into
+  the *separate* `_emuHudSurface.Buffer`; the two are composited only in
+  `_renderer->Render(_emuHudSurface, _scriptHudSurface)`, downstream of the
+  filter buffer the capture reads. A toast therefore never changes a
+  capture's checksum. Automating "the toast appeared" would need a seam on
+  the HUD surface, not this one; it is not attempted here.
+
+What the capture *is* right for is unchanged and already used: comparing
+the pixels a run produced against another run's (HD-pack replacement
+diffs, F2.3), and the `IsBlank`/frame-number gates that catch a run which
+never reached a frame.
+
+### 16:9 — closed
+
+Following `PlayerChrome`'s shape (the pattern this note adopted in wave 1):
+
+- **`UI/Logic/RendererViewportFit.cs`** (host-free, ADR-0123; names
+  `MainWindow` as its stateful partner per ADR-0127) now owns the geometry
+  that was inline in `RendererPanel_LayoutUpdated`:
+  `Fit(availableWidth, availableHeight, aspectRatio, dpiScale,
+  forceIntegerScale, baseHeight)` → the picture's logical size, the
+  physical size handed to `EmuApi.SetRendererSize`, and the leftover
+  pillarbox/letterbox bands. `MainWindow.axaml.cs` keeps only what needs a
+  window: the panel bounds, `_rendererSize`, the DPI scale, the window
+  state (it resolves the `FullscreenForceIntegerScale && maximized/
+  fullscreen` conjunction) and the assignments.
+  One deliberate behaviour change: degenerate inputs (an aspect ratio of
+  `0.0`, which `AspectRatioMath` returns for an unknown setting, or a panel
+  with no bounds yet) used to produce `NaN`/`Infinity` on a control's
+  `Width` — silently meaning "auto". They now fill the available space.
+- **`UI.Tests/Config/RendererViewportFitTests.cs`** — 14 cases: pillarbox,
+  letterbox, no crop on either axis over a 5 × 5 × 5 sweep of
+  ratio/width/height with the binding axis actually bound, the ratio
+  preserved whatever the window's shape, the integer-scale rule flooring a
+  fractional scale / leaving an exact one alone / clamping at 1× / being
+  inert when off / flooring in device pixels at 2× DPI, the real size in
+  device pixels, and the degenerate inputs.
+- **`UI.HeadlessTests/RendererLetterboxTests.cs`** — 3 cases, wiring only
+  per `UI.HeadlessTests/AGENTS.md`: a real `MainWindow` laid out at a
+  deliberately odd 900 × 400 sizes its real renderer control to exactly
+  what `RendererViewportFit` says for the real `RendererPanel` bounds; the
+  picture is contained in the panel, keeps the core's aspect ratio, and
+  leaves a genuine band (so a renderer that merely filled the panel fails);
+  and `FullscreenForceIntegerScale` is inert in a `Normal` window.
+
+Both suites were defect-probed. Neutering the integer-scale branch fails 3
+`UI.Tests` cases; making `RendererPanel_LayoutUpdated` assign the panel
+size straight to the renderer fails 2 of the 3 headless cases. Green:
+`make unit-tests` 423/423, `make headless-ui-tests` 15/15 (0 skipped, with
+the native core built).
+
+### What remains genuinely manual after wave 3
+
+- **F6.5 / the installer** — the OS file-picker step and a human
+  confirming the prompt. Everything upstream is host-free and unit-tested.
+- **The OSD toast appearing** — no seam on the HUD surface today.
+- **Hardware** — a physical pad or keypress: I.2's polling half, I.3's
+  end-to-end, and the 2C items.
+- **Subjective audio** — timbre quality (F5.4g Block B), the audible
+  SFX-during-OGG end-to-end (Block C item 9), the P.5 toast-noise
+  judgement.
+
+16:9 is no longer on this list.

@@ -695,27 +695,19 @@ namespace Mesen.Windows
 			double dpiScale = LayoutHelper.GetLayoutScale(this);
 
 			Size finalSize = _rendererSize == default ? _rendererPanel.Bounds.Size : _rendererSize;
-			double height = finalSize.Height;
-			double width = finalSize.Height * aspectRatio;
-			if(Math.Round(width) > Math.Round(finalSize.Width)) {
-				//Use renderer width to calculate the height instead of the opposite
-				//when current window dimensions would cause cropping horizontally
-				//if the screen width was calculated based on the height.
-				width = finalSize.Width;
-				height = width / aspectRatio;
-			}
 
-			if(ConfigManager.Config.Video.FullscreenForceIntegerScale && (WindowState == WindowState.FullScreen || WindowState == WindowState.Maximized)) {
-				FrameInfo baseSize = EmuApi.GetBaseScreenSize();
-				double scale = height * dpiScale / baseSize.Height;
-				if(scale != Math.Floor(scale)) {
-					height = baseSize.Height * Math.Max(1, Math.Floor(scale / dpiScale));
-					width = height * aspectRatio;
-				}
-			}
+			//P.7: the letterbox/pillarbox fit and the fullscreen integer-scale
+			//rule are pure geometry, so they live in UI/Logic and are asserted
+			//host-free by UI.Tests (RendererViewportFitTests). This method keeps
+			//only what needs a window: the panel bounds, the DPI scale, the
+			//window state and the assignments below.
+			bool forceIntegerScale = ConfigManager.Config.Video.FullscreenForceIntegerScale && (WindowState == WindowState.FullScreen || WindowState == WindowState.Maximized);
+			RendererViewport viewport = RendererViewportFit.Fit(finalSize.Width, finalSize.Height, aspectRatio, dpiScale, forceIntegerScale, EmuApi.GetBaseScreenSize().Height);
+			double width = viewport.Width;
+			double height = viewport.Height;
 
-			uint realWidth = (uint)Math.Round(width * dpiScale);
-			uint realHeight = (uint)Math.Round(height * dpiScale);
+			uint realWidth = viewport.RealWidth;
+			uint realHeight = viewport.RealHeight;
 			EmuApi.SetRendererSize(realWidth, realHeight);
 			_model.RendererSize = new Size(realWidth, realHeight);
 
