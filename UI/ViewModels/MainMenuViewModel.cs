@@ -1269,17 +1269,30 @@ namespace Mesen.ViewModels
 							Directory.CreateDirectory(targetFolder);
 						}
 
-						string hiresFileFolder = hiresEntry.FullName.Substring(0, hiresEntry.FullName.Length - "hires.txt".Length);
+						string? hiresNormPath = LegacyHdPackInstall.NormalizeZipPath(hiresEntry.FullName);
+						if(hiresNormPath == null) {
+							//hires.txt reachable only via ".."/a rooted path is not a pack to install
+							await MesenMsgBox.Show(wnd, "InstallHdPackInvalidPack", MessageBoxButtons.OK, MessageBoxIcon.Error);
+							return;
+						}
+						string hiresFileFolder = hiresNormPath.Substring(0, hiresNormPath.Length - "hires.txt".Length);
 						foreach(ZipArchiveEntry entry in zip.Entries) {
 							//Extract only the files in the same subfolder as the hires.txt file (and only if they have a name & size > 0)
-							if(!string.IsNullOrWhiteSpace(entry.Name) && entry.Length > 0 && entry.FullName.StartsWith(hiresFileFolder)) {
-								string filePath = Path.Combine(targetFolder, entry.FullName.Substring(hiresFileFolder.Length));
-								string? fileFolder = Path.GetDirectoryName(filePath);
-								if(fileFolder != null) {
-									Directory.CreateDirectory(fileFolder);
-								}
-								entry.ExtractToFile(filePath, true);
+							if(string.IsNullOrWhiteSpace(entry.Name) || entry.Length <= 0) {
+								continue;
 							}
+							//Route every entry path through the zip-slip sanitizer (same as the legacy
+							//install path) so a rooted/".." entry cannot escape targetFolder
+							string? normPath = LegacyHdPackInstall.NormalizeZipPath(entry.FullName);
+							if(normPath == null || !normPath.StartsWith(hiresFileFolder, StringComparison.Ordinal)) {
+								continue;
+							}
+							string filePath = Path.Combine(targetFolder, normPath.Substring(hiresFileFolder.Length).Replace('/', Path.DirectorySeparatorChar));
+							string? fileFolder = Path.GetDirectoryName(filePath);
+							if(fileFolder != null) {
+								Directory.CreateDirectory(fileFolder);
+							}
+							entry.ExtractToFile(filePath, true);
 						}
 					} catch(Exception ex) {
 						await MesenMsgBox.Show(wnd, "InstallHdPackError", MessageBoxButtons.OK, MessageBoxIcon.Error, ex.ToString());
