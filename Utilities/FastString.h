@@ -30,15 +30,23 @@ public:
 
 	void Write(char c)
 	{
-		if(_lowerCase) {
-			_buffer[_pos++] = ::tolower(c);
-		} else {
-			_buffer[_pos++] = c;
+		if(_pos < 999) {
+			if(_lowerCase) {
+				_buffer[_pos++] = ::tolower(c);
+			} else {
+				_buffer[_pos++] = c;
+			}
 		}
 	}
 
 	void Write(const char* str, int size)
 	{
+		if(size > 999 - _pos) {
+			size = 999 - _pos;
+		}
+		if(size <= 0) {
+			return;
+		}
 		if(_lowerCase) {
 			for(int i = 0; i < size; i++) {
 				_buffer[_pos + i] = ::tolower(str[i]);
@@ -63,20 +71,33 @@ public:
 
 	void Write(string& str, bool preserveCase = false)
 	{
+		size_t size = str.size();
+		if(size > (size_t)(999 - _pos)) {
+			size = (size_t)(999 - _pos);
+		}
+		if(size == 0) {
+			return;
+		}
 		if(_lowerCase && !preserveCase) {
-			for(size_t i = 0; i < str.size(); i++) {
+			for(size_t i = 0; i < size; i++) {
 				_buffer[_pos + i] = ::tolower(str[i]);
 			}
 		} else {
-			memcpy(_buffer + _pos, str.c_str(), str.size());
+			memcpy(_buffer + _pos, str.c_str(), size);
 		}
-		_pos += (uint16_t)str.size();
+		_pos += (uint16_t)size;
 	}
 
 	void Write(FastString& str)
 	{
-		memcpy(_buffer + _pos, str._buffer, str._pos);
-		_pos += str._pos;
+		uint16_t size = str._pos;
+		if(size > 999 - _pos) {
+			size = (uint16_t)(999 - _pos);
+		}
+		if(size > 0) {
+			memcpy(_buffer + _pos, str._buffer, size);
+			_pos += size;
+		}
 	}
 
 	const char* ToString()

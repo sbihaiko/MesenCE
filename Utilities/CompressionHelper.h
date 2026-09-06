@@ -21,6 +21,10 @@ public:
 
 	static bool Decompress(vector<uint8_t>& input, vector<uint8_t>& output)
 	{
+		if(input.size() < sizeof(uint32_t) * 2) {
+			return false;
+		}
+
 		uint32_t decompressedSize;
 		uint32_t compressedSize;
 
