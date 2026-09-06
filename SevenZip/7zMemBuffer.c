@@ -8,20 +8,35 @@ WRes MemBuffer_Read(CSzMemBuffer *p, void *data, size_t *size)
 	if(originalSize == 0)
 		return 0;
 
-	size_t length = (size_t)(p->pos + (Int64)(*size) > p->size ? p->size - p->pos - 1 : *size);
+	if(p->pos >= p->size) {
+		*size = 0;
+		return 0;
+	}
+
+	size_t length = (size_t)(p->size - p->pos);
+	if(originalSize < length)
+		length = originalSize;
+
 	memcpy(data, (char*)(p->buffer) + p->pos, length);
 	p->pos += length;
+	*size = length;
 	return 0;
 }
 
 WRes MemBuffer_Seek(CSzMemBuffer *p, Int64 *pos, ESzSeek origin)
 {
+	Int64 newPos;
 	switch(origin) {
-		case SZ_SEEK_SET: p->pos = 0 + *pos; break;
-		case SZ_SEEK_CUR: p->pos += *pos; break;
-		case SZ_SEEK_END: p->pos = p->size - *pos; break;
+		case SZ_SEEK_SET: newPos = *pos; break;
+		case SZ_SEEK_CUR: newPos = p->pos + *pos; break;
+		case SZ_SEEK_END: newPos = p->size - *pos; break;
 		default: return 1;
 	}
+	if(newPos < 0)
+		newPos = 0;
+	if(newPos > p->size)
+		newPos = p->size;
+	p->pos = newPos;
 	*pos = p->pos;
 	return 0;
 }
