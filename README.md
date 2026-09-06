@@ -54,10 +54,13 @@ a build is red. Per-commit builds live in the [Actions](https://github.com/sbiha
 
 *Mega Man 3, Shadow Man stage. Same game, same notes, same timing — only the instruments change.*
 
-| | |
-|---|---|
-| **Before** — original NES chip (2A03) | ▶ [shadowman-before.mp3](https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/media/shadowman-before.mp3) |
-| **After** — Enhanced Audio, **Studio** style | ▶ [shadowman-enhanced.mp3](https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/media/shadowman-enhanced.mp3) |
+**Before** — original NES chip (2A03):
+
+https://github.com/user-attachments/assets/985a03ae-d6ae-4ca2-8d86-f1ddb85b0a9d
+
+**After** — Enhanced Audio, **Studio** style:
+
+https://github.com/user-attachments/assets/20218b52-e79b-4bad-a99c-6cbd5ab6f6c1
 
 ![Spectrogram: original NES chip audio vs. Enhanced Audio remaster](docs/media/shadowman-spectrogram.png)
 
