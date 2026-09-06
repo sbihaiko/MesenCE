@@ -24,14 +24,19 @@ PY="${PYTHON:-python3}"
 [ -x "$SMOKE" ] || { echo "FAIL: $SMOKE not executable" >&2; exit 1; }
 if [ ! -x "$HARNESS" ]; then
   echo "building $HARNESS (make capture-tool)..." >&2
-  if ! (cd "$REPO_ROOT" && make -s capture-tool >/dev/null 2>&1); then
+  BUILD_LOG="$(mktemp)"
+  if ! (cd "$REPO_ROOT" && make -s capture-tool >"$BUILD_LOG" 2>&1); then
     if [ "${CI:-}" = "true" ]; then
-      echo "FAIL: could not build $HARNESS (required for the F6.6 smoke in CI)" >&2
+      echo "FAIL: could not build $HARNESS (required for the F6.6 smoke in CI); build output:" >&2
+      tail -n 60 "$BUILD_LOG" >&2
+      rm -f "$BUILD_LOG"
       exit 1
     fi
     echo "SKIP: $HARNESS not built and could not be built (run 'make capture-tool' first)" >&2
+    rm -f "$BUILD_LOG"
     exit 0
   fi
+  rm -f "$BUILD_LOG"
 fi
 
 WORK="$(mktemp -d)"

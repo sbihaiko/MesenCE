@@ -103,7 +103,7 @@ jobs:
         run: |
           sudo apt-get update -qy
           sudo apt-get install -qy libsdl2-dev ccache # The compilers are already installed on GitHub's runners.
-          python3 -m pip install --user PyYAML==6.0.3 Pillow==12.3.0 numpy==2.5.2 # doc-checks verify scripts need PyYAML/Pillow/numpy (not preinstalled everywhere)
+          python3 -m pip install --user PyYAML==6.0.3 Pillow==12.3.0 numpy==2.2.6 # numpy 2.3+ dropped Python 3.10 (ubuntu-22.04 runners) # doc-checks verify scripts need PyYAML/Pillow/numpy (not preinstalled everywhere)
 
       - name: Setup CCache
         uses: ./.github/actions/setup-ccache-action
@@ -204,7 +204,7 @@ jobs:
         run: |
           brew install sdl2 ccache
           # Homebrew python is externally-managed (PEP 668): --break-system-packages is required.
-          python3 -m pip install --user --break-system-packages PyYAML==6.0.3 Pillow==12.3.0 numpy==2.5.2
+          python3 -m pip install --user --break-system-packages PyYAML==6.0.3 Pillow==12.3.0 numpy==2.2.6 # numpy 2.3+ dropped Python 3.10 (ubuntu-22.04 runners)
 
       - name: Get brew prefix
         run: |

@@ -2,7 +2,9 @@
 #include "JsonReader.h"
 #include <cstdlib>
 #include <cerrno>
-#include <charconv>
+#include <sstream>
+#include <locale>
+#include <cmath>
 
 static constexpr int kMaxDepth = 64;
 
@@ -147,15 +149,20 @@ bool JsonReader::ParseNumber(JsonValue& out)
 		}
 	}
 
-	//std::from_chars is locale-independent (strtod honours LC_NUMERIC, so a
-	//host running under a comma-decimal locale would misparse "1.5")
+	//The text was validated above to [-0-9.eE+], so only the conversion is
+	//left. strtod honours LC_NUMERIC (a host under a comma-decimal locale would
+	//misparse "1.5") and libc++ before LLVM 20 (Xcode < 26) has no
+	//floating-point std::from_chars, so parse through a stream pinned to the
+	//classic locale.
 	double value = 0;
-	std::from_chars_result parsed = std::from_chars(start, _cur, value);
-	if(parsed.ec == std::errc::result_out_of_range) {
-		return Fail("number out of range");
-	}
-	if(parsed.ec != std::errc() || parsed.ptr != _cur) {
+	std::istringstream in(std::string(start, _cur));
+	in.imbue(std::locale::classic());
+	in >> value;
+	if(in.fail() || !in.eof()) {
 		return Fail("invalid number");
+	}
+	if(!std::isfinite(value)) {
+		return Fail("number out of range");
 	}
 	out._type = JsonValue::Type::Number;
 	out._number = value;
