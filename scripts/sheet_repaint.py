@@ -901,23 +901,63 @@ def apply_alpha(generated: Image, control: Image, verbose=False, label=""):
     return generated
 
 
-def _palette_of(img: Image, region: Region):
-    """The distinct opaque colours of a cell, most-frequent first. On NES art
-    this is the cell's palette in use order; it is read off the pixels rather
-    than off `tiles[].palette` because only the pixels say which of the four
-    indexes actually got drawn."""
-    counts = {}
-    for y in range(region.y, region.y + region.h):
-        for x in range(region.x, region.x + region.w):
-            r, g, b, a = img.get(x, y)
-            if a == 0:
+def palette_correspondence(img: Image, canon: Region, variant: Region):
+    """ADR-0154 §5 step 1, mechanism per ADR-0161 — which canonical colour is
+    which variant colour.
+
+    The ADR words this as "in NES colour-index order (0..3)", and the index is
+    what matters: index *i* of the canonical palette must line up with index
+    *i* of the variant's. This script cannot read that order off the sidecar's
+    `tiles[].palette`, because a sheet is rendered through the emulator's
+    configured master palette (`HdPackBuilder::_palette`, `SheetRender.h`) and
+    the tree carries no copy of it in Python — so a palette byte does not name
+    an RGB triple here. It is read off the pixels instead, and **positionally**
+    rather than by frequency: the two cells are members of one shape group
+    (`shape_key`, palette ignored), so they share the same CHR bitmaps and the
+    same pixel at the same offset carries the same colour index in both. Same
+    offset therefore *is* same index, exactly.
+
+    Returns `(canon_palette, mapping, missing)`:
+
+      * `canon_palette` — every opaque colour of the canonical cell, in
+        first-appearance order. The nearest-colour search runs over all of it,
+        including colours with no counterpart, so a generated pixel is never
+        attracted to the wrong index just because its own went unmapped;
+      * `mapping` — `canonical rgb -> variant rgb` where the evidence is
+        unambiguous;
+      * `missing` — the canonical colours with no counterpart, either because
+        the variant is transparent there or because one canonical colour was
+        seen against two different variant colours (which means the two cells
+        are not the same drawing after all). Those degrade to identity: §5
+        would rather leave a colour alone than invent a mapping for it.
+    """
+    palette, seen, ambiguous = [], {}, set()
+    known = set()
+    for dy in range(min(canon.h, variant.h)):
+        for dx in range(min(canon.w, variant.w)):
+            cr, cg, cb, ca = img.get(canon.x + dx, canon.y + dy)
+            if ca == 0:
                 continue
-            counts[(r, g, b)] = counts.get((r, g, b), 0) + 1
-    return [c for c, _n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+            key = (cr, cg, cb)
+            if key not in known:
+                known.add(key)
+                palette.append(key)
+            vr, vg, vb, va = img.get(variant.x + dx, variant.y + dy)
+            if va == 0:
+                continue
+            value = (vr, vg, vb)
+            if key in seen:
+                if seen[key] != value:
+                    ambiguous.add(key)
+            else:
+                seen[key] = value
+    mapping = {k: v for k, v in seen.items() if k not in ambiguous}
+    missing = [k for k in palette if k not in mapping]
+    return palette, mapping, missing
 
 
 def recolour(generated: Image, canonical: Region, source: Image,
-             canon_src: Region, variant_src: Region, verbose=False):
+             canon_src: Region, variant_src: Region, verbose=False, label=""):
     """ADR-0154 §5: produce a palette variant of an already generated cell.
 
     Every generated pixel is matched to the nearest colour of the canonical
@@ -926,28 +966,33 @@ def recolour(generated: Image, canonical: Region, source: Image,
     silhouette (which comes from one generation and one alpha mask) does not
     move. Missing indexes degrade to identity, loudly, rather than inventing a
     mapping."""
-    canon_pal = _palette_of(source, canon_src)
-    var_pal = _palette_of(source, variant_src)
+    canon_pal, mapping, missing = palette_correspondence(source, canon_src, variant_src)
     if not canon_pal:
         return generated.crop(canonical.x, canonical.y, canonical.w, canonical.h)
-    if len(var_pal) < len(canon_pal) and verbose:
-        print(f"info: palette variant uses {len(var_pal)} colours against the canonical "
-              f"{len(canon_pal)} — the missing indexes are left unchanged")
+    if missing:
+        # §5: "says so on stderr rather than inventing a mapping" — not gated
+        # on --verbose, because silently dropping a colour is exactly the case
+        # a person needs to know about.
+        print(f"warning: {label or 'palette variant'}: {len(missing)} of {len(canon_pal)} "
+              "canonical colour(s) have no counterpart in this variant — left unchanged rather "
+              "than guessed (ADR-0154 §5)", file=sys.stderr)
     out = generated.crop(canonical.x, canonical.y, canonical.w, canonical.h)
     for y in range(out.height):
         for x in range(out.width):
             r, g, b, a = out.get(x, y)
             if a == 0:
                 continue
-            best, best_d = 0, None
-            for i, (cr, cg, cb) in enumerate(canon_pal):
+            best, best_d = None, None
+            for colour in canon_pal:
+                cr, cg, cb = colour
                 d = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2
                 if best_d is None or d < best_d:
-                    best, best_d = i, d
-            if best >= len(var_pal):
+                    best, best_d = colour, d
+            target = mapping.get(best)
+            if target is None:
                 continue
-            cr, cg, cb = canon_pal[best]
-            vr, vg, vb = var_pal[best]
+            cr, cg, cb = best
+            vr, vg, vb = target
             out.set(x, y, (_clamp(vr + r - cr), _clamp(vg + g - cg), _clamp(vb + b - cb), a))
     return out
 
@@ -991,9 +1036,28 @@ def seam_pass(img: Image, rect_pairs, width: int):
 
     Only the W-pixel band inside each cell is written: never the interior,
     never the gutter. A pixel pair where either side is fully transparent is
-    skipped, so the pass can neither grow nor erode a silhouette."""
+    skipped, so the pass can neither grow nor erode a silhouette.
+
+    Every read is taken from the image as it was *before* the pass, and every
+    write happens after the last read. That is what makes the operation
+    order-independent, and it is the only way §6's "a cell with several
+    different neighbours on the same side gets the mean of all of them" can be
+    true: blending pair by pair in place would let the second neighbour
+    outweigh the first, and would move a border line after its partner had
+    already been averaged against the old value — so at j = 0 the two sides
+    would no longer agree, which is exactly the property PRD validation
+    test 4 (a continuous stripe across a map) rests on. A pixel with N
+    partners moves to `own + mean_i(f_i * (partner_i - own))`, which collapses
+    to the ADR's `(1-f)*own + f*partner` for the single-neighbour case a map
+    always produces."""
     if width <= 0:
         return img
+    # (x, y) -> [(f, partner rgb), ...], gathered against the pre-blend image.
+    pull = {}
+
+    def add(dst, src, f):
+        pull.setdefault(dst, []).append((f, src))
+
     for rect_a, side, rect_b in rect_pairs:
         for j in range(width):
             f = 0.5 * (width - j) / width
@@ -1020,10 +1084,16 @@ def seam_pass(img: Image, rect_pairs, width: int):
                 b = img.get(bxp, byp)
                 if a[3] == 0 or b[3] == 0:
                     continue
-                blended_a = tuple(_clamp(int(round((1 - f) * a[i] + f * b[i]))) for i in range(3)) + (a[3],)
-                blended_b = tuple(_clamp(int(round((1 - f) * b[i] + f * a[i]))) for i in range(3)) + (b[3],)
-                img.set(axp, ayp, blended_a)
-                img.set(bxp, byp, blended_b)
+                add((axp, ayp), b[:3], f)
+                add((bxp, byp), a[:3], f)
+
+    for (x, y), contributions in pull.items():
+        own = img.get(x, y)
+        blended = []
+        for i in range(3):
+            delta = sum(f * (partner[i] - own[i]) for f, partner in contributions)
+            blended.append(_clamp(int(round(own[i] + delta / len(contributions)))))
+        img.set(x, y, tuple(blended) + (own[3],))
     return img
 
 
@@ -1104,7 +1174,9 @@ def _apply_variants(sheet: Sheet, generated: Image, control: Image, regions, ver
         members.sort(key=lambda rc: -int(rc[1].get("count") or 0))
         canon_region, _canon_cell = members[0]
         for region, _cell in members[1:]:
-            patch = recolour(generated, canon_region, control, canon_region, region, verbose=verbose)
+            patch = recolour(generated, canon_region, control, canon_region, region,
+                             verbose=verbose,
+                             label=f"{sheet.png_path.name} cell {region.index}")
             generated.paste(patch, region.x, region.y)
         if verbose:
             print(f"info: {sheet.png_path.name}: {len(members) - 1} palette variant(s) recoloured "

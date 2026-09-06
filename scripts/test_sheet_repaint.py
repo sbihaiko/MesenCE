@@ -912,6 +912,154 @@ def test_catalog_generated_column():
     ok("the column's note appears only when some pack in the catalog declares itself generated")
 
 
+# --- §5 / §6 at unit level, on inputs the fixture cannot express ------------
+
+
+def _repaint_module():
+    sys.path.insert(0, str(REPO / "scripts"))
+    import sheet_repaint
+    return sheet_repaint
+
+
+def _paint(mod, img, region, colour_at):
+    for dy in range(region.h):
+        for dx in range(region.w):
+            img.set(region.x + dx, region.y + dy, colour_at(dx, dy))
+
+
+def test_palette_correspondence_is_positional():
+    """ADR-0154 §5 step 1: canonical index *i* must line up with variant index
+    *i*. Ranking the two palettes by frequency looks equivalent and is not —
+    two indexes that cover the same number of pixels tie, and the tie is then
+    broken by RGB value, which the *variant's* colours can break the other
+    way round. The two members of a shape group share the same CHR bitmaps,
+    so the same offset carries the same index in both: the correspondence is
+    positional, and that is exact rather than nearly right."""
+    mod = _repaint_module()
+    img = mod.Image(8, 4)
+    canon = mod.Region(0, 0, 4, 4, 0, 0)
+    variant = mod.Region(4, 0, 4, 4, 1, 1)
+    # Eight pixels each, so frequency cannot separate them; the variant's own
+    # colours sort in the opposite order to the canonical's.
+    dark, light = (10, 10, 10), (200, 200, 200)
+    v_dark, v_light = (250, 0, 0), (0, 0, 5)
+    _paint(mod, img, canon,
+           lambda dx, dy: ((dark if (dx + dy) % 2 == 0 else light) + (255,)))
+    _paint(mod, img, variant,
+           lambda dx, dy: ((v_dark if (dx + dy) % 2 == 0 else v_light) + (255,)))
+
+    palette, mapping, missing = mod.palette_correspondence(img, canon, variant)
+    if sorted(palette) != sorted([dark, light]):
+        fail(f"the canonical palette was not read off the cell: {palette}")
+        return
+    if mapping != {dark: v_dark, light: v_light}:
+        fail(f"the correspondence is not positional (a frequency tie was broken by RGB "
+             f"instead of by pixel offset): {mapping}")
+        return
+    if missing:
+        fail(f"a fully mapped pair reported missing indexes: {missing}")
+        return
+    ok("palette_correspondence pairs canonical and variant colours by pixel offset, not by rank")
+
+    # The whole point: recolour must land on the variant's colours, not on the
+    # swapped ones the frequency ranking would have produced.
+    generated = img.clone()
+    patch = mod.recolour(generated, canon, img, canon, variant)
+    got = {patch.get(dx, dy)[:3] for dy in range(4) for dx in range(4)}
+    if got != {v_dark, v_light}:
+        fail(f"the recoloured variant does not land on the variant's palette: {sorted(got)}")
+        return
+    if patch.get(0, 0)[:3] != v_dark:
+        fail("the recoloured variant has its two colours swapped")
+        return
+    ok("recolour lands each canonical colour on its own variant counterpart, not on the other one")
+
+
+def test_palette_variant_missing_index_is_identity():
+    """ADR-0154 §5: an index with no counterpart "degrades to identity ... and
+    says so on stderr". Not on stdout and not only under --verbose: dropping a
+    colour silently is the failure this sentence exists to prevent."""
+    import contextlib
+    import io
+    mod = _repaint_module()
+    img = mod.Image(8, 4)
+    canon = mod.Region(0, 0, 4, 4, 0, 0)
+    variant = mod.Region(4, 0, 4, 4, 1, 1)
+    dark, light = (10, 10, 10), (200, 200, 200)
+    v_dark = (250, 0, 0)
+    _paint(mod, img, canon,
+           lambda dx, dy: ((dark if dy < 2 else light) + (255,)))
+    # The variant is transparent exactly where the canonical is `light`, so
+    # `light` has no counterpart at all.
+    _paint(mod, img, variant,
+           lambda dx, dy: (v_dark + (255,)) if dy < 2 else (0, 0, 0, 0))
+
+    _palette, mapping, missing = mod.palette_correspondence(img, canon, variant)
+    if mapping != {dark: v_dark} or missing != [light]:
+        fail(f"an index with no counterpart was not reported missing: {mapping}, {missing}")
+        return
+
+    generated = img.clone()
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        patch = mod.recolour(generated, canon, img, canon, variant, label="metatiles.png cell 2")
+    if patch.get(0, 3)[:3] != light:
+        fail(f"the unmapped colour was changed instead of left alone: {patch.get(0, 3)}")
+        return
+    if patch.get(0, 0)[:3] != v_dark:
+        fail("the mapped colour was not recoloured")
+        return
+    ok("an unmapped canonical colour is left unchanged; the mapped one is still recoloured")
+
+    text = err.getvalue()
+    if "metatiles.png cell 2" not in text or "ADR-0154 §5" not in text:
+        fail(f"the degradation is not reported on stderr with a usable label: {text!r}")
+        return
+    ok("the §5 degradation is announced on stderr, unconditionally, naming the cell")
+
+
+def test_seam_pass_multiple_neighbours():
+    """ADR-0154 §6: "a cell with several different neighbours on the same side
+    gets the mean of all of them". Blending pair by pair in place gives the
+    last neighbour more weight than the first, and moves a border line after
+    its partner was averaged against the old value — so the two sides stop
+    agreeing at j = 0, which is the property PRD validation test 4 rests on."""
+    mod = _repaint_module()
+
+    def build():
+        img = mod.Image(12, 2)
+        rects = [mod.Region(0, 0, 4, 2, 0, 0), mod.Region(4, 0, 4, 2, 1, 1),
+                 mod.Region(8, 0, 4, 2, 2, 2)]
+        colours = [(40, 40, 40), (240, 0, 0), (0, 240, 0)]
+        for rect, colour in zip(rects, colours):
+            _paint(mod, img, rect, lambda dx, dy, c=colour: c + (255,))
+        return img, rects, colours
+
+    img, rects, colours = build()
+    a, b, c = colours
+    mod.seam_pass(img, [(rects[0], "E", rects[1]), (rects[0], "E", rects[2])], 1)
+    want_a = tuple(round(0.5 * a[i] + 0.25 * b[i] + 0.25 * c[i]) for i in range(3))
+    got_a = img.get(3, 0)[:3]
+    if got_a != want_a:
+        fail(f"a cell with two east neighbours is {got_a}, expected the mean-based {want_a}")
+        return
+    for rect, own in ((rects[1], b), (rects[2], c)):
+        want = tuple(round(0.5 * own[i] + 0.5 * a[i]) for i in range(3))
+        got = img.get(rect.x, 0)[:3]
+        if got != want:
+            fail(f"neighbour at x={rect.x} is {got}, expected {want} — it was blended against a "
+                 "border line the other pair had already moved")
+            return
+    ok("several neighbours on one side contribute their mean, each read pre-blend (§6)")
+
+    swapped, rects2, _ = build()
+    mod.seam_pass(swapped, [(rects2[0], "E", rects2[2]), (rects2[0], "E", rects2[1])], 1)
+    if swapped.px != img.px:
+        fail("the seam pass is order-dependent: swapping the two pairs changed the output")
+        return
+    ok("the seam pass is order-independent — every read is taken before every write")
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -930,6 +1078,9 @@ def main():
         test_diffusion_comfy_driver(root, sheets)
         test_target_screens(root)
         test_catalog_generated_column()
+        test_palette_correspondence_is_positional()
+        test_palette_variant_missing_index_is_identity()
+        test_seam_pass_multiple_neighbours()
     print(f"{PASSED} check(s) passed, {'some failed' if FAILED else 'none failed'}")
     return 1 if FAILED else 0
 
