@@ -22,7 +22,9 @@
 # first ~25 s to get through title and menu screens and then only moves, so it
 # does not pause the game it just started. It reaches gameplay on many NES
 # titles and on some it does not, so each finished pack is run through the
-# Verdicts: OK, OK* (pack complete, recorder exited non-zero -- see issue #165),
+# Verdicts: OK, OK* (a pack was written and the recorder still exited non-zero:
+# the recording was cut short, so the pack is real but thinner than it should be
+# -- see issue #165 for how that used to happen for no reason at all),
 # MENU (the pack is real but the run never left the menus), EMPTY (no hires.txt)
 # and FAIL (no hires.txt and a non-zero exit).
 #
@@ -90,12 +92,13 @@ record_one() {
 		fi
 		return 0
 	fi
-	# The pack is on disk and complete. A non-zero exit after that is a real
-	# signal and is kept visible, but it is not a reason to throw away five
-	# minutes of recording: on 2026-09-05 eight of thirty runs exited non-zero
-	# with the pack fully written -- hires.txt, sheets and audio -- and all
-	# eight were byte-for-byte reproducible as clean runs afterwards. Judge the
-	# artefact, report the code.
+	# A pack is on disk. A non-zero exit after that is a real signal and is kept
+	# visible, but it is not a reason to throw away the recording: the pack is
+	# built from whatever frames the run did cover, so it is thinner, not wrong.
+	# On 2026-09-05 eight of thirty runs exited non-zero this way; the cause was
+	# a watchdog that budgeted wall clock from the recording's *emulated*
+	# seconds, which stopped meaning anything once the frame limiter came off
+	# (#165). Judge the artefact, report the code.
 
 	rm -rf "$folder/auto/textures"
 	mkdir -p "$folder/auto"
@@ -110,7 +113,7 @@ record_one() {
 	probe=$(python3 "$ROOT/scripts/gameplay_probe.py" "$out" 2>/dev/null | head -1 || true)
 	verdict=$(printf '%s' "$probe" | cut -f1)
 	local exited=""
-	[ "$rc" -ne 0 ] && exited=" [pack complete, but the recorder exited $rc]"
+	[ "$rc" -ne 0 ] && exited=" [truncated run, recorder exited $rc -- see $stage/$name.log]"
 	if [ "$verdict" = "menu-only" ]; then
 		echo "MENU   $name (sheets $sheets, screens $screens) - $(printf '%s' "$probe" | cut -f3)$exited"
 	elif [ -n "$exited" ]; then

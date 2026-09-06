@@ -369,19 +369,34 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	//Wall-clock deadline for the whole run. Nothing about the *output* depends
-	//on it - it exists so a hung emulator cannot hang CI forever.
-	const double safetyTimeout = 120.0 + seconds * 3.0;
+	//The watchdog exists so a *hung* emulator cannot hang CI forever, and it
+	//measures exactly that: wall clock since the frame counter last moved.
+	//Issue #165: it used to be a budget for the whole run, 120 s + 3x the
+	//recording's <seconds>. That relationship died with ADR-0157/F9.14 - the
+	//frame limiter is off, so a run's length in emulated frames says nothing
+	//about how long it takes on the host, and four parallel jobs on a loaded
+	//machine make it say even less. Eight of thirty runs then tripped it at
+	//1020 s (= 120 + 3x300) while the emulator was plainly still advancing -
+	//Zelda at frame 7482 of 18030, Double Dragon at 15710 - and the message
+	//said "the emulator is not advancing", which was simply false. Each one
+	//wrote a *truncated* pack that the batch went on to install.
+	const double stallTimeout = 90.0;
 	auto t0 = std::chrono::steady_clock::now();
 	auto elapsed = [&t0]() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
 	auto waitForPause = [&](const char* what) {
+		uint32_t lastFrame = HeadlessGetFrameCount();
+		double lastProgress = elapsed();
 		while(!IsPaused()) {
 			if(!IsRunning()) {
 				fprintf(stderr, "emulation stopped unexpectedly while %s\n", what);
 				return false;
 			}
-			if(elapsed() > safetyTimeout) {
-				fprintf(stderr, "SAFETY TIMEOUT after %.1fs of wall clock while %s (frame %u) - the emulator is not advancing\n", elapsed(), what, HeadlessGetFrameCount());
+			uint32_t frame = HeadlessGetFrameCount();
+			if(frame != lastFrame) {
+				lastFrame = frame;
+				lastProgress = elapsed();
+			} else if(elapsed() - lastProgress > stallTimeout) {
+				fprintf(stderr, "STALLED: no frame in %.1fs of wall clock while %s (stuck on frame %u, %.1fs into the run)\n", elapsed() - lastProgress, what, frame, elapsed());
 				return false;
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(2));
