@@ -21,6 +21,10 @@ protected:
 		} else {
 			uint32_t playerCount = 0;
 			SV(playerCount);
+			if(playerCount > 64) {
+				//Reject an absurd player count received from the server
+				return;
+			}
 			_playerList.resize(playerCount);
 
 			for(uint32_t i = 0; i < playerCount; i++) {

@@ -151,6 +151,11 @@ bool GameClientConnection::AttemptLoadGame(string filename, uint32_t crc32)
 
 void GameClientConnection::PushControllerState(uint8_t port, ControlDeviceState state)
 {
+	if(port >= BaseControlDevice::PortCount) {
+		//Ignore input for an invalid port sent by the server
+		return;
+	}
+
 	LockHandler lock = _writeLock.AcquireSafe();
 	_inputData[port].push_back(state);
 	_inputSize[port]++;

@@ -18,8 +18,13 @@ protected:
 
 	NetMessage(void* buffer, uint32_t length)
 	{
-		_type = (MessageType)((uint8_t*)buffer)[0];
-		_receivedData.write((char*)buffer + 1, length - 1);
+		if(length > 0) {
+			_type = (MessageType)((uint8_t*)buffer)[0];
+			_receivedData.write((char*)buffer + 1, length - 1);
+		} else {
+			//Reject messages with no data, _type is not a valid message type so it will be ignored
+			_type = (MessageType)0xFF;
+		}
 	}
 
 public:
