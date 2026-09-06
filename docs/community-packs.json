@@ -17,9 +17,9 @@
       "name": "Ice_Climber \u2014 community submission",
       "pack_id": "liquidzgit/hdnes:ice-climber",
       "rom": {},
-      "sha256": "2281b9fa3b14fa8f417ce15082c8b1c29eec6bdbbf70c4a583d8f2bfa751687e",
+      "sha256": "0540f9e0a6a58bacdd4a7b7891c96f3174a7b05317091ba2c52dd34b869fc169",
       "system": "nes",
-      "url": "https://github.com/LiQuiDzGit/HDnes/archive/refs/heads/main.zip",
+      "url": "https://github.com/LiQuiDzGit/HDnes/archive/a72fe6394b88387e5f6377d07e5606461a685bc5.zip",
       "validated_at": "2026-08-29T21:38:12Z",
       "verdict": "accepted",
       "votes": 1
@@ -311,5 +311,5 @@
       "votes": 1
     }
   ],
-  "updated": "2026-09-05"
+  "updated": "2026-09-06"
 }
