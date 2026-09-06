@@ -318,9 +318,11 @@ does not exist.
   further down into title text. Known false positive: a frozen scenery band
   (Excitebike's crowd stand) passes the status-bar test and lands a cell on
   `hud.png`; the cost is bounded and no cheap test separates it from a real
-  HUD without tracking scroll per row. Not done: F9.6 (AI repaint) and the two
-  Zelda titles, whose name-registration screen no generic input script gets
-  past — the way out there is a GUI save state, not a script.
+  HUD without tracking scroll per row. Not done: the two Zelda
+  titles, whose name-registration screen no generic input script gets past —
+  the way out there is a GUI save state, not a script. F9.6 (AI repaint) has
+  since shipped; only its blind A/B (validation test 8) is outstanding, and
+  that one needs a human.
 
 - **Phase 9 scrutiny against a target mockup (2026-09-05).** The pipeline was
   audited against an artist's HD reimagining of Punch-Out!! (redrawn crowd,
@@ -722,7 +724,7 @@ harness problem, solved several ways, in readable code.
    P.7 (quick-toggle panel + welcome/Continue cards) is independent of
    Phase 8 below — it ships without a Border toggle and adds one later.
 6. ~~**Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance~~ shipped 2026-09-02, F8.3 normative closure + tests the same day.
-7. **Phase 9 (artist-legible sheets)** — F9.0 (ADR) first; F9.1 → F9.2 ‖ F9.3 → F9.4; F9.5 after F9.3; F9.6 only on an explicit go. Independent of Part B.
+7. **Phase 9 (artist-legible sheets)** — F9.0 (ADR) first; F9.1 → F9.2 ‖ F9.3 → F9.4; F9.5 after F9.3; F9.6 shipped 2026-09-05 on the user's go (ADR-0154, ADR-0161). Independent of Part B.
 
 ### 6. ADR map
 
