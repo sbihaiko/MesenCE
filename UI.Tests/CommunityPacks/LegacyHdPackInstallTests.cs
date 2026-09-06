@@ -348,5 +348,52 @@ namespace Mesen.Tests.CommunityPacks
 			using StreamWriter writer = new(stream);
 			writer.Write(content);
 		}
+
+		//ADR-0147 (hardened 2026-09-06, 36ecf152): the host-free output-folder
+		//gate an hd-legacy (re)install runs before writing into mep/. An
+		//unstamped non-empty folder is the user's own work (hand-made pack or
+		//editor session) and is refused, never cleared; a folder carrying our
+		//.mep-install.json stamp is our prior install and may be cleared; an
+		//empty or absent folder proceeds as a fresh install.
+		[Theory]
+		[InlineData(true, true, true, LegacyHdPackInstall.HdLegacyOutputFolderVerdict.ClearForReinstall)]
+		[InlineData(true, true, false, LegacyHdPackInstall.HdLegacyOutputFolderVerdict.ClearForReinstall)]
+		[InlineData(false, true, true, LegacyHdPackInstall.HdLegacyOutputFolderVerdict.RefuseNonEmptyUnstamped)]
+		[InlineData(false, true, false, LegacyHdPackInstall.HdLegacyOutputFolderVerdict.Proceed)]
+		[InlineData(false, false, false, LegacyHdPackInstall.HdLegacyOutputFolderVerdict.Proceed)]
+		public void DecideOutputFolderHandling_CoversTheWholeTruthTable(
+			bool stampExists, bool folderExists, bool folderNonEmpty, LegacyHdPackInstall.HdLegacyOutputFolderVerdict expected)
+		{
+			Assert.Equal(expected, LegacyHdPackInstall.DecideOutputFolderHandling(stampExists, folderExists, folderNonEmpty));
+		}
+
+		[Fact]
+		public void DecideOutputFolderHandling_UnstampedNonEmptyFolderIsRefused_NotCleared()
+		{
+			//The refusal path the review cares about: an auto-install must never
+			//clobber an editor session / hand-made pack sitting in mep/.
+			Assert.Equal(
+				LegacyHdPackInstall.HdLegacyOutputFolderVerdict.RefuseNonEmptyUnstamped,
+				LegacyHdPackInstall.DecideOutputFolderHandling(stampExists: false, folderExists: true, folderNonEmpty: true));
+		}
+
+		[Fact]
+		public void DecideOutputFolderHandling_OurOwnStampedInstallMayBeClearedForReinstall()
+		{
+			Assert.Equal(
+				LegacyHdPackInstall.HdLegacyOutputFolderVerdict.ClearForReinstall,
+				LegacyHdPackInstall.DecideOutputFolderHandling(stampExists: true, folderExists: true, folderNonEmpty: true));
+		}
+
+		[Fact]
+		public void DecideOutputFolderHandling_EmptyOrAbsentFolderProceeds()
+		{
+			Assert.Equal(
+				LegacyHdPackInstall.HdLegacyOutputFolderVerdict.Proceed,
+				LegacyHdPackInstall.DecideOutputFolderHandling(stampExists: false, folderExists: true, folderNonEmpty: false));
+			Assert.Equal(
+				LegacyHdPackInstall.HdLegacyOutputFolderVerdict.Proceed,
+				LegacyHdPackInstall.DecideOutputFolderHandling(stampExists: false, folderExists: false, folderNonEmpty: false));
+		}
 	}
 }

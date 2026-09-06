@@ -258,5 +258,34 @@ namespace Mesen.Logic
 			}
 			return true;
 		}
+
+		//How an hd-legacy install may treat an existing output mep/ folder before
+		//writing into it (ADR-0147, hardened 2026-09-06 by 36ecf152).
+		public enum HdLegacyOutputFolderVerdict
+		{
+			Proceed,                 // folder absent or empty and unstamped: fresh install
+			ClearForReinstall,       // folder carries our .mep-install.json stamp: our prior install, safe to clear
+			RefuseNonEmptyUnstamped  // folder has content but no stamp: the user's own work, never overwritten
+		}
+
+		//Decides, host-free, what an hd-legacy (re)install may do with an existing
+		//output folder before extraction: a folder carrying the .mep-install.json
+		//stamp is our own prior install and is cleared for a reinstall; an
+		//unstamped non-empty folder is the user's (a hand-made pack or an editor
+		//session) and is never overwritten by an auto-install; an empty or absent
+		//folder is a fresh install. Mirrors the equivalent guard in the MEP recipe
+		//path (MepRecipeInstaller) so the two never diverge. Pure - the
+		//UI/Services coordinator supplies the three booleans and acts on the
+		//verdict (this class has no File I/O).
+		public static HdLegacyOutputFolderVerdict DecideOutputFolderHandling(bool stampExists, bool folderExists, bool folderNonEmpty)
+		{
+			if(stampExists && folderExists) {
+				return HdLegacyOutputFolderVerdict.ClearForReinstall;
+			}
+			if(folderExists && folderNonEmpty) {
+				return HdLegacyOutputFolderVerdict.RefuseNonEmptyUnstamped;
+			}
+			return HdLegacyOutputFolderVerdict.Proceed;
+		}
 	}
 }

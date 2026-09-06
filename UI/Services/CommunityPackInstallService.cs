@@ -7,7 +7,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using Mesen.Logic;
 
@@ -22,7 +21,11 @@ namespace Mesen.Services
 	public static class CommunityPackInstallService
 	{
 		private const string MessageTitle = "Enhancement Packs";
-		private static int _running = 0;
+		//Exclusion between the auto-install (OnGameLoaded/RunAsync) and the user's
+		//Restore so the two never rewrite the same mep/ at once (host-free
+		//CommunityPackInstallGate, UI.Tests). At most one holder at a time; a
+		//refused caller backs off without releasing the holder's token.
+		private static readonly CommunityPackInstallGate _installGate = new();
 		//§51 per-session idempotency key: one successful-or-in-flight attempt
 		//per ROM sha1 per process, decided before any network call. A failed
 		//fetch/install or a thrown extract is removed so the next load retries.
@@ -54,11 +57,11 @@ namespace Mesen.Services
 		//install registry (outside mep/) to confirm a catalog pack is installed
 		//for the loaded ROM, then re-fetches the artifact and rewrites mep/. A
 		//pack that left the catalog cannot be restored (nothing to fetch from).
-		//Shares the _running gate with the auto-install so the two never rewrite
-		//the same mep/ at once.
+		//Shares the CommunityPackInstallGate with the auto-install so the two
+		//never rewrite the same mep/ at once.
 		public static async Task<(bool Ok, string Error)> RestoreInstalledPack()
 		{
-			if(Interlocked.CompareExchange(ref _running, 1, 0) != 0) {
+			if(!_installGate.TryEnter()) {
 				return (false, "an install is already in progress");
 			}
 			try {
@@ -85,7 +88,7 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPack] RestoreInstalledPack: restored " + fetched.Entry.PackId + " to mep/");
 				return (true, "");
 			} finally {
-				Interlocked.Exchange(ref _running, 0);
+				_installGate.Exit();
 			}
 		}
 
@@ -102,7 +105,7 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPack] skipped: isPowerCycle or AutoInstallCommunityPacks off");
 				return;
 			}
-			if(Interlocked.CompareExchange(ref _running, 1, 0) != 0) {
+			if(!_installGate.TryEnter()) {
 				EmuApi.WriteLogEntry("[CommunityPack] skipped: a previous load's install is still in flight");
 				return; //a previous load's install is still in flight
 			}
@@ -170,7 +173,7 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPack] RunAsync threw: " + ex);
 				Notify("Community pack auto-install failed: " + ex.Message);
 			} finally {
-				Interlocked.Exchange(ref _running, 0);
+				_installGate.Exit();
 			}
 		}
 

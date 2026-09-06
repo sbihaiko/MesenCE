@@ -93,15 +93,23 @@ namespace Mesen.Services
 			//HdPacks/<rom>/ path; the pack stays visible and editable in mep/.
 			string texturesFolder = Path.Combine(outFolder, "textures");
 			string stampPath = Path.Combine(outFolder, ".mep-install.json");
-			if(File.Exists(stampPath) && Directory.Exists(outFolder)) {
-				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy reinstall - clearing " + outFolder);
-				ClearFolderForReinstall(outFolder);
-			} else if(Directory.Exists(outFolder) && Directory.EnumerateFileSystemEntries(outFolder).Any()) {
-				//ADR-0147, mirroring MepRecipeInstaller's own guard: a mep/ folder we
-				//did not stamp is the user's (a hand-made pack or an editor session)
-				//and is never overwritten by an auto-install.
-				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy install refused - output folder is not empty and carries no install stamp: " + outFolder);
-				return CommunityPackInstallOutcome.Failed("output folder is not empty: " + outFolder);
+			bool folderExists = Directory.Exists(outFolder);
+			bool folderNonEmpty = folderExists && Directory.EnumerateFileSystemEntries(outFolder).Any();
+			//ADR-0147, mirroring MepRecipeInstaller's own guard: a mep/ folder we
+			//did not stamp is the user's (a hand-made pack or an editor session)
+			//and is never overwritten by an auto-install. The decision is the
+			//host-free LegacyHdPackInstall.DecideOutputFolderHandling (UI.Tests);
+			//this only acts on it.
+			switch(LegacyHdPackInstall.DecideOutputFolderHandling(File.Exists(stampPath), folderExists, folderNonEmpty)) {
+				case LegacyHdPackInstall.HdLegacyOutputFolderVerdict.ClearForReinstall:
+					EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy reinstall - clearing " + outFolder);
+					ClearFolderForReinstall(outFolder);
+					break;
+				case LegacyHdPackInstall.HdLegacyOutputFolderVerdict.RefuseNonEmptyUnstamped:
+					EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy install refused - output folder is not empty and carries no install stamp: " + outFolder);
+					return CommunityPackInstallOutcome.Failed("output folder is not empty: " + outFolder);
+				case LegacyHdPackInstall.HdLegacyOutputFolderVerdict.Proceed:
+					break;
 			}
 
 			if(!TryExtractLegacyPack(primaryPackPath, texturesFolder, romName, out string error)) {
