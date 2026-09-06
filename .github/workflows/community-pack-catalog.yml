@@ -20,6 +20,16 @@ name: Community pack catalog
 on:
   workflow_dispatch:
 
+# Every "Aceito*" verdict dispatches this workflow, so revalidating several
+# packs at once used to start one run per pack, each checking out main,
+# committing and pushing. On 2026-09-06 three such runs raced and the last
+# one died on a non-fast-forward push. Serialize them instead; regeneration
+# reads the live board and is idempotent, so a queued run that GitHub drops
+# in favour of a newer one loses nothing.
+concurrency:
+  group: community-pack-catalog
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -50,4 +60,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: regenerate docs/community-packs.md and docs/community-packs.json"
-          git push
+          # The concurrency group above keeps this workflow from racing
+          # itself; this loop covers the remaining case of someone pushing
+          # to main while the catalog was being generated. Rebase rather
+          # than merge: the commit only ever touches the two generated
+          # files, so it replays cleanly onto whatever landed meanwhile.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt) - rebasing onto the new main and retrying"
+            git pull --rebase --no-edit origin main
+          done
+          echo "push still rejected after 3 attempts" >&2
+          exit 1
