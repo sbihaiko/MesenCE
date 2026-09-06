@@ -9,6 +9,7 @@ int64_t UpsPatcher::ReadBase128Number(std::istream& file)
 	int64_t result = 0;
 	int shift = 0;
 	uint8_t buffer;
+	int byteCount = 0;
 	while(true) {
 		file.read((char*)&buffer, 1);
 		if(file.eof()) {
@@ -18,6 +19,10 @@ int64_t UpsPatcher::ReadBase128Number(std::istream& file)
 		shift += 7;
 		if(buffer & 0x80) {
 			break;
+		}
+		if(++byteCount >= 5) {
+			//A base128 number cannot exceed 5 bytes
+			return -1;
 		}
 		result += (int64_t)1 << shift;
 	}
@@ -55,6 +60,10 @@ bool UpsPatcher::PatchBuffer(std::istream& upsFile, vector<uint8_t>& input, vect
 	}
 
 	output.resize((size_t)outputFileSize);
+	if((size_t)inputFileSize != input.size() || output.size() < input.size()) {
+		//Invalid file
+		return false;
+	}
 	std::copy(input.begin(), input.end(), output.begin());
 
 	uint32_t pos = 0;
@@ -75,6 +84,10 @@ bool UpsPatcher::PatchBuffer(std::istream& upsFile, vector<uint8_t>& input, vect
 				return false;
 			}
 
+			if(pos >= output.size()) {
+				//Invalid file
+				return false;
+			}
 			output[pos] ^= xorValue;
 			pos++;
 

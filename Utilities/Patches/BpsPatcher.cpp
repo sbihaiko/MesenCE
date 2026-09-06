@@ -9,6 +9,7 @@ int64_t BpsPatcher::ReadBase128Number(std::istream& file)
 	int64_t result = 0;
 	int shift = 0;
 	uint8_t buffer;
+	int byteCount = 0;
 	while(true) {
 		file.read((char*)&buffer, 1);
 		if(file.eof()) {
@@ -18,6 +19,10 @@ int64_t BpsPatcher::ReadBase128Number(std::istream& file)
 		shift += 7;
 		if(buffer & 0x80) {
 			break;
+		}
+		if(++byteCount >= 5) {
+			//A base128 number cannot exceed 5 bytes
+			return -1;
 		}
 		result += (int64_t)1 << shift;
 	}
@@ -79,7 +84,7 @@ bool BpsPatcher::PatchBuffer(std::istream& bpsFile, vector<uint8_t>& input, vect
 			case 0:
 				//SourceRead
 				while(length--) {
-					if(outputOffset >= output.size()) {
+					if(outputOffset >= output.size() || outputOffset >= input.size()) {
 						return false;
 					}
 
