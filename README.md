@@ -29,17 +29,26 @@ Underneath it all is [MesenCE](https://github.com/nesdev-org/MesenCE) / [Mesen2]
 
 ## Download
 
-Fresh builds from the latest `main` — no install, unzip and run:
+The newest build of `main` that passed CI — no installer, unzip and run:
 
 | Platform | Build | Notes |
 |---|---|---|
-| **Windows** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Windows%20-%20net10.0%20-%20AoT%29.zip) | Windows 7 SP1 or newer |
-| **Linux x64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04%20-%20clang_aot%29.zip) | requires **SDL2** |
-| **Linux ARM64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04-arm%20-%20clang_aot%29.zip) | requires **SDL2** |
-| **macOS Apple Silicon** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15%20-%20clang_aot%29.zip) | requires **SDL2**; self-signed — allow it once in Gatekeeper |
-| **macOS Intel** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15-intel%20-%20clang_aot%29.zip) | requires **SDL2**; self-signed — allow it once in Gatekeeper |
+| **Windows x64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Windows%20-%20net10.0%20-%20AoT%29.zip) | Windows 10 (1607) or newer |
+| **Linux x64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04%20-%20clang_aot%29.zip) · [AppImage](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20x64%20-%20AppImage%29.zip) | requires **SDL2**: `sudo apt install libsdl2-2.0-0` |
+| **Linux ARM64** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20-%20ubuntu-22.04-arm%20-%20clang_aot%29.zip) · [AppImage](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28Linux%20ARM64%20-%20AppImage%29.zip) | requires **SDL2**: `sudo apt install libsdl2-2.0-0` |
+| **macOS Apple Silicon** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15%20-%20clang_aot%29.zip) | requires **SDL2**: `brew install sdl2` |
+| **macOS Intel** | [Download](https://nightly.link/sbihaiko/MesenCE/workflows/build/main/Mesen%20%28macOS%20-%20macos-15-intel%20-%20clang_aot%29.zip) | requires **SDL2**: `brew install sdl2` |
 
-Per-commit builds live in the [Actions](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain) tab. Building from source: [COMPILING.md](COMPILING.md).
+The AppImage packs the same build into a single executable file with a desktop
+entry; it is not a bundle, so it still needs SDL2 on the host.
+
+**macOS, first launch.** The app is signed with our own certificate rather than
+an Apple Developer ID, so Gatekeeper refuses it the first time. Open it once,
+dismiss the warning, then go to **System Settings → Privacy & Security** and
+press **Open Anyway** next to the Mesen entry.
+
+These links always serve the newest *green* build, so they lag `main` whenever
+a build is red. Per-commit builds live in the [Actions](https://github.com/sbihaiko/MesenCE/actions/workflows/build.yml?query=branch%3Amain) tab. Building from source: [COMPILING.md](COMPILING.md).
 
 ## Hear it
 
