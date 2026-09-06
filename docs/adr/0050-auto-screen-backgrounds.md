@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-08-25
 - Phase 5, F5.4. Reorders the F5.4 plan (objects/sheets → backgrounds first).
+- Amended by: ADR-0147 (`auto/` resolution note now lives in MEP-v1 §2.1), ADR-0153 (the artist surface gains `textures/sheets/`), ADR-0156 (a captured screen owns the cells it covers), ADR-0159 (anchors chosen at save time — replaces the "rarest non-flat tiles, ≥ 64 px apart" clause)
+- Related: ADR-0049 (sibling-folder convention), ADR-0157 (headless input for the recorder)
 
 ## Context
 Comparing the auto layer with three community packs (`scripts/mep_compare.py`,

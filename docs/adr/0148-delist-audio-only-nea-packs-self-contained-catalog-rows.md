@@ -15,6 +15,7 @@
   extract-audio flow actually has a patched ROM to work from. ADR-0144 as
   written (and `.github/ai/validate-classify.md`, which implements it)
   requires only that the patch be present in the archive.
+- Amended by: ADR-0151 (extends "self-contained, verifiable" to intra-artifact reference resolution), ADR-0152 (known-missing errata keeps a usable pack listed)
 
 ## Context
 The LiQuiDzGit/HDnes submission (#128) is a single GitHub archive zip

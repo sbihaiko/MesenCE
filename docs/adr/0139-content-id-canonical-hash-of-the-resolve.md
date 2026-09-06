@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-28
+- Related: ADR-0140 (`pack_id` — product identity; this is content identity), ADR-0141 (one live slot per `pack_id`), ADR-0138 §37/§43
 
 ## Context
 the consolidated PRD, Part B §3.2 (accepted product text, 2026-08-28). The catalog's Pack Hash / MEI sha256 / mep-meta source_sha256 is the download wrapper, not the pack: after ADR-0120/0121 discovery (and a MEP Recipe when present) the host loads a subset of the zip. Two wrappers of the same tree must be one revision; two recipes on one primary zip must be two revisions. The client needs the same value to detect updates (§3.6) and to merge a user-dropped container with a catalog install (§5). Product constraint: same loaded files ⇒ same content_id; wrapper-only change ⇒ same content_id; any loaded-file change ⇒ new content_id.

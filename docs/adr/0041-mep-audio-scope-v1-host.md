@@ -3,6 +3,7 @@
 - Status: accepted (partially superseded by ADR-0047/ADR-0049, see Decision)
 - Date: 2026-08-24
 - Phase: F3.0 (MEP v1 host)
+- Related: ADR-0133 (per-channel mute mask), ADR-0134 (loop point), ADR-0142 (crossfade), ADR-0144 (audio packs supplying `.ogg` via a bundled ROM patch) — all NES-only, inside this scope
 
 ## Context
 MEP-v1 §5.2 lets `audio.path` point at OGG replacement (via hires.txt `<bgm>`/

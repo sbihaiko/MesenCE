@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0039 (the hash is computed from the ROM file, per system, before load), ADR-0145 (fallback when the hash does not match)
 
 ## Context
 Raised during spec and decompose (consolidates former ADR-0009): Two halves of the same hash contract were left unstated. (1) Byte range: the PRD's own 4.1 table names rcheevos `rhash` specifically for hash computation when the system hashes only part of the file (e.g. NES iNES headers and other header/trainer-bearing formats where No-Intro hashes only the ROM payload). The approved spec computes CRC32/SHA-1 via the existing utilities but does not specify whether hashing happens on the raw loaded file or on a header-stripped payload matching No-Intro's convention — hashing the wrong range makes MEP/MEI pack matching silently fail against real No-Intro-keyed packs even though the code builds and the ACs pass. (2) String format: the hash-string contract (hex case, byte order, CRC32-vs-SHA1 field naming) is frozen in the golden files by T2/T4 before any code has run against the real Utilities/CRC32 and Utilities/sha1 output; the plan's only mitigation ('flag it rather than silently editing the frozen golden') defers a contract break to the end of the run.

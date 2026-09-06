@@ -303,3 +303,11 @@ close this gap and could be folded into the E2E harness named in §4.
   zip whose entry order changes, and would contradict the fail-closed
   posture ADR-0040's zip-slip validation already establishes for this exact
   code path.
+
+## Amendments (2026-09-06, code-review pass)
+
+- `PrepareZip`'s cache-hit path returns the prefixed folder directly, using the
+  root prefix recorded in the second line of `.mep-source` (ADR-0040
+  amendment). The public signature is unchanged as §2 requires; the
+  behavioural difference is that a fallback zip is extracted once, not on
+  every load.

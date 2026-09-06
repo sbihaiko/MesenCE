@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0004 (hires.txt extension spec, v1-draft), ADR-0149 (border layer added to the envelope in MEP-v1.5)
 
 ## Context
 Raised during decompose: MEP introduces a second, parallel enhancement-content system alongside the existing hires.txt HD Pack stack (HdPackLoader/HdNesPack/HdPackBuilder), and the spec defines no relationship between them: if a game has both an installed MEP pack with a textures/ section and a loose HD pack folder, which wins? Left undecided, F2 (hires.txt GB/SMS extension) and F3 (MEP textures/) will each grow their own texture-loading path.

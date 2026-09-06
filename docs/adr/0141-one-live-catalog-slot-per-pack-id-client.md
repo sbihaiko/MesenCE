@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-28
+- Related: ADR-0138 §37 (the reinstall trigger this ADR amends), ADR-0140 (`pack_id` sources), ADR-0143 (`pack_id` = origin × game — sibling expansion), ADR-0148 (de-listing on stale shared-zip `sha256`)
 
 ## Context
 the consolidated PRD, Part B §3.6 and §4 (accepted product text, 2026-08-28). The player must never be asked to choose between 1.0 and 1.2 of the same pack; the official catalog must expose one current revision per product. ADR-0138 §37 (accepted) makes F6.4b reinstall when catalog source.sha256 differs from .mep-install.json — that fires on wrapper-only changes and misses the actual revision identity. Yanks and republished older labels must not silently downgrade a user's install. Removal of a pack from the catalog must not interrupt a player.

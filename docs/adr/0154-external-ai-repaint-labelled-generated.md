@@ -1,7 +1,7 @@
 # ADR-0154: The optional AI repaint is an external, backend-pluggable script whose output lands in `auto/`, is labelled `generated` in `pack.json`, and is never eligible for the community catalog
 
-- Status: accepted
-- Date: 2026-09-05 (accepted 2026-09-05, after the user settled §2)
+- Status: accepted (2026-09-05, by the user, after §2 was settled on Option A — reflected in `scripts/sheet_repaint.py`; PRD Part A slice F9.6)
+- Date: 2026-09-05
 - Related: PRD Part A §4 "Phase 9" (slice F9.6 and validation test 8),
   ADR-0153, ADR-0049, ADR-0147, ADR-0050, ADR-0005, ADR-0140, ADR-0152,
   ADR-0148, ADR-0138 §41, MEP-v1 §3.1/§3.2, CLAUDE.md "Community HD/MEP Pack

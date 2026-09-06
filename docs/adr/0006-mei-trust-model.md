@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0138 §41 (host allow-list packaging), ADR-0146 (auto-load of accepted packs rides on this trust model)
 
 ## Context
 Raised during decompose (consolidates former ADR-0010): F4's Pack Browser is the first outbound-network plus untrusted-archive-extraction path in the UI — it fetches federated manifests from user-configurable third-party URLs, downloads the .zip artifacts they point to, and installs them locally. The spec lists an artifact checksum in the MEI manifest but does not make verification a contract, and no trust model is specified: whether install MUST refuse a checksum mismatch, whether URLs are HTTPS-only, how zip path traversal is prevented on extraction, and what happens when a non-default manifest URL is added.
@@ -14,3 +15,18 @@ The trust decisions are contract, not client implementation detail — third-par
 
 ## Alternatives
 Checksum as advisory metadata (spec-compliant clients could install tampered artifacts). HTTP allowed with a warning (downgrade/MITM surface on an auto-install path).
+
+## Amendments (2026-09-06, code-review pass)
+
+- The trust model gains a size axis. Archives are refused before extraction
+  when any entry declares more than 1 GiB uncompressed or the archive total
+  exceeds 2 GiB (`Core/Shared/EnhancementPacks/MepFileIo.h`,
+  `MepZipExtract::CheckPlanSizes`, `MepRecipeSource::Read`). The CI linter
+  refuses any member above 300 MB uncompressed (`mep_lint.MAX_MEMBER_BYTES`,
+  verdict `invalid`). Legacy HD pack extraction in the client aborts past
+  2 GiB inflated (`LegacyHdPackInstall.MaxExtractedBytes`).
+- Rule D(1) is enforced without exception: the client no longer accepts a
+  sha256 mismatch for branch-archive URLs (`/archive/refs/heads/`). Stale
+  hashes are handled by de-listing (ADR-0148), not by a bypass.
+- Download budgets: 30 s for the catalog document, 10 min for an artifact
+  including every redirect hop; a stall is logged and skipped.

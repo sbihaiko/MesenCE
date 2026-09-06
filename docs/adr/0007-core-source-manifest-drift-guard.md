@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0155 (header dependency tracking in the same makefile), ADR-0137 (`make doc-checks` runs `check-core-manifest.sh`)
 
 ## Context
 Raised during decompose: The project maintains two independent source manifests — a globbing makefile and a hand-enumerated Core.vcxproj (308 explicit entries). Any work that adds Core sources builds green on macOS/Linux while the MSVC project silently drifts, and the current effort adds six new Core sources across three parallel tasks.

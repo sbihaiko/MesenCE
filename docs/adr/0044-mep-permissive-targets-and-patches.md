@@ -3,6 +3,7 @@
 - Status: accepted (F5.1, 2026-08-25)
 - Date: 2026-08-25
 - Phase 5 (docs/roadmap/plano-execucao-F5.md), F5.1.
+- Related: ADR-0138 (the recipe/installer consumes the per-hash `patches[]`), ADR-0144 (audio via a bundled ROM patch), ADR-0148 (a patch counts only when wired)
 
 ## Context
 Zelda Remastered v1.3 requires one exact PRG0 sha1: it ships an IPS that

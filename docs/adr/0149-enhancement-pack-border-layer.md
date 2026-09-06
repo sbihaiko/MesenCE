@@ -122,3 +122,21 @@ The border compositing path is integrated cleanly into `VideoRenderer` and `Base
 - `EnableBorder` allows players to toggle borders off instantly if they prefer pure black bars or stretch modes.
 - ABI safety: `InteropEnhancementPackConfig` is updated symmetrically in C++ and C#.
 - Zero performance impact when no border is present or when `EnableBorder == false`.
+
+## Amendments (2026-09-06, code-review pass)
+
+- The border asset is resolved once, not per frame. `VideoRenderer` holds a
+  notification listener that marks the border dirty on `GameLoaded`,
+  `BeforeGameUnload` and `EmulationStopped`; the interop setters
+  `SetPreferredMepPack`/`SetMepPackEnabled` call
+  `VideoRenderer::InvalidateBorderAsset()` so a UI-side pack change takes
+  effect on the next frame. The decode thread no longer reads
+  `MepPackManager` state per frame (that read was unsynchronised against the
+  emu and UI threads).
+- Border PNGs above 8192 px per side or above `FrameCaptureMath::MaxCapturePixels`
+  are refused with a log line. The overlay blend precomputes the border over
+  black at load and blends only the clamped viewport per frame; rounding is
+  round-to-nearest (±1 LSB versus the previous truncation).
+- Open points, deliberately unchanged: `scale_mode` is parsed but not applied
+  (Stretch has no effect); AVI/GIF recording captures the pre-border frame.
+  Both need a decision before the next border-related slice.

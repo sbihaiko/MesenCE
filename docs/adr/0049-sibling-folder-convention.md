@@ -4,6 +4,8 @@
 - Date: 2026-08-25
 - Phase 5 (docs/roadmap/plano-execucao-F5.md). Supersedes the manifest-heavy
   drafts of ADR-0045/0046/0048 (deleted 2026-08-27; their text lives in git history, the surviving substance is summarised here).
+- Amended by: ADR-0147 (the human layer moves from the pack root to `mep/`), ADR-0160 (`Chr_XX_N.png` leaves the pack root for `textures/chr/`)
+- Related: ADR-0040 (storage/discovery precedence), ADR-0050 (bootstrap backgrounds written into the sibling folder), ADR-0146 (an accepted community pack wins over the local auto-only pack)
 
 ## Context
 Two real packs (Contra80s, Zelda Remastered) showed authors fighting text

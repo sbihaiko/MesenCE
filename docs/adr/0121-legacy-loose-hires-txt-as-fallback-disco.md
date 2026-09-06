@@ -4,6 +4,7 @@
 - Date: 2026-08-27
 - Amended 2026-09-04 (bare `hires.txt` must have a sibling image — see "Amendment" below; issue #161)
 - Extends ADR-0120 §2/§3 (subfolder fallback for wrapped zips). Motivated by issues #46, #47, #48.
+- Related: ADR-0040 (storage/discovery precedence this fallback extends), ADR-0120 (the zip subfolder fallback it refines)
 
 ## Context
 Bug https://github.com/sbihaiko/MesenCE/issues/48: scripts/mep_lint.py rejects classic Mesen 0.9.5/Mesen2-native HD packs (hires.txt at the pack's own root, no textures/ subfolder — the pre-MEP, pre-ADR-0049 convention MesenCE's HdPacks loader still supports at the container root) with "no section found", specifically when that loose hires.txt sits one level down inside an unrelated wrapper folder — e.g. a raw GitHub /archive/refs/heads/<branch>.zip download whose top-level folder is named after the repo (HDNes-Graphics-Pac-master/, ZII-mesen-main/), not the ROM/game.

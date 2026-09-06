@@ -4,6 +4,7 @@
 - Date: 2026-08-24
 - Resolves the GB half of ADR-0002 (key must be decided per console before the
   hires.txt 2xx spec freezes).
+- Related: ADR-0002 (per-console key is a recorded decision), ADR-0037 (the SMS/GG counterpart)
 
 ## Context
 The NES builder keys tiles on `{tile bytes, palette RAM values}` (CHR-RAM path)

@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-28
+- Related: ADR-0139 (`content_id`), ADR-0141 (one live slot per `pack_id`), ADR-0143 (amends source 2 — `pack_id` = origin × game)
 
 ## Context
 the consolidated PRD, Part B §3.3 and §3.5 (accepted product text, 2026-08-28). A pack is a product with revisions; content_id (ADR on canonical hash) identifies a revision but makes every version look like a different pack. Competing packs for the same ROM must be distinguishable from revisions of the same pack, in the catalog and in the client's per-ROM preference (P.3). Local drops have no catalog row and today are keyed by container name (ADR-0040/0049). The download allow-list (scripts/pack_host_allowlist.json) includes gists, raw.githubusercontent.com and Google Drive, where no owner/repo exists.
@@ -28,3 +29,13 @@ Not implemented: closing the newer duplicate issue (`mep_identity_check.py` only
 - Product-level deduplication for gist/raw/Drive links: rejected as a documented non-goal — no stable owner exists, so `issue-{n}` is the id.
 - Making `id` a MUST in MEP-v1: rejected — a SHOULD keeps every legacy `hires.txt` pack loadable; hosts never fail a load on it.
 - Letting any origin claim an existing `id` (pure first-match): rejected by the 2026-08-28 origin-binding amendment — `id: contra80s, version: 99.0.0` from a stranger would otherwise take the slot on every client (PRD Part B §3.3).
+
+## Amendments (2026-09-06, code-review pass)
+
+- Core now validates the stamped `pack_id` against the slug rule before
+  writing `.mep-install.json` (`MepRecipeInstaller::WriteInstallStamp`); an
+  invalid `pack.id` is logged and omitted, so the container degrades to
+  `local:<container>`. Dep ids are validated against MEP-recipe-v1 §3.3
+  instead (a different vocabulary). Every key and value in the stamp goes
+  through the JSON string writer, closing a key-injection path. Line numbers
+  quoted in Consequences predate this change.

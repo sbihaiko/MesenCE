@@ -8,6 +8,7 @@
   whole scene vocabulary — the cells the screen surface owns are left off it)
   and ADR-0050 (its screens stop being a parallel artefact and become the
   primary surface for the content they cover)
+- Amended by: ADR-0159 (lifts this ADR's non-goal on changing what `CaptureScreen` captures and its anchors)
 
 ## Context
 

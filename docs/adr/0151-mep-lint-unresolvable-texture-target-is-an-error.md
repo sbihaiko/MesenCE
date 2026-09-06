@@ -4,6 +4,7 @@
 - Date: 2026-09-04
 - Related: ADR-0148, ADR-0138 §4/§37, MEP-v1 §2.1/§5, `scripts/mep_lint.py`, `scripts/smoke_pack_headless.sh`, `.github/ai/validate-classify.md`, issue #155
 - Supersedes / amends: extends ADR-0148 ("a listed row must be a self-contained, verifiable artifact") from *artifact availability* to *intra-artifact reference resolution*, and tightens the classify contract stated in CLAUDE.md, "Community HD/MEP Pack triage"
+- Amended by: ADR-0152 (narrows this rule — a reviewed `miss` errata may declare exact targets known-missing)
 
 ## Context
 

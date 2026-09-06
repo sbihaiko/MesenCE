@@ -1,9 +1,10 @@
 # ADR-0134: Loop point placement for replaced audio tracks (fingerprint field vs OGG tags)
 
 - Status: accepted (decided 2026-08-29 — **Option A**: the loop point lives in `fingerprints.json` as an optional `tracks[i].loop` field; Block C item 8 implements it)
-- Date: 2026-08-29 (restored from b0b334b0^; originally dated 2026-08-27)
+- Date: 2026-08-29
+- Note: restored 2026-08-29 from b0b334b0^ after accidental deletion; originally dated 2026-08-27
 - Consolidates: ADR-0095, ADR-0098
-- Related: ADR-0052 (orthogonal — level 2 audio; the loop point is F5.3/3b territory), ADR-0047 (fingerprint trigger)
+- Related: ADR-0142 (crossfade), ADR-0052 (orthogonal — level 2 audio; the loop point is F5.3/3b territory), ADR-0047 (fingerprint trigger)
 
 ## Context
 

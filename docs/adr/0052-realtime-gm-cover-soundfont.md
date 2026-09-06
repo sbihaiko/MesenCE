@@ -1,8 +1,9 @@
 # ADR-0052: Sound level 2 — automatic GM cover from live APU state, SoundFont timbres
 
-- Status: accepted (items 1, 2, 5 and 6 — Block A implemented 2026-08-25; items 3, 4 and 6 implemented 2026-08-29 as Block B — arpeggio→chord, expression→patch family, per-channel FixedRole override, channel-steal/return; only the bundled-SoundFont question still open)
+- Status: accepted (items 1, 2, 5 and 6 — Block A implemented 2026-08-25; items 3, 4 and 6 implemented 2026-08-29 as Block B — arpeggio→chord, expression→patch family, per-channel FixedRole override, channel-steal/return; the bundled-SoundFont question was decided 2026-08-29 — bundle GeneralUser GS in the installer, see PRD Part A §4 Phase 5 row "SoundFont"; the bundling itself waits on the installer's release path)
 - Date: 2026-08-25
 - Phase 5, F5.4g. Builds on F1 (`EnhancedSynth`/`EnhancedSynthEngine`), ADR-0042 (ESP per pack), ADR-0047/0051 (track identification).
+- Related: ADR-0133 (mute mask — companion of item 2), ADR-0134 (loop point), ADR-0142 (crossfade), ADR-0135 (sound-driver probe runtime contract), ADR-0051 (discovery spike)
 
 ## Context
 Two roads were explored for better game audio without a human in the loop:

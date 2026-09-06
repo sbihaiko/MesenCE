@@ -1,6 +1,6 @@
 # ADR-0150: Avalonia.Headless for XAML-wiring tests (Welcome/Continue cards, menu visibility, enhancements panel)
 
-- Status: accepted (2026-09-03) — decided by the user; implementation is wave 2 of `docs/validation/manual-validation-automation-plan.md`
+- Status: accepted (2026-09-03, by the user) — reflected in `UI.HeadlessTests/` (landed the same day as wave 2 of `docs/validation/manual-validation-automation-plan.md`; PRD Part A ADR table row ADR-0150); no PRD slice pending
 - Date: 2026-09-03
 - Origin: `docs/validation/manual-validation-automation-plan.md` (step 7 of "Proposed execution order"; the plan's "Rejected suggestions" table lists `Avalonia.Headless` as the right long-term answer for XAML wiring but explicitly refuses to adopt it as a plan step, because it changes unit-test/CI wiring and CLAUDE.md routes that through an ADR).
 - Related: ADR-0123 (UI/Logic host-free firewall: the dual-compile is the authoritative gate), ADR-0130 (core unit-test binary gitignored), ADR-0131 (`unit-tests.yml` contract invariants), ADR-0137 (repo-hygiene checks wired into make/CI), PRD Part B §5–§6 (Player shell, pack picker, enhancements quick-toggle panel).

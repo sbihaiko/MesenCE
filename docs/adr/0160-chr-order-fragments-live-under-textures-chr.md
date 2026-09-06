@@ -121,3 +121,10 @@ and requiring the two manifests to be byte-identical.
   change to `PruneLegacyChrFiles` should be read as touching user data.
 - `mep_lint` needed no change: it resolves `<img>` targets by path and reports
   a real `auto/` pack in the new shape with 0 errors and all 91 images found.
+
+## Amendments (2026-09-06, code-review pass)
+
+- §3 guard: `PruneLegacyChrFiles()` is skipped, with a log line, whenever the
+  export dropped a tile on the upstream ">256 tiles of the same palette" path
+  (`HdPackBuilder::_droppedTiles`). A truncated re-emit must never delete the
+  artist's source `Chr_*.png`.

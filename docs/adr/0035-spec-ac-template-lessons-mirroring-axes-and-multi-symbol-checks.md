@@ -18,3 +18,12 @@ Single-grep ACs stop passing on incomplete deliverables; sibling-mirroring specs
 
 ## Alternatives
 Fix only this run's ACs and spec text: the next run regenerates the same three failure shapes from the same templates.
+
+## Clarifications (2026-09-06)
+
+- Ids 0139–0148 were reused once before this rule was enforced: the H1 review
+  findings auto-minted under those ids (see ADR-0137's "Consolidates:" line and
+  ADR-0124's Clarifications) were deleted on 2026-08-28 and the ids reissued to
+  the hand-written ADR-0139–0148 that exist today. That is history, not a
+  precedent — renumbering is forbidden, so the current files keep their ids and
+  no further reuse is allowed.

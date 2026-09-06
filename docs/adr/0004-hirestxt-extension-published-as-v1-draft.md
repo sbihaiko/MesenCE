@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0005 (MEP `textures/` is an envelope over this extension)
 
 ## Context
 Raised during spec: The PRD explicitly states this extension 'deve ser discutida com a comunidade HDNes/Mesen antes de congelar a v1' (must be discussed with the community before freezing v1), unlike the other three specs (ESP/MEP/MEI) which it treats as ready to formalize outright. The spec's deliverable nonetheless produces this as a golden-example-backed, script-validated 'v1' file on the same footing as the other three.

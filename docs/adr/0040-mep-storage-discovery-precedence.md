@@ -1,11 +1,12 @@
 # ADR-0040: MEP storage folder, zip handling and deterministic precedence
 
-- Status: accepted (revised by ADR-0049, extended by ADR-0120)
+- Status: accepted (reflected in the code; revised by ADR-0049, extended by ADR-0120/ADR-0121/ADR-0147 — see "Amended by")
 - Date: 2026-08-24
 - Phase: F3.0 (MEP v1 host)
 - Refines ADR-0005 (loose HD pack wins) and the storage note in
   `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (memory: "central
   folder per ROM, accept zip and directory").
+- Amended by: ADR-0049 (the sibling folder revises the storage root), ADR-0120 (zip subfolder fallback), ADR-0121 (legacy loose `hires.txt` as a fallback discovery signal), ADR-0147 (`auto/` and `mep/` sibling sub-folders)
 
 ## Context
 MEP-v1 §2 requires hosts to accept a `.zip` and a directory with identical
@@ -68,3 +69,14 @@ take a *directory*; only the NES `HdPacks/<rom>.zip` path reads zips directly.
   teach (NES/HdTilePack/OggMixer), plus MSU-1 later. Rejected for v1.
 - "Newest wins" by mtime: non-deterministic across copies. Rejected.
 - Per-ROM sub-folders like HdPacks/: contradicts hash-based identity.
+
+## Amendments (2026-09-06, code-review pass)
+
+- `.mep-source` (§2) is now two lines: `<size>:<mtime>` followed by the root
+  prefix resolved at extraction time (`""` for a pack whose `pack.json` sits
+  at the archive root). A one-line stamp is still accepted as prefix `""`.
+  This stops hires.txt-only zips (ADR-0049, ADR-0120) from being wiped and
+  re-extracted on every ROM load, and makes a cache hit return the same
+  folder the first extraction did.
+- Decompression caps (1 GiB per entry, 2 GiB total) apply before any byte is
+  written; see ADR-0006 amendments for the numbers and their location.

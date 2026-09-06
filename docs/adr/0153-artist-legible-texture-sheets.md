@@ -14,6 +14,7 @@
   real recordings contradicted the criterion this ADR was accepted with;
   **amended 2026-09-05** again (§6 continuous cut rule, F9.12) after a title
   screen was found welded into a level map
+- Amended by: ADR-0156 (§3 — the scene sheet loses the cells a screen owns), ADR-0160 (top-level layout — CHR-order fragments move under `textures/chr/`); see also ADR-0159 (anchors), ADR-0154/ADR-0161 (external repaint and its palette-variant mapping)
 
 ## Context
 
@@ -379,3 +380,16 @@ The hot path keeps no dump code.
   identity round-trip of untouched sheets has to reproduce the captured screens
   under `scripts/headless_record`, which is the automated half of the otherwise
   human validation panel.
+
+## Amendments (2026-09-06, code-review pass)
+
+- §6 output contract: a stitched map whose 1x canvas exceeds
+  `kMaxMapPixels` (64 Mi pixels, `TileSheetTypes.h`) is skipped with a log line
+  instead of being rendered and upscaled (a 16×8-screen overworld at scale 4
+  would otherwise hold ~500 MB live on the emu thread).
+- §5 is now honoured literally: the five host-free modules no longer include
+  `pch.h`; `Core.vcxproj` opts them out of the precompiled header.
+- The per-frame co-occurrence graph (`AccumulateCoOccurrence`) was reviewed
+  as a hot-path cost while recording and kept: replacing it with the
+  vocabulary's East/South relations was not provably output-identical. Open
+  design point.

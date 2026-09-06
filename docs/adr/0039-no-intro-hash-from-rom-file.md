@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-08-24
 - Phase: F3.0 (MEP v1 host)
+- Related: ADR-0003 (the byte-range contract this computes), ADR-0145 (optimistic fallback on mismatch)
 
 ## Context
 MEP matches packs by No-Intro SHA-1 (MEP-v1 §4): the hash of the ROM payload,

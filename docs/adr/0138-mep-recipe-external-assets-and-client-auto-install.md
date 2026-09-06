@@ -4,6 +4,7 @@
 - Date: 2026-08-27
 - Related: ADR-0040 (central per-ROM pack storage and discovery precedence), ADR-0044 (per-hash `patches[]`, hash gate on patches), ADR-0049 (sibling-folder convention), ADR-0120/ADR-0121 (zip fallback discovery, legacy `hires.txt`), ADR-0039 (No-Intro hash from the ROM file)
 - Spec impact: `docs/specs/MEP-v1.md` §6 (security wording), new `docs/specs/MEP-recipe-v1.md`
+- Built on by: ADR-0139/ADR-0140 (content_id, pack_id), ADR-0143 (multi-game zips), ADR-0144 (audio via bundled ROM patch), ADR-0145 (optimistic matching on SHA mismatch), ADR-0148 (de-listing rules), ADR-0151/ADR-0152 (`mep_lint` texture-target errors and known-missing errata; §41 allow-list). Amendments: ADR-0141 (§37), ADR-0146 (§38/§51/§54), ADR-0147 (§4) — see Status
 
 ## Context
 
@@ -751,3 +752,27 @@ Status mapping + parity check), §33 (fence length guard in
 `generate_community_pack_catalog.py` into MEI entry assembly (`scripts/mei_catalog_entry.py`), Markdown
 rendering (`scripts/community_pack_markdown.py`) and the fetch/orchestration
 that stays behind — file list pre-declared. Runs before F6.4.
+
+## Amendments (2026-09-06, code-review pass)
+
+- §41 per-hop validation is now real on both sides. `scripts/fetch_pack.py`
+  installs a non-following redirect handler, so every 3xx surfaces and the
+  next hop is checked against the allow-list, HTTPS-only, hostname (not
+  netloc), no userinfo, port 443, public IP, at most 5 hops. The C# downloader
+  already had `AllowAutoRedirect = false`; it now also carries a per-request
+  timeout. DNS is resolved twice (check, then connect); the rebinding residual
+  is accepted and documented in the module docstring because every listed
+  host is a major CDN.
+- Recipe gate: `mep_recipe.py validate --require-allowlisted-hosts` enforces
+  the same allow-list on `sources.primary.url` and every dep hint. CI and
+  `scripts/validate_pack_local.sh` pass the flag; the default (no flag) stays
+  byte-identical so the goldens under `docs/specs/golden/` keep their
+  `example.org` URLs.
+- The linter refuses any archive member above 300 MB uncompressed with a lint
+  error (verdict `invalid`), closing the deflate-bomb gap that the 300 MB
+  download cap left open.
+- The classify step runs with `Write`/`Edit`/`MultiEdit`/`NotebookEdit`/
+  `WebFetch`/`WebSearch`/`Task` disallowed in addition to `Bash`/`Read`, and a
+  deterministic step fails the run if the checkout changed after it. Every
+  third-party action is pinned to a commit SHA; secrets are passed explicitly
+  to the reusable workflow instead of `secrets: inherit`.

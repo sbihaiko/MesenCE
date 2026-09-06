@@ -59,8 +59,9 @@ Two exceptions:
 - ADR ids are never reused (ADR-0035): 0009–0010, 0015–0020 and 0022–0032 are
   permanently retired.
 - Machine-generated review findings are not decisions. One ADR per decision,
-  written by hand. (ADR-0122–0137 consolidated the former auto-minted
-  ADR-0053–0119, each citing its sources in a "Consolidates:" line.)
+  written by hand. (ADR-0122–0131 and ADR-0133–0137 consolidated the former
+  auto-minted ADR-0053–0119, each citing its sources in a "Consolidates:"
+  line; ADR-0132 was written by hand in the same range.)
 - Verification: `python3 scripts/checks/verify_adr_refs.py` (wired into
   `make doc-checks`) fails when any cited `ADR-NNNN` has no
   `docs/adr/NNNN-*.md`.

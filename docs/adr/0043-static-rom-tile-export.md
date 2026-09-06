@@ -1,8 +1,9 @@
 # ADR-0043: Static ROM tile export as palette-agnostic `defaultTile` entries
 
-- Status: accepted (amended 2026-08-25, F5.4 — see Amendment section)
+- Status: accepted (reflected in the HD Pack Builder; amended 2026-08-25 for PRD slice F5.4a — see Amendment section)
 - Date: 2026-08-25
 - Complements F2 (HD Pack Builder) and feeds F5 (offline upscaling pipeline).
+- Related: ADR-0132 (per-shape palette-variant cap in the same builder)
 
 ## Context
 The HD Pack Builder records tiles *while playing*: a hires.txt key is
@@ -43,7 +44,7 @@ ExportRomTilesHdPack`, same `HdPackBuilderOptions` as recording):
 - The neutral gray sheets are the natural input for the F5 upscaling
   pipeline.
 
-## Amendment (2026-08-25, F5.4 — "assets without playing")
+## Amendment (2026-08-25, F5.4a — "assets without playing")
 - **CHR RAM games are no longer refused.** Their tiles sit verbatim inside PRG
   ROM (99 % of the tiles drawn in Zelda/Castlevania/Mega Man were found there)
   but at arbitrary 16-byte alignments. `HdPackBuilder::AddPrgScanTiles` votes

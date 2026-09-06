@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-24
+- Related: ADR-0138 (client auto-install later widened the consumer set beyond this F3 scope)
 
 ## Context
 Raised during decompose: F3 lands MepPack and EnhancementPackManager with no consumer anywhere in the tree: nothing in the ROM-load path constructs the manager, and neither HdNesPack (textures), OggMixer (audio) nor EnhancedSynthEngine/EnhancedSynthPreset (synth) is taught to read from a loaded pack. As planned, F3 compiles as dead code and the per-section TextureEnabled/AudioEnabled/SynthEnabled toggles have no effect on anything. The ACs (greps only) will not catch this.

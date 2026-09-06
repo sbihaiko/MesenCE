@@ -9,6 +9,7 @@
 - Date: 2026-08-29
 - Related: ADR-0043 (HD pack static export and UI expectations), ADR-0034
   (small focused methods)
+- Note: not part of the 2026-08-27 consolidation despite its id falling inside 0122–0137 — written retroactively on 2026-08-29 for a cap that had shipped without an ADR, hence no "Consolidates:" line
 
 ## Context
 

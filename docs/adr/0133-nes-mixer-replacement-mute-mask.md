@@ -1,9 +1,10 @@
 # ADR-0133: Per-channel replacement mute mask in NesSoundMixer (Block C item 9)
 
 - Status: accepted (decided 2026-08-29 — the per-channel mask contract below is adopted; Block C item 9 implements it)
-- Date: 2026-08-29 (restored from b0b334b0^; originally dated 2026-08-27)
+- Date: 2026-08-29
+- Note: restored 2026-08-29 from b0b334b0^ after accidental deletion; originally dated 2026-08-27
 - Consolidates: ADR-0094, ADR-0097
-- Related: ADR-0052 item 2 (SFX vs music classifier — parent decision), ADR-0047 (fingerprint trigger), ADR-0051
+- Related: ADR-0142 (crossfade — the other Block C audio item), ADR-0052 item 2 (SFX vs music classifier — parent decision), ADR-0047 (fingerprint trigger), ADR-0051
 
 ## Context
 
@@ -102,3 +103,12 @@ Proposed contract for Block C item 9:
   crossfade could hide role flips, but the classifier already crossfades on
   role changes and a bit mask keeps the contract trivially testable.
 - **Unmute all on classification loss** — rejected (music would play twice).
+
+## Amendments (2026-09-06, code-review pass)
+
+- Point 3 (mask recomputed every frame while a replacement track plays,
+  pushed only on change) had regressed: `NesAudioFingerprint::OnFrame`
+  returned early when the matcher reported no new match, so the mask froze at
+  the value computed on the first frame of a track. Restored on 2026-09-06.
+- `FingerprintStore` tracks whose `Kind`/`Id` are empty or contain `/`, `\`
+  or `..` are dropped at load (they were used raw as path components).

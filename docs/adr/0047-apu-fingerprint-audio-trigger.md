@@ -3,6 +3,7 @@
 - Status: accepted (2026-08-25, F5.3 — `Core/Shared/EnhancementPacks/AudioFingerprint.*`, `Core/NES/HdPacks/NesAudioFingerprint.*`; fingerprint = first ≤32 onsets `[voice, relative pitch, frame]`, tolerance ±3 frames, confirmation after 8 onsets, 90 silent frames stop the OGG and restore the APU)
 - Date: 2026-08-25
 - Phase 5, F5.3. Sits beside the HDNes `$41xx` mechanism, does not replace it.
+- Related: ADR-0041 (audio scope), ADR-0133 (mute mask while a replacement plays), ADR-0134 (loop point in `fingerprints.json`), ADR-0142 (crossfade), ADR-0135 (probe runtime contract)
 
 ## Context
 HDNes audio (`<bgm>/<sfx>` → `HdAudioDevice` → `OggMixer`) needs the *game*

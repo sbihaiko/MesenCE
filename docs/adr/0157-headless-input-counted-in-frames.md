@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-09-05
 - Amended: 2026-09-05
-- Related: ADR-0013 (same axis, exporter side), ADR-0050, ADR-0153, ADR-0156, PRD Part A Phase 9 (F9.13, F9.14), `scripts/headless_record.cpp`, `scripts/bootstrap_auto_packs.sh`, `scripts/gameplay_probe.py`
+- Related: ADR-0158 (runtime mode, not compile-time — relies on §3), ADR-0162 (the accuracy harness drives input through this contract), ADR-0013 (same axis, exporter side), ADR-0050, ADR-0153, ADR-0156, PRD Part A Phase 9 (F9.13, F9.14), `scripts/headless_record.cpp`, `scripts/bootstrap_auto_packs.sh`, `scripts/gameplay_probe.py`
 
 ## Amended 2026-09-05
 

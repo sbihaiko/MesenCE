@@ -4,6 +4,7 @@
 - Date: 2026-08-24
 - Resolves the SMS half of ADR-0002 (key must be decided per console before
   the hires.txt 2xx spec freezes).
+- Related: ADR-0002 (per-console key is a recorded decision), ADR-0036 (the GB/GBC counterpart)
 
 ## Context
 The hires-gbsms draft §3.2 originally proposed "CRAM base entry (0/16)" as the
