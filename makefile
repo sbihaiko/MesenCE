@@ -8,14 +8,23 @@ UNAME_S := $(shell uname -s)
 
 MESENFLAGS=
 
+#Use ccache when the developer has it installed. `build.yml` already gets it on
+#every Linux and macOS job, by putting ccache's shims on PATH - a local build
+#gets nothing unless the developer does that PATH surgery themselves, and pays
+#the full ~150 s on every clean `make core` (ADR-0158 measured it). This closes
+#that gap without requiring anything: when ccache is absent the variable is
+#empty and the command lines are byte-for-byte what they were. `make CCACHE=`
+#opts out; overriding CXX on the command line still wins, as it always did.
+CCACHE := $(shell command -v ccache 2>/dev/null)
+
 ifeq ($(USE_GCC),true)
-	CXX := g++
-	CC := gcc
+	CXX := $(strip $(CCACHE) g++)
+	CC := $(strip $(CCACHE) gcc)
 	PROFILE_GEN_FLAG := -fprofile-generate
 	PROFILE_USE_FLAG := -fprofile-use
 else
-	CXX := clang++
-	CC := clang
+	CXX := $(strip $(CCACHE) clang++)
+	CC := $(strip $(CCACHE) clang)
 	ifeq ($(UNAME_S),Linux)
 		MESENFLAGS += -Werror -Wno-undefined-inline -Wno-return-type-c-linkage
 	endif
