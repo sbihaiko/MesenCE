@@ -31,6 +31,17 @@ on:
         description: 'submit (brand-new item) or revalidate (existing item, hash/verdict refresh)'
         required: true
         type: string
+    # Passed explicitly by every caller (no `secrets: inherit`): the classic
+    # PAT for Projects v2 / issue writes, and one of the two model credentials
+    # for the classify step. All optional here so a caller that lacks one
+    # still validates as far as its steps can get.
+    secrets:
+      PROJECT_PAT:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
 
 env:
   REPO: sbihaiko/MesenCE
@@ -83,9 +94,15 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    # One validation per issue at a time, whichever caller (submit, comment,
+    # drift check) started it; never cancels, so two callers cannot race the
+    # same Project item into a half-written state.
+    concurrency:
+      group: community-pack-validate-${{ inputs.issue_number }}
+      cancel-in-progress: false
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Add item to Project 3 (idempotent) and move to "Em validação"
         id: project-item
         env:
@@ -130,6 +147,7 @@ jobs:
       - name: Record submission metadata (title, Game, Console, Pack URL)
         id: rename-title
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           PACK_URL: ${{ inputs.pack_url }}
@@ -145,7 +163,7 @@ jobs:
             if [ "$CURRENT_TITLE" != "$NEW_TITLE" ]; then
               gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
             fi
-            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
               --field-id "$GAME_FIELD_ID" --text "$GAME" >/dev/null
           fi
           case "$CONSOLE" in
@@ -157,7 +175,7 @@ jobs:
             *) OPT="" ;;
           esac
           if [ -n "$OPT" ]; then
-            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
               --field-id "$CONSOLE_FIELD_ID" --single-select-option-id "$OPT" >/dev/null
           fi
           # Console label (console:nes/gb/gbc/sms) mirrors the board's
@@ -169,7 +187,7 @@ jobs:
           case "$CONSOLE" in
             NES|GB|GBC|SMS) gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "console:$(echo "$CONSOLE" | tr 'A-Z' 'a-z')" ;;
           esac
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$PACK_URL_FIELD_ID" --text "$PACK_URL" >/dev/null
       # Allowed hosts live in scripts/pack_host_allowlist.json (not inline
       # here) so adding one is a config change, not a workflow edit -- but
@@ -194,6 +212,7 @@ jobs:
       - name: Reject disallowed host
         if: steps.host-check.outputs.allowed != '1'
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
@@ -210,7 +229,7 @@ jobs:
           # label, or the issue carries both at once (#159). Removing a label
           # that is not applied is a no-op.
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
       # scripts/fetch_pack.py re-validates the allow-list (and resolved IPs)
@@ -229,6 +248,7 @@ jobs:
       - name: Reject oversized/failed download
         if: steps.host-check.outputs.allowed == '1' && steps.download.outcome == 'failure'
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
@@ -240,7 +260,7 @@ jobs:
           # label, or the issue carries both at once (#159). Removing a label
           # that is not applied is a no-op.
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
       # Always writes sha256 to Pack Hash, independent of the eventual
@@ -249,15 +269,16 @@ jobs:
         id: hash
         if: steps.download.outcome == 'success'
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
           HASH=$(sha256sum pack_download.bin | awk '{print $1}')
           echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$PACK_HASH_FIELD_ID" --text "$HASH" >/dev/null
           MD5=$(md5sum pack_download.bin | awk '{print $1}')
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$PACK_MD5_FIELD_ID" --text "$MD5" >/dev/null
       # ROM SHA1/MD5 come from the submitted pack.json's targets[0], when a
       # pack.json exists at all (folder-convention packs, ADR-0049, usually
@@ -274,23 +295,55 @@ jobs:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
-          python3 -c "import sys, json; from pathlib import Path; sys.path.insert(0, 'scripts'); from mep_lint import Source, find_fallback_subfolder; src = Source(Path('pack_download.bin')); fb = None if src.exists('pack.json') else find_fallback_subfolder(src.names); root = (fb[0] + '/') if fb else ''; ok = src.exists(root + 'pack.json'); data = json.loads(src.text(root + 'pack.json')) if ok else {}; targets = data.get('targets') or []; t0 = targets[0] if targets else {}; print('sha1=' + (t0.get('sha1') or '')); print('md5=' + (t0.get('md5') or ''))" >> "$GITHUB_OUTPUT"
+          # The declared hashes are submitter-controlled pack.json text; only a
+          # value that is exactly a hex digest of the right length is emitted
+          # (anything else becomes the empty string), so a crafted value can
+          # never reach the `gh project item-edit` calls below.
+          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          from mep_lint import Source, find_fallback_subfolder
+
+          src = Source(Path("pack_download.bin"))
+          fb = None if src.exists("pack.json") else find_fallback_subfolder(src.names)
+          root = (fb[0] + "/") if fb else ""
+          data = json.loads(src.text(root + "pack.json")) if src.exists(root + "pack.json") else {}
+          targets = data.get("targets") or []
+          t0 = targets[0] if isinstance(targets, list) and targets else {}
+          if not isinstance(t0, dict):
+              t0 = {}
+
+          def hexdigest(value, length):
+              value = value if isinstance(value, str) else ""
+              return value if re.fullmatch(r"[0-9a-fA-F]{%d}" % length, value) else ""
+
+          print("sha1=" + hexdigest(t0.get("sha1"), 40))
+          print("md5=" + hexdigest(t0.get("md5"), 32))
+          PYEOF
       - name: Record ROM SHA1 on the Project item (when declared)
         if: steps.download.outcome == 'success' && steps.rom-hashes.outputs.sha1 != ''
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ROM_SHA1: ${{ steps.rom-hashes.outputs.sha1 }}
         run: |
           set -euo pipefail
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
-            --field-id "$ROM_SHA1_FIELD_ID" --text "${{ steps.rom-hashes.outputs.sha1 }}" >/dev/null
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+            --field-id "$ROM_SHA1_FIELD_ID" --text "$ROM_SHA1" >/dev/null
       - name: Record ROM MD5 on the Project item (when declared)
         if: steps.download.outcome == 'success' && steps.rom-hashes.outputs.md5 != ''
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ROM_MD5: ${{ steps.rom-hashes.outputs.md5 }}
         run: |
           set -euo pipefail
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
-            --field-id "$ROM_MD5_FIELD_ID" --text "${{ steps.rom-hashes.outputs.md5 }}" >/dev/null
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
+            --field-id "$ROM_MD5_FIELD_ID" --text "$ROM_MD5" >/dev/null
       # Redirect lint to a file (do not tee 10k+ warnings into the Actions
       # log — issue #148 Metroid HD wrote 11k lines and bloated the log).
       # Capture the process exit explicitly: `set -e` plus a failing
@@ -331,6 +384,7 @@ jobs:
       - name: Reject on lint failure
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'failure'
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
@@ -356,7 +410,7 @@ jobs:
           # label, or the issue carries both at once (#159). Removing a label
           # that is not applied is a no-op.
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label pack:invalid --remove-label pack:valid
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$STATUS_INVALIDO" >/dev/null
           echo "FINAL_STATUS_ID=$STATUS_INVALIDO" >> "$GITHUB_ENV"
       # Builds the real C++ HD/MEP loader (scripts/headless_record, `make
@@ -373,7 +427,7 @@ jobs:
       - name: Cache Mesen core build
         if: steps.download.outcome == 'success' && env.LIVE_VALIDATION_ENABLED == 'true'
         id: core-cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             Core
@@ -438,9 +492,13 @@ jobs:
       # the repo. No git/gh tool at all: this step only edits a file in the
       # job's own checkout; "Publish autofix as a PR" below (deterministic,
       # no model involved) decides whether that diff ever leaves this job.
-      # The pack's file names/content never enter this prompt — only the
-      # diagnostic line numbers already extracted above — so there's
-      # nothing here for a malicious pack author to inject into.
+      # The rendered prompt carries the drift line numbers and the
+      # submitter-declared game name ({{GAME}}, from the Issue Form), and
+      # the agent may run mep_lint.py / mep_live_validate.py against the
+      # downloaded pack — so pack content does reach the model indirectly
+      # through those tools' output. Treat everything it sees as data; the
+      # tool list below is the real boundary (edits limited to
+      # scripts/mep_lint.py, no arbitrary shell, no network, no subagents).
       # Single source (ADR-0138): the static autofix prompt and its JSON
       # schema live in .github/ai/validate-autofix.md — mirroring the
       # prepare-classify-prompt step exactly (rsplit on the LAST marker,
@@ -471,14 +529,15 @@ jobs:
       - name: Autofix mep_lint.py drift (Claude Code Action)
         id: autofix
         if: env.LIVE_VALIDATION_ENABLED == 'true' && steps.drift-check.outputs.drift == '1'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@9c5ddab2e6d17b83ea679153b31f1d5f023cf636 # v1.0.217
         with:
           github_token: ${{ secrets.PROJECT_PAT }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-haiku-4-5
-            --allowedTools "Read,Glob,Grep,Edit(scripts/mep_lint.py),Bash(python3 scripts/mep_lint.py *),Bash(python3 scripts/mep_live_validate.py *),Bash(python3 -c *)"
+            --allowedTools "Read,Glob,Grep,Edit(scripts/mep_lint.py),Bash(python3 scripts/mep_lint.py *),Bash(python3 scripts/mep_live_validate.py *)"
+            --disallowedTools Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task
             --json-schema '${{ steps.prepare-autofix-prompt.outputs.autofix_schema }}'
           prompt: |
             ${{ steps.prepare-autofix-prompt.outputs.autofix_prompt }}
@@ -530,6 +589,18 @@ jobs:
           gh pr create --repo "$REPO" --base main --head "$BRANCH" \
             --title "fix(mep_lint): autofix drift found validating issue #${ISSUE_NUMBER}" \
             --body-file /tmp/autofix-pr-body.txt
+      # The autofix agent edits scripts/mep_lint.py in this checkout, and the
+      # publish step above may have committed that edit onto a new branch.
+      # Everything after this point (recipe dry-run, lint excerpts, errata)
+      # must run against the reviewed mep_lint.py from the commit this run
+      # was started for, not against an unreviewed model edit — so detach
+      # back onto that commit and discard any unpublished change.
+      - name: Restore scripts/mep_lint.py from the checked-out commit
+        if: env.LIVE_VALIDATION_ENABLED == 'true' && steps.autofix.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          git checkout -q --detach "$GITHUB_SHA"
+          git checkout -q "$GITHUB_SHA" -- scripts/mep_lint.py
       # Claude only READS the pack and returns a validated JSON verdict via
       # --json-schema; it never calls a comment/label/Project tool itself —
       # github_token below is present only for the action's own internal
@@ -625,7 +696,7 @@ jobs:
         id: classify
         if: steps.download.outcome == 'success' && steps.lint.outcome == 'success'
         timeout-minutes: 15
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@9c5ddab2e6d17b83ea679153b31f1d5f023cf636 # v1.0.217
         with:
           # github_token here is only so the action's own internal GitHub
           # API calls (rate-limit checks, etc.) don't fail under the job's
@@ -638,10 +709,23 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-haiku-4-5
-            --disallowedTools Bash,Read
+            --disallowedTools Bash,Read,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task
             --json-schema '${{ steps.prepare-classify-prompt.outputs.classify_schema }}'
           prompt: |
             ${{ steps.prepare-classify-prompt.outputs.classify_prompt }}
+      # Deterministic belt-and-braces for the tool restrictions above: the
+      # model step has no Write/Edit/Bash, so nothing under scripts/ or
+      # .github/ may differ from the checkout afterwards. Any diff means the
+      # restriction did not hold and the verdict must not be applied.
+      - name: Verify classify left the checkout untouched
+        if: steps.classify.outcome == 'success'
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- scripts .github)" ]; then
+            echo "::error::classify modified tracked files"
+            git status --porcelain -- scripts .github
+            exit 1
+          fi
       # Deterministic MEP Recipe assembly (ADR-0138 §4/§12/§13, F6.2b) — the
       # sources block (hash-bearing) is never something the LLM computes,
       # so this step, not "Classify pack" above, builds it: fetches the
@@ -686,9 +770,9 @@ jobs:
           SO: ${{ steps.classify.outputs.structured_output }}
         run: |
           set -euo pipefail
-          python3 - "$SO" > "$RUNNER_TEMP/mep_classify_clean.json" <<'PY'
+          printf '%s' "$SO" | python3 -c "$(cat <<'PY'
           import sys, json
-          raw = sys.argv[1]
+          raw = sys.stdin.read()
           try:
               json.loads(raw)
               sys.stdout.write(raw)
@@ -717,6 +801,7 @@ jobs:
           json.loads(fixed)  # must parse now; ValueError aborts under set -e
           sys.stdout.write(fixed)
           PY
+          )" > "$RUNNER_TEMP/mep_classify_clean.json"
       - name: Assemble MEP recipe
         id: assemble-recipe
         if: steps.classify.outcome == 'success'
@@ -786,7 +871,7 @@ jobs:
         run: |
           set -uo pipefail
           RECIPE_OK=true
-          if ! python3 scripts/mep_recipe.py validate "$RUNNER_TEMP/mep_recipe.json"; then
+          if ! python3 scripts/mep_recipe.py validate --require-allowlisted-hosts "$RUNNER_TEMP/mep_recipe.json"; then
             RECIPE_OK=false
           fi
           if [ "$RECIPE_OK" = "true" ]; then
@@ -812,6 +897,7 @@ jobs:
         id: apply-verdict
         if: steps.classify.outcome == 'success'
         env:
+          ITEM_ID: ${{ steps.project-item.outputs.item_id }}
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           PACK_SHA256: ${{ steps.hash.outputs.sha256 }}
@@ -955,10 +1041,10 @@ jobs:
           # records it, and the catalog generator reads it from there.
           AUTHOR=$(jq -r '.author // "" | gsub("\\s+"; " ")' < "$RUNNER_TEMP/mep_classify_clean.json")
           echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
-          gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+          gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
             --field-id "$STATUS_FIELD_ID" --single-select-option-id "$FINAL" >/dev/null
           if [ -n "$CATEGORY" ]; then
-            gh project item-edit --id "${{ steps.project-item.outputs.item_id }}" --project-id "$PROJECT_ID" \
+            gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" \
               --field-id "$CATEGORY_FIELD_ID" --single-select-option-id "$CATEGORY" >/dev/null
           fi
           echo "FINAL_STATUS_ID=$FINAL" >> "$GITHUB_ENV"

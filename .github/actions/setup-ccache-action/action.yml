@@ -8,15 +8,19 @@ runs:
   steps:
       - name: Setup CCache
         shell: bash
+        env:
+          CCACHE_PATH: ${{ inputs.ccache-path }}
         run: |
-          eval $(printf 'PATH=${{ inputs.ccache-path }}:%s\n' "$PATH" | tee -a "$GITHUB_ENV")
+          # Prepend the ccache shims for every later step via GITHUB_PATH; no
+          # eval of interpolated input.
+          echo "$CCACHE_PATH" >> "$GITHUB_PATH"
           cat <<EOF >>"$GITHUB_ENV"
           CCACHE_MAXSIZE=500M
           CCACHE_DIR=$HOME/.cache/ccache
           CCACHE_BASEDIR=$PWD
           EOF
       - name: Cache compilation
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ matrix.compiler }}-${{ matrix.platform.os }}

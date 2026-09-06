@@ -19,6 +19,14 @@ on:
   issue_comment:
     types: [created]
 
+# Least privilege for GITHUB_TOKEN: every issue/Project write in the
+# pipeline goes through the PROJECT_PAT secret, so the default token only
+# needs to read the checkout. A caller's permissions cap the reusable
+# workflow's, and community-pack-validate.yml itself declares only
+# `contents: read`, so this is the full set it can ever use.
+permissions:
+  contents: read
+
 # Serializes runs per issue. A newer `issues` trigger (opened/edited)
 # supersedes a stale in-flight run for the same issue — that is the real
 # fix for the self-trigger duplication (see the now-removed DEBUG step this
@@ -100,19 +108,29 @@ jobs:
   validate-submit:
     needs: prepare
     if: needs.prepare.outputs.mode == 'submit'
+    permissions:
+      contents: read
     uses: ./.github/workflows/community-pack-validate.yml
     with:
       issue_number: ${{ github.event.issue.number }}
       pack_url: ${{ needs.prepare.outputs.pack_url }}
       mode: submit
-    secrets: inherit
+    secrets:
+      PROJECT_PAT: ${{ secrets.PROJECT_PAT }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   validate-revalidate:
     needs: prepare
     if: needs.prepare.outputs.mode == 'revalidate'
+    permissions:
+      contents: read
     uses: ./.github/workflows/community-pack-validate.yml
     with:
       issue_number: ${{ github.event.issue.number }}
       pack_url: ${{ needs.prepare.outputs.pack_url }}
       mode: revalidate
-    secrets: inherit
+    secrets:
+      PROJECT_PAT: ${{ secrets.PROJECT_PAT }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

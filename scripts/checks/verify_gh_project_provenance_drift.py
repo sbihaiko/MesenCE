@@ -5,11 +5,10 @@ Checks, against the real file (no mocks):
   - the CONFIRMED (confirmed live) facts (Status field ID and Pack Hash
     field ID, via `gh project field-list`) are documented with the exact
     IDs;
-  - the UNCONFIRMED coverage gap (per-item JSON key names, because
-    `gh project item-list` returned zero items) is explicitly declared,
-    not presented as a settled fact;
-  - any negative conclusion is qualified by that gap (hedged language, not
-    a definitive statement);
+  - the per-item JSON shape (`.status`, `.content.number`, `Pack Hash`) is
+    documented as confirmed live via `gh project item-list` against the
+    populated Project (the original spec-time "zero items" coverage gap was
+    closed on 2026-09-06 once real items existed to inspect);
   - item parsing uses defensive lookups (`//` fallback), not direct
     indexing that would break on a missing key.
 
@@ -36,24 +35,14 @@ def check_confirmed_facts(text, errors):
         errors.append(f"Pack Hash field ID ({PACK_HASH_FIELD_ID}) missing from the provenance block")
 
 
-def check_coverage_gap_disclosed(text, errors):
-    if "UNCONFIRMED" not in text:
-        errors.append("provenance block does not declare any UNCONFIRMED gap")
+def check_item_shape_confirmed(text, errors):
     if "gh project item-list" not in text:
-        errors.append("coverage gap does not cite 'gh project item-list' as the call that revealed the gap")
-    if not re.search(r"zero items|ZERO items|totalCount.{0,5}0", text, re.IGNORECASE):
-        errors.append("coverage gap does not mention that the Project had zero items at spec time")
-    if "coverage gap" not in text:
-        errors.append("text does not use the phrase 'coverage gap' for the coverage gap")
-
-
-def check_negative_conclusion_hedged(text, errors):
-    hedges = ["provisional", "not definitive", "necessarily provisional"]
-    if not any(h in text for h in hedges):
-        errors.append(
-            "no negative conclusion is qualified as provisional/non-definitive "
-            "(there must be an explicit hedge, not a settled statement)"
-        )
+        errors.append("provenance does not cite 'gh project item-list' as the source for the per-item shape")
+    if not re.search(r"Per-item JSON shape.*confirmed live", text, re.IGNORECASE | re.DOTALL):
+        errors.append("per-item JSON shape is not documented as confirmed live against the populated Project")
+    for key in (".status", ".content.number", "Pack Hash"):
+        if key not in text:
+            errors.append(f"confirmed per-item key {key!r} missing from the provenance block")
 
 
 def check_defensive_parsing(text, errors):
@@ -75,8 +64,7 @@ def main():
     text = WORKFLOW.read_text(encoding="utf-8")
     errors = []
     check_confirmed_facts(text, errors)
-    check_coverage_gap_disclosed(text, errors)
-    check_negative_conclusion_hedged(text, errors)
+    check_item_shape_confirmed(text, errors)
     check_defensive_parsing(text, errors)
 
     if errors:
@@ -84,8 +72,8 @@ def main():
             print(f"FAIL: {err}")
         return 1
 
-    print(f"PASS: {WORKFLOW} - confirmed field IDs, disclosed item-list coverage gap, "
-          "hedged negative conclusions, and defensive jq lookups all documented")
+    print(f"PASS: {WORKFLOW} - confirmed field IDs, confirmed per-item shape, "
+          "and defensive jq lookups all documented")
     return 0
 
 

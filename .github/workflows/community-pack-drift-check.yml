@@ -2,9 +2,10 @@
 #
 # Daily drift check for community packs already accepted in Project 3
 # ("MesenCE Community Packs", node id PVT_kwHOB1MsbM4BhjpN, owner sbihaiko).
-# For each accepted item, re-downloads the stored `pack_url` and recomputes
-# the hash with `curl`+`sha256sum` (without calling the Claude Code Action in
-# this pre-check); only when the hash changed does this workflow comment on
+# For each accepted item, re-downloads the stored `pack_url` through
+# `scripts/fetch_pack.py` (same host allow-list and SSRF guard as the validate
+# workflow) and recomputes the hash with `sha256sum` (without calling the
+# Claude Code Action in this pre-check); only when the hash changed does this workflow comment on
 # the issue and call the reusable `community-pack-validate.yml` workflow with
 # `mode: revalidate`.
 #
@@ -26,17 +27,12 @@
 #              cd763737 (Aceito MEP completo)
 #   - Pack Hash field: PVTF_lAHOB1MsbM4BhjpNzhge9Is
 #
-# UNCONFIRMED - an explicit coverage gap, not an assumption presented as
-# fact: `gh project item-list 3 --owner sbihaiko --format json`, in the same
-# session, returned `{"items":[],"totalCount":0}` - Project 3 had ZERO
-# items. The per-item JSON key names (how the Status value appears nested,
-# how the Pack Hash text appears, how the source issue number appears) were
-# never observed against real data - the gap is in the datastore itself (no
-# populated item exists to inspect), not just in a cached view. Any "this key
-# doesn't exist" conclusion below is necessarily provisional, not definitive,
-# and the parsing below is deliberately defensive (multiple candidate keys,
-# `// empty` fallback, never direct indexing) so it fails visibly - not
-# silently - if the real schema diverges from the keys tried here.
+# Per-item JSON shape (confirmed live 2026-09-06 against the populated
+# Project via `gh project item-list 3 --owner sbihaiko --format json`):
+# `.status` is a plain string, `.content.number` is the issue number, and
+# the text field appears under its name (`.["Pack Hash"]`). The parsing
+# below stays deliberately defensive (`//` fallbacks, never direct indexing)
+# so a renamed field becomes a skipped item with a warning, not a crash.
 # -----------------------------------------------------------------------------
 
 name: Community Pack Drift Check
@@ -46,36 +42,44 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN: all Project/issue access uses the
+# PROJECT_PAT secret (scoped to the steps that call `gh`), and the reusable
+# workflow this calls declares only `contents: read` itself.
+permissions:
+  contents: read
+
 jobs:
   detect-drift:
     runs-on: ubuntu-latest
     outputs:
       mismatched: ${{ steps.diff.outputs.mismatched }}
     env:
-      GH_TOKEN: ${{ secrets.PROJECT_PAT }}
       REPO: sbihaiko/MesenCE
       STATUS_ACCEPTED_PARTIAL: "Aceito parcial (HD Mesen)"
       STATUS_ACCEPTED_FULL: "Aceito (MEP completo)"
       MAX_PACK_BYTES: 314572800 # 300MB, same cap as community-pack-validate.yml
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: List accepted project items
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
           gh project item-list 3 --owner sbihaiko --format json > items.json
 
-      - name: Recompute hash and diff against Pack Hash (curl + sha256sum only)
+      - name: Recompute hash and diff against Pack Hash (fetch_pack.py + sha256sum only)
         id: diff
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
           mismatched="[]"
           while IFS= read -r item; do
-            # Defensive candidate keys: the per-item schema was never
-            # observed against real data (see the provenance block above), so
-            # we try the plausible variants with a `//` fallback instead of
-            # direct indexing - a missing key becomes an empty string, not a crash.
+            # Candidate keys with a `//` fallback instead of direct indexing
+            # (see the provenance block above): a renamed/missing key becomes
+            # an empty string and a skipped item, not a crash.
             status=$(jq -r '.status // .["Status"] // empty' <<<"$item")
             case "$status" in
               "$STATUS_ACCEPTED_PARTIAL"|"$STATUS_ACCEPTED_FULL") ;;
@@ -100,9 +104,9 @@ jobs:
             # SSRF guard as community-pack-validate.yml's own download step
             # (defense in depth: if a host was later removed from the
             # allow-list, drift-check refuses to follow it too, instead of
-            # blindly curling whatever URL is sitting in the issue body) and
+            # blindly fetching whatever URL is sitting in the issue body) and
             # handles host-specific quirks like Google Drive's two-step
-            # confirm-token download the plain-curl version could not.
+            # confirm-token download a plain HTTP client could not.
             rm -f drift_download.bin
             if ! python3 scripts/fetch_pack.py "$pack_url" drift_download.bin \
                 --max-bytes "$MAX_PACK_BYTES" --allowlist scripts/pack_host_allowlist.json; then
@@ -123,6 +127,8 @@ jobs:
   revalidate:
     needs: detect-drift
     if: needs.detect-drift.outputs.mismatched != '[]'
+    permissions:
+      contents: read
     strategy:
       matrix:
         item: ${{ fromJson(needs.detect-drift.outputs.mismatched) }}
@@ -131,4 +137,7 @@ jobs:
       issue_number: ${{ matrix.item.issue_number }}
       pack_url: ${{ matrix.item.pack_url }}
       mode: revalidate
-    secrets: inherit
+    secrets:
+      PROJECT_PAT: ${{ secrets.PROJECT_PAT }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

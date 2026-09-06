@@ -34,17 +34,17 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: ${{ matrix.platform.netversion }}
 
       - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v3
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
         with:
           msbuild-architecture: x64
 
@@ -61,7 +61,7 @@ jobs:
         run: dotnet publish --no-restore -c Release -p:PublishAot="${{ matrix.platform.aot }}" -p:SelfContained="${{ matrix.platform.aot }}" -p:PublishSingleFile="${{ matrix.platform.singleFile }}" -p:OptimizeUi="true" -p:Platform="Any CPU" -p:TargetFramework="${{ matrix.platform.targetframework }}" -r win-x64 Mesen.sln /p:PublishProfile=UI\Properties\PublishProfiles\Release.pubxml
 
       - name: Upload Mesen
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: github.event_name != 'pull_request'
         with:
           name: Mesen (Windows - ${{ matrix.platform.targetframework }}${{ matrix.platform.aotString }})
@@ -90,12 +90,12 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.x
 
@@ -103,7 +103,7 @@ jobs:
         run: |
           sudo apt-get update -qy
           sudo apt-get install -qy libsdl2-dev ccache # The compilers are already installed on GitHub's runners.
-          python3 -m pip install --user PyYAML Pillow numpy # doc-checks verify scripts need PyYAML/Pillow/numpy (not preinstalled everywhere)
+          python3 -m pip install --user PyYAML==6.0.3 Pillow==12.3.0 numpy==2.5.2 # doc-checks verify scripts need PyYAML/Pillow/numpy (not preinstalled everywhere)
 
       - name: Setup CCache
         uses: ./.github/actions/setup-ccache-action
@@ -121,7 +121,7 @@ jobs:
           make -j$(nproc) -O ${{ matrix.make_flags }} LTO=true STATICLINK=true SYSTEM_LIBEVDEV=false
 
       - name: Upload Mesen
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: github.event_name != 'pull_request'
         with:
           name: Mesen (Linux - ${{ matrix.platform.os }} - ${{ matrix.compiler }})
@@ -140,12 +140,12 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.x
 
@@ -165,7 +165,7 @@ jobs:
           ${{ matrix.platform.script }}
 
       - name: Upload Mesen (AppImage)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: github.event_name != 'pull_request'
         with:
           name: Mesen (Linux ${{ matrix.platform.name }} - AppImage)
@@ -191,12 +191,12 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.x
 
@@ -204,7 +204,7 @@ jobs:
         run: |
           brew install sdl2 ccache
           # Homebrew python is externally-managed (PEP 668): --break-system-packages is required.
-          python3 -m pip install --user --break-system-packages PyYAML Pillow numpy
+          python3 -m pip install --user --break-system-packages PyYAML==6.0.3 Pillow==12.3.0 numpy==2.5.2
 
       - name: Get brew prefix
         run: |
@@ -259,7 +259,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent bin/osx-${{ matrix.platform.arch }}/Release/osx-${{ matrix.platform.arch }}/publish/Mesen.app bin/osx-${{ matrix.platform.arch }}/Release/Mesen.app.zip
 
       - name: Upload Mesen
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: github.event_name != 'pull_request'
         with:
           name: Mesen (macOS - ${{ matrix.platform.os }} - ${{ matrix.compiler }})

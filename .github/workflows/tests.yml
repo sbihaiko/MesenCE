@@ -29,17 +29,17 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: ${{ matrix.platform.netversion }}
 
       - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v3
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
         with:
           msbuild-architecture: x64
 
@@ -50,9 +50,12 @@ jobs:
         run: msbuild -nologo -m -p:Configuration=Release -p:Platform=x64 -t:Clean,PGOHelper -p:TargetFramework="${{ matrix.platform.targetframework }}"
 
       - name: Checkout MesenTests repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: nesdev-org/MesenTests
+          # Pinned to the default-branch HEAD observed on 2026-09-06 so a push
+          # to that third-party repo cannot change what this job executes.
+          ref: 30d3fef97a1014b0f6b5c7e760e33d4481bb68a1
           path: ./bin/win-x64/Release/Tests
 
       - name: Run CI Tests
@@ -60,7 +63,7 @@ jobs:
  
       - name: Upload screenshots for failures
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Screenshots
           path: ./bin/win-x64/Release/Tests/MesenHomeFolder/Screenshots/

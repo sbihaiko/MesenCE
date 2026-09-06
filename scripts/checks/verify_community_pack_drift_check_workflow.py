@@ -4,8 +4,8 @@
 Checks, against the real file (no mocks):
   - `schedule` (with `cron`) and `workflow_dispatch` triggers;
   - the exact invocation `gh project item-list 3 --owner sbihaiko`;
-  - the hash pre-check using only `curl` + `sha256sum` (without calling the
-    Claude Code Action at this step);
+  - the hash pre-check using only `scripts/fetch_pack.py` + `sha256sum`
+    (without calling the Claude Code Action at this step);
   - the conditional call (only on mismatch) to the reusable workflow,
     identified literally by `uses:` + `mode: revalidate` — never
     resolving/opening community-pack-validate.yml.
@@ -49,15 +49,15 @@ def check_item_list_invocation(text, errors):
         )
 
 
-def check_curl_sha256_precheck(text, errors):
-    if "curl" not in text:
-        errors.append("pre-check missing 'curl'")
+def check_fetch_sha256_precheck(text, errors):
+    if "scripts/fetch_pack.py" not in text:
+        errors.append("pre-check missing 'scripts/fetch_pack.py' (allow-listed download)")
     if "sha256sum" not in text:
         errors.append("pre-check missing 'sha256sum'")
     if re.search(r"claude-code-action|anthropics/claude", text):
         errors.append(
             "the drift pre-check must not invoke the Claude Code Action "
-            "(must use only curl+sha256sum)"
+            "(must use only fetch_pack.py+sha256sum)"
         )
 
 
@@ -96,7 +96,7 @@ def main():
     errors = []
     check_triggers(data, errors)
     check_item_list_invocation(text, errors)
-    check_curl_sha256_precheck(text, errors)
+    check_fetch_sha256_precheck(text, errors)
     check_conditional_revalidate_call(data, errors)
 
     if errors:
@@ -104,7 +104,7 @@ def main():
             print(f"FAIL: {err}")
         return 1
 
-    print(f"PASS: {WORKFLOW} - triggers, gh invocation, curl+sha256sum precheck, "
+    print(f"PASS: {WORKFLOW} - triggers, gh invocation, fetch_pack.py+sha256sum precheck, "
           "conditional mode:revalidate call all present")
     return 0
 

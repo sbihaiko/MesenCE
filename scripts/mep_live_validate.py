@@ -23,7 +23,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from mep_lint import Source, find_fallback_subfolder, find_fallback_subfolder_by_name  # noqa: E402
+from mep_lint import Source, find_fallback_subfolder, find_fallback_subfolder_by_name, safe_rel  # noqa: E402
 from gen_synthetic_nrom import build_rom  # noqa: E402
 
 DIAG_PREFIXES = ("[HDPack", "[MEP")
@@ -45,8 +45,11 @@ def extract_root(pack_path: Path, root: str, dest: Path):
             norm = name.replace("\\", "/")
             if not norm.startswith(root) or norm.endswith("/"):
                 continue
-            rel = norm[len(root):]
-            if not rel or ".." in Path(rel).parts:
+            # mep_lint.safe_rel is the one path sanitizer for pack entries:
+            # None for absolute paths, drive letters or `..` components, so
+            # nothing a zip declares can land outside `dest`.
+            rel = safe_rel(norm[len(root):])
+            if not rel:
                 continue
             target = dest / rel
             target.parent.mkdir(parents=True, exist_ok=True)
