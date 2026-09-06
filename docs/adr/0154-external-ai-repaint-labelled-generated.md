@@ -339,6 +339,14 @@ the canonical *generated* pixels:
 
 1. From the 1x originals, read the canonical cell's palette colours and the
    variant cell's palette colours, in NES colour-index order (0..3).
+   **Read [ADR-0161](0161-palette-variant-correspondence-is-positional.md)
+   before implementing this step.** Index order is the *result* this step
+   must produce, but a palette byte cannot be turned into an RGB value on
+   the script side — sheets render through the emulator's configured master
+   palette, which Python has no copy of. ADR-0161 reads the correspondence
+   positionally instead (same pixel offset *is* same colour index). Ranking
+   each cell's colours by frequency looks equivalent, ties on every cell of
+   a shape group, and silently permutes the variant's colours.
 2. For each generated pixel, find the nearest canonical palette colour in RGB
    and keep the residual `pixel - palette[i]`.
 3. Emit `variant_palette[i] + residual`, clamped to 0..255.

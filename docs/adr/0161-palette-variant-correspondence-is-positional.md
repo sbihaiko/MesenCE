@@ -1,6 +1,6 @@
 # ADR-0161: The palette-variant correspondence is read positionally, not from the palette bytes
 
-- Status: proposed
+- Status: accepted (2026-09-06, by the user — record of a mechanism already in `scripts/sheet_repaint.py`; ADR-0154 §5 step 1 carries a pointer to it so the literal recipe is not reimplemented)
 - Date: 2026-09-05
 - Related: PRD Part A §4 "Phase 9" (slice F9.6), ADR-0154 §5, ADR-0153 §4
   (sidecar `cells[].tiles[].tile` / `.palette`), `scripts/sheet_repaint.py`,

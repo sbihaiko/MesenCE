@@ -675,6 +675,15 @@ summary line in this PRD's shipped record.
    unlabelled; three reviewers. Pass to keep the slice: the AI output is
    preferred or tied on ≥ 2 of 5 screens **and** fails seam test 4 on
    none; any visible alpha loss on sprites fails the slice regardless.
+   **Blocked, and not on a reviewer.** There is no AI repaint to judge yet:
+   the `diffusion` backend of `scripts/sheet_repaint.py` has never been
+   executed, because ADR-0154 §2 deliberately makes the weights and the
+   local ComfyUI/`diffusers` process the user's to install, and this machine
+   has neither. Its driver and its unavailable paths are covered; its
+   generation path is untested code. The precondition is therefore a local
+   stack, not three humans — until someone installs one, the `classical`
+   backend is the only non-`passthrough` arm that has produced pixels, and
+   this test does not run.
 
 Tests 3, 4 and 6 have automatable halves (rebuild, headless run, diff)
 that go into `make doc-checks`/`scripts/test_mep_build.py`; the judgement

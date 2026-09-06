@@ -1,6 +1,6 @@
 # ADR-0162: An accuracy suite is run against our own binary in several configurations, and the frames must be identical
 
-- Status: proposed — implemented as `scripts/accuracy_compare.py` + `scripts/test_accuracy_compare.py`, listed as slice **H10** in `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` §4 "Repo hygiene and tests". Only a human marks this accepted.
+- Status: accepted (2026-09-06, by the user) — implemented as `scripts/accuracy_compare.py` + `scripts/test_accuracy_compare.py`, slice **H10** in `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` §4 "Repo hygiene and tests". Accepting it does not wire CI: §6 stands, and the `SKIP` contract is what makes wiring cheap later
 - Date: 2026-09-05
 - Related: ADR-0157 (headless input counted in emulated frames), ADR-0159 (in-memory frame capture, `Core/Shared/Video/FrameCapture.h`), ADR-0005 (MEP textures as an envelope over HD Pack), ADR-0050 (bootstrap builder), ADR-0133 (NES mixer replacement), ADR-0137 (`make doc-checks`), ADR-0131 (`unit-tests.yml` builds no core), PRD Part A slice H10
 - Prior art: `100thCoin/AccuracyCoin` (MIT, Chris Siebert) — the test ROM; `Core/Shared/RecordedRomTest.{h,cpp}` — upstream's own deterministic replay harness, which is where the "zero power-on RAM or the comparison is noise" lesson came from
