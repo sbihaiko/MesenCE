@@ -77,6 +77,20 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   and power-on RAM is zeroed: two runs of the same ROM, script and binary
   must produce byte-identical output. `write_play_scripts.py` and
   `bootstrap_auto_packs.sh` emit frame-counted scripts.
+- `accuracy_compare.py` (H10, ADR-0162) is the self-comparative accuracy
+  harness: it runs an accuracy suite against **one** binary in several arms
+  (vanilla, HD Pack Builder recording, a loose HD pack, a MEP container) and
+  requires the ADR-0159 frame checksums to be identical at fixed absolute
+  frames. It is not a test of upstream's accuracy — the suite's own score is
+  never asserted on, only that it is the same in every arm. The two art arms
+  install an **identity pack** (an HD pack the builder itself recorded at
+  scale 1), which is what lets a fully active texture layer still be required
+  to produce a bit-identical frame. The suite ROM is not in this repo:
+  `--rom`, then `$MESENCE_ACCURACY_ROM`, then `tests/accuracy/`, and with none
+  of them it prints `SKIP` and exits 0 (`--require-rom` makes that exit 2).
+  `--perturb-flag` / `--perturb-texture` exist so the comparison can be shown
+  to go red. Pure helpers are covered by `test_accuracy_compare.py`, which
+  needs no ROM and no emulator.
 - `rom_target.py` — versioned map from catalog game name to No-Intro /
   CheatDb / `GetMepRomSha1` hashes (`sha1` + optional `alt_sha1`/`crc32`).
   Extra ROM revisions go here so auto-install can match; the catalog
