@@ -1,3 +1,4 @@
+#include "pch.h"
 //ADR-0153 §2 (Phase 9, F9.5) - see SpriteGrouping.h. Stateful partner: HdPackBuilder.
 #include "NES/HdPacks/SpriteGrouping.h"
 #include "NES/HdPacks/SheetGrouping.h"

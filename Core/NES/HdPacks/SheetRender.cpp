@@ -1,3 +1,4 @@
+#include "pch.h"
 //ADR-0153 §3/§4 (Phase 9) - see SheetRender.h. Stateful partner: HdPackBuilder.
 #include "NES/HdPacks/SheetRender.h"
 #include <cmath>

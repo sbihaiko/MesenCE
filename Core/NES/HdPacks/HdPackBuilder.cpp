@@ -894,7 +894,14 @@ void HdPackBuilder::BuildSheets()
 	}
 	_sheetsBuilt = true;
 
+	#ifdef _MSC_VER
+	#pragma warning(push)
+	#pragma warning(disable : 4996)  //getenv is deprecated on MSVC; _dupenv_s is the secure form but getenv is fine here
+	#endif
 	const char* dumpPath = std::getenv("MESEN_SHEET_GRID_DUMP");
+	#ifdef _MSC_VER
+	#pragma warning(pop)
+	#endif
 	if(dumpPath && *dumpPath) {
 		WriteGridDump(dumpPath);
 	}

@@ -1,3 +1,4 @@
+#include "pch.h"
 //ADR-0153 §6: screen-based and continuous stitching. Port of the 2026-09-04
 //spike (scripts/spike_tile_sheets.py: shift_match, stitch, shift_match_x,
 //stitch_continuous), with one behavioural change the ADR asks for: a cut in the

@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "NES/HdPacks/SheetGrouping.h"
 #include <algorithm>
 #include <deque>
