@@ -25,31 +25,6 @@
       "votes": 1
     },
     {
-      "content_id": "7ba6421d839ceb0f61bbcbeb564c935b468771bfde2e53fd47a6a6071ea21627",
-      "game": "Pac-Man (Namco, US, 1993)",
-      "issue": 140,
-      "kind": "hd-legacy",
-      "labels": [
-        "pack:valid",
-        "assets:textures"
-      ],
-      "license": "unknown",
-      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
-      "pack_id": "pepcodes/hdnes-graphics-pac",
-      "rom": {
-        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
-        "sha1s": [
-          "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08"
-        ]
-      },
-      "sha256": "6730d563b108054d9848d038debe7286cf857b285a2a42e4e846171225b2f0da",
-      "system": "nes",
-      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/447e6018a538c65aa60c2be77ea2a97cc535a543.zip",
-      "validated_at": "2026-09-05T01:19:19Z",
-      "verdict": "accepted",
-      "votes": 1
-    },
-    {
       "content_id": "b49bead9a33a319230c24908911da6a7b6cab59106b2310b392d96c75e13e5e2",
       "game": "Castlevania (USA)",
       "issue": 143,
@@ -123,6 +98,28 @@
       "system": "nes",
       "url": "https://www.mediafire.com/file/5xgz6dr0tyiqm6g/Donkey_Kong_%28JU%29_HD_Pack.zip/file",
       "validated_at": "2026-09-05T01:20:10Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "1fc543fc901b2d4a104c3a0ce8f5ebc5437d91a437f37f47bcc6d8b34d3f3ea1",
+      "game": "Zelda II: The Adventure of Link (USA)",
+      "issue": 141,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures",
+        "assets:audio",
+        "patch:ips"
+      ],
+      "license": "unknown",
+      "name": "Zelda II: The Adventure of Link (USA) \u2014 community submission",
+      "pack_id": "modernretrodesign/zii-mesen",
+      "rom": {},
+      "sha256": "1fd7c5fd4845bef6f8c6a438e56b0e13f92708d1faa31726c69b19c53eb5f667",
+      "system": "nes",
+      "url": "https://github.com/ModernRetroDesign/ZII-mesen/archive/de2a1105d1f0be3a2bebf5a0dfe03c069eadcb81.zip",
+      "validated_at": "2026-09-05T01:20:13Z",
       "verdict": "accepted",
       "votes": 1
     },
@@ -285,6 +282,31 @@
       "system": "nes",
       "url": "https://github.com/AxlRocks/Megaman-Super/archive/be6f9c23335666aaface41d4598a299a09ab110b.zip",
       "validated_at": "2026-09-06T09:42:52Z",
+      "verdict": "accepted",
+      "votes": 1
+    },
+    {
+      "content_id": "7ba6421d839ceb0f61bbcbeb564c935b468771bfde2e53fd47a6a6071ea21627",
+      "game": "Pac-Man (Namco, US, 1993)",
+      "issue": 140,
+      "kind": "hd-legacy",
+      "labels": [
+        "pack:valid",
+        "assets:textures"
+      ],
+      "license": "unknown",
+      "name": "Pac-Man (Namco, US, 1993) \u2014 community submission",
+      "pack_id": "pepcodes/hdnes-graphics-pac",
+      "rom": {
+        "sha1": "A34E68372082513209A795786C8EEA493CC2CD14",
+        "sha1s": [
+          "AA1BBA9A243C70EB4E9928B5EFEC9D4877579D08"
+        ]
+      },
+      "sha256": "6730d563b108054d9848d038debe7286cf857b285a2a42e4e846171225b2f0da",
+      "system": "nes",
+      "url": "https://github.com/PepCodes/HDNes-Graphics-Pac/archive/447e6018a538c65aa60c2be77ea2a97cc535a543.zip",
+      "validated_at": "2026-09-06T09:43:07Z",
       "verdict": "accepted",
       "votes": 1
     }
