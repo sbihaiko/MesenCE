@@ -1470,7 +1470,72 @@ void HdPackBuilder::SaveHdPack()
 	hiresFile << ss.str();
 	hiresFile.close();
 
+	//After hires.txt is on disk, never before: an interrupted save must not
+	//leave a pack whose manifest points at files that are gone (ADR-0160 §3).
+	PruneLegacyChrFiles();
+
 	delete[] pngBuffer;
+}
+
+//F9.10 (ADR-0160 §3): a pack recorded before this slice keeps its CHR-order
+//fragments at the top level. Re-recording over it rewrites hires.txt to name
+//textures/chr/, so those files stop being referenced by anything and would
+//stay behind as exactly the clutter this slice removes. Only names the builder
+//itself writes are swept, and only at the top level - sheets/, backgrounds/,
+//audio/ and any file an artist added are never touched. Runs after hires.txt
+//is written, so an interrupted save can never leave a pack that references
+//files it no longer has.
+void HdPackBuilder::PruneLegacyChrFiles()
+{
+	auto isBuilderChrName = [](const string& name) {
+		//Chr_<N>.png (CHR RAM) or Chr_<HH>_<N>.png (CHR ROM), plus the
+		//_writeReferences ".orig.png" twin of either.
+		size_t end = name.size();
+		if(name.size() > 9 && name.compare(name.size() - 9, 9, ".orig.png") == 0) {
+			end = name.size() - 9;
+		} else if(name.size() > 4 && name.compare(name.size() - 4, 4, ".png") == 0) {
+			end = name.size() - 4;
+		} else {
+			return false;
+		}
+		if(end < 5 || name.compare(0, 4, "Chr_") != 0) {
+			return false;
+		}
+		string body = name.substr(4, end - 4);
+		size_t sep = body.find('_');
+		if(sep != string::npos) {
+			string bank = body.substr(0, sep);
+			if(bank.empty() || bank.find_first_not_of("0123456789ABCDEFabcdef") != string::npos) {
+				return false;
+			}
+			body = body.substr(sep + 1);
+		}
+		return !body.empty() && body.find_first_not_of("0123456789") == string::npos;
+	};
+
+	int removed = 0;
+	std::error_code ec;
+	std::filesystem::directory_iterator it(std::filesystem::u8path(_saveFolder), ec);
+	if(ec) {
+		return;
+	}
+	vector<std::filesystem::path> stale;
+	for(const std::filesystem::directory_entry& entry : it) {
+		if(!entry.is_regular_file(ec) || ec) {
+			continue;
+		}
+		if(isBuilderChrName(entry.path().filename().u8string())) {
+			stale.push_back(entry.path());
+		}
+	}
+	for(const std::filesystem::path& path : stale) {
+		if(std::filesystem::remove(path, ec) && !ec) {
+			removed++;
+		}
+	}
+	if(removed > 0) {
+		MessageManager::Log("[HD Pack Builder] swept " + std::to_string(removed) + " unreferenced top-level CHR file(s); this pack's fragments are now under " + string(kChrFolder) + "/");
+	}
 }
 /*
 void HdPackBuilder::GetChrBankList(uint32_t *banks)

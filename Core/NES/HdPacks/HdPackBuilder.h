@@ -196,6 +196,11 @@ private:
 	void WriteGridDump(const string& path) const;
 	HdPackTileInfo* FindObjectArt(uint32_t shapeHash, std::map<uint32_t, HdPackTileInfo*>& bestByShape);
 
+	//F9.10 (ADR-0160 §3): sweeps the pre-F9.10 top-level Chr_*.png fragments of a
+	//pack being re-recorded, once hires.txt already names chr/. It deletes user
+	//files - read any change to it as touching user data.
+	void PruneLegacyChrFiles();
+
 	void AddTile(HdPackTileInfo* tile, uint32_t usageCount);
 	void GenerateHdTile(HdPackTileInfo* tile);
 	void DrawTile(HdPackTileInfo* tile, int tileIndex, uint32_t* pngBuffer, int pageNumber, bool containsSpritesOnly);

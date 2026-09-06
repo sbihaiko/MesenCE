@@ -662,6 +662,31 @@ def run(*argv, expect=0, cwd=None):
     return out
 
 
+def chr_relegation_test(root: Path):
+    """F9.10 (ADR-0160): the bootstrap writes its CHR-order fragments under
+    `textures/chr/` and names them that way in `<img>`. The sheet build drops
+    every `<img>` of the key source and re-emits its own, so where the
+    fragments live must make no difference at all to the built manifest — and
+    the built manifest must keep pointing only at `sheets/`, which is the whole
+    point of relegating them."""
+    old = make_author_folder(root, name="chr-at-root")
+    new = make_author_folder(root, name="chr-in-subfolder")
+    for folder, img in ((old, "<img>Chr_00_0.png"), (new, "<img>chr/Chr_00_0.png")):
+        hires = folder / "textures" / "hires.txt"
+        hires.write_text(hires.read_text(encoding="utf-8").replace("<img>old.png", img),
+                         encoding="utf-8")
+    if run("build", str(old)) is None or run("build", str(new)) is None:
+        return
+    old_text = (old / "textures" / "hires.txt").read_text(encoding="utf-8")
+    new_text = (new / "textures" / "hires.txt").read_text(encoding="utf-8")
+    if old_text != new_text:
+        fail("moving the CHR-order fragments into chr/ changed the built hires.txt")
+    elif [l for l in new_text.splitlines() if l.startswith("<img>")] != ["<img>sheets/objects.png"]:
+        fail(f"the built manifest does not reference sheets/ alone:\n{new_text}")
+    else:
+        ok("F9.10: a key source naming textures/chr/ builds the same manifest, pointing only at sheets/")
+
+
 def make_author_folder(root: Path, keys: int = 16, name: str = "author"):
     """A buildable author folder: a 16-column sheet at scale 2 (16px cells),
     a key-source hires.txt, and one bgm + one sfx OGG."""
@@ -849,6 +874,10 @@ def main() -> int:
         # --- ADR-0153 / F9.4: the artist-legible sheet round-trip ---
         sheet_alias_tests(root)
         sheet_round_trip_tests(root)
+
+        # --- F9.10: sheets/ is the front door; chr/ is where the CHR-order
+        # fragments went, and the round trip cannot notice the difference ---
+        chr_relegation_test(root)
 
         # --- F5.4g item 12: audio_cleanup_suggest reads the probe's log ---
         sug = root / "sug-pack"
