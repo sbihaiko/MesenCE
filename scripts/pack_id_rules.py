@@ -223,7 +223,7 @@ def select_catalog_rows(candidates):
         kept.append(candidate)
     # Content-dedup pass (above) is global; now resolve per pack_id: drop
     # foreign-origin claims, then the single §3.6 slot winner survives.
-    for pack_id, members in grouped.items():
+    for members in grouped.values():
         bound_origin = None
         same_origin = []
         for candidate in members:

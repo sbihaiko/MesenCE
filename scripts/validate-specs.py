@@ -5,7 +5,11 @@ and enforces the wire format of shared cross-language test fixtures
 (path-cases.txt, ADR-0124); also lints every MEP golden root via mep_lint.py (ADR-0136). Exits non-zero on the first violation. Run from the repo root:
 python3 scripts/validate-specs.py
 """
-import json, re, struct, subprocess, sys
+import json
+import re
+import struct
+import subprocess
+import sys
 from pathlib import Path
 
 from mei_rules import (
@@ -145,7 +149,7 @@ def validate_mep_border(root):
         check(all(isinstance(v, int) and not isinstance(v, bool) for v in (x, y)), f"{root.name}: viewport.x/y must be integers")
         check(positive_int(vw) and positive_int(vh), f"{root.name}: viewport.width/height must be integers > 0")
         if all(isinstance(v, int) for v in (x, y, vw, vh)):
-            check(0 <= x and 0 <= y and x + vw <= w and y + vh <= h, f"{root.name}: viewport {x},{y} {vw}x{vh} exceeds the {w}x{h} canvas")
+            check(x >= 0 and y >= 0 and x + vw <= w and y + vh <= h, f"{root.name}: viewport {x},{y} {vw}x{vh} exceeds the {w}x{h} canvas")
     check(meta.get("scale_mode", "fit") in ("fit", "stretch"), f"{root.name}: border.json scale_mode must be 'fit' or 'stretch'")
     check(isinstance(meta.get("underlay", False), bool), f"{root.name}: border.json underlay must be a boolean")
 
@@ -201,13 +205,13 @@ def validate_mei_catalog():
         validate_mei(catalog_path)
 
 def validate_hires_draft(path):
-    lines = [l for l in path.read_text().splitlines() if l.strip()]
+    lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
     check(lines and lines[0].startswith("<ver>"), f"{path.name}: first line must be <ver>")
     ver = int(lines[0][5:])
     check(ver >= 200, f"{path.name}: GB/SMS extension requires <ver> >= 200 (draft §2)")
-    tags = {l[:l.index(">") + 1] for l in lines if l.startswith("<")}
+    tags = {ln[:ln.index(">") + 1] for ln in lines if ln.startswith("<")}
     check("<system>" in tags, f"{path.name}: <system> is required at <ver> >= 200")
-    system_line = next(l for l in lines if l.startswith("<system>"))
+    system_line = next(ln for ln in lines if ln.startswith("<system>"))
     check(system_line[8:] in ("gb", "gbc", "sms", "gg", "sg1000", "coleco"), f"{path.name}: invalid <system>: {system_line[8:]}")
 
 PATH_CASE_LINE = re.compile(r"^[^\t]+\t(ok|bad)$")

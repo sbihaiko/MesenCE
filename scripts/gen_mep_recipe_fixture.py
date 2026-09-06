@@ -41,7 +41,6 @@ Usage: python3 scripts/gen_mep_recipe_fixture.py
 """
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import struct
@@ -49,8 +48,10 @@ import zipfile
 import zlib
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parent
-ROOT = SCRIPTS.parent
+from mep_recipe_common import REPO_ROOT, SCRIPTS_DIR, sha256_file
+
+SCRIPTS = SCRIPTS_DIR
+ROOT = REPO_ROOT
 FIXTURE_DIR = ROOT / "docs" / "specs" / "golden" / "mep-recipe" / "fixture"
 
 # Fixed per-entry zip timestamp (matches the DOS-epoch floor zipfile accepts)
@@ -150,7 +151,7 @@ def _write_deterministic_zip(path: Path, files: dict) -> str:
             info.compress_type = zipfile.ZIP_STORED
             info.external_attr = 0o644 << 16
             zf.writestr(info, data)
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_file(path)
 
 
 def _pack_files_at_zip_root() -> dict:
@@ -218,7 +219,7 @@ def _write_edge_case_recipes(out_dir: Path, audio_sha256: str, audio_size: int) 
 
 
 def _sha256_of(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_file(path)
 
 
 def _build_recipe(primary_sha256: str, audio_sha256: str, audio_size: int) -> dict:

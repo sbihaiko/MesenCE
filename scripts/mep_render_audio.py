@@ -21,7 +21,6 @@ there is no auto layer — `--layer` forces it).
 Usage: python3 scripts/mep_render_audio.py <pack-folder> [--sf2 file.sf2] [--layer auto|human] [--force]
 """
 import json
-import math
 import os
 import shutil
 import struct

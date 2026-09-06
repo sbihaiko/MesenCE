@@ -220,9 +220,11 @@ def make_fixture(root: Path):
     }, indent=2), encoding="utf-8")
 
     lines = ["<ver>107", "<scale>1", "<system>nes", f"<supportedRom>{ROM_SHA1}", "<img>old.png"]
-    for index in sorted(CELL_COLOURS):
-        for k in range(4):
-            lines.append(f"<tile>0,{tile_hex(CELL_SHAPE[index], k)},{CELL_PALETTE[index]},0,0,1,N")
+    lines.extend(
+        f"<tile>0,{tile_hex(CELL_SHAPE[index], k)},{CELL_PALETTE[index]},0,0,1,N"
+        for index in sorted(CELL_COLOURS)
+        for k in range(4)
+    )
     (game / "auto" / "textures" / "hires.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     mep = game / "mep"
@@ -308,7 +310,7 @@ def test_seam_pass_touches_only_borders(root: Path, sheets: Path):
     ok("the seam pass writes only the border band of the adjacent cells (no interior, no gutter)")
 
     # The border itself is the plain average of the two touching lines.
-    want = tuple(round((a + b) / 2) for a, b in zip(CELL_COLOURS[0][1], CELL_COLOURS[1][0])) + (255,)
+    want = tuple(round((a + b) / 2) for a, b in zip(CELL_COLOURS[0][1], CELL_COLOURS[1][0], strict=True)) + (255,)
     got_a = after[y0][x0 + UNIT - 1]
     got_b = after[y1][x1]
     if got_a != want or got_b != want:
@@ -365,7 +367,7 @@ def test_palette_variant_recolour(root: Path, sheets: Path):
     x0, y0 = cell_origin(0)
 
     # Expected: cell 0's geometry (including *its* hole) under cell 2's colours.
-    swap = dict(zip(CELL_COLOURS[0], CELL_COLOURS[2]))
+    swap = dict(zip(CELL_COLOURS[0], CELL_COLOURS[2], strict=True))
     want = [[(swap[src[y0 + cy][x0 + cx][:3]] + (255,)) if src[y0 + cy][x0 + cx][3] else TRANSPARENT
              for cx in range(UNIT)] for cy in range(UNIT)]
     have = [[got[y2 + cy][x2 + cx] for cx in range(UNIT)] for cy in range(UNIT)]
@@ -1031,7 +1033,7 @@ def test_seam_pass_multiple_neighbours():
         rects = [mod.Region(0, 0, 4, 2, 0, 0), mod.Region(4, 0, 4, 2, 1, 1),
                  mod.Region(8, 0, 4, 2, 2, 2)]
         colours = [(40, 40, 40), (240, 0, 0), (0, 240, 0)]
-        for rect, colour in zip(rects, colours):
+        for rect, colour in zip(rects, colours, strict=True):
             _paint(mod, img, rect, lambda dx, dy, c=colour: c + (255,))
         return img, rects, colours
 

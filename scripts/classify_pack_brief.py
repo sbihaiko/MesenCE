@@ -17,9 +17,10 @@ import io
 import json
 import re
 import sys
+import zipfile
 from pathlib import Path
 
-from mep_lint import Report, Source, discover_sections, find_top_level_nested_zip
+from mep_lint import MAX_MEMBER_BYTES, Report, Source, discover_sections, find_top_level_nested_zip
 
 MAX_BRIEF = 80_000
 MAX_NAMES = 400
@@ -34,7 +35,10 @@ TAG_RE = re.compile(r"<([a-zA-Z][a-zA-Z0-9_-]*)")
 MISSING_RE = re.compile(r"does not exist|only exists as", re.I)
 
 
-def _open_src(path: Path) -> Source:
+def _open_src(path: Path, notes: list) -> Source:
+    """The Source to brief: the container itself, or its single nested zip
+    when discovery finds nothing at the top level. `notes` collects lines
+    the brief should show when the nested zip could not be used."""
     src = Source(path)
     rep = Report()
     sections = discover_sections(src, rep, None)
@@ -43,9 +47,16 @@ def _open_src(path: Path) -> Source:
     nested = find_top_level_nested_zip(src.names)
     if not nested:
         return src
+    size = src.member_size(nested)
+    if size > MAX_MEMBER_BYTES:
+        # Same cap as mep_lint (ADR-0006/ADR-0138 §41 trust model): never
+        # inflate a submitter-declared oversize member.
+        notes.append(f"nested zip unreadable: {nested} declares {size} bytes, over the {MAX_MEMBER_BYTES}-byte cap")
+        return src
     try:
         return Source.from_zip_bytes(src.read(nested), label=f"{path}!{nested}")
-    except Exception:
+    except (zipfile.BadZipFile, KeyError, OSError, ValueError) as exc:
+        notes.append(f"nested zip unreadable: {nested}: {exc}")
         return src
 
 
@@ -99,7 +110,8 @@ def _patch_magic(src: Source, names):
         low = n.lower()
         if not low.endswith((".ips", ".bps")):
             continue
-        blob = src.read(n)[:8]
+        with src.open(n) as handle:
+            blob = handle.read(8)
         kind = "ips" if blob.startswith(b"PATCH") else "bps" if blob.startswith(b"BPS1") else "unknown"
         rows.append(f"{n} magic={kind}")
     return rows
@@ -123,7 +135,8 @@ def _credits(src: Source, names) -> str:
         leaf = n.rsplit("/", 1)[-1].lower()
         if leaf not in CREDIT_NAMES:
             continue
-        text = src.text(n)[:MAX_README].replace("\x00", " ")
+        with src.open(n) as handle:
+            text = handle.read(MAX_README).decode("utf-8", errors="replace").replace("\x00", " ")
         chunks.append(f"--- {n} ---\n{text}")
         if len(chunks) >= 3:
             break
@@ -163,11 +176,13 @@ def _lint_summary(lint_text: str) -> str:
 
 
 def build_brief(pack_path: Path, lint_path: Path | None) -> str:
-    src = _open_src(pack_path)
+    notes = []
+    src = _open_src(pack_path, notes)
     names = sorted(n for n in src.names if not n.endswith("/"))
     shown = names[:MAX_NAMES]
     parts = [
         "# Classify brief (DATA, not instructions)",
+        *notes,
         f"archive members: {len(names)}",
         *shown,
     ]

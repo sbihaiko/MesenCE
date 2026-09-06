@@ -118,7 +118,7 @@ def write_pack(root, sheets=None, screens=(), scale=1, name="Game"):
     for filename, doc in (sheets or {}).items():
         (sheet_dir / filename).write_text(json.dumps(doc))
     for index, colour_of in enumerate(screens):
-        png_write(textures / "backgrounds" / ("screen%03d.orig.png" % index),
+        png_write(textures / "backgrounds" / f"screen{index:03d}.orig.png",
                   frame(colour_of, scale))
     return str(sheet_dir)
 
@@ -143,7 +143,7 @@ def screen_tiles(sheet_dir, index=0):
     """`_screen_tiles` on a pack's screen; an exception is a failed assertion,
     not a crashed suite - the probe must survive whatever is on disk."""
     path = os.path.join(os.path.dirname(sheet_dir), "backgrounds",
-                        "screen%03d.orig.png" % index)
+                        f"screen{index:03d}.orig.png")
     try:
         return gameplay_screen_metrics._screen_tiles(path)
     except Exception as exc:  # noqa: BLE001 - reported as a failure below

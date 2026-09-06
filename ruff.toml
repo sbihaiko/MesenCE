@@ -1,0 +1,22 @@
+# Lint config for the repo's Python (scripts/, scripts/checks/). CI runners use
+# python3 3.10+, so the target stays py310 even though dev boxes run 3.12.
+line-length = 120
+target-version = "py310"
+extend-exclude = ["runs", "roms", "graphify-out"]
+
+[lint]
+select = ["E", "F", "W", "B", "SIM", "UP", "PERF", "S"]
+ignore = [
+    "S603",    # subprocess without shell=True: every call site passes a list built from our own paths/args
+    "S607",    # partial executable path (gh, git, make): PATH lookup is intended for these dev tools
+    "PERF203", # try/except inside a loop: the per-item recovery is the point at those sites
+    "E501",    # ~95 pre-existing long lint-message/spec lines; enforced at 120 once they are wrapped
+]
+
+[lint.per-file-ignores]
+"scripts/test_*.py" = ["S101"]
+"scripts/checks/*.py" = ["S101"]
+# Dev-only generators/validators that use assert for internal invariants (never run with -O in CI).
+"scripts/gen_hdpack_test_roms.py" = ["S101"]
+"scripts/mep_render_audio.py" = ["S101"]
+"scripts/validate_hdpack_dump.py" = ["S101"]

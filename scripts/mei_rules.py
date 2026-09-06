@@ -175,9 +175,11 @@ def mei_errata_field_errors(entry):
                 errors.append(f"{where}.{field} is required and must be a non-empty string")
         if isinstance(item.get("tag"), str) and item["tag"] not in ERRATA_TAGS:
             errors.append(f"{where}.tag must be one of {', '.join(sorted(ERRATA_TAGS))}")
-        for field in ("manifest", "target"):
-            if isinstance(item.get(field), str) and any(ch in item[field] for ch in "*?["):
-                errors.append(f"{where}.{field} must be an exact name, no wildcards")
+        errors.extend(
+            f"{where}.{field} must be an exact name, no wildcards"
+            for field in ("manifest", "target")
+            if isinstance(item.get(field), str) and any(ch in item[field] for ch in "*?[")
+        )
         reviewed = item.get("reviewed_in")
         if reviewed is not None and not (isinstance(reviewed, str) and reviewed.strip()):
             errors.append(f"{where}.reviewed_in must be a non-empty string when present")

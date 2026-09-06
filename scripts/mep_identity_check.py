@@ -136,7 +136,8 @@ def main(argv):
     my_recipe_id = None
     if args.classify:
         try:
-            classify = json.load(open(args.classify, encoding="utf-8"))
+            with open(args.classify, encoding="utf-8") as handle:
+                classify = json.load(handle)
             recipe = classify.get("recipe") or {}
             pack = recipe.get("pack") or {}
             my_recipe_id = pack.get("id")
@@ -166,7 +167,7 @@ def main(argv):
         return 0
     if decision[0] == "duplicate":
         holder = decision[1]
-        print(f"decision=duplicate")
+        print("decision=duplicate")
         print(f"duplicate_of={holder}")
         if args.post:
             body = (
@@ -179,7 +180,7 @@ def main(argv):
         return 0
     # origin collision
     bound, holder = decision[1], decision[2]
-    print(f"decision=origin")
+    print("decision=origin")
     print(f"origin={bound}")
     print(f"holder={holder}")
     if args.post:

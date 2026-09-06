@@ -15,6 +15,8 @@ Usage: python3 scripts/test_mep_recipe.py
 from __future__ import annotations
 
 import hashlib
+import io
+import contextlib
 import json
 import struct
 import sys
@@ -88,7 +90,7 @@ def base_recipe(primary_hash: str, audio_hash: str) -> dict:
         "recipe": 1,
         "sources": {
             "primary": {
-                "url": "https://example.org/packs/synthetic-split-1.0.0.zip",
+                "url": "https://github.com/example/repo/releases/download/v1/synthetic-split-1.0.0.zip",
                 "sha256": primary_hash,
             },
             "deps": [
@@ -96,7 +98,7 @@ def base_recipe(primary_hash: str, audio_hash: str) -> dict:
                     "id": "audio",
                     "sha256": audio_hash,
                     "size": 64,
-                    "hints": ["https://example.org/audio/synthetic-split-ogg.zip"],
+                    "hints": ["https://github.com/example/repo/releases/download/v1/synthetic-split-ogg.zip"],
                     "license": "CC0-1.0",
                     "user_supplied": True,
                 }
@@ -134,6 +136,32 @@ def check_golden_validates():
         fail(f"mep_recipe.py validate golden exited {rc}")
         return
     ok("golden recipe.json validates")
+
+
+def check_host_allowlist_enforced():
+    """ADR-0138 §41 (opt-in): with require_allowlisted_hosts /
+    --require-allowlisted-hosts, sources.primary.url and every dep hint must
+    be on the community-pack host allow-list; the golden's example.org
+    placeholders are rejected under the flag and accepted without it."""
+    recipe = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    errors = mep_recipe.validate_recipe(recipe, require_allowlisted_hosts=True)
+    if not any("sources.primary.url" in e and "allow-list" in e for e in errors):
+        fail(f"example.org primary url was not rejected by the host gate: {errors}")
+        return
+    if not any("hints[0]" in e and "allow-list" in e for e in errors):
+        fail(f"example.org dep hint was not rejected by the host gate: {errors}")
+        return
+    with contextlib.redirect_stderr(io.StringIO()):  # the expected rejection is not a suite failure
+        rc = mep_recipe.main(["mep_recipe.py", "validate", str(GOLDEN), "--require-allowlisted-hosts"])
+    if rc != 1:
+        fail(f"mep_recipe.py validate golden with --require-allowlisted-hosts exited {rc}, expected 1")
+        return
+    good = base_recipe("a" * 64, "b" * 64)
+    errors = mep_recipe.validate_recipe(good, require_allowlisted_hosts=True)
+    if errors:
+        fail(f"github.com releases URLs were rejected by the host gate: {errors}")
+        return
+    ok("--require-allowlisted-hosts enforces the allow-list on sources.primary.url and dep hints (ADR-0138 §41)")
 
 
 def check_unknown_op_rejected():
@@ -290,7 +318,7 @@ def check_hash_mismatch_aborts():
 
 PACK_URL = "https://github.com/example/repo/releases/download/v1/pack.zip"
 PACK_SHA256 = hashlib.sha256(b"synthetic-primary-artifact").hexdigest()
-AUDIO_URL = "https://example.com/audio/synthetic-split-ogg.zip"
+AUDIO_URL = "https://github.com/example/repo/releases/download/v1/synthetic-split-ogg.zip"
 AUDIO_SHA256 = hashlib.sha256(b"synthetic-audio-artifact").hexdigest()
 
 ISSUE_BODY_NO_ASSETS = "\n".join([
@@ -577,6 +605,7 @@ def check_assemble_sources_cli_absent_writes_nothing():
 
 def main():
     check_golden_validates()
+    check_host_allowlist_enforced()
     check_unknown_op_rejected()
     check_escaping_path_rejected()
     check_dry_run_lint_clean()

@@ -105,7 +105,7 @@ def parse_anchors(textures_dir):
         return {}
     conds = {}
     backgrounds = {}
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+    with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
             line = line.strip()
             m = COND_RE.match(line)
@@ -229,10 +229,7 @@ def analyse(textures_dir, threshold):
     new_anchors = {}
     for name in names:
         blocks = screens[name]
-        stable = []
-        for i in range(len(blocks)):
-            if all(screens[v][i] == blocks[i] for v in variants[name]):
-                stable.append(i)
+        stable = [i for i in range(len(blocks)) if all(screens[v][i] == blocks[i] for v in variants[name])]
         picked, cross_stable = pick_anchors_guarded(
             name, names, screens, variants, rarity, stable)
         if len(picked) < 3 or cross_stable:

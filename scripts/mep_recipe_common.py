@@ -14,10 +14,20 @@ payload in this project: a writer calls `choose_fence()` to pick a fence
 strictly longer than any backtick run already in the payload, and a
 reader calls `find_fenced_block()`, which accepts an opening run of 3 or
 more backticks and matches the closing run by that same length (never a
-bare 3-backtick assumption)."""
+bare 3-backtick assumption).
+
+Also the home of the two repo-layout constants (`REPO_ROOT`, `SCRIPTS_DIR`)
+and the one streaming `sha256_file`, so sibling scripts stop re-deriving
+`Path(__file__).resolve().parent.parent` and re-implementing the digest
+loop."""
 from __future__ import annotations
 
+import hashlib
 import re
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPTS_DIR.parent
 
 RECIPE_VERSION = 1
 SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -58,3 +68,13 @@ def find_fenced_block(text: str, label: str, min_backticks: int = MIN_FENCE_BACK
     if closer is None:
         return None
     return text[body_start : body_start + closer.start()]
+
+
+def sha256_file(path, chunk_size: int = 1 << 20) -> str:
+    """Hex SHA-256 of a file, streamed in `chunk_size` blocks so a 300 MB
+    artifact is never held in memory. Accepts str or Path."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

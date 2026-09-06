@@ -40,7 +40,7 @@ def no_intro_sha1(rom: Path) -> str:
         offset = 16 + (512 if data[6] & 0x04 else 0)
     elif ext in {".sfc", ".smc", ".swc", ".fig", ".bs", ".st"} and len(data) % 1024 == 512:
         offset = 512
-    return hashlib.sha1(data[offset:]).hexdigest().upper()
+    return hashlib.sha1(data[offset:]).hexdigest().upper()  # noqa: S324 - No-Intro identity hash is SHA-1 by contract (ADR-0003/ADR-0039)
 
 
 def system_for(rom: Path) -> str:

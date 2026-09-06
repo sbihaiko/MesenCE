@@ -76,7 +76,7 @@ def check_keys_stable_and_distinct():
     keys = list(rom_target.NO_INTRO_TARGETS)
     normalized = [rom_target.normalize_game_name(k) for k in keys]
     if normalized != keys:
-        bad = [k for k, n in zip(keys, normalized) if k != n]
+        bad = [k for k, n in zip(keys, normalized, strict=True) if k != n]
         fail(f"keys not stable under normalization: {bad}")
         return
     if len(set(keys)) != len(keys):

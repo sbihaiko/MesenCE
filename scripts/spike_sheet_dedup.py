@@ -36,7 +36,7 @@ def cell_crops(sheet_dir):
     doc_path = os.path.join(sheet_dir, "metatiles.json")
     if not os.path.exists(doc_path):
         return None, None
-    with open(doc_path) as handle:
+    with open(doc_path, encoding="utf-8") as handle:
         doc = json.load(handle)
     reference = doc.get("reference") or "metatiles.orig.png"
     image_path = os.path.join(sheet_dir, reference)
@@ -60,7 +60,7 @@ def collapse(crops, tolerance):
         matched = False
         for rep in representatives:
             diff = 0
-            for a, b in zip(crop, rep):
+            for a, b in zip(crop, rep, strict=True):
                 if a != b:
                     diff += 1
                     if diff > budget:
@@ -102,17 +102,17 @@ def main():
         print()
         return 0
 
-    print("%-44s %6s %7s %8s %8s" % ("pack", "cells", "exact", "clusters", "collapse"))
+    print("%-44s %6s %7s %8s %8s" % ("pack", "cells", "exact", "clusters", "collapse"))  # noqa: UP031 - tabular report; the % column spec is the readable form
     for row in sorted(rows, key=lambda r: -r["nearCollapse"]):
         name = row["path"].split(os.sep)
         name = name[name.index("roms") + 1] if "roms" in name else row["path"]
-        print("%-44s %6d %7d %8d %7.0f%%" % (
+        print("%-44s %6d %7d %8d %7.0f%%" % (  # noqa: UP031 - tabular report; the % column spec is the readable form
             name[:44], row["cells"], row["exactDistinct"], row["clusters"],
             row["nearCollapse"] * 100))
     if rows:
         cells = sum(r["cells"] for r in rows)
         clusters = sum(r["clusters"] for r in rows)
-        print("\n%d packs: %d cells collapse to %d subjects (%.0f%%)" % (
+        print("\n%d packs: %d cells collapse to %d subjects (%.0f%%)" % (  # noqa: UP031 - tabular report; the % column spec is the readable form
             len(rows), cells, clusters, 100 * (1 - clusters / cells)))
     return 0
 

@@ -502,7 +502,7 @@ PY
   RECIPE_OK=""
   if [ "$RECIPE_STATUS" = "present" ]; then
     RECIPE_OK=true
-    if ! python3 scripts/mep_recipe.py validate "$WORK/mep_recipe.json"; then
+    if ! python3 scripts/mep_recipe.py validate --require-allowlisted-hosts "$WORK/mep_recipe.json"; then
       RECIPE_OK=false
     fi
     if [ "$RECIPE_OK" = "true" ]; then

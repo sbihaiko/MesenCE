@@ -3,15 +3,27 @@
 community-pack-validate.yml. Two things make this more than a plain `curl`:
 
 1. The allow-list check runs on every hop, not just the URL the issue
-   submitter typed. `requests`/`curl -L` would happily follow a redirect
-   from an allowed host to an arbitrary one; here every redirect target is
-   re-validated against the same allow-list before being followed.
+   submitter typed. `requests`/`curl -L` -- and urllib's default opener --
+   would happily follow a redirect from an allowed host to an arbitrary
+   one; here the opener is built with a redirect handler that refuses to
+   follow anything (`_NoRedirect`), so every 3xx surfaces as an HTTPError
+   and `open_validated` re-validates the Location target against the same
+   allow-list (scheme, hostname, no userinfo, port 443 only) and the DNS
+   check below before issuing the next request. At most MAX_REDIRECTS hops.
 2. Before connecting, the target host's resolved IPs are checked against
    private/loopback/link-local/reserved ranges (this also catches the
    cloud-metadata address, 169.254.169.254) and rejected. The allow-listed
    hosts are all public multi-tenant platforms (GitHub, Google Drive, MediaFire) whose
    DNS we don't control, so this is what actually stands in for "no SSRF",
    not the hostname string match by itself.
+
+   DNS is resolved twice -- once by `assert_public_host` and again by the
+   socket connect inside urllib -- so a host that flips its answer between
+   the two lookups (DNS rebinding) could in principle slip past the check.
+   That residual risk is accepted rather than pinned: every allow-listed
+   host is a major CDN-backed platform whose records we neither control nor
+   expect to be adversarial, and pinning would mean re-implementing TLS SNI
+   / Host handling for no realistic gain (ADR-0138 §41).
 
 Google Drive (`kind: "google-drive"` in the allow-list) needs a second
 request: the first response for a file too large to virus-scan is an HTML
@@ -43,22 +55,64 @@ import urllib.request
 
 DEFAULT_ALLOWLIST = "scripts/pack_host_allowlist.json"
 USER_AGENT = "MesenCE-community-pack-validator/1.0"
+MAX_REDIRECTS = 5  # mirrors the client's 5-hop cap (ADR-0138 §41)
+DRIVE_ID = re.compile(r"^[a-zA-Z0-9_-]+$")
+REDIRECT_CODES = (301, 302, 303, 307, 308)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses to follow any redirect, so a 3xx reaches `open_validated` as
+    an HTTPError and the Location target gets the same allow-list + DNS
+    checks as the URL the submitter typed (instead of urllib silently
+    following it to an arbitrary host)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect())
 
 
 def load_allowlist(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)["hosts"]
 
 
-def match_host(url, hosts):
+def validate_url_shape(url):
+    """Rejects, with a ValueError naming the reason, any URL that is not
+    `https://<hostname>[:443]/...` -- no userinfo (`user@host` tricks the
+    eye and some parsers), no non-443 port (nothing allow-listed serves
+    packs elsewhere), a real hostname. Returns the lower-cased hostname."""
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https":
+        raise ValueError(f"URL scheme must be https: {url}")
+    if parsed.username is not None or parsed.password is not None or "@" in parsed.netloc:
+        raise ValueError(f"URL must not carry userinfo: {url}")
+    try:
+        port = parsed.port
+    except ValueError as e:
+        raise ValueError(f"URL has an invalid port: {url}") from e
+    if port is not None and port != 443:
+        raise ValueError(f"URL port must be 443, got {port}: {url}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"URL has no hostname: {url}")
+    return hostname
+
+
+def match_host(url, hosts):
+    """The allow-list entry `url` matches, or None. Matches on the parsed
+    hostname (never the raw netloc, which could hide userinfo or a port)."""
+    try:
+        hostname = validate_url_shape(url)
+    except ValueError:
         return None
+    parsed = urllib.parse.urlparse(url)
     for entry in hosts:
-        host = entry.get("host") or ""
-        suffix = entry.get("host_ends_with") or ""
-        host_match = bool(host) and parsed.netloc == host
-        suffix_match = bool(suffix) and parsed.netloc.endswith(suffix)
+        host = (entry.get("host") or "").lower()
+        suffix = (entry.get("host_ends_with") or "").lower()
+        host_match = bool(host) and hostname == host
+        suffix_match = bool(suffix) and hostname.endswith(suffix)
         if not (host_match or suffix_match):
             continue
         substrings = entry.get("path_contains_any")
@@ -72,8 +126,8 @@ def assert_public_host(host):
     try:
         infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
     except socket.gaierror as e:
-        raise ValueError(f"could not resolve host {host!r}: {e}")
-    for family, _, _, _, sockaddr in infos:
+        raise ValueError(f"could not resolve host {host!r}: {e}") from e
+    for _family, _, _, _, sockaddr in infos:
         ip = ipaddress.ip_address(sockaddr[0])
         if (
             ip.is_private
@@ -86,27 +140,31 @@ def assert_public_host(host):
             raise ValueError(f"host {host!r} resolved to non-public address {ip}")
 
 
-def open_validated(url, hosts, max_redirects=5):
+def open_validated(url, hosts, max_redirects=MAX_REDIRECTS, opener=None):
     """Follows redirects manually, re-checking the allow-list and DNS on
-    every hop, instead of trusting urllib's/curl's built-in follower."""
+    every hop, instead of trusting urllib's/curl's built-in follower. The
+    opener never follows a 3xx itself (`_NoRedirect`), which is what makes
+    this loop the only redirect path; `opener` is injectable for tests."""
+    opener = opener or _OPENER
     for _ in range(max_redirects + 1):
+        hostname = validate_url_shape(url)
         entry = match_host(url, hosts)
         if entry is None:
-            raise ValueError(f"host not allow-listed: {urllib.parse.urlparse(url).netloc}")
-        assert_public_host(urllib.parse.urlparse(url).netloc)
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            raise ValueError(f"host not allow-listed: {hostname}")
+        assert_public_host(hostname)
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310 - https + allow-list + DNS checked above
         try:
-            resp = urllib.request.urlopen(req, timeout=30)  # noqa: S310 - host validated above
+            resp = opener.open(req, timeout=30)
         except urllib.error.HTTPError as e:
-            if e.code in (301, 302, 303, 307, 308):
+            if e.code in REDIRECT_CODES:
                 location = e.headers.get("Location")
                 if not location:
-                    raise ValueError(f"redirect ({e.code}) with no Location header")
+                    raise ValueError(f"redirect ({e.code}) with no Location header") from e
                 url = urllib.parse.urljoin(url, location)
                 continue
             raise
         return resp, entry
-    raise ValueError("too many redirects")
+    raise ValueError(f"too many redirects (more than {max_redirects})")
 
 
 MEDIAFIRE_DOWNLOAD = re.compile(
@@ -127,7 +185,10 @@ def extract_drive_id(url):
         return m.group(1)
     qs = urllib.parse.parse_qs(parsed.query)
     if "id" in qs:
-        return qs["id"][0]
+        file_id = qs["id"][0]
+        if not DRIVE_ID.match(file_id):
+            raise ValueError(f"Google Drive file id has unexpected characters: {file_id!r}")
+        return file_id
     raise ValueError(f"could not extract a file id from Google Drive URL: {url}")
 
 
@@ -226,9 +287,14 @@ def main(argv):
         return 2
 
     hosts = load_allowlist(allowlist_path)
+    try:
+        hostname = validate_url_shape(url)
+    except ValueError as e:
+        print(f"rejected URL: {e}", file=sys.stderr)
+        return 1
     entry = match_host(url, hosts)
     if entry is None:
-        print(f"host not allow-listed: {urllib.parse.urlparse(url).netloc}", file=sys.stderr)
+        print(f"host not allow-listed: {hostname}", file=sys.stderr)
         return 1
 
     try:

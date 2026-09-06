@@ -63,12 +63,13 @@ import sys
 import zipfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent  # mep_recipe_common.REPO_ROOT needs sys.path below first
 HARNESS = REPO_ROOT / "scripts" / "headless_record"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import rom_target  # noqa: E402  (cross-validation only)
 from mep_lint import normalize_rom_core_name  # noqa: E402
+from mep_recipe_common import sha256_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # No-Intro sha1 mirror of MepPackManager::ComputeNoIntroSha1 (ADR-0044): the
@@ -95,7 +96,7 @@ def no_intro_sha1(data: bytes) -> str:
             size = declared
     if offset > size:
         offset = size
-    return hashlib.sha1(data[offset:size]).hexdigest().upper()
+    return hashlib.sha1(data[offset:size]).hexdigest().upper()  # noqa: S324 - No-Intro identity hash is SHA-1 by contract (ADR-0003/ADR-0039)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,7 @@ def no_intro_sha1(data: bytes) -> str:
 
 
 def normalize_zip_path(path: str):
+    # Deliberate independent mirror of the C# normalizer (not mep_lint.safe_rel): this harness cross-checks the client.
     work = path.replace("\\", "/")
     if work.startswith("/") or ":" in work:
         return None
@@ -145,6 +147,7 @@ def find_nested_zip(names):
     """LegacyHdPackInstall.FindNestedZip: the single root-level '.zip' entry
     of a wrapper zip (the "UnZipMeFirst"-style Drive release), None on zero
     or several."""
+    # Deliberate independent mirror of the C# nested-zip pick (not mep_lint.find_top_level_nested_zip) — see above.
     candidate = None
     for name in names:
         if not name or "/" in name:
@@ -228,7 +231,8 @@ def io_bytes(b: bytes):
 
 def load_catalog(path: Path):
     import json
-    return json.load(open(path))["packs"]
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)["packs"]
 
 
 def find_catalog_match(packs, sha1, rom_name=None):
@@ -341,12 +345,11 @@ def acquire_pack(entry, args, work: Path) -> Path:
                  "--max-bytes", "314572800"],
                 cwd=str(REPO_ROOT), env=env, check=True)
             local = out
-    actual = hashlib.sha256(local.read_bytes()).hexdigest()
-    if declared:
-        if actual != declared.lower():
-            raise ValueError(
-                f"sha256 mismatch for {local.name}: catalog declares {declared}, artifact is {actual} "
-                f"(catalog data stale until revalidation, or wrong artifact)")
+    actual = sha256_file(local)
+    if declared and actual != declared.lower():
+        raise ValueError(
+            f"sha256 mismatch for {local.name}: catalog declares {declared}, artifact is {actual} "
+            f"(catalog data stale until revalidation, or wrong artifact)")
     return local
 
 

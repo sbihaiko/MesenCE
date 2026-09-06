@@ -129,7 +129,7 @@ HIRES = """<ver>109
 def test_rotate_tile_art():
     print("rotate_tile_art")
     text, described = ac.rotate_tile_art(HIRES)
-    lines = [l for l in text.splitlines() if l.startswith("<tile>")]
+    lines = [ln for ln in text.splitlines() if ln.startswith("<tile>")]
     # Art coordinates move one rule up; the tile index and palette - the match
     # keys - stay put, so the pack still replaces exactly the same tiles.
     check(lines == ["<tile>0,01,2D003021,24,0,1,N",

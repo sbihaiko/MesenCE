@@ -47,13 +47,13 @@ def load_sheets(sheet_dir):
             continue
         path = os.path.join(sheet_dir, name)
         try:
-            with open(path) as handle:
+            with open(path, encoding="utf-8") as handle:
                 doc = json.load(handle)
         except (OSError, ValueError) as err:
             sheets[name] = {"error": str(err)}
             continue
         if doc.get("version") != 1:
-            sheets[name] = {"error": "unsupported version %r" % doc.get("version")}
+            sheets[name] = {"error": "unsupported version {!r}".format(doc.get("version"))}
             continue
         sheets[name] = doc
     return sheets
@@ -90,30 +90,30 @@ def summarize(sheet_dir):
 
 def print_summary(summary):
     name = os.path.relpath(summary["path"])
-    print("== %s" % name)
+    print(f"== {name}")
     if summary["errors"]:
         for sheet, err in summary["errors"].items():
-            print("   ERROR %s: %s" % (sheet, err))
+            print(f"   ERROR {sheet}: {err}")
     probe = summary["gameplay"]
-    print("   gameplay  : %s%s" % (probe["verdict"],
+    print("   gameplay  : {}{}".format(probe["verdict"],
                                    (" - " + "; ".join(probe["reasons"])) if probe["reasons"] else ""))
     if summary["gridUnit"] is None:
         print("   no metatiles.json - nothing to read")
         return
     consistency = summary["gridConsistency"] or {}
-    print("   grid      : %spx phase (%s,%s)  consistency %.2f vs 8x8 %.2f" % (
+    print("   grid      : {}px phase ({},{})  consistency {:.2f} vs 8x8 {:.2f}".format(
         summary["gridUnit"],
         (summary["gridPhase"] or {}).get("x"), (summary["gridPhase"] or {}).get("y"),
         consistency.get("chosen", 0.0), consistency.get("alt8x8", 0.0)))
     cells = summary["cells"]
-    print("   cells     : scene %d  hud %d  font %d  misc %d" % (
-        cells["metatiles"], cells["hud"], cells["font"], cells["misc"]))
-    print("   noise     : %.1f%% %s (budget %.0f%%)" % (
+    print(f"   cells     : scene {cells['metatiles']}  hud {cells['hud']}  font {cells['font']}  misc {cells['misc']}")
+    print("   noise     : {:.1f}% {} (budget {:.0f}%)".format(
         summary["noise"] * 100, "OK" if summary["noiseOk"] else "OVER", NOISE_BUDGET * 100))
     objects = summary["objects"]
-    print("   objects   : %d%s" % (len(objects), (" (largest %s)" % objects[:5]) if objects else ""))
+    largest = f" (largest {objects[:5]})" if objects else ""
+    print(f"   objects   : {len(objects)}{largest}")
     for entry in summary["maps"]:
-        print("   map       : %s, %d placements" % (entry["mode"], entry["placements"]))
+        print(f"   map       : {entry['mode']}, {entry['placements']} placements")
 
 
 def main():
@@ -127,7 +127,7 @@ def main():
 
     dirs = find_sheet_dirs(args.target)
     if not dirs:
-        print("no sheets/ folder with sidecar JSON under %s" % args.target, file=sys.stderr)
+        print(f"no sheets/ folder with sidecar JSON under {args.target}", file=sys.stderr)
         return 1
 
     summaries = [summarize(d) for d in dirs]

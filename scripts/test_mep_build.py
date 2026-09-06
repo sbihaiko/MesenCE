@@ -30,7 +30,6 @@ Wired into `make doc-checks`. Usage: python3 scripts/test_mep_build.py
 """
 
 import hashlib
-import shutil
 import struct
 import subprocess
 import sys
@@ -171,9 +170,7 @@ def _fixed(v):
 
 
 def _tiles_json(tiles):
-    parts = []
-    for t in tiles:
-        parts.append("null" if t is None else f'{{ "tile": "{tile_hex(t)}", "palette": "{PAL_HEX}" }}')
+    parts = ["null" if t is None else f'{{ "tile": "{tile_hex(t)}", "palette": "{PAL_HEX}" }}' for t in tiles]
     return "[" + ", ".join(parts) + "]"
 
 
@@ -454,7 +451,7 @@ def screen_residency_tests(root: Path):
         fail("routing one cell off metatiles.png took the rest of the sheet with it")
     else:
         ok("ADR-0156: the cells that stayed on the sheet still round-trip")
-    body = [l.strip() for l in hires.read_text(encoding="utf-8").splitlines()]
+    body = [ln.strip() for ln in hires.read_text(encoding="utf-8").splitlines()]
     if bg_line not in body:
         fail("the <background> line the cells were routed to did not survive the rebuild")
     elif not (folder / "textures" / "backgrounds" / "screen001.png").is_file():
@@ -681,7 +678,7 @@ def chr_relegation_test(root: Path):
     new_text = (new / "textures" / "hires.txt").read_text(encoding="utf-8")
     if old_text != new_text:
         fail("moving the CHR-order fragments into chr/ changed the built hires.txt")
-    elif [l for l in new_text.splitlines() if l.startswith("<img>")] != ["<img>sheets/objects.png"]:
+    elif [ln for ln in new_text.splitlines() if ln.startswith("<img>")] != ["<img>sheets/objects.png"]:
         fail(f"the built manifest does not reference sheets/ alone:\n{new_text}")
     else:
         ok("F9.10: a key source naming textures/chr/ builds the same manifest, pointing only at sheets/")
@@ -697,8 +694,7 @@ def make_author_folder(root: Path, keys: int = 16, name: str = "author"):
     (folder / "textures" / "sheets" / "objects.png").write_bytes(png(256, 16))  # 16 cells, scale 2
     lines = ["<ver>107", "<scale>2", "<system>nes",
              "<supportedRom>2A4E126D0286BEA0BF503C80A12352C57539F76B", "<img>old.png"]
-    for k in range(keys):
-        lines.append(f"<tile>0,{k:02X}{'00' * 15},0F001A2C,0,0,1,N")
+    lines.extend(f"<tile>0,{k:02X}{'00' * 15},0F001A2C,0,0,1,N" for k in range(keys))
     (folder / "textures" / "hires.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (folder / "audio" / "bgm" / "01.ogg").write_bytes(b"")
     (folder / "audio" / "sfx" / "03.ogg").write_bytes(b"")
@@ -716,11 +712,11 @@ def main() -> int:
             return 1
         hires = folder / "textures" / "hires.txt"
         text = hires.read_text(encoding="utf-8")
-        tiles = [l for l in text.splitlines() if "<tile>" in l]
+        tiles = [ln for ln in text.splitlines() if "<tile>" in ln]
         if len(tiles) != 16:
             fail(f"build emitted {len(tiles)} tiles, expected 16")
         else:
-            ok(f"build emitted 16 tiles")
+            ok("build emitted 16 tiles")
         if "<img>sheets/objects.png" not in text:
             fail("build did not point <img> at the sheet under textures/sheets/")
         else:

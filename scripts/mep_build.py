@@ -67,6 +67,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import struct
 import sys
 import zipfile
@@ -74,6 +75,7 @@ import zlib
 from pathlib import Path
 
 import mep_lint
+from mep_recipe_common import sha256_file
 
 # NES hires.txt version emitted for the texture and audio manifests (ver >=
 # 100 is the current HD format; 107 is what HdPackBuilder::SaveHdPack writes).
@@ -585,7 +587,7 @@ def _slice_sheet(sd: SheetDoc, scale: int, sheets_dir: Path) -> list:
         raise BuildError(f"{sd.name}: not a valid PNG")
     w, h = size
     span = 8 * scale
-    inside = [c for c in crops if 0 <= c[0] and 0 <= c[1] and c[0] + span <= w and c[1] + span <= h]
+    inside = [c for c in crops if c[0] >= 0 and c[1] >= 0 and c[0] + span <= w and c[1] + span <= h]
     if len(inside) != len(crops):
         print(f"warning: {sd.name}: {len(crops) - len(inside)} crop(s) fall outside the {w}x{h} image — dropped")
     return inside
@@ -956,7 +958,7 @@ def cmd_build(args) -> int:
     existing_audio = folder / "audio" / "hires.txt"
     seed = audio_refs
     if existing_audio.exists():
-        seed = [l for l in existing_audio.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+        seed = [ln for ln in existing_audio.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
     if system is not None and system != "nes":
         print(f"info: audio manifest skipped — OGG replacement is NES-only (got <system>{system})")
     audio_manifest = _build_audio_manifest(folder, system, seed)
@@ -1010,7 +1012,7 @@ def _no_intro_sha1(rom: Path) -> str:
             end = declared
     elif ext in {".sfc", ".smc", ".swc", ".fig", ".bs", ".st"} and len(data) % 1024 == 512:
         offset = 512
-    return hashlib.sha1(data[offset:end]).hexdigest().upper()
+    return hashlib.sha1(data[offset:end]).hexdigest().upper()  # noqa: S324 - No-Intro identity hash is SHA-1 by contract (ADR-0003/ADR-0039)
 
 
 def _system_for(rom: Path) -> str:
@@ -1067,28 +1069,34 @@ def cmd_pack(args) -> int:
     pack_json.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
     out = Path(args.out).resolve() if args.out else folder.with_name(f"{body['name']}-{body['version']}.zip")
+    # Paths only — each member is streamed from disk into the zip below, so a
+    # large pack is never held in RAM as a whole.
     files = {}
     for f in sorted(p for p in folder.rglob("*") if p.is_file() and p.name != "pack.json"):
         if out == f:
             continue  # --out inside the folder must not embed a prior zip
-        files[f.relative_to(folder).as_posix()] = f.read_bytes()
+        files[f.relative_to(folder).as_posix()] = f
     # pack.json first at the root; everything else lexical (deterministic zip).
-    ordered = {"pack.json": (json.dumps(body, indent=2) + "\n").encode("utf-8")}
-    ordered.update(files)
+    pack_json_bytes = (json.dumps(body, indent=2) + "\n").encode("utf-8")
+
+    def _member(name):
+        info = zipfile.ZipInfo(filename=name, date_time=FIXED_DATE_TIME)
+        info.compress_type = zipfile.ZIP_STORED
+        info.external_attr = 0o644 << 16
+        return info
 
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         with zipfile.ZipFile(out, "w") as zf:
-            for name, data in ordered.items():
-                info = zipfile.ZipInfo(filename=name, date_time=FIXED_DATE_TIME)
-                info.compress_type = zipfile.ZIP_STORED
-                info.external_attr = 0o644 << 16
-                zf.writestr(info, data)
+            zf.writestr(_member("pack.json"), pack_json_bytes)
+            for name, path in files.items():
+                with path.open("rb") as src, zf.open(_member(name), "w") as dst:
+                    shutil.copyfileobj(src, dst, 1 << 20)
     except (UnicodeEncodeError, UnicodeDecodeError) as e:
         print(f"error: cannot zip the folder — non-UTF-8 file name: {e}", file=sys.stderr)
         return 1
-    digest = hashlib.sha256(out.read_bytes()).hexdigest()
-    print(f"packed {out} ({len(ordered)} entries, sha256 {digest})")
+    digest = sha256_file(out)
+    print(f"packed {out} ({len(files) + 1} entries, sha256 {digest})")
 
     rc = _run_lint(out, quiet=args.quiet)
     if rc != 0:

@@ -332,7 +332,7 @@ def main(argv=None):
     notes = []
     # The checkpoints are frame numbers read off this exact ROM; against a
     # different build of the suite they would point at different screens.
-    actual_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
+    actual_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()  # noqa: S324 - No-Intro identity hash is SHA-1 by contract (ADR-0003/ADR-0039)
     if actual_sha1 != SUITE_FILE_SHA1:
         notes.append(f"WARNING: {rom.name} is sha1 {actual_sha1}, not the {SUITE_FILE_SHA1} the "
                      f"checkpoints were read from - the frame numbers may land on other screens")

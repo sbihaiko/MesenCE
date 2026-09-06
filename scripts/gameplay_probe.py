@@ -25,7 +25,6 @@ Usage: scripts/gameplay_probe.py <pack-or-library> [--json]
 import json
 import os
 import sys
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Clauses C and D measure pixels in the captured screens; that half lives in
@@ -83,14 +82,13 @@ def evaluate(sheets, screen_dir):
     structure, misc = metrics["tileStructure"], metrics["miscShare"]
     churn, reuse = metrics["everChanged"], metrics["reuse"]
     if structure is not None and structure < MIN_TILE_STRUCTURE:
-        reasons.append("no repeating tile structure (%.2f < %.2f)" % (structure, MIN_TILE_STRUCTURE))
+        reasons.append(f"no repeating tile structure ({structure:.2f} < {MIN_TILE_STRUCTURE:.2f})")
     if misc is not None and misc >= MAX_MISC_SHARE:
         reasons.append("%.0f%% of the vocabulary is off-grid noise" % (misc * 100))
     if churn is not None and churn < MIN_EVER_CHANGED:
-        reasons.append("%d screens, only %.0f%% of the screen ever changes"
-                       % (metrics["screens"], churn * 100))
+        reasons.append(f"{int(metrics['screens'])} screens, only {churn * 100:.0f}% of the screen ever changes")
     if reuse is not None and reuse < MIN_TILE_REUSE:
-        reasons.append("screens are one-off bitmaps (tile reuse %.2f)" % reuse)
+        reasons.append(f"screens are one-off bitmaps (tile reuse {reuse:.2f})")
     if reasons:
         return {"verdict": "menu-only", "reasons": reasons, "metrics": metrics}
     if structure is None and reuse is None:
@@ -106,7 +104,7 @@ def probe(sheet_dir):
         if not name.endswith(".json"):
             continue
         try:
-            with open(os.path.join(sheet_dir, name)) as handle:
+            with open(os.path.join(sheet_dir, name), encoding="utf-8") as handle:
                 doc = json.load(handle)
         except (OSError, ValueError):
             continue
@@ -122,7 +120,7 @@ def main():
     import sheet_report
     dirs = sheet_report.find_sheet_dirs(sys.argv[1])
     if not dirs:
-        print("no sheets/ folder with sidecar JSON under %s" % sys.argv[1], file=sys.stderr)
+        print(f"no sheets/ folder with sidecar JSON under {sys.argv[1]}", file=sys.stderr)
         return 1
     results = [dict(probe(d), path=d) for d in dirs]
     if "--json" in sys.argv:
@@ -132,7 +130,7 @@ def main():
         for result in results:
             # Tab-separated: a pack path can contain " - " (The Flintstones
             # does), so callers need a separator the data cannot forge.
-            print("%s\t%s\t%s" % (result["verdict"], os.path.relpath(result["path"]),
+            print("{}\t{}\t{}".format(result["verdict"], os.path.relpath(result["path"]),
                                    "; ".join(result["reasons"])))
     return 0
 

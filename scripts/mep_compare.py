@@ -52,7 +52,7 @@ class Pack:
 
     def _parse(self):
         text = (self.folder / "hires.txt").read_text(errors="replace")
-        lines = [l.strip() for l in text.splitlines()]
+        lines = [ln.strip() for ln in text.splitlines()]
         # Header first: nothing in the format orders <system> before the first
         # <tile>, and the tile-data width filter below depends on it.
         for line in lines:
@@ -247,7 +247,7 @@ def montage(rows, cell, labels, path: Path):
     out = Image.new("RGB", (w, h), (24, 24, 28))
     from PIL import ImageDraw
     d = ImageDraw.Draw(out)
-    for r, (imgs, label) in enumerate(zip(rows, labels)):
+    for r, (imgs, label) in enumerate(zip(rows, labels, strict=True)):
         d.text((4, r * (cell + pad) + cell // 2 - 5), label, fill=(200, 200, 200))
         for c, im in enumerate(imgs):
             bg = Image.new("RGBA", im.size, (0, 0, 0, 255))
@@ -274,7 +274,7 @@ def main(argv):
         if a == "--samples":
             samples = int(argv[i + 1])
     out.mkdir(parents=True, exist_ok=True)
-    rnd = random.Random(7)
+    rnd = random.Random(7)  # noqa: S311 - deterministic sampling for a visual diff, not security
 
     a_keys, r_keys = set(auto.tiles), set(artist.tiles)
     common = sorted(a_keys & r_keys)

@@ -66,7 +66,8 @@ CGB_OBJ_PAL = bytes([0x00, 0x00, 0x1F, 0x7C, 0xFF, 0x03, 0xE0, 0x7F])  # (color 
 
 
 def gb_program(cgb):
-    ldh = lambda reg, val: bytes([0x3E, val, 0xE0, reg])  # ld a,v ; ldh (reg),a
+    def ldh(reg, val):
+        return bytes([0x3E, val, 0xE0, reg])  # ld a,v ; ldh (reg),a
     code = [
         bytes([0xF3]),                       # di
         ("label", "wait_vbl"),

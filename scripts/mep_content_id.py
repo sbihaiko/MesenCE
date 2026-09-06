@@ -68,24 +68,56 @@ def _entry_payload(rel_path: str, data: bytes) -> bytes:
     return data
 
 
+CHUNK = 1 << 20
+
+
+def digest_stream(handle, chunk_size: int = CHUNK) -> bytes:
+    """32-byte SHA-256 of a binary file object, read in `chunk_size` blocks."""
+    h = hashlib.sha256()
+    for chunk in iter(lambda: handle.read(chunk_size), b""):
+        h.update(chunk)
+    return h.digest()
+
+
+def _entry_digest(rel_path: str, value) -> bytes:
+    """The 32-byte payload digest for one manifest entry. `value` is one of:
+    the entry's bytes; a zero-arg callable returning them (pack.json needs
+    the bytes for canonicalisation, everything else is hashed as-is); or,
+    for non-pack.json entries, a zero-arg callable returning a binary file
+    object -- hashed in CHUNK blocks so the pack is never held in RAM."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return hashlib.sha256(_entry_payload(rel_path, bytes(value))).digest()
+    produced = value()
+    if isinstance(produced, (bytes, bytearray, memoryview)):
+        return hashlib.sha256(_entry_payload(rel_path, bytes(produced))).digest()
+    with produced as handle:
+        if rel_path == "pack.json" or rel_path.endswith("/pack.json"):
+            return hashlib.sha256(_canonical_pack_json(handle.read())).digest()
+        return digest_stream(handle)
+
+
 def compute_tree_content_id(entries) -> str:
     """Hex SHA-256 of the canonical manifest of the resolved pack root.
 
-    `entries`: iterable of `(rel_path, data_bytes)` for the discovered root's
-    files. Rel paths use '/' separators, relative to the root. Paths must be
-    shorter than 256 bytes (the manifest stores the length in one byte).
+    `entries`: iterable of `(rel_path, value)` for the discovered root's
+    files, where `value` is the entry's bytes, or a zero-arg callable that
+    returns either the bytes or an open binary file object (see
+    `_entry_digest`) -- the callable form lets a caller hash a large zip
+    member by member without materialising the whole pack. Rel paths use '/'
+    separators, relative to the root. Paths must be shorter than 256 bytes
+    (the manifest stores the length in one byte). The manifest bytes are
+    identical whichever form is used.
     """
     manifest = bytearray()
-    for rel_path, data in sorted(entries, key=lambda e: e[0]):
+    for rel_path, value in sorted(entries, key=lambda e: e[0]):
         if _is_excluded(rel_path):
             continue
-        payload = _entry_payload(rel_path, data)
         path_bytes = rel_path.encode("utf-8")
         if len(path_bytes) >= 256:
             raise ValueError(f"content_id path too long: {rel_path}")
         manifest += path_bytes
         manifest.append(len(path_bytes))
-        manifest += hashlib.sha256(payload).digest()
+        manifest += _entry_digest(rel_path, value)
     return hashlib.sha256(bytes(manifest)).hexdigest()
 
 
@@ -96,6 +128,5 @@ def compute_recipe_content_id(primary_tree_hash: str, recipe_hash: str, dep_hash
     need the dep bytes). The dep digests are emitted sorted by dep id, one per
     '\\n' line after the primary/recipe pair."""
     lines = [primary_tree_hash, recipe_hash]
-    for dep_id in sorted(dep_hashes):
-        lines.append(dep_hashes[dep_id])
+    lines.extend(dep_hashes[dep_id] for dep_id in sorted(dep_hashes))
     return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()

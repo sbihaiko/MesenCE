@@ -74,6 +74,7 @@ Exit codes: 0 = wrote a repaint, 1 = nothing to do or a fatal error,
 """
 
 import argparse
+import contextlib
 import datetime
 import json
 import os
@@ -561,10 +562,10 @@ class EsrganBackend(RepaintBackend):
             try:
                 proc = subprocess.run(cmd, capture_output=True, text=True,
                                       timeout=getattr(self.options, "backend_timeout", 600))
-            except FileNotFoundError:
-                raise RepaintError(ESRGAN_MISSING)
-            except subprocess.TimeoutExpired:
-                raise RepaintError(f"'{binary}' did not finish within the backend timeout")
+            except FileNotFoundError as err:
+                raise RepaintError(ESRGAN_MISSING) from err
+            except subprocess.TimeoutExpired as err:
+                raise RepaintError(f"'{binary}' did not finish within the backend timeout") from err
             if proc.returncode != 0:
                 raise RepaintError(
                     f"'{binary}' exited {proc.returncode}: "
@@ -684,7 +685,7 @@ class DiffusionBackend(RepaintBackend):
         except RepaintError as err:
             raise RepaintError(
                 f"no diffusion runtime answered at {self.endpoint} ({err}).\n"
-                + self._missing_message())
+                + self._missing_message()) from err
 
     def _missing_message(self):
         return DIFFUSION_MISSING_ENDPOINT.format(endpoint=self.endpoint)
@@ -700,29 +701,29 @@ class DiffusionBackend(RepaintBackend):
 
     def _get(self, path: str, timeout=None) -> bytes:
         try:
-            with urllib.request.urlopen(self._url(path), timeout=timeout or self._timeout()) as resp:
+            with urllib.request.urlopen(self._url(path), timeout=timeout or self._timeout()) as resp:  # noqa: S310 - loopback-only runtime endpoint
                 return resp.read()
         except urllib.error.HTTPError as err:
-            raise RepaintError(f"GET {path} -> HTTP {err.code}")
+            raise RepaintError(f"GET {path} -> HTTP {err.code}") from err
         except (urllib.error.URLError, OSError) as err:
-            raise RepaintError(f"GET {path} -> {err}")
+            raise RepaintError(f"GET {path} -> {err}") from err
 
     def _post_json(self, path: str, payload: dict) -> dict:
         body = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(self._url(path), data=body,
+        request = urllib.request.Request(self._url(path), data=body,  # noqa: S310 - loopback-only runtime endpoint
                                          headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout()) as resp:
+            with urllib.request.urlopen(request, timeout=self._timeout()) as resp:  # noqa: S310 - loopback-only
                 raw = resp.read()
         except urllib.error.HTTPError as err:
             detail = (err.read() or b"")[:400].decode("utf-8", "replace")
-            raise RepaintError(f"POST {path} -> HTTP {err.code}: {detail}")
+            raise RepaintError(f"POST {path} -> HTTP {err.code}: {detail}") from err
         except (urllib.error.URLError, OSError) as err:
-            raise RepaintError(f"POST {path} -> {err}")
+            raise RepaintError(f"POST {path} -> {err}") from err
         try:
             doc = json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as err:
-            raise RepaintError(f"POST {path} -> answer is not JSON ({err})")
+            raise RepaintError(f"POST {path} -> answer is not JSON ({err})") from err
         if not isinstance(doc, dict):
             raise RepaintError(f"POST {path} -> answer is not a JSON object")
         return doc
@@ -733,21 +734,21 @@ class DiffusionBackend(RepaintBackend):
         boundary = "----sheet-repaint-" + uuid.uuid4().hex
         parts = [
             f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; "
-            f"filename=\"{name}\"\r\nContent-Type: image/png\r\n\r\n".encode("utf-8"),
+            f"filename=\"{name}\"\r\nContent-Type: image/png\r\n\r\n".encode(),
             png_bytes,
             f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\n"
-            f"true\r\n--{boundary}--\r\n".encode("utf-8"),
+            f"true\r\n--{boundary}--\r\n".encode(),
         ]
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310 - loopback-only runtime endpoint
             self._url("/upload/image"), data=b"".join(parts),
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout()) as resp:
+            with urllib.request.urlopen(request, timeout=self._timeout()) as resp:  # noqa: S310 - loopback-only
                 doc = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as err:
-            raise RepaintError(f"uploading the control image -> HTTP {err.code}")
+            raise RepaintError(f"uploading the control image -> HTTP {err.code}") from err
         except (urllib.error.URLError, OSError, ValueError, UnicodeDecodeError) as err:
-            raise RepaintError(f"uploading the control image -> {err}")
+            raise RepaintError(f"uploading the control image -> {err}") from err
         uploaded = doc.get("name") if isinstance(doc, dict) else None
         if not uploaded:
             raise RepaintError(f"the runtime accepted the control image but named none: {doc}")
@@ -781,7 +782,7 @@ class DiffusionBackend(RepaintBackend):
         except ValueError as err:
             raise RepaintError(
                 f"--diffusion-workflow {self.workflow_path} is not valid JSON after "
-                f"placeholder substitution ({err})")
+                f"placeholder substitution ({err})") from err
         if not isinstance(graph, dict) or not graph:
             raise RepaintError(
                 f"--diffusion-workflow {self.workflow_path} is not a ComfyUI API-format "
@@ -795,7 +796,7 @@ class DiffusionBackend(RepaintBackend):
             try:
                 history = json.loads(raw.decode("utf-8"))
             except (ValueError, UnicodeDecodeError) as err:
-                raise RepaintError(f"the runtime's history is not JSON ({err})")
+                raise RepaintError(f"the runtime's history is not JSON ({err})") from err
             entry = history.get(prompt_id) if isinstance(history, dict) else None
             if isinstance(entry, dict) and entry.get("outputs"):
                 status = (entry.get("status") or {})
@@ -838,11 +839,11 @@ class DiffusionBackend(RepaintBackend):
         cmd = shlex.split(runner) + [str(control), str(out), str(request.scale)]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._timeout())
-        except FileNotFoundError:
-            raise RepaintError(f"--diffusion-runner {runner!r}: command not found")
-        except subprocess.TimeoutExpired:
+        except FileNotFoundError as err:
+            raise RepaintError(f"--diffusion-runner {runner!r}: command not found") from err
+        except subprocess.TimeoutExpired as err:
             raise RepaintError(f"--diffusion-runner {runner!r} did not finish within "
-                               f"{self._timeout()}s")
+                               f"{self._timeout()}s") from err
         if proc.returncode != 0:
             raise RepaintError(f"--diffusion-runner {runner!r} exited {proc.returncode}: "
                                f"{(proc.stderr or proc.stdout or '').strip()[:400]}")
@@ -1165,7 +1166,7 @@ def _apply_variants(sheet: Sheet, generated: Image, control: Image, regions, ver
         if key is None:
             continue
         groups.setdefault(key, []).append((region, cell))
-    for key, members in groups.items():
+    for members in groups.values():
         if len(members) < 2:
             continue
         palettes = {palette_key(c) for _r, c in members}
@@ -1261,10 +1262,8 @@ def parse_hires(path: Path) -> HiresManifest:
         if not line or line.startswith("//"):
             continue
         if line.startswith("<scale>"):
-            try:
+            with contextlib.suppress(ValueError):
                 doc.scale = max(1, int(line[len("<scale>"):].strip()))
-            except ValueError:
-                pass
             continue
         if any(line.startswith(f"<{tag}>") for tag in HIRES_HEADER_TAGS):
             doc.header.append(line)

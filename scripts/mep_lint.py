@@ -130,6 +130,24 @@ HDPACK_BOOL = HDPACK_BOOL_TRUE | HDPACK_BOOL_FALSE
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 HEX40 = re.compile(r"^[0-9A-Fa-f]{40}$")
 
+# Largest single member the linter will decompress (300 MB — the same cap the
+# workflow puts on the whole download). A zip's central directory is
+# submitter-controlled data (ADR-0006 trust model, ADR-0138 §41): a tiny
+# archive can declare a multi-GB member and a naive `zip.read()` would try to
+# inflate it into RAM. Exceeding this is a lint error (verdict `invalid`),
+# not a crash.
+MAX_MEMBER_BYTES = 314572800
+
+
+class MemberTooLargeError(ValueError):
+    """A member's declared uncompressed size exceeds MAX_MEMBER_BYTES.
+    Raised by Source.read; the lint entry point turns it into an error."""
+
+    def __init__(self, rel: str, size: int):
+        super().__init__(f"member {rel!r} declares {size} uncompressed bytes, over the {MAX_MEMBER_BYTES}-byte cap")
+        self.rel = rel
+        self.size = size
+
 
 class Source:
     """Uniformizes folder and zip: listing, byte and text reading. Also
@@ -168,10 +186,30 @@ class Source:
             self._lower = {n.lower(): n for n in self.names}
         return self._lower.get(rel.lower())
 
+    def member_size(self, rel: str) -> int:
+        """Declared uncompressed size of `rel` (zip central directory or stat)."""
+        if self.zip:
+            return self.zip.getinfo(rel).file_size
+        return (self.path / rel).stat().st_size
+
+    def check_member_size(self, rel: str) -> None:
+        size = self.member_size(rel)
+        if size > MAX_MEMBER_BYTES:
+            raise MemberTooLargeError(rel, size)
+
     def read(self, rel: str) -> bytes:
+        self.check_member_size(rel)
         if self.zip:
             return self.zip.read(rel)
         return (self.path / rel).read_bytes()
+
+    def open(self, rel: str):
+        """Binary file object for `rel` (caller closes); streams a zip member
+        instead of inflating it whole. Same size cap as read()."""
+        self.check_member_size(rel)
+        if self.zip:
+            return self.zip.open(rel)
+        return (self.path / rel).open("rb")
 
     def text(self, rel: str) -> str:
         return self.read(rel).decode("utf-8", errors="replace")
@@ -272,9 +310,9 @@ def lint_border_json(bj, where, rep):
             elif not _border_nonneg_int(vp[key]):
                 rep.error(where, f"'viewport.{key}' must be an integer >= 0")
                 vp_ok = False
-        if vp_ok and _border_positive_int(bj.get("width")) and _border_positive_int(bj.get("height")):
-            if vp["x"] + vp["width"] > bj["width"] or vp["y"] + vp["height"] > bj["height"]:
-                rep.warning(where, "'viewport' exceeds the canvas ('width' x 'height'); it will be clamped")
+        if (vp_ok and _border_positive_int(bj.get("width")) and _border_positive_int(bj.get("height"))
+                and (vp["x"] + vp["width"] > bj["width"] or vp["y"] + vp["height"] > bj["height"])):
+            rep.warning(where, "'viewport' exceeds the canvas ('width' x 'height'); it will be clamped")
     if "scale_mode" in bj and bj["scale_mode"] not in ("fit", "stretch"):
         rep.error(where, "'scale_mode' must be \"fit\" or \"stretch\"")
     if "underlay" in bj and not isinstance(bj["underlay"], bool):
@@ -554,6 +592,8 @@ def find_nested_game_zips(src: Source):
             continue  # first (sorted) valid zip for this subfolder already won
         try:
             inner = Source.from_zip_bytes(src.read(normalized), label=f"{src.path}!{normalized}")
+        except MemberTooLargeError:
+            raise  # over the cap is a verdict, not "not a candidate"
         except (zipfile.BadZipFile, OSError, ValueError):
             continue  # not a real zip — not a candidate
         if not _root_is_pack(inner):
@@ -686,7 +726,9 @@ def compute_content_id(src: Source) -> str:
             if not rel.startswith(f"{prefix}/"):
                 continue
             rel = rel[len(prefix) + 1:]
-        entries.append((rel, src.read(name)))
+        # A callable per entry: mep_content_id hashes each member from its
+        # stream in 1 MiB chunks, so the pack is never held in RAM at once.
+        entries.append((rel, lambda n=name: src.open(n)))
     return mep_content_id.compute_tree_content_id(entries)
 
 
@@ -1038,7 +1080,8 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             if not m:
                 rep.error(where, "<patch> needs file,sha1")
                 continue
-            patch_file, patch_sha1 = m.group(1).strip(), m.group(2)
+            # The sha1 is matched by the emulator against the loaded ROM at run time (ADR-0044); the linter has no ROM, so it is not verified here.
+            patch_file, _ = m.group(1).strip(), m.group(2)
             rep.wired_patches.add((folder + patch_file).lower())
             if not src.exists(folder + patch_file):
                 real = src.exists_icase(folder + patch_file)
@@ -1069,8 +1112,6 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     if dups:
         sample = ", ".join(f"{n}(={first})" for n, first in dups[:5])
         rep.warning(rel, f"{len(dups)} duplicate <tile>(s) (same key/palette/conditions); only the first of each is used — e.g. lines {sample}")
-    for name, line in conds.items():
-        pass
     rep.info(rel, f"NES hires.txt: ver {version}, scale {scale}, {len(imgs)} images, {len(tile_keys)} tiles, {len(conds)} conditions")
 
 
@@ -1291,109 +1332,122 @@ def main(argv):
 
     rep = Report(errata)
 
-    if list_games:
-        # ADR-0143: enumerate the distinct game pack roots so the pipeline
-        # can split a multi-game container into one pack and one issue per
-        # game. A single top-level .zip wraps one pack one level deeper —
-        # mirror the issue #19 last resort before concluding no game exists.
-        roots = discover_game_roots(src, rom_name)
-        if not roots:
-            nested_name = find_top_level_nested_zip(src.names)
-            if nested_name:
-                try:
-                    nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
-                except zipfile.BadZipFile as exc:
-                    rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
-                else:
-                    roots = discover_game_roots(nested_src, rom_name)
-        for prefix, game in roots:
-            print(f"{prefix}\t{game or ''}")
-        return 0
-
-    if root_prefix is not None:
-        # ADR-0143 split pass: lint exactly the pack at <root_prefix> (no
-        # structural fallback — the pipeline already resolved the root).
-        sections = discover_scoped(src, rep, root_prefix)
-    else:
-        sections = discover_sections(src, rep, rom_name)
-
-        if not sections:
-            # Issue #19: absolute last resort, tried only once every convention
-            # and both ADR-0120 fallbacks above already found nothing — the pack
-            # may be wrapped one level deeper inside a single top-level .zip
-            # (e.g. a Google Drive export bundling the real pack.zip alongside
-            # unrelated bonus folders). Unwraps in memory and re-runs the exact
-            # same discovery against the nested zip's own content.
-            nested_name = find_top_level_nested_zip(src.names)
-            if nested_name:
-                try:
-                    nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
-                except zipfile.BadZipFile as exc:
-                    rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
-                else:
-                    rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
-                    src = nested_src
-                    sections = discover_sections(src, rep, rom_name)
-
-    if content_id_only:
-        if not sections:
-            return 1
-        try:
-            print(compute_content_id(src))
-            return 0
-        except ValueError as exc:
-            print(f"error: content_id not computed: {exc}", file=sys.stderr)
-            return 2
-
-    if not sections:
-        rep.error(".", "no section found (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")
-
-    seen = set()
-    for name, rel in sections.items():
-        base = name.split("/")[-1]
-        if base == "synth":
-            if rel not in seen and src.exists(rel):
-                seen.add(rel)
-                lint_esp(src, rel, rep)
-        elif base == "border":
-            border_png = f"{rel}/border.png" if rel else "border.png"
-            if border_png not in seen and src.exists(border_png):
-                seen.add(border_png)
-                try:
-                    data = src.read(border_png)
-                    size = png_size(data)
-                    if size is None:
-                        rep.error(border_png, "invalid or corrupt PNG file")
+    def _lint_target():
+        nonlocal src
+        if list_games:
+            # ADR-0143: enumerate the distinct game pack roots so the pipeline
+            # can split a multi-game container into one pack and one issue per
+            # game. A single top-level .zip wraps one pack one level deeper —
+            # mirror the issue #19 last resort before concluding no game exists.
+            roots = discover_game_roots(src, rom_name)
+            if not roots:
+                nested_name = find_top_level_nested_zip(src.names)
+                if nested_name:
+                    try:
+                        nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
+                    except zipfile.BadZipFile as exc:
+                        rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
                     else:
-                        w, h = size
-                        rep.info(border_png, f"border frame PNG {w}x{h}")
-                except Exception as exc:  # noqa: BLE001
-                    rep.error(border_png, f"cannot read PNG: {exc}")
-            border_json = f"{rel}/border.json" if rel else "border.json"
-            if src.exists(border_json):
-                try:
-                    bj = json.loads(src.text(border_json))
-                except Exception as exc:  # noqa: BLE001
-                    rep.error(border_json, f"invalid JSON: {exc}")
-                else:
-                    lint_border_json(bj, border_json, rep)
+                        roots = discover_game_roots(nested_src, rom_name)
+            for prefix, game in roots:
+                print(f"{prefix}\t{game or ''}")
+            return 0
+
+        if root_prefix is not None:
+            # ADR-0143 split pass: lint exactly the pack at <root_prefix> (no
+            # structural fallback — the pipeline already resolved the root).
+            sections = discover_scoped(src, rep, root_prefix)
         else:
-            hires = f"{rel}/hires.txt" if rel else "hires.txt"
-            if hires not in seen and src.exists(hires):
-                seen.add(hires)
-                lint_hires(src, hires, rep)
+            sections = discover_sections(src, rep, rom_name)
 
-    scan_bundled_patches(src, rep)
+            if not sections:
+                # Issue #19: absolute last resort, tried only once every convention
+                # and both ADR-0120 fallbacks above already found nothing — the pack
+                # may be wrapped one level deeper inside a single top-level .zip
+                # (e.g. a Google Drive export bundling the real pack.zip alongside
+                # unrelated bonus folders). Unwraps in memory and re-runs the exact
+                # same discovery against the nested zip's own content.
+                nested_name = find_top_level_nested_zip(src.names)
+                if nested_name:
+                    try:
+                        nested_src = Source.from_zip_bytes(src.read(nested_name), label=f"{target}!{nested_name}")
+                    except zipfile.BadZipFile as exc:
+                        rep.info(nested_name, f"single top-level .zip entry found but could not be opened as a zip ({exc}) — skipping nested-zip fallback")
+                    else:
+                        rep.info(nested_name, "nested-zip fallback (issue #19): re-running discovery inside this single top-level .zip entry")
+                        src = nested_src
+                        sections = discover_sections(src, rep, rom_name)
 
-    if errata is not None:
-        rep.info("errata", f"{errata.path.name}: {len(errata.entries)} known-missing declaration(s) applied (ADR-0152)")
-        for manifest, tag, target_name in errata.unused:
-            #A declaration that matched nothing does not describe this artifact.
-            #Left as a warning it would rot into a blanket pardon nobody rereads,
-            #so it fails the pack that carries it.
-            rep.error("errata", f"{errata.path.name} declares <{tag}> {target_name} in {manifest} "
-                                f"as known-missing, but no such unresolvable target was found — "
-                                f"the declaration does not describe this artifact")
+        if content_id_only:
+            if not sections:
+                return 1
+            try:
+                print(compute_content_id(src))
+                return 0
+            except ValueError as exc:
+                print(f"error: content_id not computed: {exc}", file=sys.stderr)
+                return 2
+
+        if not sections:
+            rep.error(".", "no section found (textures/hires.txt, audio/hires.txt, synth/preset.cfg, auto/...)")
+
+        seen = set()
+        for name, rel in sections.items():
+            base = name.split("/")[-1]
+            if base == "synth":
+                if rel not in seen and src.exists(rel):
+                    seen.add(rel)
+                    lint_esp(src, rel, rep)
+            elif base == "border":
+                border_png = f"{rel}/border.png" if rel else "border.png"
+                if border_png not in seen and src.exists(border_png):
+                    seen.add(border_png)
+                    try:
+                        data = src.read(border_png)
+                        size = png_size(data)
+                        if size is None:
+                            rep.error(border_png, "invalid or corrupt PNG file")
+                        else:
+                            w, h = size
+                            rep.info(border_png, f"border frame PNG {w}x{h}")
+                    except Exception as exc:  # noqa: BLE001
+                        rep.error(border_png, f"cannot read PNG: {exc}")
+                border_json = f"{rel}/border.json" if rel else "border.json"
+                if src.exists(border_json):
+                    try:
+                        bj = json.loads(src.text(border_json))
+                    except Exception as exc:  # noqa: BLE001
+                        rep.error(border_json, f"invalid JSON: {exc}")
+                    else:
+                        lint_border_json(bj, border_json, rep)
+            else:
+                hires = f"{rel}/hires.txt" if rel else "hires.txt"
+                if hires not in seen and src.exists(hires):
+                    seen.add(hires)
+                    lint_hires(src, hires, rep)
+
+        scan_bundled_patches(src, rep)
+
+        if errata is not None:
+            rep.info("errata", f"{errata.path.name}: {len(errata.entries)} known-missing declaration(s) applied (ADR-0152)")
+            for manifest, tag, target_name in errata.unused:
+                #A declaration that matched nothing does not describe this artifact.
+                #Left as a warning it would rot into a blanket pardon nobody rereads,
+                #so it fails the pack that carries it.
+                rep.error("errata", f"{errata.path.name} declares <{tag}> {target_name} in {manifest} "
+                                    f"as known-missing, but no such unresolvable target was found — "
+                                    f"the declaration does not describe this artifact")
+        return None
+
+    try:
+        early_exit = _lint_target()
+    except MemberTooLargeError as exc:
+        # Submitter-controlled central directory (ADR-0006/ADR-0138 §41):
+        # report and fail the pack instead of inflating the member.
+        rep.error(exc.rel, str(exc))
+    else:
+        if early_exit is not None:
+            return early_exit
 
     for level, where, msg in rep.items:
         # The bundled-patch lines are the ADR-0144 signal the classifier

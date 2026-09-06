@@ -8,11 +8,18 @@ find_top_level_nested_zip, safe_rel, parse_line) — never a parallel
 implementation (ADR-0138).
 
 Usage:
-  python3 scripts/mep_recipe.py validate <recipe.json>
+  python3 scripts/mep_recipe.py validate <recipe.json> [--require-allowlisted-hosts]
   python3 scripts/mep_recipe.py dry-run <recipe.json> --primary PATH
-      [--dep ID=PATH ...] --out DIR [--rom-name NAME]
+      [--dep ID=PATH ...] --out DIR [--rom-name NAME] [--require-allowlisted-hosts]
   python3 scripts/mep_recipe.py apply <recipe.json> --primary PATH
-      [--dep ID=PATH ...] --out DIR [--rom-name NAME]
+      [--dep ID=PATH ...] --out DIR [--rom-name NAME] [--require-allowlisted-hosts]
+
+--require-allowlisted-hosts (opt-in) additionally enforces the community-pack
+host allow-list (scripts/pack_host_allowlist.json, ADR-0138 §41) on
+sources.primary.url and every dep hints[] URL — a recipe naming a host the
+client will never download from is rejected at validation, not at install
+time. The CI recipe gate passes it; it is off by default so the frozen
+goldens under docs/specs/golden/ (example.org placeholders) keep validating.
   python3 scripts/mep_recipe.py assemble-sources --issue-body PATH
       --pack-url URL --pack-sha256 HEX [--classify PATH] [--out PATH]
 
@@ -37,31 +44,32 @@ cycle in either direction (§24).
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import sys
+import urllib.parse
 import zipfile
 from pathlib import Path
 
+import fetch_pack  # host allow-list (match_host/load_allowlist) — the one enforcement (ADR-0138 §41)
 import mep_lint
 from mep_recipe_assemble import assemble_sources, cmd_assemble_sources  # noqa: F401  (facade)
-from mep_recipe_common import RECIPE_VERSION, SHA256_HEX, RecipeError, find_fenced_block  # noqa: F401  (facade)
+from mep_recipe_common import (  # noqa: F401  (facade)
+    RECIPE_VERSION,
+    SCRIPTS_DIR,
+    SHA256_HEX,
+    RecipeError,
+    find_fenced_block,
+    sha256_file,
+)
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SOURCE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 KNOWN_OPS = ("copy", "glob", "rename", "rewrite-paths")
 REWRITE_TAGS = ("bgm", "sfx", "img", "background", "patch")
 PATCH_SUFFIXES = (".ips", ".bps")
+DEFAULT_ALLOWLIST = SCRIPTS_DIR / "pack_host_allowlist.json"
 FENCE = "mep-recipe"  # fence label; opener/closer matched by length via mep_recipe_common.find_fenced_block (ADR-0138 §33)
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def load_recipe(path: Path) -> dict:
@@ -103,12 +111,32 @@ def _known_source_ids(recipe: dict) -> set:
     return ids
 
 
-def validate_recipe(recipe: dict) -> list:
-    """Returns a list of error strings; empty means the recipe is valid."""
+def validate_recipe(recipe: dict, require_allowlisted_hosts: bool = False, hosts=None) -> list:
+    """Returns a list of error strings; empty means the recipe is valid.
+
+    `require_allowlisted_hosts` (opt-in; CLI `--require-allowlisted-hosts`):
+    additionally require `sources.primary.url` and every dep `hints[]` URL to
+    match the community-pack host allow-list (ADR-0138 §41 — the client
+    downloads recipe sources through the same allow-list as CI, so a recipe
+    naming a host outside it can never be installed). Off by default so the
+    frozen goldens under docs/specs/golden/ (example.org placeholders) keep
+    validating; the CI recipe gate passes the flag. `hosts` overrides the
+    allow-list (default: scripts/pack_host_allowlist.json)."""
     errors = []
+    allowed_hosts = None
+    if require_allowlisted_hosts:
+        allowed_hosts = hosts if hosts is not None else fetch_pack.load_allowlist(str(DEFAULT_ALLOWLIST))
 
     def fail(msg):
         errors.append(msg)
+
+    def check_host(url, where):
+        if allowed_hosts is None or not isinstance(url, str):
+            return
+        if fetch_pack.match_host(url, allowed_hosts) is None:
+            host = urllib.parse.urlparse(url).hostname or url
+            fail(f"{where}: host {host!r} is not on the community-pack allow-list "
+                 f"(scripts/pack_host_allowlist.json, ADR-0138 §41): {url}")
 
     if recipe.get("recipe") != RECIPE_VERSION:
         fail(f"'recipe' must be the integer {RECIPE_VERSION}, got {recipe.get('recipe')!r}")
@@ -124,6 +152,8 @@ def validate_recipe(recipe: dict) -> list:
     url = primary.get("url")
     if not isinstance(url, str) or not url.startswith("https://"):
         fail("'sources.primary.url' must be an HTTPS URL")
+    else:
+        check_host(url, "sources.primary.url")
     if not isinstance(primary.get("sha256"), str) or not SHA256_HEX.match(primary.get("sha256") or ""):
         fail("'sources.primary.sha256' must be 64 hex digits")
 
@@ -155,6 +185,9 @@ def validate_recipe(recipe: dict) -> list:
         if "hints" in dep:
             if not isinstance(dep["hints"], list) or not all(isinstance(h, str) for h in dep["hints"]):
                 fail(f"{where}.hints must be an array of strings")
+            else:
+                for j, hint in enumerate(dep["hints"]):
+                    check_host(hint, f"{where}.hints[{j}]")
         if "user_supplied" in dep and not isinstance(dep["user_supplied"], bool):
             fail(f"{where}.user_supplied must be a boolean")
 
@@ -429,8 +462,9 @@ def _write_pack_json(recipe: dict, out: Path, include_patches: bool):
     (out / "pack.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
-def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str | None) -> None:
-    errors = validate_recipe(recipe)
+def run_recipe(recipe: dict, primary: Path, deps: dict, out: Path, rom_name: str | None,
+               require_allowlisted_hosts: bool = False) -> None:
+    errors = validate_recipe(recipe, require_allowlisted_hosts=require_allowlisted_hosts)
     if errors:
         raise RecipeError("\n".join(errors))
     if not primary.exists():
@@ -565,12 +599,17 @@ def _parse_kv_args(argv):
     out = None
     rom_name = None
     deps = {}
+    require_hosts = False
     rest = argv[2:]
     i = 0
     positional = []
     while i < len(rest):
         arg = rest[i]
-        if arg == "--primary" and i + 1 < len(rest):
+        if arg == "--require-allowlisted-hosts":
+            # Opt-in ADR-0138 §41 host gate (the CI recipe gate passes it).
+            require_hosts = True
+            i += 1
+        elif arg == "--primary" and i + 1 < len(rest):
             primary = Path(rest[i + 1])
             i += 2
         elif arg == "--out" and i + 1 < len(rest):
@@ -593,7 +632,7 @@ def _parse_kv_args(argv):
             i += 1
     if positional:
         recipe = Path(positional[0])
-    return command, recipe, primary, deps, out, rom_name
+    return command, recipe, primary, deps, out, rom_name, require_hosts
 
 
 def main(argv=None) -> int:
@@ -604,7 +643,7 @@ def main(argv=None) -> int:
     if argv[1] == "assemble-sources":
         return cmd_assemble_sources(argv[2:])
     try:
-        command, recipe_path, primary, deps, out, rom_name = _parse_kv_args(argv)
+        command, recipe_path, primary, deps, out, rom_name, require_hosts = _parse_kv_args(argv)
     except RecipeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -614,7 +653,7 @@ def main(argv=None) -> int:
     try:
         recipe = load_recipe(recipe_path)
         if command == "validate":
-            errors = validate_recipe(recipe)
+            errors = validate_recipe(recipe, require_allowlisted_hosts=require_hosts)
             if errors:
                 for item in errors:
                     print(f"error: {item}", file=sys.stderr)
@@ -623,7 +662,7 @@ def main(argv=None) -> int:
             return 0
         if primary is None or out is None:
             raise RecipeError(f"{command} requires --primary and --out")
-        run_recipe(recipe, primary, deps, out, rom_name)
+        run_recipe(recipe, primary, deps, out, rom_name, require_allowlisted_hosts=require_hosts)
         if command == "dry-run":
             rc = mep_lint.main(["mep_lint.py", str(out), *( [rom_name] if rom_name else [] ), "--quiet"])
             if rc != 0:

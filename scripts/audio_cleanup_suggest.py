@@ -14,8 +14,6 @@ trigger id), so an automated delete would risk removing a real track.
 Usage: python3 scripts/audio_cleanup_suggest.py <pack-folder>
 Exit codes mirror mep_lint: 0 = nothing obviously garbage, 1 = suggestions made.
 """
-import csv
-import io
 import json
 import sys
 from pathlib import Path

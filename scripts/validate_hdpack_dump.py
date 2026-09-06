@@ -113,17 +113,17 @@ def main():
         c555 = (((v & 0xF8) << 7) | ((v & 0xF800) >> 6) | ((v & 0xF80000) >> 19)) & 0x7FFF
         dmg_shades.append(rgb555_to_rgba(c555))
 
-    lines = [l.strip() for l in hires.read_text().splitlines() if l.strip() and not l.startswith("#")]
+    lines = [ln.strip() for ln in hires.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
     tags = dict()
     imgs = []
     tiles = []
-    for l in lines:
-        if l.startswith("<img>"):
-            imgs.append(l[5:])
-        elif l.startswith("<tile>"):
-            tiles.append(l[6:].split(","))
-        elif l.startswith("<"):
-            tags[l[1:l.index(">")]] = l[l.index(">") + 1:]
+    for ln in lines:
+        if ln.startswith("<img>"):
+            imgs.append(ln[5:])
+        elif ln.startswith("<tile>"):
+            tiles.append(ln[6:].split(","))
+        elif ln.startswith("<"):
+            tags[ln[1:ln.index(">")]] = ln[ln.index(">") + 1:]
 
     system = tags.get("system")
     scale = int(tags.get("scale", "1"))
@@ -161,10 +161,7 @@ def main():
                 for sy in range(scale):
                     for sx in range(scale):
                         got = sheet.getpixel((x + px * scale + sx, y + py * scale + sy))
-                        if exp[3] == 0:
-                            ok = got[3] == 0
-                        else:
-                            ok = got == exp
+                        ok = got[3] == 0 if exp[3] == 0 else got == exp
                         if not ok:
                             print(f"ERROR: tile @png{png_idx} ({x},{y}) pixel ({px},{py}): expected {exp}, PNG has {got}")
                             errors += 1

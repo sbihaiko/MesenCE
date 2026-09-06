@@ -23,18 +23,19 @@ Usage:
                                                 exit 0 when declared, 1 when not
   mep_errata.py resolve <dir> <sha256>          print the errata path, if any
 """
-import hashlib
 import json
 import os
 import sys
 from pathlib import Path
+
+from mep_recipe_common import REPO_ROOT, sha256_file  # noqa: F401  (re-exported: mep_lint/smoke gate call mep_errata.sha256_file)
 
 #Only targets that are *absent* can be declared known-missing. A corrupt PNG or
 #a bad bitmap index is a different defect: the file is there and wrong, so
 #"we checked, it is missing" would be a false statement.
 KNOWN_TAGS = ("img", "background")
 REQUIRED_ENTRY_FIELDS = ("manifest", "tag", "target", "reason", "reviewed_in")
-DEFAULT_DIR = Path(__file__).resolve().parent.parent / "docs" / "community-packs" / "errata"
+DEFAULT_DIR = REPO_ROOT / "docs" / "community-packs" / "errata"
 
 
 class ErrataError(Exception):
@@ -91,7 +92,7 @@ def load(path) -> Errata:
     try:
         doc = json.loads(path.read_text())
     except (OSError, ValueError) as exc:
-        raise ErrataError(f"{path}: cannot be read as JSON ({exc})")
+        raise ErrataError(f"{path}: cannot be read as JSON ({exc})") from exc
     if not isinstance(doc, dict):
         raise ErrataError(f"{path}: top level must be an object")
 
@@ -130,14 +131,6 @@ def load(path) -> Errata:
         seen.add(key)
 
     return Errata(path, sha, entries)
-
-
-def sha256_file(path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def resolve(sha256: str, directory=None):

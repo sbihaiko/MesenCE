@@ -211,7 +211,7 @@ def main(argv=None):
         steps = build(args.seconds)
         total = sum(float(s.split()[0]) for s in steps)
         frames = [_frames(step) for step in steps]
-        with open(path, "w") as handle:
+        with open(path, "w", encoding="utf-8") as handle:
             handle.write("\n".join(frames) + "\n")
         print(f"wrote  {name}.play.txt ({len(frames)} steps, "
               f"{sum(int(f.split('f')[0]) for f in frames)} frames "

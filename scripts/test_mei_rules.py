@@ -34,7 +34,7 @@ def check_constants_shape():
     if "nes" not in mei_rules.SYSTEMS or "gb" not in mei_rules.SYSTEMS:
         fail(f"SYSTEMS missing expected consoles: {mei_rules.SYSTEMS!r}")
         return
-    if mei_rules.MEI_KINDS != {"mep", "hd-legacy"}:
+    if {"mep", "hd-legacy"} != mei_rules.MEI_KINDS:
         fail(f"MEI_KINDS unexpected: {mei_rules.MEI_KINDS!r}")
         return
     if not mei_rules.SEMVER.match("1.1.0") or mei_rules.SEMVER.match("1.1"):

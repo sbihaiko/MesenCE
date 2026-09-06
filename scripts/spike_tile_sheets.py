@@ -23,7 +23,6 @@ Not a product feature: no hires.txt is emitted.
 import argparse
 import collections
 import os
-import sys
 
 from PIL import Image, ImageDraw
 
@@ -69,7 +68,7 @@ def parse_dump(path):
     tiles = {}
     frames = []  # list of (frame_no, rows) with rows: {y: [(x, id), ...]}
     cur = None
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             if line.startswith("F "):
                 cur = (int(line[2:]), collections.defaultdict(list))
@@ -90,7 +89,7 @@ def frame_grid(rows, tiles):
     """Return (fine_x, grid) where grid[(col,row)] = tile id, cols aligned to the
     inferred fine x scroll (run starts sit on tile boundaries)."""
     starts = collections.Counter()
-    for y, runs in rows.items():
+    for runs in rows.values():
         for x, _ in runs:
             if x != 0:
                 starts[x % 8] += 1
@@ -139,7 +138,6 @@ def grid_hash(grid):
 def stable_screens(frames, tiles, min_stable, hud_rows):
     """Collapse consecutive identical frames; returns list of dicts."""
     screens = []
-    prev_h, run, first = None, 0, None
     seq = []  # per frame: (hash, grid, fine)
     for fno, rows in frames:
         fine, grid = frame_grid(rows, tiles)
@@ -294,14 +292,12 @@ def metatiles(seq, tiles, hud_rows, mt_x0, mt_y0):
     east = collections.Counter()
     south = collections.Counter()
     seen_frames = set()
-    for fno, fine, grid in seq:
+    for _fno, _fine, grid in seq:
         h = grid_hash(grid)
         if h in seen_frames:
             continue  # count each distinct screen once, not per frame
         seen_frames.add(h)
         mts = {}
-        cols = sorted({c for c, r in grid})
-        rows = sorted({r for c, r in grid})
         for r in range(hud_rows, 30, 1):
             if (r - mt_y0) % 2:
                 continue
@@ -411,7 +407,7 @@ def baseline_tiles(seq, tiles, hud_rows):
     """F5.4e criterion: tile shapes adjacent (E/S) >= 2 times, union-find."""
     co = collections.Counter()
     seen = set()
-    for fno, fine, grid in seq:
+    for _fno, _fine, grid in seq:
         h = grid_hash(grid)
         if h in seen:
             continue
@@ -439,7 +435,7 @@ def layout_object(comp, edges, art, tiles, path):
     """BFS placement of a component's metatiles at their E/S offsets."""
     adj = collections.defaultdict(list)
     keyset = set(comp)
-    for a, b, d, n, pa, pb in edges:
+    for a, b, d, _n, _pa, _pb in edges:
         if a in keyset and b in keyset:
             off = (1, 0) if d == "E" else (0, 1)
             adj[a].append((b, off))
@@ -513,7 +509,7 @@ def main():
     base = baseline_tiles(vocab_seq, tiles, a.hud_rows)
     comps, edges = group(vocab, east, south, a.min_count, a.min_prob)
     comps.sort(key=len, reverse=True)
-    with open(os.path.join(a.out, "baseline_vs_pmi.txt"), "w") as f:
+    with open(os.path.join(a.out, "baseline_vs_pmi.txt"), "w", encoding="utf-8") as f:
         f.write("F5.4e baseline (tile shapes, adjacency count >= 2): component sizes\n")
         f.write(f"  components: {len(base)}  largest: {base[:10]}\n")
         f.write(f"  shapes in giant component: {base[0] if base else 0} of {sum(base)}\n\n")
@@ -529,14 +525,14 @@ def main():
     if a.continuous:
         log, W = stitch_continuous(seq, tiles, a.hud_rows, a.out, a.step, 12)
         rep.append(f"continuous stitch: {W} px wide, {len(log)} cuts")
-        rep.extend("  " + l for l in log[:20])
+        rep.extend("  " + entry for entry in log[:20])
     else:
         st = stitch(seq, screens, tiles, a.hud_rows, a.out)
         if st:
             log, n = st
             rep.append(f"stitched screens: {n}")
-            rep.extend("  " + l for l in log)
-    with open(os.path.join(a.out, "report.txt"), "w") as f:
+            rep.extend("  " + entry for entry in log)
+    with open(os.path.join(a.out, "report.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(rep) + "\n")
     print("\n".join(rep))
 

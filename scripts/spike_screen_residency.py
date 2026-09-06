@@ -81,7 +81,7 @@ def load_metatiles(sheet_dir):
     doc_path = os.path.join(sheet_dir, "metatiles.json")
     if not os.path.exists(doc_path):
         return None, None
-    with open(doc_path) as handle:
+    with open(doc_path, encoding="utf-8") as handle:
         doc = json.load(handle)
     reference = doc.get("reference") or "metatiles.orig.png"
     image_path = os.path.join(sheet_dir, reference)
@@ -214,17 +214,17 @@ def main():
         print()
         return 0
 
-    print("%-40s %7s %6s %7s %7s %7s %6s" % (
+    print("%-40s %7s %6s %7s %7s %7s %6s" % (  # noqa: UP031 - tabular report; the % column spec is the readable form
         "pack", "screens", "cells", "none", "one", "many", "moved"))
     for row in sorted(rows, key=lambda r: -r["share"]):
-        print("%-40s %7d %6d %7d %7d %7d %5.0f%%" % (
+        print("%-40s %7d %6d %7d %7d %7d %5.0f%%" % (  # noqa: UP031 - tabular report; the % column spec is the readable form
             pack_name(row["path"])[:40], row["screens"], row["cells"],
             row["onNoScreen"], row["onOneScreen"], row["onManyScreens"],
             row["share"] * 100))
     if rows:
         cells = sum(r["cells"] for r in rows)
         one = sum(r["onOneScreen"] for r in rows)
-        print("\n%d packs: %d of %d metatile cells sit on exactly one captured screen (%.0f%%)" % (
+        print("\n%d packs: %d of %d metatile cells sit on exactly one captured screen (%.0f%%)" % (  # noqa: UP031 - tabular report; the % column spec is the readable form
             len(rows), one, cells, 100 * one / cells))
     return 0
 
