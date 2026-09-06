@@ -670,6 +670,26 @@ void HdPackBuilder::OnFrameEnd()
 	std::fill(_frameBg.begin(), _frameBg.end(), 0);
 }
 
+//ADR-0159 amendment (2026-09-05): intern a PaletteColors word into the small
+//id the grid stream carries. First sight wins an id; past the id space every
+//further palette is kUnknownPalette, which the anchor rule reads as "no
+//evidence" - it never anchors on such a cell and never counts it as proof that
+//a rival was ruled out. A recording that needs more than 255 background
+//palettes has bigger problems than its anchors.
+MesenSheets::PaletteId HdPackBuilder::PaletteIdFor(uint32_t paletteColors)
+{
+	auto existing = _paletteIds.find(paletteColors);
+	if(existing != _paletteIds.end()) {
+		return existing->second;
+	}
+	if(_paletteIds.size() >= MesenSheets::kUnknownPalette) {
+		return MesenSheets::kUnknownPalette;
+	}
+	MesenSheets::PaletteId id = (MesenSheets::PaletteId)_paletteIds.size();
+	_paletteIds[paletteColors] = id;
+	return id;
+}
+
 //F9.1 (ADR-0153 §5): turn this frame's background runs into a compact
 //GridFrame. Ported from the spike's frame_grid (scripts/spike_tile_sheets.py):
 //run starts sit on tile boundaries, so the most common (x % 8) among non-zero
@@ -723,15 +743,20 @@ void HdPackBuilder::RecordGridFrame()
 		if(shape == MesenSheets::kEmptyCell) {
 			continue;
 		}
+		MesenSheets::PaletteId palette = PaletteIdFor(run.Tile.PaletteColors);
 		for(; cx + 8 <= 256 && cx < xEnd; cx += 8) {
 			int32_t col = ((int32_t)cx - (int32_t)fine) / 8;
 			if(col >= 0 && col < (int32_t)MesenSheets::kGridCols) {
 				frame.Cells[row][col] = shape;
+				frame.Palettes[row][col] = palette;
 			}
 		}
 	}
 
-	if(!_gridFrames.empty() && _gridFrames.back().FineX == frame.FineX && _gridFrames.back().SameCells(frame)) {
+	//De-duplicate on drawing *and* colours (ADR-0159 amendment): a frame that
+	//only recolours the screen is the evidence the anchor rule is missing, so
+	//it must not collapse into the previous frame's RepeatCount.
+	if(!_gridFrames.empty() && _gridFrames.back().FineX == frame.FineX && _gridFrames.back().SamePalettedCells(frame)) {
 		_gridFrames.back().RepeatCount++;
 		_gridFrameLive = true;
 		return;

@@ -184,6 +184,11 @@ private:
 	uint32_t _sheetObjectCount = 0;
 	void RecordGridFrame();
 	MesenSheets::ShapeId ShapeIdFor(const HdPpuTileInfo& tile);
+	//ADR-0159 amendment: PaletteColors -> the per-cell palette id the grid
+	//stream carries, so a variant that only recolours an anchor cell is
+	//visible at save time (the shape ids above wildcard the palette).
+	unordered_map<uint32_t, MesenSheets::PaletteId> _paletteIds;
+	MesenSheets::PaletteId PaletteIdFor(uint32_t paletteColors);
 	void BuildSheets();
 	void EnforceCollapsedSheetFloor(MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);
 	void WriteContextSheets(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::TileLookup& lookup);

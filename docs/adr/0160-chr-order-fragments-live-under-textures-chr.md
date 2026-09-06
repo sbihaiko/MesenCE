@@ -1,6 +1,6 @@
 # ADR-0160: The CHR-order fragments live under `textures/chr/` — `sheets/` is the front door
 
-- Status: proposed
+- Status: accepted (2026-09-05, by the user — record of a decision already reflected in the code: the move shipped in `a2139da6` and the legacy sweep of §3 in `2b12c5e2`. No PRD slice pending)
 - Date: 2026-09-05
 - Related: PRD Part A §4 "Phase 9" (slice F9.10, and the 2026-09-05 scrutiny
   against a target mockup, item 5), ADR-0153 §3/§5, ADR-0050, ADR-0049,

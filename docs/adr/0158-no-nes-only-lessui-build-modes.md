@@ -1,6 +1,6 @@
 # ADR-0158: No `NES_ONLY` / `LessUI` build modes — the console reduction already took the win
 
-- Status: proposed
+- Status: accepted (2026-09-05, by the user — the decision is *against*, so it requests no work; slice H8 is closed as measured-and-declined. The one thing H8 did buy, the `core-unit-tests` parallelisation, shipped in `7748c013` and is recorded under "What to do instead")
 - Date: 2026-09-05
 - Related: ADR-0157 §3 (runtime mode, not compile-time), ADR-0007 (Core source-manifest guard), ADR-0131 (`unit-tests.yml` contract), ADR-0155 (header dependency tracking), PRD Part A slice H8, `docs/roadmap/AGENTS.md` (product consoles), `makefile`, `.github/workflows/build.yml`, `.github/workflows/unit-tests.yml`
 

@@ -47,7 +47,9 @@ namespace MesenSheets
 	//4x4 block of 8x8 cells - half the kSheetMaxObjectCells budget - and past it
 	//a constant offset says "both were on screen", not "these move together".
 	constexpr int32_t kSpriteMaxOffset = 32;
-	//Retained per-frame grids (de-duplicated); ~1.9 KB each.
+	//Retained per-frame grids (de-duplicated); ~2.8 KB each since the ADR-0159
+	//amendment added the palette plane (1920 B of shape ids + 960 B of palette
+	//ids), i.e. ~11.5 MB with the stream full.
 	constexpr uint32_t kMaxSheetFrames = 4096;
 	//1-cell gutter, transparent, between every sheet cell.
 	constexpr uint32_t kSheetGutter = 1;
@@ -228,12 +230,32 @@ namespace MesenSheets
 	using ShapeId = uint16_t;
 	constexpr ShapeId kEmptyCell = 0xFFFF;
 
+	//Which 4-colour NES palette a cell was drawn with, interned by the recorder
+	//in first-sight order (ADR-0159 amendment, 2026-09-05). A whole
+	//PaletteColors word per cell would triple the retained stream; an id only
+	//has to answer "the same colours as last time?", which is the only question
+	//the anchor rule asks of it.
+	using PaletteId = uint8_t;
+	//"No palette evidence": no cell was drawn here, the caller carries none at
+	//all, or the recording used more palettes than the id space holds. The
+	//anchor rule reads it as "the colours may well be the same" throughout, so
+	//a stream without palettes behaves exactly as it did before the amendment
+	//instead of anchoring on nothing.
+	constexpr PaletteId kUnknownPalette = 0xFF;
+
 	//One recorded background frame: which shape sat at every 8x8 cell origin.
 	//FineX is the sub-tile x scroll the cells were aligned to (0..7), so two
 	//frames of the same screen at different scroll offsets compare equal.
 	struct GridFrame
 	{
 		ShapeId Cells[kGridRows][kGridCols];
+		//Palette id per cell, same indexing as Cells (ADR-0159 amendment). The
+		//shape ids above are palette-agnostic on purpose - the vocabulary must
+		//see a bank-swapped or recoloured tile as one subject - so a recolour is
+		//invisible in Cells, while the tileAtPosition condition an anchor becomes
+		//compares PaletteColors and fails on it. This plane is the evidence for
+		//that one case: +960 B on a 1920 B frame, ~2.8 KB retained per frame.
+		PaletteId Palettes[kGridRows][kGridCols];
 		uint8_t FineX = 0;
 		uint32_t FrameNumber = 0;
 		//How many consecutive recorded frames were identical to this one. The
@@ -252,6 +274,7 @@ namespace MesenSheets
 			for(uint32_t r = 0; r < kGridRows; r++) {
 				for(uint32_t c = 0; c < kGridCols; c++) {
 					Cells[r][c] = kEmptyCell;
+					Palettes[r][c] = kUnknownPalette;
 				}
 			}
 		}
@@ -266,6 +289,15 @@ namespace MesenSheets
 			return n;
 		}
 		bool SameCells(const GridFrame& o) const { return memcmp(Cells, o.Cells, sizeof(Cells)) == 0; }
+		//Same drawing *and* same colours. The recorder de-duplicates on this, so
+		//a frame that only recolours the screen earns its own entry instead of
+		//collapsing into RepeatCount - otherwise the very evidence the anchor
+		//rule needs is the evidence the stream throws away. The vocabulary keeps
+		//using SameCells: for it a recoloured tile is the same subject.
+		bool SamePalettedCells(const GridFrame& o) const
+		{
+			return SameCells(o) && memcmp(Palettes, o.Palettes, sizeof(Palettes)) == 0;
+		}
 	};
 
 	//---- OAM (F9.5) --------------------------------------------------------

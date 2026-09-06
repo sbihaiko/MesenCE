@@ -3603,6 +3603,131 @@ namespace
 			"picked=" + std::to_string(choice.Picked.size()));
 	}
 
+	//--- issue #164, third mode: a variant that only *recolours* the anchor ---
+	//
+	//ADR-0159 shipped with this one open: the retained grid stream carried
+	//palette-agnostic shape ids (HdTileKey::GetKey(true)), while the
+	//tileAtPosition condition an anchor becomes compares the tile index *and*
+	//PaletteColors. A variant that keeps the tile and swaps its palette was
+	//therefore stable in the evidence, chosen, and then did not match - and
+	//since ADR-0156 the cells routed onto that screen render vanilla. Measured
+	//on the 30-pack library re-recorded 2026-09-05 (scripts/spike_anchor_stability.py
+	//--recolour): 190 of 4333 shipped anchors (4.4 %) on 124 of 1450 screens.
+	//The amendment adds a palette plane to GridFrame; these cases are its
+	//contract.
+
+	//Every drawn cell of `frame` was painted with the same palette. The
+	//fixtures above predate the plane and leave it kUnknownPalette, which is
+	//exactly the "no evidence" case one of the cases below pins down.
+	void SheetPaintPalettes(GridFrame& frame, PaletteId id)
+	{
+		for(uint32_t r = 0; r < kGridRows; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				frame.Palettes[r][c] = id;
+			}
+		}
+	}
+
+	void TestAnchorAvoidsACellAVariantOnlyRecolours()
+	{
+		//The gap, in the smallest form that reproduces it: the rarest tile on
+		//the frame keeps its 16 CHR bytes on every variant of the screen and
+		//changes colour - a flashing prompt, a power-up palette cycle. Nothing
+		//in Cells moves, so the old rule anchored on it and the <background>
+		//stopped drawing anyway.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		SheetPaintPalettes(screen, 1);
+		screen.Cells[2][4] = 900;  //ranked first: the rarest candidate
+		screen.Cells[20][4] = 901; //a rare badge that neither moves nor blinks
+		GridFrame variant = screen;
+		variant.Palettes[2][4] = 2; //same drawing, other colours
+		variant.FrameNumber = 1;
+		std::vector<GridFrame> frames = { screen, variant };
+
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, AnchorCandidates());
+		Check(choice.Picked.size() == kAnchorCount,
+			"BlocoP2: a recoloured candidate still leaves three anchors",
+			"picked=" + std::to_string(choice.Picked.size()));
+		Check(!AnchorPicked(choice, 0),
+			"BlocoP2: the cell a variant only recolours is not made an anchor");
+		Check(AnchorPicked(choice, 1),
+			"BlocoP2: the rarest cell no variant recolours is preferred");
+	}
+
+	void TestAnchorSeparatesAScreenByPaletteAlone()
+	{
+		//The other half of the same fact: tileAtPosition compares the palette,
+		//so a frame that draws the same tile in other colours does *not*
+		//satisfy the condition and is not a rival. Reading rivals off shapes
+		//alone made the pick believe it was ambiguous and widen the pool for
+		//nothing.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		SheetPaintPalettes(screen, 1);
+		GridFrame rival = screen;
+		for(uint32_t r = 20; r < 26; r++) {
+			for(uint32_t c = 0; c < kGridCols; c++) {
+				rival.Cells[r][c] = (ShapeId)(700 + r * 32 + c); //a fifth of the frame: not a variant
+			}
+		}
+		rival.Palettes[15][20] = 2; //...and one candidate it draws in other colours
+		rival.FrameNumber = 1;
+		std::vector<GridFrame> frames = { screen, rival };
+
+		std::vector<AnchorCandidate> candidates = { { 2, 5, 1 }, { 14, 5, 2 }, { 26, 5, 3 }, { 15, 20, 4 } };
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, candidates);
+		Check(choice.Rivals == 0,
+			"BlocoP2: a frame that redraws the anchor tile in other colours is not a rival",
+			"rivals=" + std::to_string(choice.Rivals));
+		Check(AnchorPicked(choice, 3),
+			"BlocoP2: the cell that separates the screen by palette alone is picked");
+		Check(!choice.UsedVolatileCell,
+			"BlocoP2: separating by palette does not cost the screen its stable pick");
+	}
+
+	void TestAnchorWithoutPaletteEvidenceKeepsTheStablePick()
+	{
+		//A cell whose palette id is unknown - past the 255-palette id space, or
+		//a stream recorded before the plane existed - is evidence of nothing,
+		//not evidence of a recolour. It degrades to the pre-amendment pick,
+		//the same way an out-of-range capturedIndex degrades to ADR-0050's
+		//plain rarity greedy.
+		GridFrame screen = SheetBlockScreen(0, 3);
+		SheetPaintPalettes(screen, 1);
+		screen.Cells[2][4] = 900;
+		screen.Palettes[2][4] = kUnknownPalette;
+		GridFrame variant = screen;
+		variant.Cells[10][20] = 902; //a variant that changes some other cell
+		variant.FrameNumber = 1;
+		std::vector<GridFrame> frames = { screen, variant };
+
+		AnchorChoice choice = SelectScreenAnchors(frames, 0, AnchorCandidates());
+		Check(AnchorPicked(choice, 0),
+			"BlocoP2: a candidate with no palette evidence is still eligible");
+		Check(!choice.UsedVolatileCell,
+			"BlocoP2: missing palette evidence does not push the pick onto volatile cells");
+	}
+
+	void TestGridFrameRecolourIsItsOwnFrame()
+	{
+		//The recorder de-duplicates consecutive frames. If it kept doing that on
+		//the drawing alone, the recoloured frame - the only evidence the rule
+		//above can read - would vanish into RepeatCount. The vocabulary keeps
+		//the palette-agnostic comparison: for it the two frames are one subject.
+		GridFrame frame = SheetBlockScreen(0, 3);
+		SheetPaintPalettes(frame, 1);
+		GridFrame recoloured = frame;
+		recoloured.Palettes[9][9] = 2;
+
+		Check(frame.SameCells(recoloured),
+			"BlocoP2: a recolour draws the same shapes");
+		Check(!frame.SamePalettedCells(recoloured),
+			"BlocoP2: a recolour is not the same frame for the recorder's de-duplication");
+		GridFrame moved = frame;
+		moved.Cells[9][9] = 950;
+		Check(!frame.SamePalettedCells(moved) && !frame.SameCells(moved),
+			"BlocoP2: a changed cell is still a changed frame under both comparisons");
+	}
+
 	void TestSheetContactSheetGeometry()
 	{
 		Vocabulary vocab;
@@ -4570,6 +4695,10 @@ int main()
 	TestAnchorFallsBackWhenNoStableCellDiscriminates();
 	TestAnchorsStaySpreadApartAndCapAtThree();
 	TestAnchorWithoutAGridFrameKeepsTheRarityPick();
+	TestAnchorAvoidsACellAVariantOnlyRecolours();
+	TestAnchorSeparatesAScreenByPaletteAlone();
+	TestAnchorWithoutPaletteEvidenceKeepsTheStablePick();
+	TestGridFrameRecolourIsItsOwnFrame();
 	TestSheetContactSheetGeometry();
 	TestSheetUpscaleIsNearestNeighbour();
 	TestSheetJsonCarriesTheGridDecision();

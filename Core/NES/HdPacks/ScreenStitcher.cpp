@@ -812,6 +812,21 @@ namespace MesenSheets
 			return true;
 		}
 
+		//How the palette plane is read (ADR-0159 amendment). An unknown id - no
+		//cell drawn there, a caller that carries no palette evidence at all,
+		//or a recording past the id space - is evidence of nothing, so it reads
+		//as "the colours may well be the same" on both sides of the rule: the
+		//candidate stays eligible and the rival stays counted. That is the same
+		//degradation as an out-of-range capturedIndex - back to the pre-amendment
+		//behaviour, never to no anchors and never to an anchor the evidence does
+		//not support.
+		bool PaletteMayMatch(const GridFrame& screen, const GridFrame& other, uint32_t row, uint32_t col)
+		{
+			PaletteId want = screen.Palettes[row][col];
+			PaletteId got = other.Palettes[row][col];
+			return want == kUnknownPalette || got == kUnknownPalette || want == got;
+		}
+
 		bool AnchorFarEnough(const AnchorCandidate& candidate, const std::vector<const AnchorCandidate*>& picked)
 		{
 			for(const AnchorCandidate* other : picked) {
@@ -845,9 +860,12 @@ namespace MesenSheets
 					}
 					uint32_t survivors = 0;
 					if(screen) {
+						//A rival satisfies the condition only when the tile *and*
+						//its palette match, which is what tileAtPosition compares.
 						ShapeId wanted = screen->Cells[candidate.Row][candidate.Col];
 						for(const GridFrame* rival : alive) {
-							survivors += rival->Cells[candidate.Row][candidate.Col] == wanted ? 1 : 0;
+							survivors += rival->Cells[candidate.Row][candidate.Col] == wanted &&
+								PaletteMayMatch(*screen, *rival, candidate.Row, candidate.Col) ? 1 : 0;
 						}
 					}
 					if(bestPos == left.size() || survivors < bestSurvivors) {
@@ -863,7 +881,8 @@ namespace MesenSheets
 					ShapeId wanted = screen->Cells[chosen.Row][chosen.Col];
 					std::vector<const GridFrame*> kept;
 					for(const GridFrame* rival : alive) {
-						if(rival->Cells[chosen.Row][chosen.Col] == wanted) {
+						if(rival->Cells[chosen.Row][chosen.Col] == wanted &&
+							PaletteMayMatch(*screen, *rival, chosen.Row, chosen.Col)) {
 							kept.push_back(rival);
 						}
 					}
@@ -928,9 +947,14 @@ namespace MesenSheets
 			if(wanted == kEmptyCell) {
 				continue;
 			}
+			//Stable means the *condition* holds on every variant, not just the
+			//drawing: a variant that keeps the tile and swaps its palette reads
+			//as unchanged in Cells and still fails tileAtPosition, which is the
+			//gap the ADR-0159 amendment closes.
 			bool survives = true;
 			for(const GridFrame* variant : variants) {
-				if(variant->Cells[candidate.Row][candidate.Col] != wanted) {
+				if(variant->Cells[candidate.Row][candidate.Col] != wanted ||
+					!PaletteMayMatch(*screen, *variant, candidate.Row, candidate.Col)) {
 					survives = false;
 					break;
 				}

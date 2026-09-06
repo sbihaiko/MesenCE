@@ -280,6 +280,133 @@ def analyse(textures_dir, threshold):
     return stats
 
 
+def shape_of(block):
+    """The block's palette-agnostic pattern: colours renumbered in order of
+    first appearance. The recorder's ShapeId is `HdTileKey::GetKey(true)` - the
+    16 CHR bytes with `PaletteColors` wildcarded - and this is the closest an
+    offline pixel dump can get to it. It can only *under*-count recolours: when
+    a palette maps two colour indices onto the same RGB, the pattern collapses
+    and reads as a different shape where the recorder would still see one.
+    """
+    out = bytearray()
+    seen = {}
+    for i in range(0, len(block), 4):
+        colour = block[i:i + 4]
+        idx = seen.setdefault(colour, len(seen))
+        out.append(idx)
+    return bytes(out)
+
+
+def analyse_recolour(textures_dir, threshold):
+    """Issue #164, third failure mode: a variant that only *recolours* the
+    anchor cell.
+
+    ADR-0159 picks anchors from the cells no variant changes, but it reads
+    "changes" off the retained grid stream, which stores palette-agnostic shape
+    ids. The `tileAtPosition` condition the anchor becomes compares the tile
+    index *and* `PaletteColors`, so a variant that keeps the tile and swaps its
+    palette is stable in the grid, is chosen, and then does not match.
+
+    This sizes that gap on the packs on disk: variants are settled on shapes
+    (as the shipped rule does), and each shipped anchor is then checked for a
+    variant that agrees on the shape and disagrees on the pixels.
+    """
+    screens = load_screens(textures_dir)
+    anchors = parse_anchors(textures_dir)
+    names = [n for n in sorted(screens) if n in anchors and anchors[n]]
+    if not names:
+        return None
+    shapes = {n: [shape_of(b) for b in screens[n]] for n in names}
+
+    variants = {n: set() for n in names}
+    for a in range(len(names)):
+        for b in range(a + 1, len(names)):
+            sa, sb = shapes[names[a]], shapes[names[b]]
+            same = sum(1 for i in range(len(sa)) if sa[i] == sb[i])
+            if same >= threshold * len(sa):
+                variants[names[a]].add(names[b])
+                variants[names[b]].add(names[a])
+
+    stats = {
+        "pack": os.path.basename(os.path.dirname(os.path.dirname(textures_dir.rstrip("/")))),
+        "screens": len(names),
+        "anchors": 0,
+        "anchors_recoloured": 0,
+        "screens_recoloured": 0,
+        "variant_pairs": 0,
+        "miss": 0,
+        "miss_recolour_only": 0,
+        "stable_cells": 0,
+        "stable_cells_recoloured": 0,
+    }
+    for name in names:
+        blocks, shp = screens[name], shapes[name]
+        peers = variants[name]
+        recoloured_anchor = False
+        for (row, col) in anchors[name]:
+            i = row * COLS + col
+            stats["anchors"] += 1
+            if any(shapes[v][i] == shp[i] and screens[v][i] != blocks[i] for v in peers):
+                stats["anchors_recoloured"] += 1
+                recoloured_anchor = True
+        stats["screens_recoloured"] += 1 if recoloured_anchor else 0
+
+        # the pool ADR-0159 draws from, and how much of it is a trap
+        for i in range(len(blocks)):
+            if is_flat(blocks[i]):
+                continue
+            if any(shapes[v][i] != shp[i] for v in peers):
+                continue
+            stats["stable_cells"] += 1
+            if any(screens[v][i] != blocks[i] for v in peers):
+                stats["stable_cells_recoloured"] += 1
+
+        for other in peers:
+            stats["variant_pairs"] += 1
+            cells = [(r * COLS + c) for (r, c) in anchors[name]]
+            if all(screens[other][i] == blocks[i] for i in cells):
+                continue
+            stats["miss"] += 1
+            # every failing cell agrees on the shape: a pure recolour, which is
+            # exactly what the retained grid stream cannot see
+            if all(shapes[other][i] == shp[i] for i in cells):
+                stats["miss_recolour_only"] += 1
+    return stats
+
+
+def report_recolour(rows):
+    total = defaultdict(int)
+    hdr = (f"{'pack':38} {'scr':>4} {'anc':>5} {'recol':>6} {'vpairs':>7} "
+           f"{'miss':>6} {'recol':>6} {'stable':>7} {'trap':>6}")
+    print(hdr)
+    for r in rows:
+        for k, v in r.items():
+            if isinstance(v, int):
+                total[k] += v
+        print(f"{r['pack'][:38]:38} {r['screens']:4} {r['anchors']:5} "
+              f"{r['anchors_recoloured']:6} {r['variant_pairs']:7} {r['miss']:6} "
+              f"{r['miss_recolour_only']:6} {r['stable_cells']:7} "
+              f"{r['stable_cells_recoloured']:6}")
+    print("-" * len(hdr))
+    print(f"{'TOTAL':38} {total['screens']:4} {total['anchors']:5} "
+          f"{total['anchors_recoloured']:6} {total['variant_pairs']:7} "
+          f"{total['miss']:6} {total['miss_recolour_only']:6} "
+          f"{total['stable_cells']:7} {total['stable_cells_recoloured']:6}")
+    if total["anchors"]:
+        print(f"anchors a recolour breaks: {total['anchors_recoloured']}/{total['anchors']} "
+              f"({100.0 * total['anchors_recoloured'] / total['anchors']:.1f}%)")
+    if total["variant_pairs"]:
+        print(f"variant pairs missed: {total['miss']}/{total['variant_pairs']} "
+              f"({100.0 * total['miss'] / total['variant_pairs']:.1f}%), of which "
+              f"recolour-only {total['miss_recolour_only']} "
+              f"({100.0 * total['miss_recolour_only'] / total['variant_pairs']:.1f}% of pairs)")
+    if total["stable_cells"]:
+        print(f"shape-stable candidate cells a recolour breaks: "
+              f"{total['stable_cells_recoloured']}/{total['stable_cells']} "
+              f"({100.0 * total['stable_cells_recoloured'] / total['stable_cells']:.1f}%)")
+    print(f"screens with >=1 recoloured anchor: {total['screens_recoloured']}/{total['screens']}")
+
+
 def find_texture_dirs(root):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -294,17 +421,25 @@ def main():
     ap.add_argument("root")
     ap.add_argument("--variant-threshold", type=float, default=0.90)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--recolour", action="store_true",
+                    help="issue #164 third mode: anchors a variant only recolours")
     args = ap.parse_args()
 
     dirs = find_texture_dirs(args.root)
     rows = []
     for d in dirs:
-        stats = analyse(d, args.variant_threshold)
+        stats = analyse_recolour(d, args.variant_threshold) if args.recolour \
+            else analyse(d, args.variant_threshold)
         if stats:
             rows.append(stats)
 
     if args.json:
         print(json.dumps(rows, indent=2))
+        return 0
+
+    if args.recolour:
+        print(f"variant threshold {args.variant_threshold:.2f} (shape agreement)")
+        report_recolour(rows)
         return 0
 
     total = defaultdict(int)
