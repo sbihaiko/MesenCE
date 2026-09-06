@@ -427,7 +427,8 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 
 			resultType = EvalResultType::Numeric;
 			switch(token) {
-				case EvalOperators::Multiplication: token = left * right; break;
+				//Do the math on uint64_t so signed overflow wraps as two's-complement instead of invoking UB
+				case EvalOperators::Multiplication: token = (int64_t)((uint64_t)left * (uint64_t)right); break;
 				case EvalOperators::Division:
 					if(right == 0) {
 						resultType = EvalResultType::DivideBy0;
@@ -443,10 +444,11 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 					}
 					token = left % right;
 					break;
-				case EvalOperators::Addition: token = left + right; break;
-				case EvalOperators::Substration: token = left - right; break;
-				case EvalOperators::ShiftLeft: token = left << right; break;
-				case EvalOperators::ShiftRight: token = left >> right; break;
+				case EvalOperators::Addition: token = (int64_t)((uint64_t)left + (uint64_t)right); break;
+				case EvalOperators::Substration: token = (int64_t)((uint64_t)left - (uint64_t)right); break;
+				//Mask the shift count to 0..63 (shifting by 64+ or a negative amount is UB)
+				case EvalOperators::ShiftLeft: token = (int64_t)((uint64_t)left << (right & 0x3F)); break;
+				case EvalOperators::ShiftRight: token = left >> (right & 0x3F); break;
 
 				case EvalOperators::SmallerThan:
 					token = left < right;
@@ -494,7 +496,7 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 
 				//Unary operators
 				case EvalOperators::Plus: token = right; break;
-				case EvalOperators::Minus: token = -right; break;
+				case EvalOperators::Minus: token = (int64_t)(-(uint64_t)right); break;
 				case EvalOperators::BinaryNot: token = ~right; break;
 				case EvalOperators::LogicalNot: token = (bool)!right; break;
 				case EvalOperators::AbsoluteAddress: token = right >= 0 ? _debugger->GetAbsoluteAddress({ (int32_t)right, _cpuMemory }).Address : -1; break;
