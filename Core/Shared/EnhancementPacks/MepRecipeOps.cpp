@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Shared/EnhancementPacks/MepRecipeOps.h"
 #include "Shared/EnhancementPacks/MepPack.h"
+#include "Shared/EnhancementPacks/MepFileIo.h"
 #include "Utilities/JsonReader.h"
 #include "Utilities/StringUtilities.h"
 #include "Utilities/FolderUtilities.h"
@@ -23,19 +24,17 @@ void MepRecipeSource::Close()
 	}
 	_loaded = false;
 	_normalizedToOriginal.clear();
+	_rawEntries.clear();
 }
 
 bool MepRecipeSource::LoadFile(const string& path, string& error)
 {
-	ifstream in(path, std::ios::in | std::ios::binary);
-	if(!in) {
+	vector<uint8_t> bytes;
+	if(!MepFileIo::ReadWholeFile(path, bytes)) {
 		error = "cannot open: " + path;
 		return false;
 	}
-	std::ostringstream ss;
-	ss << in.rdbuf();
-	string content = ss.str();
-	return LoadBytes(vector<uint8_t>(content.begin(), content.end()), error);
+	return LoadBytes(std::move(bytes), error);
 }
 
 bool MepRecipeSource::LoadBytes(vector<uint8_t> bytes, string& error)
@@ -56,10 +55,16 @@ bool MepRecipeSource::LoadBytes(vector<uint8_t> bytes, string& error)
 		if(!mz_zip_reader_file_stat(&_zip, i, &stat)) {
 			continue;
 		}
+		//MEP-recipe-v1 §5: an entry that escapes (or normalizes to nothing)
+		//is skipped and can never become a pack root or an op source
 		string original = stat.m_filename;
-		string normalized = original;
-		std::replace(normalized.begin(), normalized.end(), '\\', '/');
-		_normalizedToOriginal[normalized] = original;
+		string normalized;
+		if(!MepPack::NormalizeRelativePath(original, normalized) || normalized.empty()) {
+			continue;
+		}
+		if(_normalizedToOriginal.emplace(normalized, original).second) {
+			_rawEntries.push_back(normalized);
+		}
 	}
 	return true;
 }
@@ -75,8 +80,21 @@ bool MepRecipeSource::Read(const string& rel, vector<uint8_t>& out) const
 	if(it == _normalizedToOriginal.end()) {
 		return false;
 	}
+	mz_zip_archive* zip = const_cast<mz_zip_archive*>(&_zip);
+	int index = mz_zip_reader_locate_file(zip, it->second.c_str(), nullptr, 0);
+	mz_zip_archive_file_stat stat;
+	if(index < 0 || !mz_zip_reader_file_stat(zip, (mz_uint)index, &stat)) {
+		return false;
+	}
+	//Per-entry decompression cap (MepFileIo) from the declared size, before
+	//inflating anything
+	uint64_t total = 0;
+	string capError;
+	if(!MepFileIo::CheckDecompressionCaps(rel, stat.m_uncomp_size, total, capError)) {
+		return false;
+	}
 	size_t size = 0;
-	void* data = mz_zip_reader_extract_file_to_heap(const_cast<mz_zip_archive*>(&_zip), it->second.c_str(), &size, 0);
+	void* data = mz_zip_reader_extract_to_heap(zip, (mz_uint)index, &size, 0);
 	if(!data) {
 		return false;
 	}
@@ -88,42 +106,27 @@ bool MepRecipeSource::Read(const string& rel, vector<uint8_t>& out) const
 vector<string> MepRecipeSource::ListRelative() const
 {
 	vector<string> result;
-	for(const auto& entry : _normalizedToOriginal) {
-		const string& name = entry.first;
+	for(const string& name : _rawEntries) {
 		if(name.compare(0, _rootPrefix.size(), _rootPrefix) != 0) {
 			continue;
 		}
 		string rel = name.substr(_rootPrefix.size());
 		if(!rel.empty()) {
-			result.push_back(rel);
+			result.push_back(std::move(rel));
 		}
-	}
-	return result;
-}
-
-vector<string> MepRecipeSource::RawEntries() const
-{
-	vector<string> result;
-	for(const auto& entry : _normalizedToOriginal) {
-		result.push_back(entry.first);
 	}
 	return result;
 }
 
 namespace
 {
-	bool HasEntry(const vector<string>& entries, const char* name)
-	{
-		return std::find(entries.begin(), entries.end(), string(name)) != entries.end();
-	}
-
 	//MEP-recipe-v1 §7 root-hit probes (mep_lint.py's PROBES/AUDIO_ALT_PROBE, plus pack.json)
-	bool HasRootHit(const vector<string>& entries)
+	bool HasRootHit(const MepRecipeSource& src)
 	{
 		static const char* kProbes[] = { "pack.json", "hires.txt", "textures/hires.txt",
 			"audio/hires.txt", "synth/preset.cfg", "audio/fingerprints.json" };
 		for(const char* probe : kProbes) {
-			if(HasEntry(entries, probe)) {
+			if(src.HasRawEntry(probe)) {
 				return true;
 			}
 		}
@@ -146,13 +149,13 @@ namespace
 
 	//Re-runs the root-hit + fallback checks (shared by the direct pass and
 	//the post-nested-zip retry below)
-	bool TryDiscover(const vector<string>& entries, const string& romName, string& prefix)
+	bool TryDiscover(const MepRecipeSource& src, const string& romName, string& prefix)
 	{
-		if(HasRootHit(entries)) {
+		if(HasRootHit(src)) {
 			prefix = "";
 			return true;
 		}
-		string fallback = MepPack::FindFallbackSubfolder(entries, romName);
+		string fallback = MepPack::FindFallbackSubfolder(src.RawEntries(), romName);
 		if(!fallback.empty()) {
 			prefix = fallback + "/";
 			return true;
@@ -164,15 +167,15 @@ namespace
 string DiscoverPrimaryRoot(MepRecipeSource& src, const string& romName)
 {
 	string prefix;
-	if(TryDiscover(src.RawEntries(), romName, prefix)) {
+	if(TryDiscover(src, romName, prefix)) {
 		src.SetRootPrefix(prefix);
 		return prefix;
 	}
 	string nested = FindTopLevelNestedZip(src.RawEntries());
 	vector<uint8_t> bytes;
 	string loadError;
-	if(!nested.empty() && src.Read(nested, bytes) && src.LoadBytes(bytes, loadError)
-		&& TryDiscover(src.RawEntries(), romName, prefix)) {
+	if(!nested.empty() && src.Read(nested, bytes) && src.LoadBytes(std::move(bytes), loadError)
+		&& TryDiscover(src, romName, prefix)) {
 		src.SetRootPrefix(prefix);
 		return prefix;
 	}
@@ -182,79 +185,159 @@ string DiscoverPrimaryRoot(MepRecipeSource& src, const string& romName)
 
 //--- path-safety + glob (§4.2) + rewrite-paths (§4.4) ----------------------
 
-bool IsPatchDest(const string& rel)
-{
-	//One literal per line (rather than a single chained boolean expression)
-	//so no source line reads as an opaque high-entropy run of mixed code +
-	//quoted text to a naive secret scanner.
-	string lower = StringUtilities::ToLower(rel);
-	if(StringUtilities::StartsWith(lower, "patches/")) {
-		return true;
-	}
-	if(StringUtilities::EndsWith(lower, ".ips")) {
-		return true;
-	}
-	return StringUtilities::EndsWith(lower, ".bps");
-}
-
-bool RequireSafeRel(const string& raw, string& out)
-{
-	string normalized;
-	if(!MepPack::NormalizeRelativePath(raw, normalized) || normalized.empty()) {
-		return false;
-	}
-	out = normalized;
-	return true;
-}
-
 namespace
 {
-	bool GlobMatchImpl(const char* pat, const char* name);
-
-	//"**/" -> zero-or-more path segments (only stops right after a '/');
-	//bare "**" -> zero-or-more of anything (stops at any position). Both
-	//forms also allow the zero-length match (mirrors Python's optional
-	//"(?:.*/)?" group vs. its unconstrained ".*" translation).
-	bool MatchStarStar(const char* rest, const char* name, bool requireSlash)
+	//True when `rel` (already safe-normalized) is a patch destination that
+	//policy.apply_patch_only_if_complete withholds (MEP-recipe-v1 §6):
+	//under patches/ or ending in .ips/.bps.
+	bool IsPatchDest(const string& rel)
 	{
-		if(GlobMatchImpl(rest, name)) {
+		string lower = StringUtilities::ToLower(rel);
+		if(StringUtilities::StartsWith(lower, "patches/")) {
 			return true;
 		}
-		for(const char* p = name; *p; p++) {
-			if((!requireSlash || *p == '/') && GlobMatchImpl(rest, p + 1)) {
-				return true;
-			}
+		if(StringUtilities::EndsWith(lower, ".ips")) {
+			return true;
 		}
-		return false;
+		return StringUtilities::EndsWith(lower, ".bps");
 	}
 
-	bool GlobMatchImpl(const char* pat, const char* name)
+	//MEP-recipe-v1 §5: normalizes `raw` (MepPack::NormalizeRelativePath) and
+	//additionally rejects the empty result - every path this interpreter
+	//writes or reads MUST be non-empty once normalized.
+	bool RequireSafeRel(const string& raw, string& out)
 	{
-		if(pat[0] == '*' && pat[1] == '*' && pat[2] == '/') {
-			return MatchStarStar(pat + 3, name, true);
+		string normalized;
+		if(!MepPack::NormalizeRelativePath(raw, normalized) || normalized.empty()) {
+			return false;
 		}
-		if(pat[0] == '*' && pat[1] == '*') {
-			return MatchStarStar(pat + 2, name, false);
-		}
-		if(pat[0] == '*') {
-			if(GlobMatchImpl(pat + 1, name)) {
-				return true;
+		out = normalized;
+		return true;
+	}
+
+	enum class GlobTokenKind : uint8_t
+	{
+		Literal,
+		Star, //zero or more chars other than '/'
+		StarStar, //zero or more of anything
+		StarStarSlash, //zero or more whole segments ("**/")
+		Question //one char other than '/'
+	};
+
+	struct GlobToken
+	{
+		GlobTokenKind Kind;
+		char Literal;
+	};
+
+	vector<GlobToken> TokenizeGlob(const string& pattern)
+	{
+		vector<GlobToken> tokens;
+		for(size_t i = 0; i < pattern.size();) {
+			char c = pattern[i];
+			if(c == '*' && i + 1 < pattern.size() && pattern[i + 1] == '*') {
+				if(i + 2 < pattern.size() && pattern[i + 2] == '/') {
+					tokens.push_back({ GlobTokenKind::StarStarSlash, 0 });
+					i += 3;
+				} else {
+					tokens.push_back({ GlobTokenKind::StarStar, 0 });
+					i += 2;
+				}
+			} else if(c == '*') {
+				tokens.push_back({ GlobTokenKind::Star, 0 });
+				i++;
+			} else if(c == '?') {
+				tokens.push_back({ GlobTokenKind::Question, 0 });
+				i++;
+			} else {
+				tokens.push_back({ GlobTokenKind::Literal, c });
+				i++;
 			}
-			return *name && *name != '/' && GlobMatchImpl(pat, name + 1);
 		}
-		if(pat[0] == '?') {
-			return *name && *name != '/' && GlobMatchImpl(pat + 1, name + 1);
+		return tokens;
+	}
+
+	//NFA state values: 0 = inactive, 1 = active at a segment boundary (a
+	//"**/" may end here without consuming anything), 2 = active mid-segment
+	//(a "**/" must still see a '/' before it can end).
+	void CloseGlobStates(const vector<GlobToken>& tokens, vector<char>& states)
+	{
+		for(size_t i = 0; i < tokens.size(); i++) {
+			if(!states[i]) {
+				continue;
+			}
+			switch(tokens[i].Kind) {
+				case GlobTokenKind::Star:
+				case GlobTokenKind::StarStar:
+					states[i + 1] = 1;
+					break;
+				case GlobTokenKind::StarStarSlash:
+					if(states[i] == 1) {
+						states[i + 1] = 1;
+					}
+					break;
+				default:
+					break;
+			}
 		}
-		if(pat[0] == '\0') {
-			return *name == '\0';
-		}
-		return *name == pat[0] && GlobMatchImpl(pat + 1, name + 1);
 	}
 }
 
 bool GlobMatch(const string& pattern, const string& name)
 {
-	return GlobMatchImpl(pattern.c_str(), name.c_str());
+	vector<GlobToken> tokens = TokenizeGlob(pattern);
+	vector<char> states(tokens.size() + 1, 0);
+	vector<char> next(tokens.size() + 1, 0);
+	states[0] = 1;
+	CloseGlobStates(tokens, states);
+	for(char c : name) {
+		std::fill(next.begin(), next.end(), 0);
+		bool any = false;
+		for(size_t i = 0; i < tokens.size(); i++) {
+			if(!states[i]) {
+				continue;
+			}
+			switch(tokens[i].Kind) {
+				case GlobTokenKind::Literal:
+					if(c == tokens[i].Literal) {
+						next[i + 1] = 1;
+						any = true;
+					}
+					break;
+				case GlobTokenKind::Question:
+					if(c != '/') {
+						next[i + 1] = 1;
+						any = true;
+					}
+					break;
+				case GlobTokenKind::Star:
+					if(c != '/') {
+						next[i] = 1;
+						any = true;
+					}
+					break;
+				case GlobTokenKind::StarStar:
+					next[i] = 1;
+					any = true;
+					break;
+				case GlobTokenKind::StarStarSlash:
+					//A boundary state (1) must win over a mid-segment one (2)
+					if(c == '/') {
+						next[i] = 1;
+					} else if(next[i] != 1) {
+						next[i] = 2;
+					}
+					any = true;
+					break;
+			}
+		}
+		if(!any) {
+			return false;
+		}
+		CloseGlobStates(tokens, next);
+		std::swap(states, next);
+	}
+	return states[tokens.size()] != 0;
 }
 
 namespace
@@ -282,10 +365,7 @@ namespace
 	}
 
 	//Applies `prefix` to `value` once (idempotent: a value already under
-	//the prefix is returned unchanged). Split into guarded statements
-	//(see IsPatchDest above) rather than one chained boolean + ternary
-	//expression, so no single line reads as an opaque high-entropy run of
-	//mixed code and quoted text to a naive secret scanner.
+	//the prefix is returned unchanged).
 	string ApplyPrefixOnce(const string& value, const string& prefix)
 	{
 		if(value == prefix) {
@@ -344,37 +424,44 @@ namespace
 		size_t tagEnd = stripped.find('>') + 1;
 		return stripped.substr(0, tagEnd) + RewriteHiresParams(tag, params, prefix) + newline;
 	}
-}
 
-string RewriteHiresText(const string& text, const vector<string>& tags, const string& prefixIn)
-{
-	string prefix = prefixIn;
-	if(prefix.empty() || prefix.back() != '/') {
-		prefix += '/';
+	//MEP-recipe-v1 §4.4: rewrites the bgm/sfx/img/background/patch file-path
+	//token of every matching tagged line of `text`; `tags` is the op's own
+	//tags list (only those tags are rewritten). Returns the rewritten text.
+	string RewriteHiresText(const string& text, const vector<string>& tags, const string& prefixIn)
+	{
+		string prefix = prefixIn;
+		if(prefix.empty() || prefix.back() != '/') {
+			prefix += '/';
+		}
+		string result;
+		size_t pos = 0;
+		while(pos < text.size()) {
+			size_t next = text.find('\n', pos);
+			size_t len = next == string::npos ? text.size() - pos : next - pos + 1;
+			result += RewriteHiresLine(text.substr(pos, len), tags, prefix);
+			pos += len;
+		}
+		return result;
 	}
-	string result;
-	size_t pos = 0;
-	while(pos < text.size()) {
-		size_t next = text.find('\n', pos);
-		size_t len = next == string::npos ? text.size() - pos : next - pos + 1;
-		result += RewriteHiresLine(text.substr(pos, len), tags, prefix);
-		pos += len;
-	}
-	return result;
-}
 
-vector<string> CollectStringArray(const JsonValue& parent, const char* key)
-{
-	vector<string> result;
-	const JsonValue* arr = parent.Get(key);
-	if(arr && arr->IsArray()) {
-		for(const JsonValue& item : arr->GetArray()) {
-			if(item.IsString()) {
-				result.push_back(item.GetString());
+	//Every string entry of `parent`'s array member `key` (non-string entries
+	//skipped); "" when the member is absent or not an array. Shared by every
+	//op field that is a JSON array of strings (currently only rewrite-paths's
+	//"tags").
+	vector<string> CollectStringArray(const JsonValue& parent, const char* key)
+	{
+		vector<string> result;
+		const JsonValue* arr = parent.Get(key);
+		if(arr && arr->IsArray()) {
+			for(const JsonValue& item : arr->GetArray()) {
+				if(item.IsString()) {
+					result.push_back(item.GetString());
+				}
 			}
 		}
+		return result;
 	}
-	return result;
 }
 
 //--- the four op runners (§4) -----------------------------------------------
@@ -408,14 +495,6 @@ namespace
 		out.write((const char*)data.data(), (std::streamsize)data.size());
 		return true;
 	}
-	string RstripSlash(const string& value)
-	{
-		string result = value;
-		while(result.size() > 1 && result.back() == '/') {
-			result.pop_back();
-		}
-		return result;
-	}
 	//Dedupes RunGlobOp's matches by basename and writes the surviving ones.
 	bool WriteGlobMatches(const vector<string>& matches, MepRecipeSource& src,
 		const string& destDir, MepRecipeOpContext& ctx, string& error)
@@ -429,7 +508,11 @@ namespace
 				return false;
 			}
 			seenBasenames[base] = match;
-			string dest = destDir + "/" + base;
+			string dest;
+			if(!RequireSafeRel(destDir + "/" + base, dest)) {
+				error = "glob: unsafe destination for '" + match + "'";
+				return false;
+			}
 			if(!ctx.IncludePatches && IsPatchDest(dest)) {
 				continue;
 			}
@@ -502,7 +585,8 @@ bool RunGlobOp(const JsonValue& op, MepRecipeOpContext& ctx, string& error)
 {
 	string sourceId, pattern, destDir;
 	bool fromOk = SplitFrom(op.GetString("from"), sourceId, pattern);
-	bool toOk = RequireSafeRel(RstripSlash(op.GetString("to")), destDir);
+	//NormalizeRelativePath already drops the trailing '/' of "audio/"
+	bool toOk = RequireSafeRel(op.GetString("to"), destDir);
 	if(!fromOk || !toOk) {
 		error = "glob: invalid 'from'/'to'";
 		return false;
@@ -555,6 +639,14 @@ bool RunRewritePathsOp(const JsonValue& op, MepRecipeOpContext& ctx, string& err
 		error = "rewrite-paths: invalid 'file'";
 		return false;
 	}
+	//MEP-recipe-v1 §4.4/§5: the prefix is a safe relative directory prefix -
+	//an absolute or '..' prefix is a validation error (mep_recipe.py applies
+	//the same _safe() check to prefix.rstrip("/"))
+	string prefix;
+	if(!RequireSafeRel(op.GetString("prefix"), prefix)) {
+		error = "rewrite-paths: invalid 'prefix'";
+		return false;
+	}
 	if(ctx.IsWithheld(rel)) {
 		return true;
 	}
@@ -565,12 +657,12 @@ bool RunRewritePathsOp(const JsonValue& op, MepRecipeOpContext& ctx, string& err
 		return false;
 	}
 	vector<string> tags = CollectStringArray(op, "tags");
-	string prefix = op.GetString("prefix");
-	std::replace(prefix.begin(), prefix.end(), '\\', '/');
-	ifstream in(path, std::ios::in | std::ios::binary);
-	std::ostringstream ss;
-	ss << in.rdbuf();
-	string rewritten = RewriteHiresText(ss.str(), tags, prefix);
+	string text;
+	if(!MepFileIo::ReadWholeFile(path, text)) {
+		error = "rewrite-paths: cannot read: " + rel;
+		return false;
+	}
+	string rewritten = RewriteHiresText(text, tags, prefix);
 	ofstream out(path, std::ios::out | std::ios::binary);
 	out.write(rewritten.data(), (std::streamsize)rewritten.size());
 	return true;

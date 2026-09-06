@@ -7,7 +7,8 @@
 #include "sha256.h"
 #include <sstream>
 #include <iomanip>
-#include <fstream>
+#include <cstring>
+#include <algorithm>
 
 static const size_t BLOCK_BYTES = 64;
 
@@ -32,7 +33,7 @@ static const uint32_t kRoundConstants[64] = {
 	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-static void reset(uint32_t state[8], std::string &buffer, uint64_t &blocks)
+static void reset(uint32_t state[8], size_t &buffered, uint64_t &blocks)
 {
 	/* SHA-256 initial hash values (FIPS 180-4 §5.3.3) */
 	state[0] = 0x6a09e667;
@@ -43,7 +44,7 @@ static void reset(uint32_t state[8], std::string &buffer, uint64_t &blocks)
 	state[5] = 0x9b05688c;
 	state[6] = 0x1f83d9ab;
 	state[7] = 0x5be0cd19;
-	buffer = "";
+	buffered = 0;
 	blocks = 0;
 }
 
@@ -52,13 +53,13 @@ static uint32_t rotr(uint32_t value, uint32_t bits)
 	return (value >> bits) | (value << (32 - bits));
 }
 
-static void loadSchedule(const std::string &block, uint32_t w[64])
+static void loadSchedule(const uint8_t *block, uint32_t w[64])
 {
 	for(size_t i = 0; i < 16; i++) {
-		w[i] = (uint32_t)(uint8_t)block[4 * i] << 24
-			| (uint32_t)(uint8_t)block[4 * i + 1] << 16
-			| (uint32_t)(uint8_t)block[4 * i + 2] << 8
-			| (uint32_t)(uint8_t)block[4 * i + 3];
+		w[i] = (uint32_t)block[4 * i] << 24
+			| (uint32_t)block[4 * i + 1] << 16
+			| (uint32_t)block[4 * i + 2] << 8
+			| (uint32_t)block[4 * i + 3];
 	}
 	for(size_t i = 16; i < 64; i++) {
 		uint32_t s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
@@ -88,7 +89,7 @@ static void compress(uint32_t state[8], const uint32_t w[64])
 	state[4] += e; state[5] += f; state[6] += g; state[7] += h;
 }
 
-static void transform(uint32_t state[8], const std::string &block, uint64_t &blocks)
+static void transform(uint32_t state[8], const uint8_t *block, uint64_t &blocks)
 {
 	uint32_t w[64];
 	loadSchedule(block, w);
@@ -98,28 +99,46 @@ static void transform(uint32_t state[8], const std::string &block, uint64_t &blo
 
 SHA256::SHA256()
 {
-	reset(state, buffer, blocks);
+	reset(state, buffered, blocks);
 }
 
-void SHA256::update(const std::string &s)
+void SHA256::update(const uint8_t* data, size_t size)
 {
-	std::istringstream is(s);
-	update(is);
+	if(buffered > 0) {
+		//Top up the pending tail first; only a complete block is transformed
+		size_t take = std::min(size, BLOCK_BYTES - buffered);
+		memcpy(buffer + buffered, data, take);
+		buffered += take;
+		data += take;
+		size -= take;
+		if(buffered < BLOCK_BYTES) {
+			return;
+		}
+		transform(state, buffer, blocks);
+		buffered = 0;
+	}
+	while(size >= BLOCK_BYTES) {
+		transform(state, data, blocks);
+		data += BLOCK_BYTES;
+		size -= BLOCK_BYTES;
+	}
+	if(size > 0) {
+		memcpy(buffer, data, size);
+		buffered = size;
+	}
 }
 
 void SHA256::update(std::istream &is)
 {
-	char sbuf[BLOCK_BYTES];
-
-	while(true) {
-		is.read(sbuf, BLOCK_BYTES - buffer.size());
-		buffer.append(sbuf, (size_t)is.gcount());
-		if(buffer.size() != BLOCK_BYTES) {
-			return;
+	static const size_t kChunk = 64 * 1024;
+	std::vector<uint8_t> chunk(kChunk);
+	while(is) {
+		is.read((char*)chunk.data(), (std::streamsize)kChunk);
+		std::streamsize got = is.gcount();
+		if(got <= 0) {
+			break;
 		}
-
-		transform(state, buffer, blocks);
-		buffer.clear();
+		update(chunk.data(), (size_t)got);
 	}
 }
 
@@ -128,21 +147,19 @@ void SHA256::update(std::istream &is)
  */
 std::string SHA256::final()
 {
-	uint64_t totalBits = (blocks * BLOCK_BYTES + buffer.size()) * 8;
-	size_t buffered = buffer.size();
+	uint64_t totalBits = (blocks * BLOCK_BYTES + buffered) * 8;
+	size_t used = buffered;
 
-	buffer += (char)0x80;
-	while(buffer.size() < BLOCK_BYTES) {
-		buffer += (char)0x00;
-	}
+	buffer[used++] = 0x80;
+	memset(buffer + used, 0, BLOCK_BYTES - used);
 
-	if(buffered + 1 > BLOCK_BYTES - 8) {
+	if(used > BLOCK_BYTES - 8) {
 		transform(state, buffer, blocks);
-		buffer.assign(BLOCK_BYTES, (char)0x00);
+		memset(buffer, 0, BLOCK_BYTES);
 	}
 
 	for(int i = 0; i < 8; i++) {
-		buffer[BLOCK_BYTES - 8 + i] = (char)((totalBits >> (8 * (7 - i))) & 0xff);
+		buffer[BLOCK_BYTES - 8 + i] = (uint8_t)((totalBits >> (8 * (7 - i))) & 0xff);
 	}
 	transform(state, buffer, blocks);
 
@@ -152,39 +169,21 @@ std::string SHA256::final()
 	}
 
 	/* Reset for next run */
-	reset(state, buffer, blocks);
+	reset(state, buffered, blocks);
 
 	return result.str();
 }
 
-std::string SHA256::GetHash(vector<uint8_t> &data)
-{
-	std::stringstream ss;
-	ss.write((char*)data.data(), data.size());
-	SHA256 checksum;
-	checksum.update(ss);
-	return checksum.final();
-}
-
-std::string SHA256::GetHash(uint8_t* data, size_t size)
-{
-	std::stringstream ss;
-	ss.write((char*)data, size);
-	SHA256 checksum;
-	checksum.update(ss);
-	return checksum.final();
-}
-
-std::string SHA256::GetHash(std::istream &stream)
+std::string SHA256::GetHash(const uint8_t* data, size_t size)
 {
 	SHA256 checksum;
-	checksum.update(stream);
+	checksum.update(data, size);
 	return checksum.final();
 }
 
 std::string SHA256::GetHash(const std::string &filename)
 {
-	std::ifstream stream(filename.c_str(), std::ios::binary);
+	ifstream stream(filename, std::ios::binary);
 	if(!stream) {
 		//Verification callers (MepRecipeInstaller, MEP-recipe-v1 §8) must never
 		//see an unopenable file as "the empty-input digest": return an empty

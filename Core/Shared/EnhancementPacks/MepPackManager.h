@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "Shared/EnhancementPacks/MepPack.h"
+#include "Utilities/SimpleLock.h"
 
 class VirtualFile;
 class Emulator;
@@ -27,8 +28,11 @@ private:
 	Emulator* _emu;
 	string _romSha1;
 	//Containers disabled by the user (UI/config), lower-cased; independent of
-	//the current scan so it can be pushed at any time
+	//the current scan so it can be pushed at any time. Written from the UI
+	//thread (SetPackEnabled) and the decode thread (HandleLowTextureMatchRate)
+	//while the emulation thread reads it - every access goes through _lock.
 	unordered_set<string> _disabledContainers;
+	mutable SimpleLock _disabledLock;
 	//ADR-0145: containers whose pack.json targets did not match the loaded
 	//ROM's No-Intro SHA1 (lower-cased). They stay in _packs as *optimistic*
 	//candidates: textures apply (HdNesPack falls through per-tile, no
@@ -66,15 +70,16 @@ private:
 	void ScanSiblingFolder();
 	bool LoadContainer(const string& rootFolder, const string& containerName, bool fromZip, MepPack& outPack, string& error);
 	//Folder-convention pack (no pack.json): sections detected from the fixed
-	//layout, target = the current ROM. False when the folder has no layer.
-	bool LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack);
+	//layout, target = the current ROM. False when the folder has no layer. A
+	//non-empty humanPrefix (ADR-0147, "mep") roots the human layer at
+	//rootFolder/<humanPrefix>/ while the machine layer stays at auto/.
+	bool LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, const string& humanPrefix, MepPack& outPack);
 	//ADR-0147: true when the sibling holds mep/ as the human pack layer
 	//(a section probe under mep/, or a mep/pack.json exists)
 	bool HasSiblingMepPack(const string& sibling) const;
-	//ADR-0147: the sibling pack whose human layer is rooted at mep/ and whose
-	//machine layer is the sibling auto/ folder (siblings, not children)
-	bool LoadMepSiblingPack(const string& sibling, MepPack& outPack);
 	static string SystemFromExtension(const string& lowerExt);
+	//Comma-joined names of the pack's present sections (log + pack-list text)
+	static string JoinPresentSections(const MepPack& pack);
 	//Reads .mep-install.json at the pack root into _packIdentityByContainer
 	//(P.3; a missing/malformed stamp leaves the entry with empty fields)
 	void ReadInstallIdentity(MepPack& pack);
@@ -137,11 +142,8 @@ public:
 	void StartBootstrapIfNeeded();
 	bool IsBootstrapping() const { return _bootstrapping; }
 	const string& GetRomName() const { return _romName; }
-	const string& GetRomFolder() const { return _romFolder; }
 
 	const string& GetRomSha1() const { return _romSha1; }
-	const vector<MepPack>& GetPacks() const { return _packs; }
-	const vector<string>& GetRejected() const { return _rejected; }
 	bool HasPacks() const { return !_packs.empty(); }
 
 	//Per-pack toggle (persisted by the UI); takes effect on the next load

@@ -7,6 +7,46 @@
 
 namespace fs = std::filesystem;
 
+namespace
+{
+	//JSON string literal (quotes included) - ids/paths come back from a file a
+	//user or an earlier session wrote, so they are escaped, never trusted
+	string JsonQuote(const string& value)
+	{
+		string out = "\"";
+		for(unsigned char c : value) {
+			switch(c) {
+				case '"': out += "\\\""; break;
+				case '\\': out += "\\\\"; break;
+				case '\n': out += "\\n"; break;
+				case '\r': out += "\\r"; break;
+				case '\t': out += "\\t"; break;
+				default:
+					if(c < 0x20) {
+						char buf[8];
+						snprintf(buf, sizeof(buf), "\\u%04x", c);
+						out += buf;
+					} else {
+						out += (char)c;
+					}
+			}
+		}
+		out += '"';
+		return out;
+	}
+
+	//The numeric suffix of a generated "<prefix>NN" id; 0 when the id does not
+	//carry that prefix (a hand-written id never bumps the counter)
+	uint32_t IdCounter(const string& id, const char* prefix)
+	{
+		size_t len = strlen(prefix);
+		if(id.compare(0, len, prefix) != 0) {
+			return 0;
+		}
+		return (uint32_t)atoi(id.c_str() + len);
+	}
+}
+
 //---------------------------------------------------------------------------
 // FingerprintStore
 //---------------------------------------------------------------------------
@@ -87,14 +127,14 @@ bool FingerprintStore::Save(const string& path, const vector<AudioFingerprint>& 
 	out << "{\n  \"version\": 1,\n  \"tracks\": [";
 	for(size_t i = 0; i < tracks.size(); i++) {
 		const AudioFingerprint& fp = tracks[i];
-		out << (i ? ",\n" : "\n") << "    { \"id\": \"" << fp.Id << "\", \"kind\": \"" << fp.Kind << "\", \"frames\": " << fp.Frames;
+		out << (i ? ",\n" : "\n") << "    { \"id\": " << JsonQuote(fp.Id) << ", \"kind\": " << JsonQuote(fp.Kind) << ", \"frames\": " << fp.Frames;
 		//F5.4g Block C item 8 (ADR-0134 Option A): emit the loop point only
 		//when non-zero, so a track that loops the whole file stays schema-minimal.
 		if(fp.Loop > 0) {
 			out << ", \"loop\": " << fp.Loop;
 		}
 		if(!fp.MidiFile.empty()) {
-			out << ", \"midi\": \"" << fp.MidiFile << "\"";
+			out << ", \"midi\": " << JsonQuote(fp.MidiFile);
 		}
 		out << ", \"events\": [";
 		for(size_t j = 0; j < fp.Events.size(); j++) {
@@ -263,8 +303,9 @@ uint32_t TrackSegmenter::Save(const string& audioFolder)
 	uint32_t bgmMax = 0;
 	uint32_t sfxMax = 0;
 	for(const AudioFingerprint& t : tracks) {
-		uint32_t n = (uint32_t)atoi(t.Id.c_str() + (t.Kind == "bgm" ? 5 : 3));
-		(t.Kind == "bgm" ? bgmMax : sfxMax) = std::max(t.Kind == "bgm" ? bgmMax : sfxMax, n);
+		bool isBgm = t.Kind == "bgm";
+		uint32_t n = IdCounter(t.Id, isBgm ? "track" : "sfx");
+		(isBgm ? bgmMax : sfxMax) = std::max(isBgm ? bgmMax : sfxMax, n);
 	}
 
 	uint32_t written = 0;
@@ -306,7 +347,15 @@ uint32_t TrackSegmenter::Save(const string& audioFolder)
 //---------------------------------------------------------------------------
 void FingerprintMatcher::SetTracks(const vector<AudioFingerprint>& tracks)
 {
-	_tracks = tracks;
+	//A track without a single onset can never be matched (Feed indexes
+	//Events[0] unconditionally), so it is dropped here rather than guarded per
+	//frame
+	_tracks.clear();
+	for(const AudioFingerprint& track : tracks) {
+		if(!track.Events.empty()) {
+			_tracks.push_back(track);
+		}
+	}
 	_cursors.assign(_tracks.size(), Cursor());
 	_playing = -1;
 	_frame = 0;

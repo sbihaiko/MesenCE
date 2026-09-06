@@ -10,7 +10,10 @@
 #include "Shared/Video/DebugStats.h"
 #include "Shared/InputHud.h"
 #include "Shared/MessageManager.h"
+#include "Shared/NotificationManager.h"
+#include "Shared/Interfaces/INotificationListener.h"
 #include "Shared/EnhancementPacks/MepPackManager.h"
+#include "Shared/Video/FrameCapture.h"
 #include "Utilities/Video/IVideoRecorder.h"
 #include "Utilities/Video/AviRecorder.h"
 #include "Utilities/Video/GifRecorder.h"
@@ -18,6 +21,35 @@
 #include "Utilities/JsonReader.h"
 #include "Shared/Video/BorderLayout.h"
 #include "Utilities/FolderUtilities.h"
+
+namespace
+{
+	//ADR-0149: flips VideoRenderer::_borderDirty when the active enhancement
+	//pack may have changed. Held as a shared_ptr by the renderer (the
+	//NotificationManager keeps only a weak_ptr) and touches nothing else, so
+	//it never runs renderer code on the notifying thread.
+	class BorderInvalidator final : public INotificationListener
+	{
+	public:
+		explicit BorderInvalidator(std::atomic<bool>& dirty) : _dirty(dirty) {}
+
+		void ProcessNotification(ConsoleNotificationType type, void* parameter) override
+		{
+			switch(type) {
+				case ConsoleNotificationType::GameLoaded:
+				case ConsoleNotificationType::BeforeGameUnload:
+				case ConsoleNotificationType::EmulationStopped:
+					_dirty.store(true, std::memory_order_release);
+					break;
+				default:
+					break;
+			}
+		}
+
+	private:
+		std::atomic<bool>& _dirty;
+	};
+}
 
 VideoRenderer::VideoRenderer(Emulator* emu)
 {
@@ -27,6 +59,13 @@ VideoRenderer::VideoRenderer(Emulator* emu)
 	_rendererHud.reset(new DebugHud());
 	_systemHud.reset(new SystemHud(_emu));
 	_inputHud.reset(new InputHud(emu, _rendererHud.get()));
+
+	//Emulator constructs its NotificationManager before this object (member
+	//order), so the listener can be registered right away.
+	_borderListener.reset(new BorderInvalidator(_borderDirty));
+	if(NotificationManager* notifications = _emu->GetNotificationManager()) {
+		notifications->RegisterNotificationListener(_borderListener);
+	}
 }
 
 VideoRenderer::~VideoRenderer()
@@ -186,120 +225,129 @@ std::pair<FrameInfo, OverscanDimensions> VideoRenderer::GetScriptHudSize()
 	return { scriptHudSize, overscan };
 }
 
+void VideoRenderer::ResetBorderAsset()
+{
+	_borderAvailable = false;
+	_borderPixels.clear();
+	_borderBackdrop.clear();
+	_borderLayout = BorderLayout();
+}
+
+//Decode thread only. Runs when _borderDirty is set (game load/unload/stop),
+//so the MepPackManager section lookup and the file I/O happen once per pack
+//change instead of once per frame (ADR-0149 §2 "decoded once at pack load").
 void VideoRenderer::UpdateBorderAsset()
 {
+	if(!_borderDirty.exchange(false, std::memory_order_acq_rel)) {
+		return;
+	}
+
 	MepPackManager* mgr = _emu->GetEnhancementPackManager();
 	string borderFolder = mgr ? mgr->GetSectionPath(MepSectionType::Border) : "";
 	if(borderFolder.empty() && mgr) {
 		borderFolder = mgr->GetSectionAutoPath(MepSectionType::Border);
 	}
+	if(borderFolder == _borderPackFolder && (_borderAvailable || borderFolder.empty())) {
+		//Same pack as before - the cached surface is still the right one
+		return;
+	}
 
-	if(borderFolder != _borderPackFolder || !_borderLoaded) {
-		_borderPackFolder = borderFolder;
-		_borderLoaded = true;
-		_borderAvailable = false;
+	_borderPackFolder = borderFolder;
+	ResetBorderAsset();
+	if(borderFolder.empty()) {
+		return;
+	}
+
+	string pngPath = FolderUtilities::CombinePath(borderFolder, "border.png");
+	ifstream pngFile(pngPath, ios::in | ios::binary);
+	if(!pngFile) {
+		return;
+	}
+	vector<uint8_t> fileData((std::istreambuf_iterator<char>(pngFile)), std::istreambuf_iterator<char>());
+	uint32_t w = 0, h = 0;
+	if(!PNGHelper::ReadPNG(std::move(fileData), _borderPixels, w, h) || w == 0 || h == 0) {
 		_borderPixels.clear();
-		_borderCanvasWidth = 0;
-		_borderCanvasHeight = 0;
-		_borderVpX = 0;
-		_borderVpY = 0;
-		_borderVpWidth = 0;
-		_borderVpHeight = 0;
-		_borderUnderlay = false;
+		return;
+	}
+	//A border is a screen-sized bezel; refuse anything that would make the
+	//composite buffer (and every downstream copy) absurdly large. Same pixel
+	//budget as the capture path (FrameCapture.h).
+	if(w > 8192 || h > 8192 || (uint64_t)w * h > FrameCaptureMath::MaxCapturePixels) {
+		MessageManager::Log("[MEP] border: border.png is " + std::to_string(w) + "x" + std::to_string(h) + " - too large, border skipped (" + borderFolder + ")");
+		_borderPixels.clear();
+		return;
+	}
+	if(_borderPixels.size() < (size_t)w * h) {
+		_borderPixels.clear();
+		return;
+	}
 
-		if(!borderFolder.empty()) {
-			string pngPath = FolderUtilities::CombinePath(borderFolder, "border.png");
-			ifstream pngFile(pngPath, ios::in | ios::binary);
-			if(pngFile) {
-				vector<uint8_t> fileData((std::istreambuf_iterator<char>(pngFile)), std::istreambuf_iterator<char>());
-				uint32_t w = 0, h = 0;
-				if(PNGHelper::ReadPNG(fileData, _borderPixels, w, h) && w > 0 && h > 0) {
-					_borderCanvasWidth = w;
-					_borderCanvasHeight = h;
-					_borderAvailable = true;
+	//Layout math lives in BorderLayout (host-free, unit-tested); this method
+	//only reads border.json into it (ADR-0149 §1)
+	BorderLayout layout;
+	layout.CanvasWidth = w;
+	layout.CanvasHeight = h;
 
-					//Layout math lives in BorderLayout (host-free, unit-tested); this
-					//method only reads border.json and copies the result into the
-					//cached members (ADR-0149 §1)
-					BorderLayout layout;
-					layout.CanvasWidth = w;
-					layout.CanvasHeight = h;
-
-					string jsonPath = FolderUtilities::CombinePath(borderFolder, "border.json");
-					ifstream jsonFile(jsonPath, ios::in | ios::binary);
-					if(jsonFile) {
-						string jsonText((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
-						JsonReader reader;
-						JsonValue root;
-						if(reader.Parse(jsonText, root) && root.IsObject()) {
-							const JsonValue* vp = root.Get("viewport");
-							if(vp && vp->IsObject()) {
-								const JsonValue* vx = vp->Get("x");
-								const JsonValue* vy = vp->Get("y");
-								const JsonValue* vw = vp->Get("width");
-								const JsonValue* vh = vp->Get("height");
-								if(vx && vx->IsNumber()) layout.ViewportX = (int32_t)vx->GetNumber();
-								if(vy && vy->IsNumber()) layout.ViewportY = (int32_t)vy->GetNumber();
-								if(vw && vw->IsNumber()) layout.ViewportWidth = (uint32_t)vw->GetNumber();
-								if(vh && vh->IsNumber()) layout.ViewportHeight = (uint32_t)vh->GetNumber();
-							}
-							const JsonValue* u = root.Get("underlay");
-							if(u && u->IsBool()) {
-								layout.Underlay = u->GetBool();
-							}
-							const JsonValue* sm = root.Get("scale_mode");
-							if(sm && sm->IsString()) {
-								BorderLayout::ParseScaleMode(sm->GetString(), layout.ScaleMode);
-							}
-						}
-					}
-
-					//Fallback if viewport was absent or invalid: 4:3 centred inside canvas
-					layout.ApplyDefaultViewportIfMissing();
-					_borderVpX = layout.ViewportX;
-					_borderVpY = layout.ViewportY;
-					_borderVpWidth = layout.ViewportWidth;
-					_borderVpHeight = layout.ViewportHeight;
-					_borderUnderlay = layout.Underlay;
-				}
+	string jsonPath = FolderUtilities::CombinePath(borderFolder, "border.json");
+	ifstream jsonFile(jsonPath, ios::in | ios::binary);
+	if(jsonFile) {
+		string jsonText((std::istreambuf_iterator<char>(jsonFile)), std::istreambuf_iterator<char>());
+		JsonReader reader;
+		JsonValue root;
+		if(reader.Parse(jsonText, root) && root.IsObject()) {
+			const JsonValue* vp = root.Get("viewport");
+			if(vp && vp->IsObject()) {
+				const JsonValue* vx = vp->Get("x");
+				const JsonValue* vy = vp->Get("y");
+				const JsonValue* vw = vp->Get("width");
+				const JsonValue* vh = vp->Get("height");
+				if(vx && vx->IsNumber()) layout.ViewportX = (int32_t)vx->GetNumber();
+				if(vy && vy->IsNumber()) layout.ViewportY = (int32_t)vy->GetNumber();
+				if(vw && vw->IsNumber()) layout.ViewportWidth = (uint32_t)vw->GetNumber();
+				if(vh && vh->IsNumber()) layout.ViewportHeight = (uint32_t)vh->GetNumber();
+			}
+			const JsonValue* u = root.Get("underlay");
+			if(u && u->IsBool()) {
+				layout.Underlay = u->GetBool();
+			}
+			const JsonValue* sm = root.Get("scale_mode");
+			if(sm && sm->IsString()) {
+				BorderLayout::ParseScaleMode(sm->GetString(), layout.ScaleMode);
 			}
 		}
 	}
+
+	//Fallback if viewport was absent or invalid: 4:3 centred inside canvas
+	layout.ApplyDefaultViewportIfMissing();
+	_borderLayout = layout;
+	BorderPrepareBackdrop(_borderBackdrop, _borderPixels.data(), _borderLayout);
+	_borderAvailable = true;
 }
 
-void VideoRenderer::CompositeBorder(RenderedFrame& inFrame, RenderedFrame& outFrame)
+RenderedFrame* VideoRenderer::CompositeBorder(RenderedFrame& inFrame)
 {
-	outFrame = inFrame;
-	bool enableBorder = _emu->GetSettings()->GetEnhancementPackConfig().EnableBorder;
-	if(!enableBorder) {
-		return;
+	if(!_emu->GetSettings()->GetEnhancementPackConfig().EnableBorder) {
+		return &inFrame;
 	}
 
 	UpdateBorderAsset();
-	if(!_borderAvailable || _borderCanvasWidth == 0 || _borderCanvasHeight == 0 || _borderPixels.empty()) {
-		return;
+	if(!_borderAvailable || _borderLayout.CanvasWidth == 0 || _borderLayout.CanvasHeight == 0 || _borderPixels.empty() || !inFrame.FrameBuffer) {
+		return &inFrame;
 	}
 
-	uint32_t totalPixels = _borderCanvasWidth * _borderCanvasHeight;
+	size_t totalPixels = (size_t)_borderLayout.CanvasWidth * _borderLayout.CanvasHeight;
 	if(_compositeBuffer.size() != totalPixels) {
 		_compositeBuffer.resize(totalPixels);
 	}
 
-	BorderLayout layout;
-	layout.CanvasWidth = _borderCanvasWidth;
-	layout.CanvasHeight = _borderCanvasHeight;
-	layout.ViewportX = _borderVpX;
-	layout.ViewportY = _borderVpY;
-	layout.ViewportWidth = _borderVpWidth;
-	layout.ViewportHeight = _borderVpHeight;
-	layout.Underlay = _borderUnderlay;
-
 	uint32_t* dst = _compositeBuffer.data();
-	BorderCompositeFrame(dst, _borderPixels.data(), layout, (const uint32_t*)inFrame.FrameBuffer, inFrame.Width, inFrame.Height);
+	BorderCompositePrepared(dst, _borderBackdrop.data(), _borderPixels.data(), _borderLayout, (const uint32_t*)inFrame.FrameBuffer, inFrame.Width, inFrame.Height, _borderSxLut);
 
-	outFrame.FrameBuffer = (void*)dst;
-	outFrame.Width = _borderCanvasWidth;
-	outFrame.Height = _borderCanvasHeight;
+	_compositedFrame = inFrame;
+	_compositedFrame.FrameBuffer = (void*)dst;
+	_compositedFrame.Width = _borderLayout.CanvasWidth;
+	_compositedFrame.Height = _borderLayout.CanvasHeight;
+	return &_compositedFrame;
 }
 
 void VideoRenderer::UpdateFrame(RenderedFrame& frame)
@@ -311,16 +359,15 @@ void VideoRenderer::UpdateFrame(RenderedFrame& frame)
 
 	ProcessAviRecording(frame);
 
-	RenderedFrame effectiveFrame;
-	CompositeBorder(frame, effectiveFrame);
+	RenderedFrame* effectiveFrame = CompositeBorder(frame);
 
 	{
 		auto lock = _frameLock.AcquireSafe();
-		_lastFrame = effectiveFrame;
+		_lastFrame = *effectiveFrame;
 	}
 
 	if(_renderer) {
-		_renderer->UpdateFrame(effectiveFrame);
+		_renderer->UpdateFrame(*effectiveFrame);
 		_needRedraw = true;
 		_waitForRender.Signal();
 	}

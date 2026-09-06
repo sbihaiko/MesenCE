@@ -1,4 +1,3 @@
-#include "pch.h"
 //ADR-0153 §1/§3 (Phase 9, slice F9.1). Port of the offline prototype
 //scripts/spike_tile_sheets.py (`stable_screens`, `grid_hash`, `frame_grid`,
 //`metatiles`) into a host-free Core module. No pch.h, no Emulator, no I/O.

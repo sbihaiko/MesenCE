@@ -35,7 +35,7 @@ void BorderLayout::ApplyDefaultViewportIfMissing()
 	}
 	//Default 4:3 area inside a (16:9) canvas: full height, centred horizontally
 	ViewportHeight = CanvasHeight;
-	ViewportWidth = (CanvasHeight * 4) / 3;
+	ViewportWidth = (uint32_t)(((uint64_t)CanvasHeight * 4) / 3);
 	ViewportX = (CanvasWidth > ViewportWidth) ? (int32_t)((CanvasWidth - ViewportWidth) / 2) : 0;
 	ViewportY = 0;
 }
@@ -117,6 +117,62 @@ BorderRect BorderLayout::ViewportRectOnOutput(uint32_t outputWidth, uint32_t out
 	return r;
 }
 
+namespace
+{
+	//x / 255 rounded to nearest, without a division: exact for every multiple
+	//of 255 and never more than one step from the truncating quotient.
+	inline uint32_t Div255(uint32_t x)
+	{
+		x += 128;
+		return (x + (x >> 8)) >> 8;
+	}
+
+	//The rows/columns of the viewport that actually land on the canvas, as
+	//viewport-relative [begin, end) ranges. Empty when nothing overlaps.
+	struct ClampedSpan
+	{
+		uint32_t VxBegin = 0;
+		uint32_t VxEnd = 0;
+		uint32_t VyBegin = 0;
+		uint32_t VyEnd = 0;
+		bool Empty() const { return VxBegin >= VxEnd || VyBegin >= VyEnd; }
+	};
+
+	ClampedSpan ClampViewport(const BorderLayout& layout)
+	{
+		ClampedSpan s;
+		int64_t x0 = std::max<int64_t>(0, -(int64_t)layout.ViewportX);
+		int64_t x1 = std::min<int64_t>(layout.ViewportWidth, (int64_t)layout.CanvasWidth - layout.ViewportX);
+		int64_t y0 = std::max<int64_t>(0, -(int64_t)layout.ViewportY);
+		int64_t y1 = std::min<int64_t>(layout.ViewportHeight, (int64_t)layout.CanvasHeight - layout.ViewportY);
+		if(x1 <= x0 || y1 <= y0) {
+			return s;
+		}
+		s.VxBegin = (uint32_t)x0;
+		s.VxEnd = (uint32_t)x1;
+		s.VyBegin = (uint32_t)y0;
+		s.VyEnd = (uint32_t)y1;
+		return s;
+	}
+
+	//Blend the border over the clamped viewport only (the pixels the game
+	//just overwrote); everything else already holds the prepared backdrop.
+	void BlendBorderOverViewport(uint32_t* dst, const uint32_t* border, const BorderLayout& layout)
+	{
+		ClampedSpan span = ClampViewport(layout);
+		if(span.Empty()) {
+			return;
+		}
+		for(uint32_t vy = span.VyBegin; vy < span.VyEnd; vy++) {
+			size_t rowBase = (size_t)(layout.ViewportY + (int32_t)vy) * layout.CanvasWidth;
+			for(uint32_t vx = span.VxBegin; vx < span.VxEnd; vx++) {
+				size_t i = rowBase + (size_t)(layout.ViewportX + (int32_t)vx);
+				dst[i] = BorderBlendOver(dst[i], border[i]);
+			}
+		}
+	}
+}
+
 uint32_t BorderBlendOver(uint32_t dst, uint32_t src)
 {
 	uint32_t sa = (src >> 24) & 0xFF;
@@ -136,34 +192,75 @@ uint32_t BorderBlendOver(uint32_t dst, uint32_t src)
 	uint32_t db = dst & 0xFF;
 
 	uint32_t invA = 255 - sa;
-	uint32_t outR = (sr * sa + dr * invA) / 255;
-	uint32_t outG = (sg * sa + dg * invA) / 255;
-	uint32_t outB = (sb * sa + db * invA) / 255;
-	uint32_t outA = sa + (da * invA) / 255;
+	uint32_t outR = Div255(sr * sa + dr * invA);
+	uint32_t outG = Div255(sg * sa + dg * invA);
+	uint32_t outB = Div255(sb * sa + db * invA);
+	uint32_t outA = sa + Div255(da * invA);
 	return (outA << 24) | (outR << 16) | (outG << 8) | outB;
 }
 
-void BorderDrawGameIntoViewport(uint32_t* dst, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight)
+void BorderDrawGameIntoViewport(uint32_t* dst, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight, std::vector<uint32_t>& sxLut)
 {
 	if(!layout.HasViewport() || srcWidth == 0 || srcHeight == 0) {
 		return;
 	}
-	for(uint32_t vy = 0; vy < layout.ViewportHeight; vy++) {
-		int32_t dy = layout.ViewportY + (int32_t)vy;
-		if(dy < 0 || dy >= (int32_t)layout.CanvasHeight) {
-			continue;
-		}
+	ClampedSpan span = ClampViewport(layout);
+	if(span.Empty()) {
+		return;
+	}
+	//Source column per clamped viewport column, once per frame instead of a
+	//64-bit multiply/divide per pixel.
+	uint32_t columns = span.VxEnd - span.VxBegin;
+	if(sxLut.size() < columns) {
+		sxLut.resize(columns);
+	}
+	for(uint32_t c = 0; c < columns; c++) {
+		sxLut[c] = (uint32_t)(((uint64_t)(span.VxBegin + c) * srcWidth) / layout.ViewportWidth);
+	}
+	for(uint32_t vy = span.VyBegin; vy < span.VyEnd; vy++) {
 		uint32_t sy = (uint32_t)(((uint64_t)vy * srcHeight) / layout.ViewportHeight);
 		const uint32_t* srcRow = src + (size_t)sy * srcWidth;
-		uint32_t* dstRow = dst + (size_t)dy * layout.CanvasWidth;
-		for(uint32_t vx = 0; vx < layout.ViewportWidth; vx++) {
-			int32_t dx = layout.ViewportX + (int32_t)vx;
-			if(dx < 0 || dx >= (int32_t)layout.CanvasWidth) {
-				continue;
-			}
-			uint32_t sx = (uint32_t)(((uint64_t)vx * srcWidth) / layout.ViewportWidth);
-			dstRow[dx] = srcRow[sx];
+		uint32_t* dstRow = dst + (size_t)(layout.ViewportY + (int32_t)vy) * layout.CanvasWidth + (layout.ViewportX + (int32_t)span.VxBegin);
+		for(uint32_t c = 0; c < columns; c++) {
+			dstRow[c] = srcRow[sxLut[c]];
 		}
+	}
+}
+
+void BorderDrawGameIntoViewport(uint32_t* dst, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight)
+{
+	std::vector<uint32_t> sxLut;
+	BorderDrawGameIntoViewport(dst, layout, src, srcWidth, srcHeight, sxLut);
+}
+
+void BorderPrepareBackdrop(std::vector<uint32_t>& backdrop, const uint32_t* border, const BorderLayout& layout)
+{
+	size_t totalPixels = (size_t)layout.CanvasWidth * layout.CanvasHeight;
+	backdrop.resize(totalPixels);
+	if(totalPixels == 0) {
+		return;
+	}
+	if(layout.Underlay) {
+		memcpy(backdrop.data(), border, totalPixels * sizeof(uint32_t));
+	} else {
+		//Overlay: outside the viewport the game never draws, so the composite
+		//there is the border over transparent black - fixed for the border's life.
+		for(size_t i = 0; i < totalPixels; i++) {
+			backdrop[i] = BorderBlendOver(0, border[i]);
+		}
+	}
+}
+
+void BorderCompositePrepared(uint32_t* dst, const uint32_t* backdrop, const uint32_t* border, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight, std::vector<uint32_t>& sxLut)
+{
+	size_t totalPixels = (size_t)layout.CanvasWidth * layout.CanvasHeight;
+	if(totalPixels == 0) {
+		return;
+	}
+	memcpy(dst, backdrop, totalPixels * sizeof(uint32_t));
+	BorderDrawGameIntoViewport(dst, layout, src, srcWidth, srcHeight, sxLut);
+	if(!layout.Underlay) {
+		BlendBorderOverViewport(dst, border, layout);
 	}
 }
 

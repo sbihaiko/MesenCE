@@ -59,7 +59,6 @@ private:
 public:
 	uint32_t GetScale() { return _scale; }
 	string GetSystem() { return _system; }
-	uint32_t GetTileCount() { return (uint32_t)_tiles.size(); }
 	vector<unique_ptr<HdLoadedTile>>& GetTiles() { return _tiles; }
 
 	//Finds the pack for the ROM (HdPacks/<romname>/hires.txt) and loads it

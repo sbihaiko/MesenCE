@@ -1,4 +1,6 @@
 #include "pch.h"
+#include <cerrno>
+#include <cstdlib>
 #include <algorithm>
 #include <filesystem>
 #include <unordered_map>
@@ -945,7 +947,16 @@ void HdPackLoader::ProcessBgmTag(vector<string>& tokens)
 	size_t fileEnd = tokens.size();
 	uint32_t loopPosition = 0;
 	if(tokens.size() > 3 && IsAllDigits(tokens.back())) {
-		loopPosition = (uint32_t)std::stoul(tokens.back());
+		//strtoull never throws (stoul would abort the whole pack load on an
+		//out-of-range digit string); a value past uint32 is an error for this
+		//line only, and the tag is still loaded with loop position 0.
+		errno = 0;
+		unsigned long long parsed = strtoull(tokens.back().c_str(), nullptr, 10);
+		if(errno == ERANGE || parsed > 0xFFFFFFFFull) {
+			logError("BGM loop position out of range, ignored: " + tokens.back());
+		} else {
+			loopPosition = (uint32_t)parsed;
+		}
 		fileEnd = tokens.size() - 1;
 	}
 	string filename = JoinAudioFilename(tokens, 2, fileEnd);
@@ -997,12 +1008,19 @@ vector<HdPackCondition*> HdPackLoader::ParseConditionString(string conditionStri
 		}
 		auto result = _conditionsByName.find(name);
 		if(result == _conditionsByName.end()) {
-			string lower = StringUtilities::ToLower(name);
-			for(auto& entry : _conditionsByName) {
-				if(StringUtilities::ToLower(entry.first) == lower) {
-					result = _conditionsByName.find(entry.first);
-					break;
+			//Case-insensitive fallback through an index built once (lazily, and
+			//rebuilt only when a condition was added since), instead of
+			//lowering every registered name on every miss.
+			if(_conditionsByLowerCount != _conditionsByName.size()) {
+				_conditionsByLower.clear();
+				for(auto& entry : _conditionsByName) {
+					_conditionsByLower.emplace(StringUtilities::ToLower(entry.first), entry.first);
 				}
+				_conditionsByLowerCount = _conditionsByName.size();
+			}
+			auto lower = _conditionsByLower.find(StringUtilities::ToLower(name));
+			if(lower != _conditionsByLower.end()) {
+				result = _conditionsByName.find(lower->second);
 			}
 		}
 		if(result != _conditionsByName.end()) {

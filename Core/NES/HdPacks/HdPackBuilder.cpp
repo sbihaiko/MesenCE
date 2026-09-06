@@ -166,7 +166,13 @@ void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 	}
 	_objectsBuilt = true;
 
-	//Most-used non-default art per shape, the tileNearby target data.
+	//Most-used non-default art per shape, the tileNearby target data. A read
+	//through find(): operator[] would insert a zero entry for every tile that
+	//was never counted (static-export seeds).
+	auto usageOf = [this](HdPackTileInfo* tile) -> uint32_t {
+		auto usage = _tileUsageCount.find(tile->GetKey(false));
+		return usage == _tileUsageCount.end() ? 0 : usage->second;
+	};
 	std::map<uint32_t, HdPackTileInfo*> bestByShape;
 	for(unique_ptr<HdPackTileInfo>& tile : _hdData.Tiles) {
 		if(!tile || tile->DefaultTile) {
@@ -174,12 +180,18 @@ void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 		}
 		uint32_t shape = tile->GetKey(true).GetHashCode();
 		auto it = bestByShape.find(shape);
-		if(it == bestByShape.end() || _tileUsageCount[tile->GetKey(false)] > _tileUsageCount[it->second->GetKey(false)]) {
+		if(it == bestByShape.end() || usageOf(tile.get()) > usageOf(it->second)) {
 			bestByShape[shape] = tile.get();
 		}
 	}
 
-	tileRows << std::endl << "# inferred " << _sheetObjectCount << " object sheet(s) -> sheets/objNNN.png" << std::endl;
+	//Condition names already in the pack, once - not a scan per edge
+	unordered_set<string> definedConditions;
+	for(unique_ptr<HdPackCondition>& existing : _hdData.Conditions) {
+		definedConditions.insert(existing->Name);
+	}
+
+	tileRows << '\n' << "# inferred " << _sheetObjectCount << " object sheet(s) -> sheets/objNNN.png" << '\n';
 
 	int edgeIndex = 0;
 	for(const auto& edge : _coOccurrence) {
@@ -197,14 +209,7 @@ void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 		}
 
 		string condName = "obj_nearby" + std::to_string(edgeIndex++);
-		bool alreadyDefined = false;
-		for(unique_ptr<HdPackCondition>& existing : _hdData.Conditions) {
-			if(existing->Name == condName) {
-				alreadyDefined = true;
-				break;
-			}
-		}
-		if(alreadyDefined) {
+		if(definedConditions.count(condName)) {
 			continue;
 		}
 
@@ -226,7 +231,7 @@ void HdPackBuilder::BuildObjectSheets(stringstream& tileRows)
 		_hdData.Conditions.push_back(unique_ptr<HdPackCondition>(cond));
 
 		tileRows << "# inferred   tileNearby: attach [" << condName << "] to tile " << HexUtilities::ToHex(source->TileIndex)
-		         << " to require tile " << HexUtilities::ToHex(target->TileIndex) << " " << (east ? "8px east" : "8px south") << std::endl;
+		         << " to require tile " << HexUtilities::ToHex(target->TileIndex) << " " << (east ? "8px east" : "8px south") << '\n';
 	}
 }
 
@@ -259,11 +264,19 @@ void HdPackBuilder::AddTile(HdPackTileInfo* tile, uint32_t usageCount)
 		} else {
 			//FIXME: This will result in data loss if more than 256 tiles of the same palette exist in the hires.txt file
 			//Currently this way to prevent issues when loading a CHR RAM HD pack into the recorder (because TileIndex is -1 in that case)
+			bool placed = false;
 			for(int i = 0; i < 256; i++) {
 				if(paletteMap[palette][i] == nullptr) {
 					paletteMap[palette][i] = tile;
+					placed = true;
 					break;
 				}
+			}
+			if(!placed) {
+				//The tile keeps its hires.txt entry but is drawn on no sheet.
+				//Counted so SaveHdPack can refuse to sweep the old fragments a
+				//re-record would otherwise orphan (ADR-0160 §3 guard).
+				_droppedTiles++;
 			}
 		}
 	}
@@ -618,6 +631,9 @@ void HdPackBuilder::EnableScreenCapture()
 	_writeReferences = true;
 	_frameBg.assign(256 * 240, 0);
 	_frameRuns.reserve(4096);
+	//The retained grid stream is capped at kMaxSheetFrames (ADR-0153 §5);
+	//reserving it once avoids ~12 reallocations of a multi-MB vector
+	_gridFrames.reserve(MesenSheets::kMaxSheetFrames);
 	//Screens already in the pack (previous session) keep their numbering
 	_screensSeen.clear();
 }
@@ -645,7 +661,7 @@ void HdPackBuilder::OnFrameEnd()
 		_stableFrames++;
 		if(_stableFrames == StableFramesNeeded && _screensSeen.find(_frameHash) == _screensSeen.end()) {
 			_screensSeen.insert(_frameHash);
-			if(_hdData.BackgroundFileData.size() < MaxScreensPerSession) {
+			if(_hdData.BackgroundFileData.size() < MaxScreensPerPack) {
 				size_t before = _hdData.BackgroundFileData.size();
 				CaptureScreen();
 				//F9.9 (ADR-0156): tie the screen that was just written back to
@@ -664,10 +680,14 @@ void HdPackBuilder::OnFrameEnd()
 	}
 	_prevFrameHash = candidate ? _frameHash : 0;
 	_frameHash = 0;
+	//ProcessBgPixel is the only writer of _frameBg and bumps _bgPixels on every
+	//write, so a frame with no background pixel left the buffer untouched
+	if(_bgPixels > 0) {
+		std::fill(_frameBg.begin(), _frameBg.end(), 0);
+	}
 	_bgPixels = 0;
 	_frameRuns.clear();
 	_lastRunY = -1;
-	std::fill(_frameBg.begin(), _frameBg.end(), 0);
 }
 
 //ADR-0159 amendment (2026-09-05): intern a PaletteColors word into the small
@@ -842,7 +862,7 @@ void HdPackBuilder::WriteGridDump(const string& path) const
 	std::vector<bool> emitted(_shapeTiles.size(), false);
 	for(const MesenSheets::GridFrame& frame : _gridFrames) {
 		for(uint32_t repeat = 0; repeat < frame.RepeatCount; repeat++) {
-			dump << "F " << frame.FrameNumber << std::endl;
+			dump << "F " << frame.FrameNumber << '\n';
 			for(uint32_t row = 0; row < MesenSheets::kGridRows; row++) {
 				for(uint32_t col = 0; col < MesenSheets::kGridCols; col++) {
 					MesenSheets::ShapeId id = frame.Cells[row][col];
@@ -855,9 +875,9 @@ void HdPackBuilder::WriteGridDump(const string& path) const
 						for(int b = 0; b < 16; b++) {
 							dump << HexUtilities::ToHex(_shapeTiles[id].TileData[b]);
 						}
-						dump << " " << HexUtilities::ToHex(_shapeTiles[id].PaletteColors) << std::endl;
+						dump << " " << HexUtilities::ToHex(_shapeTiles[id].PaletteColors) << '\n';
 					}
-					dump << (col * 8 + frame.FineX) << " " << (row * 8) << " " << id << std::endl;
+					dump << (col * 8 + frame.FineX) << " " << (row * 8) << " " << id << '\n';
 				}
 			}
 		}
@@ -878,8 +898,9 @@ void HdPackBuilder::WriteSheetFiles(const string& folder, const string& baseName
 	MesenSheets::SheetImage scaled = MesenSheets::Upscale(image, _hdData.Scale);
 	PNGHelper::WritePNG(FolderUtilities::CombinePath(folder, doc.SheetFile), scaled.Pixels.data(), scaled.Width, scaled.Height, 32);
 	if(_writeReferences) {
-		MesenSheets::SheetImage reference = image;
-		PNGHelper::WritePNG(FolderUtilities::CombinePath(folder, doc.ReferenceFile), reference.Pixels.data(), reference.Width, reference.Height, 32);
+		//WritePNG only reads the buffer (it converts into its own byte array);
+		//the const_cast saves a full-canvas copy of the 1x reference.
+		PNGHelper::WritePNG(FolderUtilities::CombinePath(folder, doc.ReferenceFile), const_cast<uint32_t*>(image.Pixels.data()), image.Width, image.Height, 32);
 	}
 
 	ofstream json(FolderUtilities::CombinePath(folder, baseName + ".json"), ios::out);
@@ -1055,9 +1076,15 @@ void HdPackBuilder::WriteMapSheets(const string& folder, const MesenSheets::Voca
 		if(map.Placements.empty()) {
 			continue;
 		}
-		MesenSheets::SheetImage image = MesenSheets::RenderMap(map, vocab, lookup, _palette);
 		char buf[32];
 		snprintf(buf, sizeof(buf), "map-%03u", index++);
+		//ADR-0153 §6 / kMaxMapPixels: refuse before RenderMap allocates the
+		//canvas (and before Upscale multiplies it by scale^2).
+		if((uint64_t)map.Width * map.Height > MesenSheets::kMaxMapPixels) {
+			MessageManager::Log("[HD Pack Builder] " + string(buf) + ": canvas " + std::to_string(map.Width) + "x" + std::to_string(map.Height) + " exceeds kMaxMapPixels (" + std::to_string(MesenSheets::kMaxMapPixels) + ") - map skipped");
+			continue;
+		}
+		MesenSheets::SheetImage image = MesenSheets::RenderMap(map, vocab, lookup, _palette);
 		MesenSheets::SheetJsonDoc doc;
 		doc.Kind = "map";
 		doc.Grid = vocab.Grid;
@@ -1504,7 +1531,14 @@ void HdPackBuilder::SaveHdPack()
 
 	//After hires.txt is on disk, never before: an interrupted save must not
 	//leave a pack whose manifest points at files that are gone (ADR-0160 §3).
-	PruneLegacyChrFiles();
+	//Never when AddTile dropped a tile: the manifest just written may then
+	//not cover every tile the old fragments did, so those files are the only
+	//copy of that art and sweeping them would be data loss.
+	if(_droppedTiles > 0) {
+		MessageManager::Log("[HD Pack Builder] " + std::to_string(_droppedTiles) + " tile(s) could not be placed on a CHR page (>256 tiles for one palette); legacy top-level CHR files were left in place");
+	} else {
+		PruneLegacyChrFiles();
+	}
 
 	delete[] pngBuffer;
 }
@@ -1569,67 +1603,3 @@ void HdPackBuilder::PruneLegacyChrFiles()
 		MessageManager::Log("[HD Pack Builder] swept " + std::to_string(removed) + " unreferenced top-level CHR file(s); this pack's fragments are now under " + string(kChrFolder) + "/");
 	}
 }
-/*
-void HdPackBuilder::GetChrBankList(uint32_t *banks)
-{
-	ConsolePauseHelper helper(_instance->_console.get());
-	for(std::pair<const uint32_t, std::map<uint32_t, vector<HdPackTileInfo*>>> &kvp : _instance->_tilesByChrBankByPalette) {
-		*banks = kvp.first;
-		banks++;
-	}
-	*banks = -1;
-}
-
-void HdPackBuilder::GetBankPreview(uint32_t bankNumber, uint32_t pageNumber, uint32_t *rgbBuffer)
-{
-	ConsolePauseHelper helper(_instance->_console.get());
-
-	for(uint32_t i = 0; i < 128 * 128 * _instance->_hdData.Scale*_instance->_hdData.Scale; i++) {
-		rgbBuffer[i] = 0xFF666666;
-	}
-
-	auto result = _instance->_tilesByChrBankByPalette.find(bankNumber);
-	if(result != _instance->_tilesByChrBankByPalette.end()) {
-		std::map<uint32_t, vector<HdPackTileInfo*>> bankData = result->second;
-
-		if(_instance->_flags & HdPackRecordFlags::SortByUsageFrequency) {
-			for(int i = 0; i < 256; i++) {
-				vector<std::pair<uint32_t, HdPackTileInfo*>> tiles;
-				for(std::pair<const uint32_t, vector<HdPackTileInfo*>> &pageData : bankData) {
-					if(pageData.second[i]) {
-						tiles.push_back({ _instance->_tileUsageCount[pageData.second[i]->GetKey(false)], pageData.second[i] });
-					}
-				}
-
-				std::sort(tiles.begin(), tiles.end(), [=](std::pair<uint32_t, HdPackTileInfo*> &a, std::pair<uint32_t, HdPackTileInfo*> &b) {
-					return a.first > b.first;
-				});
-
-				size_t j = 0;
-				for(std::pair<const uint32_t, vector<HdPackTileInfo*>> &pageData : bankData) {
-					if(j < tiles.size()) {
-						pageData.second[i] = tiles[j].second;
-						j++;
-					} else {
-						pageData.second[i] = nullptr;
-					}
-				}
-			}
-		}
-
-		bool spritesOnly = true;
-		for(HdPackTileInfo* tileInfo : (*bankData.begin()).second) {
-			if(tileInfo && !tileInfo->IsSpriteTile()) {
-				spritesOnly = false;
-			}
-		}
-
-		for(int i = 0; i < 256; i++) {
-			HdPackTileInfo* tileInfo = (*bankData.begin()).second[i];
-			if(tileInfo) {
-				_instance->DrawTile(tileInfo, i, (uint32_t*)rgbBuffer, 0, spritesOnly);
-			}
-		}
-	}
-}
-*/

@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "NES/HdPacks/SheetGrouping.h"
 #include <algorithm>
 #include <deque>
@@ -293,11 +292,6 @@ namespace MesenSheets
 		SelectDirection(vocab.East, 'E', minCount, minProb, edges);
 		SelectDirection(vocab.South, 'S', minCount, minProb, edges);
 		return edges;
-	}
-
-	std::vector<std::vector<uint32_t>> BuildEdgeComponents(const std::vector<GroupEdge>& edges, uint32_t cellCount)
-	{
-		return BuildComponentsImpl(edges, cellCount);
 	}
 
 	std::vector<SheetGroup> LayoutGroups(const Vocabulary& vocab, const std::vector<GroupEdge>& edges)

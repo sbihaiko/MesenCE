@@ -40,8 +40,6 @@ namespace MesenSheets
 	//it costs the artist a file and tells them nothing. ADR-0153 §6 never
 	//promised a map on every recording - it only says which mode wins when
 	//both have something to say.
-	StitchedMap StitchScreens(const std::vector<GridFrame>& frames, const std::vector<const GridFrame*>& screens, const Vocabulary& vocab);
-
 	//Continuous stitching: accumulated per-frame x shift, a cut starts a new
 	//region.
 	//

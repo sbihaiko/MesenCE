@@ -82,10 +82,6 @@ public:
 	//True when any target's sha1 equals the given hash (case-insensitive)
 	bool MatchesSha1(const string& sha1) const;
 
-	//The matching target for this hash (nullptr when none)
-	const MepTarget* FindTarget(const string& sha1) const;
-
-	const MepSection& GetSection(MepSectionType type) const { return Sections[(int)type]; }
 	bool HasSection(MepSectionType type) const { return Sections[(int)type].Present; }
 
 	//Absolute path of a section's human layer (folder for textures/audio, file
@@ -146,6 +142,9 @@ public:
 	static constexpr int kMepFallbackMaxEntries = 2000;
 	static string FindFallbackSubfolder(const vector<string>& normalizedEntries, const string& romName);
 
+private:
+	//The matching target for this hash (nullptr when none)
+	const MepTarget* FindTarget(const string& sha1) const;
 	static bool IsValidSemver(const string& text);
 	static bool IsKnownSystem(const string& system);
 };

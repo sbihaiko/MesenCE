@@ -26,16 +26,19 @@ class SHA256
 {
 public:
 	SHA256();
-	void update(const std::string &s);
+	//Hashes complete 64-byte blocks straight from `data`; only the tail that
+	//does not fill a block is buffered until the next update()/final().
+	void update(const uint8_t* data, size_t size);
+	//Reads the stream in 64 KiB chunks and feeds them to update(ptr, size).
 	void update(std::istream &is);
 	std::string final();
+	//"" when the file cannot be opened (never the empty-input digest).
 	static std::string GetHash(const std::string &filename);
-	static std::string GetHash(std::istream &stream);
-	static std::string GetHash(vector<uint8_t> &data);
-	static std::string GetHash(uint8_t* data, size_t size);
+	static std::string GetHash(const uint8_t* data, size_t size);
 
 private:
 	uint32_t state[8];
-	std::string buffer;
+	uint8_t buffer[64];
+	size_t buffered;
 	uint64_t blocks;
 };

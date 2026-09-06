@@ -13,6 +13,7 @@
 #include "Shared/NotificationManager.h"
 #include "Shared/ColorUtilities.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTileDecode.h"
 #include "Shared/HdPacks/HdTilePack.h"
 #include "Utilities/Serializer.h"
 #include "Utilities/RandomHelper.h"
@@ -1057,14 +1058,10 @@ void SmsVdp::CaptureBgTile(uint16_t tileIndex, bool useHighPalette)
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
-		const uint8_t* row = tile.Data + y * 4;
+		uint8_t colors[8];
+		HdTileDecode::Decode4bppPlanarRow(tile.Data + y * 4, colors);
 		for(int x = 0; x < 8; x++) {
-			uint8_t color =
-				((row[0] >> (7 - x)) & 0x01) |
-				(((row[1] >> (7 - x)) & 0x01) << 1) |
-				(((row[2] >> (7 - x)) & 0x01) << 2) |
-				(((row[3] >> (7 - x)) & 0x01) << 3);
-			rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_internalPaletteRam[cramBase + color]);
+			rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_internalPaletteRam[cramBase + colors[x]]);
 		}
 	}
 
@@ -1078,13 +1075,10 @@ void SmsVdp::CaptureSpriteTile(uint16_t tileAddr)
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
-		const uint8_t* row = tile.Data + y * 4;
+		uint8_t colors[8];
+		HdTileDecode::Decode4bppPlanarRow(tile.Data + y * 4, colors);
 		for(int x = 0; x < 8; x++) {
-			uint8_t color =
-				((row[0] >> (7 - x)) & 0x01) |
-				(((row[1] >> (7 - x)) & 0x01) << 1) |
-				(((row[2] >> (7 - x)) & 0x01) << 2) |
-				(((row[3] >> (7 - x)) & 0x01) << 3);
+			uint8_t color = colors[x];
 			//Sprite color 0 is transparent
 			rgba[y * 8 + x] = color == 0 ? 0x00FFFFFF : ColorUtilities::Rgb555ToArgb(_internalPaletteRam[0x10 + color]);
 		}

@@ -1,4 +1,3 @@
-#include "pch.h"
 //ADR-0153 §6: screen-based and continuous stitching. Port of the 2026-09-04
 //spike (scripts/spike_tile_sheets.py: shift_match, stitch, shift_match_x,
 //stitch_continuous), with one behavioural change the ADR asks for: a cut in the
@@ -632,20 +631,6 @@ namespace MesenSheets
 			}
 			return maps;
 		}
-	}
-
-	StitchedMap StitchScreens(const std::vector<GridFrame>& frames, const std::vector<const GridFrame*>& screens, const Vocabulary& vocab)
-	{
-		uint32_t largest = 0;
-		std::vector<StitchedMap> maps = BuildScreenMaps(frames, screens, vocab, largest);
-		if(!maps.empty()) {
-			return maps[0]; //the largest connected region
-		}
-		StitchedMap map;
-		map.Mode = StitchMode::Screen;
-		map.HudRows = vocab.HudRows;
-		map.Log.push_back("screen stitcher: no stable screen to work with");
-		return map;
 	}
 
 	namespace

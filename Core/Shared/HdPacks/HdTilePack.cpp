@@ -169,6 +169,7 @@ bool HdTilePack::LoadFile(string definitionPath)
 	string packFolder = FolderUtilities::GetFolderName(definitionPath);
 	vector<SheetData> sheets;
 	bool versionOk = false;
+	bool scaleSeen = false;
 	bool unknownTagLogged = false;
 
 	string line;
@@ -197,6 +198,7 @@ bool HdTilePack::LoadFile(string definitionPath)
 			_system = line.substr(8);
 		} else if(line.substr(0, 7) == "<scale>") {
 			_scale = std::min(10, std::max(1, atoi(line.substr(7).c_str())));
+			scaleSeen = true;
 		} else if(line.substr(0, 5) == "<img>") {
 			string pngPath = FolderUtilities::CombinePath(packFolder, line.substr(5));
 			ifstream pngFile(pngPath, ios::in | ios::binary);
@@ -207,7 +209,7 @@ bool HdTilePack::LoadFile(string definitionPath)
 			vector<uint8_t> fileData((std::istreambuf_iterator<char>(pngFile)), std::istreambuf_iterator<char>());
 			vector<uint32_t> pixelData;
 			uint32_t width = 0, height = 0;
-			if(!PNGHelper::ReadPNG(fileData, pixelData, width, height)) {
+			if(!PNGHelper::ReadPNG(std::move(fileData), pixelData, width, height)) {
 				MessageManager::Log("[HDPack] Invalid PNG file: " + line.substr(5));
 				return false;
 			}
@@ -226,6 +228,13 @@ bool HdTilePack::LoadFile(string definitionPath)
 			}
 			sheets.push_back(std::move(sheet));
 		} else if(line.substr(0, 6) == "<tile>") {
+			//The tile geometry is 8 * _scale; a <tile> before <scale> would be
+			//sliced at the default scale and then rendered at another one, so
+			//it is refused the same way a pack without <ver> is.
+			if(!scaleSeen) {
+				MessageManager::Log("[HDPack] <tile> found before <scale> - hires.txt must declare <scale> first");
+				return false;
+			}
 			string tileLine = line.substr(6);
 			if(!ParseTileLine(tileLine, sheets)) {
 				MessageManager::Log("[HDPack] Invalid <tile> line ignored: " + line);
@@ -262,16 +271,30 @@ bool HdTilePack::ParseTileLine(string& line, vector<SheetData>& sheets)
 		return false;
 	}
 
-	uint32_t x = (uint32_t)atoi(tokens[3].c_str());
-	uint32_t y = (uint32_t)atoi(tokens[4].c_str());
-	tile->Brightness = (uint32_t)(atof(tokens[5].c_str()) * 255);
+	//x/y are sheet offsets: a negative or non-numeric value would wrap through
+	//the unsigned cast and pass the bounds test below, so parse them signed
+	//and reject anything that is not a plain non-negative integer.
+	char* end = nullptr;
+	long xl = strtol(tokens[3].c_str(), &end, 10);
+	if(end == tokens[3].c_str() || *end != '\0' || xl < 0) {
+		return false;
+	}
+	long yl = strtol(tokens[4].c_str(), &end, 10);
+	if(end == tokens[4].c_str() || *end != '\0' || yl < 0) {
+		return false;
+	}
+	uint64_t x = (uint64_t)xl;
+	uint64_t y = (uint64_t)yl;
+	tile->Brightness = (uint32_t)(std::clamp(atof(tokens[5].c_str()), 0.0, 1.0) * 255);
 	tile->DefaultTile = tokens[6] == "Y";
 	tile->Key.BankId = sheets[sheetIndex].BankId;
 
 	vector<uint32_t>& pixels = sheets[sheetIndex].Pixels;
 	uint32_t sheetWidth = sheets[sheetIndex].Width;
 	uint32_t tileDimension = 8 * _scale;
-	if(sheetWidth == 0 || x + tileDimension > sheetWidth || (uint64_t)(y + tileDimension) * sheetWidth > pixels.size()) {
+	//64-bit throughout: the sum and the product below must not wrap before
+	//they are compared against the sheet.
+	if(sheetWidth == 0 || x + tileDimension > sheetWidth || (y + tileDimension) * sheetWidth > pixels.size()) {
 		return false;
 	}
 

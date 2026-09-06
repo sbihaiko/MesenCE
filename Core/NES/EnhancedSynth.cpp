@@ -190,34 +190,43 @@ void EnhancedSynth::MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sample
 		midi->LogFrame("NES", cfg.EnhancedAudioPreset, in, sampleCount, sampleRate);
 	}
 
+	//The two peak scans below exist only for LogDiagnostics; they used to run
+	//on every flush while the line was emitted at most once per kDiagPeriodS
+	//in a steady state. Now the buffer is scanned only on the flush that can
+	//actually emit (period elapsed, or nothing logged yet), so the diagnostics
+	//sample the synth at that cadence instead of watching every flush - a
+	//state flip is reported on the next tick, not within the flush.
+	_diagTimerS += (double)sampleCount / sampleRate;
+	bool diagTick = _diagState < 0 || _diagTimerS >= kDiagPeriodS;
+
 	int32_t peakBefore = 0;
-	for(uint32_t i = 0; i < sampleCount * 2; i++) {
-		peakBefore = std::max(peakBefore, (int32_t)std::abs(out[i]));
+	if(diagTick) {
+		for(uint32_t i = 0; i < sampleCount * 2; i++) {
+			peakBefore = std::max(peakBefore, (int32_t)std::abs(out[i]));
+		}
 	}
 
 	_engine.Render(out, sampleCount, sampleRate, in, p, cfg.EnhancedAudioVolume);
 
-	int32_t peakAfter = 0;
-	for(uint32_t i = 0; i < sampleCount * 2; i++) {
-		peakAfter = std::max(peakAfter, (int32_t)std::abs(out[i]));
+	if(diagTick) {
+		int32_t peakAfter = 0;
+		for(uint32_t i = 0; i < sampleCount * 2; i++) {
+			peakAfter = std::max(peakAfter, (int32_t)std::abs(out[i]));
+		}
+		LogDiagnostics(in, raw, peakBefore, peakAfter, cfg);
 	}
-	LogDiagnostics(in, raw, peakBefore, peakAfter, cfg, sampleCount, sampleRate);
 }
 
-void EnhancedSynth::LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg, uint32_t sampleCount, uint32_t sampleRate)
+//Called once per diagnostics tick (see MixAudio): a line when the state
+//changed since the last tick, plus a heartbeat while silent.
+void EnhancedSynth::LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg)
 {
-	//Only worth a line when the answer changes, plus a heartbeat while silent
-	constexpr double kDiagPeriodS = 10.0;
-	_diagTimerS += (double)sampleCount / sampleRate;
+	_diagTimerS = 0;
 	//"the synth is doing something" = it added level of its own to the buffer
 	int state = peakAfter > peakBefore + 64 ? 1 : 0;
-	if(state == _diagState && (state == 1 || _diagTimerS < kDiagPeriodS)) {
-		if(state == 1) {
-			_diagTimerS = 0;
-		}
+	if(state == _diagState && state == 1) {
 		return;
 	}
-	_diagTimerS = 0;
 	_diagState = state;
 	char buf[512];
 	snprintf(buf, sizeof(buf), "[EnhancedAudio] %s - apu vol %.2f/%.2f/%.2f freq %.0f/%.0f/%.0f, buffer peak %d -> %d, soundfont %d voices peak %.4f keys %d/%d/%d chvol %.2f/%.2f/%.2f voices %d/%d/%d/%d gaindb %.1f/%.1f/%.1f noteons %llu fails %llu presets %d/%d/%d/%d (apu mix %u%%, synth volume %u%%)", state ? "playing" : "silent", raw[0].Vol, raw[1].Vol, raw[2].Vol, raw[0].Freq, raw[1].Freq, raw[2].Freq, peakBefore, peakAfter, _engine.SfVoiceCount(), _engine.SfLastPeak(), _engine.SfKey(0), _engine.SfKey(1), _engine.SfKey(2), _engine.SfChannelVolume(0), _engine.SfChannelVolume(1), _engine.SfChannelVolume(2), _engine.SfChannelVoices(0), _engine.SfChannelVoices(1), _engine.SfChannelVoices(2), _engine.SfChannelVoices(9), _engine.SfChannelGainDb(0), _engine.SfChannelGainDb(1), _engine.SfChannelGainDb(2), (unsigned long long)_engine.SfNoteOns(), (unsigned long long)_engine.SfNoteOnFails(), _engine.SfPresetIndex(0), _engine.SfPresetIndex(1), _engine.SfPresetIndex(2), _engine.SfPresetIndex(9), cfg.EnhancedAudioApuMix, cfg.EnhancedAudioVolume);

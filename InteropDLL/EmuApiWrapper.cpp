@@ -327,6 +327,7 @@ extern "C"
 	DllExport void __stdcall SetMepPackEnabled(const char* containerName, bool enabled)
 	{
 		_emu->GetEnhancementPackManager()->SetPackEnabled(containerName ? containerName : "", enabled);
+		_emu->GetVideoRenderer()->InvalidateBorderAsset();
 	}
 
 	//P.3 (PRD Part B §5): per-ROM-sha1 preferred pack_id pushed by the UI
@@ -335,6 +336,7 @@ extern "C"
 	DllExport void __stdcall SetPreferredMepPack(const char* romSha1, const char* packId)
 	{
 		_emu->GetEnhancementPackManager()->SetPreferredMepPack(romSha1 ? romSha1 : "", packId ? packId : "");
+		_emu->GetVideoRenderer()->InvalidateBorderAsset();
 	}
 
 	//P.3: the UI resets the per-ROM preferences before re-pushing the current

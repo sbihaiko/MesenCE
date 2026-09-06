@@ -33,7 +33,7 @@ private:
 
 public:
 	SmsEnhancedSynth(Emulator* emu, SmsConsole* console);
-	virtual ~SmsEnhancedSynth();
+	~SmsEnhancedSynth(); //non-virtual on purpose: final class owned as unique_ptr<SmsEnhancedSynth>; IAudioProvider has no virtual dtor
 
 	//No public Reset(): SmsConsole::Reset power-cycles via ReloadRom, which
 	//recreates this object (the constructor re-reads EnhancedAudioPresets.cfg),

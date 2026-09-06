@@ -96,7 +96,12 @@ private:
 	uint32_t _bgPixels = 0;
 	unordered_set<uint32_t> _screensSeen;
 	static constexpr uint32_t StableFramesNeeded = 15;
-	static constexpr uint32_t MaxScreensPerSession = 300;
+	//Ceiling on backgrounds/screenNNN.png entries in the pack (existing ones
+	//count - a re-record does not get another 300).
+	static constexpr uint32_t MaxScreensPerPack = 300;
+	//ADR-0160 §3 guard: tiles AddTile could not place on a CHR page (the
+	//">256 tiles of one palette" FIXME path). Non-zero disables PruneLegacyChrFiles.
+	uint32_t _droppedTiles = 0;
 	//Issue #164: how many rarity-ranked candidates a screen carries to save
 	//time. The selection itself looks at kAnchorCandidateCap of them; the rest
 	//are there for the spread constraint to fall back on.
@@ -124,19 +129,20 @@ private:
 	vector<PendingScreen> _pendingScreens;
 	void FinalizeScreenAnchors();
 
-	//F5.4e: spatial co-occurrence → object grouping. During screen capture the
-	//per-frame background tile grid (_frameTileGrid/_frameTileSet) accumulates,
-	//in _coOccurrence, how often two tile shapes appear exactly 8 px apart (E/S
-	//neighbors; B at A + (8,0) or A + (0,8)). Keys are shape hashes (GetKey(true):
-	//palette wildcarded), so every palette variant of a tile collapses into one
-	//shape; a rare 32-bit CHR-RAM hash collision only merges two shapes into one
-	//object, acceptable for an "# inferred" heuristic. BuildObjectSheets clusters
-	//those edges (union-find over edges seen ≥2×), writes one editable per-object
-	//sheet textures/sheets/object<NNN>.png (the object's tiles arranged as they
-	//appear in-game), documents the cell order as a hires.txt comment, and emits
-	//"# inferred" tileNearby condition candidates (inert definitions the artist
-	//can wire to a <tile> - never auto-attached, to avoid making a tile fail to
-	//render when its inferred neighbor is absent).
+	//F5.4e co-occurrence graph, kept only for the "# inferred" tileNearby
+	//comments. During screen capture the per-frame background tile grid
+	//(_frameTileGrid/_frameTileSet) accumulates, in _coOccurrence, how often
+	//two tile shapes appear exactly 8 px apart (E/S neighbours; B at A + (8,0)
+	//or A + (0,8)). Keys are shape hashes (GetKey(true): palette wildcarded),
+	//so every palette variant of a tile collapses into one shape; a rare 32-bit
+	//CHR-RAM hash collision only merges two shapes, acceptable for a heuristic.
+	//The F5.4e clustering (union-find over edges seen >= 2x) and its
+	//textures/sheets/object<NNN>.png output were retired by ADR-0153: objects
+	//now come from the metatile pipeline (BuildSheets / WriteObjectSheets ->
+	//sheets/objNNN.png). BuildObjectSheets only emits, for pairs inside one of
+	//those objects, "# inferred" tileNearby condition candidates - inert
+	//definitions the artist can wire to a <tile> by hand, never auto-attached,
+	//so a wrong inference can never make a tile fail to render.
 	struct HdPackCoOccurrenceEdge
 	{
 		uint32_t ECount = 0; //times the second shape was seen 8 px east of the first
@@ -146,7 +152,7 @@ private:
 	HdTileKey _frameTileGrid[30][32];
 	uint8_t _frameTileSet[30][32] = {}; //source of truth for which grid cells were drawn
 	std::map<std::pair<uint32_t, uint32_t>, HdPackCoOccurrenceEdge> _coOccurrence;
-	bool _objectsBuilt = false; //guard: build the object sheets once per session
+	bool _objectsBuilt = false; //guard: emit the inferred conditions once per session
 	void AccumulateCoOccurrence();
 	void BuildObjectSheets(stringstream& tileRows);
 
@@ -265,6 +271,4 @@ public:
 	//harmless defaultTile entries nobody ever draws. Returns the number added.
 	uint32_t AddPrgScanTiles(uint8_t* prgRom, uint32_t prgRomSize);
 
-	//static void GetChrBankList(uint32_t *banks);
-	//static void GetBankPreview(uint32_t bankNumber, uint32_t pageNumber, uint32_t *rgbBuffer);
 };

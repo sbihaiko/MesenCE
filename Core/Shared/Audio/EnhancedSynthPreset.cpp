@@ -2,6 +2,8 @@
 #include "Shared/Audio/EnhancedSynthPreset.h"
 #include "Utilities/FolderUtilities.h"
 #include "Shared/MessageManager.h"
+#include <algorithm>
+#include <cmath>
 
 //Field names accepted in EnhancedAudioPresets.cfg, mapped to the struct
 //members they override. Keeping this table next to the struct means adding a
@@ -9,10 +11,16 @@
 //engine that uses EnhancedSynthPreset).
 namespace
 {
+	//Min/Max bound what a preset file may set: a non-finite or out-of-range
+	//value would otherwise reach the DSP as an infinite filter coefficient, a
+	//negative delay or a 10^6 gain. The ranges are the widest the consumer
+	//still handles sanely (see EnhancedSynthEngine::Render), not taste.
 	struct PresetDoubleField
 	{
 		const char* Name;
 		double EnhancedSynthPreset::* Field;
+		double Min;
+		double Max;
 	};
 	struct PresetBoolField
 	{
@@ -21,43 +29,43 @@ namespace
 	};
 
 	static constexpr PresetDoubleField _presetDoubleFields[] = {
-		{ "LeadDetune", &EnhancedSynthPreset::LeadDetune },
-		{ "HarmDetune", &EnhancedSynthPreset::HarmDetune },
-		{ "FixedWidth", &EnhancedSynthPreset::FixedWidth },
-		{ "LeadOctaveUpMix", &EnhancedSynthPreset::LeadOctaveUpMix },
-		{ "LeadLpHz", &EnhancedSynthPreset::LeadLpHz },
-		{ "HarmLpHz", &EnhancedSynthPreset::HarmLpHz },
-		{ "LeadDrive", &EnhancedSynthPreset::LeadDrive },
-		{ "BassSine", &EnhancedSynthPreset::BassSine },
-		{ "BassSaw", &EnhancedSynthPreset::BassSaw },
-		{ "BassSub", &EnhancedSynthPreset::BassSub },
-		{ "BassLpHz", &EnhancedSynthPreset::BassLpHz },
-		{ "BassDrive", &EnhancedSynthPreset::BassDrive },
-		{ "DrumBodyLoHz", &EnhancedSynthPreset::DrumBodyLoHz },
-		{ "DrumBodyHiHz", &EnhancedSynthPreset::DrumBodyHiHz },
-		{ "DrumTopHz", &EnhancedSynthPreset::DrumTopHz },
-		{ "DrumBodyGain", &EnhancedSynthPreset::DrumBodyGain },
-		{ "ThumpGain", &EnhancedSynthPreset::ThumpGain },
-		{ "ThumpDecayS", &EnhancedSynthPreset::ThumpDecayS },
-		{ "ThumpFreqHz", &EnhancedSynthPreset::ThumpFreqHz },
-		{ "AttackMs", &EnhancedSynthPreset::AttackMs },
-		{ "ReleaseMs", &EnhancedSynthPreset::ReleaseMs },
-		{ "EchoDelayS", &EnhancedSynthPreset::EchoDelayS },
-		{ "EchoGainL", &EnhancedSynthPreset::EchoGainL },
-		{ "EchoGainR", &EnhancedSynthPreset::EchoGainR },
-		{ "ReverbWet", &EnhancedSynthPreset::ReverbWet },
-		{ "LeadGain", &EnhancedSynthPreset::LeadGain },
-		{ "HarmGain", &EnhancedSynthPreset::HarmGain },
-		{ "BassGain", &EnhancedSynthPreset::BassGain },
-		{ "DrumGain", &EnhancedSynthPreset::DrumGain },
-		{ "CompThreshold", &EnhancedSynthPreset::CompThreshold },
-		{ "CompRatio", &EnhancedSynthPreset::CompRatio },
-		{ "CompAttackMs", &EnhancedSynthPreset::CompAttackMs },
-		{ "CompReleaseMs", &EnhancedSynthPreset::CompReleaseMs },
-		{ "CompMakeup", &EnhancedSynthPreset::CompMakeup },
-		{ "GmLeadProgram", &EnhancedSynthPreset::GmLeadProgram },
-		{ "GmHarmProgram", &EnhancedSynthPreset::GmHarmProgram },
-		{ "GmBassProgram", &EnhancedSynthPreset::GmBassProgram },
+		{ "LeadDetune", &EnhancedSynthPreset::LeadDetune, 0.0, 0.5 },
+		{ "HarmDetune", &EnhancedSynthPreset::HarmDetune, 0.0, 0.5 },
+		{ "FixedWidth", &EnhancedSynthPreset::FixedWidth, 0.01, 0.99 },
+		{ "LeadOctaveUpMix", &EnhancedSynthPreset::LeadOctaveUpMix, 0.0, 1.0 },
+		{ "LeadLpHz", &EnhancedSynthPreset::LeadLpHz, 20.0, 22000.0 },
+		{ "HarmLpHz", &EnhancedSynthPreset::HarmLpHz, 20.0, 22000.0 },
+		{ "LeadDrive", &EnhancedSynthPreset::LeadDrive, 0.0, 10.0 },
+		{ "BassSine", &EnhancedSynthPreset::BassSine, 0.0, 4.0 },
+		{ "BassSaw", &EnhancedSynthPreset::BassSaw, 0.0, 4.0 },
+		{ "BassSub", &EnhancedSynthPreset::BassSub, 0.0, 4.0 },
+		{ "BassLpHz", &EnhancedSynthPreset::BassLpHz, 20.0, 22000.0 },
+		{ "BassDrive", &EnhancedSynthPreset::BassDrive, 0.0, 10.0 },
+		{ "DrumBodyLoHz", &EnhancedSynthPreset::DrumBodyLoHz, 20.0, 22000.0 },
+		{ "DrumBodyHiHz", &EnhancedSynthPreset::DrumBodyHiHz, 20.0, 22000.0 },
+		{ "DrumTopHz", &EnhancedSynthPreset::DrumTopHz, 20.0, 22000.0 },
+		{ "DrumBodyGain", &EnhancedSynthPreset::DrumBodyGain, 0.0, 4.0 },
+		{ "ThumpGain", &EnhancedSynthPreset::ThumpGain, 0.0, 4.0 },
+		{ "ThumpDecayS", &EnhancedSynthPreset::ThumpDecayS, 0.001, 5.0 },
+		{ "ThumpFreqHz", &EnhancedSynthPreset::ThumpFreqHz, 20.0, 2000.0 },
+		{ "AttackMs", &EnhancedSynthPreset::AttackMs, 0.0, 5000.0 },
+		{ "ReleaseMs", &EnhancedSynthPreset::ReleaseMs, 0.0, 5000.0 },
+		{ "EchoDelayS", &EnhancedSynthPreset::EchoDelayS, 0.001, 2.0 },
+		{ "EchoGainL", &EnhancedSynthPreset::EchoGainL, 0.0, 1.0 },
+		{ "EchoGainR", &EnhancedSynthPreset::EchoGainR, 0.0, 1.0 },
+		{ "ReverbWet", &EnhancedSynthPreset::ReverbWet, 0.0, 1.0 },
+		{ "LeadGain", &EnhancedSynthPreset::LeadGain, 0.0, 4.0 },
+		{ "HarmGain", &EnhancedSynthPreset::HarmGain, 0.0, 4.0 },
+		{ "BassGain", &EnhancedSynthPreset::BassGain, 0.0, 4.0 },
+		{ "DrumGain", &EnhancedSynthPreset::DrumGain, 0.0, 4.0 },
+		{ "CompThreshold", &EnhancedSynthPreset::CompThreshold, 0.0, 4.0 },
+		{ "CompRatio", &EnhancedSynthPreset::CompRatio, 1.0, 100.0 },
+		{ "CompAttackMs", &EnhancedSynthPreset::CompAttackMs, 0.01, 5000.0 },
+		{ "CompReleaseMs", &EnhancedSynthPreset::CompReleaseMs, 0.01, 5000.0 },
+		{ "CompMakeup", &EnhancedSynthPreset::CompMakeup, 0.0, 8.0 },
+		{ "GmLeadProgram", &EnhancedSynthPreset::GmLeadProgram, 0.0, 127.0 },
+		{ "GmHarmProgram", &EnhancedSynthPreset::GmHarmProgram, 0.0, 127.0 },
+		{ "GmBassProgram", &EnhancedSynthPreset::GmBassProgram, 0.0, 127.0 },
 	};
 	static constexpr PresetBoolField _presetBoolFields[] = {
 		{ "FollowDuty", &EnhancedSynthPreset::FollowDuty },
@@ -207,7 +215,12 @@ void EnhancedSynthPresetLoader::ApplyFile(const string& path, EnhancedSynthPrese
 		for(const PresetDoubleField& f : _presetDoubleFields) {
 			if(key == f.Name) {
 				try {
-					outPresets[presetIndex].*(f.Field) = std::stod(value);
+					double parsed = std::stod(value);
+					//NaN/inf are skipped (the field keeps its value); a finite
+					//value is clamped to the field's [Min, Max]
+					if(std::isfinite(parsed)) {
+						outPresets[presetIndex].*(f.Field) = std::clamp(parsed, f.Min, f.Max);
+					}
 				} catch(const std::exception&) {
 					//malformed number - keep the current value
 				}

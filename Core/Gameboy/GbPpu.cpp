@@ -15,6 +15,7 @@
 #include "Shared/MessageManager.h"
 #include "Shared/ColorUtilities.h"
 #include "Shared/HdPacks/HdTilePackBuilder.h"
+#include "Shared/HdPacks/HdTileDecode.h"
 #include "Shared/HdPacks/HdTilePack.h"
 #include "Utilities/HexUtilities.h"
 #include "Utilities/Serializer.h"
@@ -275,6 +276,9 @@ void GbPpu::ProcessVblankScanline()
 				_state.Ly = 0;
 				_state.LyForCompare = 0;
 				_wyEnableFlag = _state.WindowY == 0 && _state.WindowEnabled;
+				//HD pack provenance (ProcessHdPackPixel) reads this per pixel;
+				//sample the setting once per frame instead
+				_hdBgDisabled = _emu->GetSettings()->GetGameboyConfig().DisableBackground;
 
 				if(!_gameboy->IsCgb()) {
 					//On scanline 0, hblank gets set here (not on CGB)
@@ -890,10 +894,10 @@ void GbPpu::CaptureBgTile()
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
-		uint8_t low = _vram[tileAddr + y * 2];
-		uint8_t high = _vram[tileAddr + y * 2 + 1];
+		uint8_t colors[8];
+		HdTileDecode::Decode2bppRow(_vram[tileAddr + y * 2], _vram[tileAddr + y * 2 + 1], colors);
 		for(int x = 0; x < 8; x++) {
-			uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+			uint8_t color = colors[x];
 			if(_state.CgbEnabled) {
 				uint8_t palette = (_bgFetcher.Attributes & 0x07) << 2;
 				rgba[y * 8 + x] = ColorUtilities::Rgb555ToArgb(_state.CgbBgPalettes[palette + color] & 0x7FFF);
@@ -915,10 +919,10 @@ void GbPpu::CaptureObjTile()
 
 	uint32_t rgba[64];
 	for(int y = 0; y < 8; y++) {
-		uint8_t low = _vram[tileAddr + y * 2];
-		uint8_t high = _vram[tileAddr + y * 2 + 1];
+		uint8_t colors[8];
+		HdTileDecode::Decode2bppRow(_vram[tileAddr + y * 2], _vram[tileAddr + y * 2 + 1], colors);
 		for(int x = 0; x < 8; x++) {
-			uint8_t color = ((low >> (7 - x)) & 0x01) | (((high >> (7 - x)) & 0x01) << 1);
+			uint8_t color = colors[x];
 			if(color == 0) {
 				rgba[y * 8 + x] = 0x00FFFFFF;
 			} else if(_state.CgbEnabled) {
@@ -943,7 +947,7 @@ void GbPpu::ProcessHdPackPixel(GbFifoEntry& bgEntry, bool spriteOnTop, bool glit
 	HdTilePixelInfo& info = _currentHdScreenInfo[_state.Scanline * GbConstants::ScreenWidth + _drawnPixels];
 	info = {};
 
-	if(!glitchPixel && _bgFifoHdTile && !_emu->GetSettings()->GetGameboyConfig().DisableBackground) {
+	if(!glitchPixel && _bgFifoHdTile && !_hdBgDisabled) {
 		uint8_t pos = _bgFifo.Position;
 		info.BgTile = _bgFifoHdTile;
 		info.BgRow = _bgFifoHdRow;

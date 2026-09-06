@@ -1,11 +1,11 @@
 #pragma once
 #include "pch.h"
 #include "Shared/EnhancementPacks/MepPack.h"
+#include "Shared/EnhancementPacks/MepFileIo.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/StringUtilities.h"
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 
 //ADR-0120 §4: the zip half of MepPackManager::PrepareZip, extracted whole so
 //it can be driven end-to-end from scripts/core_unit_tests.cpp against real
@@ -18,12 +18,15 @@
 namespace MepZipExtract
 {
 	//How the caller reads the archive. Load() opens it and lists its raw
-	//entry names; ExtractFile() reads one of those entries.
+	//entry names; GetUncompressedSize() reports the size an entry declares
+	//(the MepFileIo decompression caps are checked against it before anything
+	//is inflated); ExtractFile() reads one of those entries.
 	class IArchive
 	{
 	public:
 		virtual ~IArchive() {}
 		virtual bool Load(const string& zipPath, vector<string>& entries, string& error) = 0;
+		virtual bool GetUncompressedSize(const string& entry, uint64_t& size) = 0;
 		virtual bool ExtractFile(const string& entry, vector<uint8_t>& content) = 0;
 	};
 
@@ -39,18 +42,55 @@ namespace MepZipExtract
 		return std::to_string(zipSize) + ":" + std::to_string((long long)mtime);
 	}
 
-	//A previous extraction of the very same zip bytes is still on disk
-	inline bool IsCacheCurrent(const string& outFolder, const string& stampPath, const string& stamp)
+	//The .mep-source stamp: line 1 is the zip fingerprint (ComputeZipStamp),
+	//line 2 the root prefix the extraction resolved (ADR-0120 fallback; ""
+	//when the pack root is the extraction folder itself). A one-line stamp
+	//(written before the prefix was recorded) reads as prefix "".
+	inline string FormatStamp(const string& stamp, const string& rootPrefix)
 	{
-		std::error_code ec;
-		ifstream in(stampPath, std::ios::in | std::ios::binary);
-		if(!in) {
+		return stamp + "\n" + rootPrefix;
+	}
+
+	//Reads the stamp file; false when it cannot be read. `rootPrefix` gets the
+	//second line ("" for a one-line stamp).
+	inline bool ReadStamp(const string& stampPath, string& stamp, string& rootPrefix)
+	{
+		string text;
+		if(!MepFileIo::ReadWholeFile(stampPath, text)) {
 			return false;
 		}
-		std::stringstream ss;
-		ss << in.rdbuf();
-		return StringUtilities::Trim(ss.str()) == stamp
-			&& std::filesystem::exists(std::filesystem::u8path(FolderUtilities::CombinePath(outFolder, "pack.json")), ec);
+		size_t newline = text.find('\n');
+		stamp = StringUtilities::Trim(newline == string::npos ? text : text.substr(0, newline));
+		rootPrefix = newline == string::npos ? "" : StringUtilities::Trim(text.substr(newline + 1));
+		return true;
+	}
+
+	//A previous extraction of the very same zip bytes is still on disk: the
+	//recorded fingerprint equals `stamp` and the recorded pack root (the
+	//extraction folder plus the recorded prefix) still exists. On success
+	//`outFolder` is rewritten to that root, so a hires-only zip resolved
+	//through the ADR-0120 fallback hits the cache like any other pack instead
+	//of being wiped and re-extracted on every load.
+	inline bool IsCacheCurrent(string& outFolder, const string& stampPath, const string& stamp)
+	{
+		string recorded, rootPrefix;
+		if(!ReadStamp(stampPath, recorded, rootPrefix) || recorded != stamp) {
+			return false;
+		}
+		string root = outFolder;
+		if(!rootPrefix.empty()) {
+			string combined;
+			if(!MepPack::NormalizeRelativePath(rootPrefix, combined) || combined.empty()) {
+				return false;
+			}
+			root = FolderUtilities::CombinePath(outFolder, combined);
+		}
+		std::error_code ec;
+		if(!std::filesystem::is_directory(std::filesystem::u8path(root), ec)) {
+			return false;
+		}
+		outFolder = root;
+		return true;
 	}
 
 	//Validates every entry before writing anything (zip-slip, spec §6);
@@ -75,15 +115,40 @@ namespace MepZipExtract
 		return true;
 	}
 
+	inline bool IsDirectoryEntry(const string& rawEntry)
+	{
+		return !rawEntry.empty() && (rawEntry.back() == '/' || rawEntry.back() == '\\');
+	}
+
+	//MepFileIo decompression caps (per entry and per archive), checked from
+	//the declared sizes before any entry is inflated
+	inline bool CheckPlanSizes(IArchive& archive, const vector<std::pair<string, string>>& plan, string& error)
+	{
+		uint64_t total = 0;
+		for(const auto& item : plan) {
+			if(IsDirectoryEntry(item.first)) {
+				continue;
+			}
+			uint64_t size = 0;
+			if(!archive.GetUncompressedSize(item.first, size)) {
+				error = "cannot read the size of '" + item.first + "'";
+				return false;
+			}
+			if(!MepFileIo::CheckDecompressionCaps(item.first, size, total, error)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	inline bool ExtractPlan(IArchive& archive, const vector<std::pair<string, string>>& plan, const string& outFolder, string& error)
 	{
 		namespace fs = std::filesystem;
 		std::error_code ec;
 		FolderUtilities::CreateFolder(outFolder);
 		for(const auto& item : plan) {
-			bool isDir = !item.first.empty() && (item.first.back() == '/' || item.first.back() == '\\');
 			string dest = FolderUtilities::CombinePath(outFolder, item.second);
-			if(isDir) {
+			if(IsDirectoryEntry(item.first)) {
 				fs::create_directories(fs::u8path(dest), ec);
 				continue;
 			}
@@ -120,16 +185,16 @@ namespace MepZipExtract
 	}
 
 	//Combines the discovered fallback prefix into outFolder (ADR-0120, no
-	//other output changes) and (re)writes the cache stamp
+	//other output changes) and (re)writes the two-line cache stamp
 	inline void FinalizePrepared(const string& fallbackPrefix, const string& stampPath, const string& stamp, string& outFolder)
 	{
+		string combined;
 		if(!fallbackPrefix.empty()) {
-			string combined;
 			MepPack::NormalizeRelativePath(fallbackPrefix, combined);
 			outFolder = FolderUtilities::CombinePath(outFolder, combined);
 		}
 		ofstream stampFile(stampPath, std::ios::out | std::ios::binary);
-		stampFile << stamp;
+		stampFile << FormatStamp(stamp, combined);
 	}
 
 	//The whole ADR-0040/ADR-0049/ADR-0120 zip pipeline for one archive:
@@ -165,14 +230,15 @@ namespace MepZipExtract
 			}
 		}
 
-		if(!ExtractPlan(archive, plan, outFolder, error)) {
+		if(!CheckPlanSizes(archive, plan, error) || !ExtractPlan(archive, plan, outFolder, error)) {
 			return false;
 		}
 		FinalizePrepared(fallbackPrefix, stampPath, stamp, outFolder);
 		return true;
 	}
 
-	//PrepareZip itself: the cache-stamp short circuit, the wipe of any stale
+	//PrepareZip itself: the cache-stamp short circuit (which also resolves
+	//the recorded root prefix into outFolder), the wipe of any stale
 	//cache (which is also what keeps a leftover symlink in the cache folder
 	//from being written through) and then ExtractZip.
 	inline bool PrepareZip(IArchive& archive, const string& zipPath, const string& cacheRoot, const string& romName, string& outFolder, string& error)

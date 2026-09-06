@@ -16,7 +16,7 @@ namespace
 	//ROM-named subfolder (ADR-0120)
 	constexpr const char* kFallbackProbeBasenames[3] = { "hires.txt", "preset.cfg", "fingerprints.json" };
 	constexpr const char* kKnownSystems[] = { "nes", "gb", "gbc", "sms", "gg", "sg1000", "coleco", "snes" };
-	constexpr int kSupportedMajor = 1;
+	constexpr const char* kSupportedMajor = "1";
 
 	bool IsHexUpperOrLower(const string& text, size_t expectedLength)
 	{
@@ -301,9 +301,11 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 		error = "'mep' is not a semver version: " + out.SpecVersion;
 		return false;
 	}
-	int major = std::stoi(out.SpecVersion.substr(0, out.SpecVersion.find('.')));
+	//Compared as text: IsValidSemver only bounds the digit count per part
+	//loosely, and std::stoi would throw on a major that overflows an int
+	string major = out.SpecVersion.substr(0, out.SpecVersion.find('.'));
 	if(major != kSupportedMajor) {
-		error = "unsupported MEP major version " + std::to_string(major) + " (host supports " + std::to_string(kSupportedMajor) + ".x)";
+		error = "unsupported MEP major version " + major + " (host supports " + kSupportedMajor + ".x)";
 		return false;
 	}
 
@@ -356,7 +358,7 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 			target.Crc32 = StringUtilities::ToUpper(target.Crc32);
 		}
 		target.Name = entry.GetString("name");
-		out.Targets.push_back(target);
+		out.Targets.push_back(std::move(target));
 	}
 
 	//patches (optional, ADR-0044): [{sha1, file}]
@@ -382,8 +384,8 @@ bool MepPack::Parse(const string& json, MepPack& out, string& error)
 				return false;
 			}
 			patch.Sha1 = StringUtilities::ToUpper(patch.Sha1);
-			patch.File = normalized;
-			out.Patches.push_back(patch);
+			patch.File = std::move(normalized);
+			out.Patches.push_back(std::move(patch));
 		}
 	}
 

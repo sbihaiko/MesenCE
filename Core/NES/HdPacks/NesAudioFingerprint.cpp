@@ -8,6 +8,7 @@
 #include "Shared/Audio/ReplacementMuteMask.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/FolderUtilities.h"
+#include <algorithm>
 
 namespace
 {
@@ -78,6 +79,18 @@ uint32_t NesAudioReplacer::Load(const vector<string>& audioLayers, HdPackData& h
 			MessageManager::Log("[MEP] audio: " + error);
 			continue;
 		}
+		//Kind/Id become path components below (<layer>/<Kind>/<Id>.ogg): a
+		//separator or ".." would let fingerprints.json reach outside the pack.
+		auto isPathSafe = [](const string& s) {
+			return !s.empty() && s.find('/') == string::npos && s.find('\\') == string::npos && s.find("..") == string::npos;
+		};
+		tracks.erase(std::remove_if(tracks.begin(), tracks.end(), [&](const AudioFingerprint& t) {
+			if(isPathSafe(t.Kind) && isPathSafe(t.Id)) {
+				return false;
+			}
+			MessageManager::Log("[MEP] audio: track ignored - kind/id must be a plain name (kind '" + t.Kind + "', id '" + t.Id + "')");
+			return true;
+		}), tracks.end());
 		for(AudioFingerprint& t : tracks) {
 			bool replaced = false;
 			for(AudioFingerprint& m : merged) {
@@ -140,6 +153,12 @@ void NesAudioReplacer::OnFrame(const ApuState& apu)
 		return;
 	}
 	int result = _matcher.Feed(NesAudioFingerprint::FromApu(apu));
+	//ADR-0133 point 3: while a replacement plays, the mask follows the
+	//classifier every frame (a channel that turns SFX mid-track passes dry);
+	//UpdateReplacementMuteMask pushes to the mixer only when the value changes.
+	if(_matcher.GetPlaying() >= 0) {
+		UpdateReplacementMuteMask();
+	}
 	if(result == -1) {
 		return;
 	}

@@ -210,7 +210,6 @@ public:
 	//Last values handed to TinySoundFont per channel (key, channel volume)
 	int SfKey(int ch) const { return _sfNotes[ch].Key; }
 	double SfChannelVolume(int ch) const { return _sfChannelVol[ch]; }
-	double SfOnVol(int ch) const { return _sfNotes[ch].OnVol; }
 	int SfChannelVoices(int channel) const;
 	double SfChannelGainDb(int channel) const;
 	uint64_t SfNoteOns() const { return _sfNoteOns; }
@@ -225,9 +224,6 @@ public:
 	//called from outside the audio mix path - e.g. on console reset, on the
 	//emulation thread - never from MixAudio/Render.
 	void ReloadUserPresets();
-	//Path of the MEP synth preset applied between built-ins and the user's
-	//file (takes effect on the next ReloadUserPresets)
-	void SetPackPresetPaths(const vector<string>& paths) { _packPresetPaths = paths; }
 
 	const EnhancedSynthPreset& GetPreset(uint32_t presetId) const;
 
@@ -241,8 +237,6 @@ public:
 	//next to ReloadUserPresets). Returns false and keeps the DSP voices when
 	//the file cannot be loaded; an empty path unloads.
 	bool LoadSoundFont(const string& path);
-	bool HasSoundFont() const { return _sf != nullptr; }
-	const string& GetSoundFontPath() const { return _sfPath; }
 	~EnhancedSynthEngine();
 
 	//Level-2 routing (ADR-0052): one RawChannel per melodic chip channel, in

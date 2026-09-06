@@ -90,6 +90,7 @@ private:
 	HdLoadedTile* _bgFifoHdTile = nullptr;
 	uint8_t _bgFifoHdRow = 0;
 	bool _bgFifoHdMirror = false;
+	bool _hdBgDisabled = false; //GameboyConfig.DisableBackground, sampled once per frame
 	HdLoadedTile* _oamHdTile[8] = {};
 	uint8_t _oamHdRow[8] = {};
 	uint8_t _oamHdCol[8] = {};

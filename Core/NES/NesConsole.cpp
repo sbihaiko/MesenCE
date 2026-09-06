@@ -45,6 +45,21 @@
 #include "Utilities/Serializer.h"
 #include "Utilities/sha1.h"
 
+namespace
+{
+	//MEP audio layering (ADR-0041): every track of `from` overrides the same
+	//id in `into` - human > auto > textures pack, in call order.
+	void MergeAudioTracks(HdPackData& into, const HdPackData& from)
+	{
+		for(const auto& bgm : from.BgmFilesById) {
+			into.BgmFilesById[bgm.first] = bgm.second;
+		}
+		for(const auto& sfx : from.SfxFilesById) {
+			into.SfxFilesById[sfx.first] = sfx.second;
+		}
+	}
+}
+
 NesConsole::NesConsole(Emulator* emu)
 {
 	_emu = emu;
@@ -345,12 +360,7 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 			return;
 		}
 		if(loaded) {
-			for(auto& bgm : audioData->BgmFilesById) {
-				_hdData->BgmFilesById[bgm.first] = bgm.second;
-			}
-			for(auto& sfx : audioData->SfxFilesById) {
-				_hdData->SfxFilesById[sfx.first] = sfx.second;
-			}
+			MergeAudioTracks(*_hdData.get(), *audioData);
 		} else {
 			_hdData.reset(audioData.release());
 			loaded = true;
@@ -359,12 +369,7 @@ void NesConsole::LoadHdPack(VirtualFile& romFile)
 	};
 	if(looseAudioOnly) {
 		if(loaded) {
-			for(auto& bgm : looseAudioOnly->BgmFilesById) {
-				_hdData->BgmFilesById[bgm.first] = bgm.second;
-			}
-			for(auto& sfx : looseAudioOnly->SfxFilesById) {
-				_hdData->SfxFilesById[sfx.first] = sfx.second;
-			}
+			MergeAudioTracks(*_hdData.get(), *looseAudioOnly);
 			for(auto& patch : looseAudioOnly->PatchesByHash) {
 				_hdData->PatchesByHash.emplace(patch.first, patch.second);
 			}

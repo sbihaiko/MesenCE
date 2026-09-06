@@ -2,6 +2,7 @@
 #include "JsonReader.h"
 #include <cstdlib>
 #include <cerrno>
+#include <charconv>
 
 static constexpr int kMaxDepth = 64;
 
@@ -146,11 +147,14 @@ bool JsonReader::ParseNumber(JsonValue& out)
 		}
 	}
 
-	string text(start, _cur - start);
-	errno = 0;
-	char* endPtr = nullptr;
-	double value = strtod(text.c_str(), &endPtr);
-	if(endPtr != text.c_str() + text.size()) {
+	//std::from_chars is locale-independent (strtod honours LC_NUMERIC, so a
+	//host running under a comma-decimal locale would misparse "1.5")
+	double value = 0;
+	std::from_chars_result parsed = std::from_chars(start, _cur, value);
+	if(parsed.ec == std::errc::result_out_of_range) {
+		return Fail("number out of range");
+	}
+	if(parsed.ec != std::errc() || parsed.ptr != _cur) {
 		return Fail("invalid number");
 	}
 	out._type = JsonValue::Type::Number;

@@ -99,12 +99,19 @@ bool HeadlessInputScript::Parse(const string& text, double frameRate, vector<Hea
 			if(value != std::floor(value)) {
 				return fail("a frame count must be a whole number - write \"" + number + "s\" to declare seconds");
 			}
+			if(value > (double)UINT32_MAX) {
+				return fail("\"" + number + "f\" is more frames than a script can address");
+			}
 			frames = (uint32_t)value;
 		} else {
 			frames = SecondsToFrames(value, frameRate);
 			if(frames == 0) {
 				return fail("\"" + number + "s\" rounds to zero frames at " + std::to_string(frameRate) + " fps");
 			}
+		}
+
+		if(frames > UINT32_MAX - nextFrame) {
+			return fail("the script's total length overflows the frame counter");
 		}
 
 		HeadlessInputStep step;
@@ -132,10 +139,10 @@ bool HeadlessInputScript::Parse(const string& text, double frameRate, vector<Hea
 			}
 		}
 
-		parsed.push_back(step);
+		parsed.push_back(std::move(step));
 	}
 
-	steps = parsed;
+	steps = std::move(parsed);
 	return true;
 }
 

@@ -53,6 +53,14 @@ namespace MesenSheets
 	constexpr uint32_t kMaxSheetFrames = 4096;
 	//1-cell gutter, transparent, between every sheet cell.
 	constexpr uint32_t kSheetGutter = 1;
+	//Largest stitched-map canvas rendered at 1x, in pixels (ADR-0153 §6: a map
+	//is a paint surface written once at save time). A screen-mode map is
+	//(screens wide x 256) x (screens tall x 240) and a continuous strip is
+	//(world columns x 8) x 240; 64 Mpx is ~1000 screens - far past any
+	//recording - and bounds the RGBA buffer at 256 MB before the pack-scale
+	//upscale multiplies it again. A map past this is skipped and logged, not
+	//truncated.
+	constexpr uint64_t kMaxMapPixels = 64ull * 1024 * 1024;
 	//A map region narrower than this does not justify the continuous stitcher.
 	constexpr uint32_t kContinuousMinWidth = 512;
 	//One subject reaches the vocabulary under several keys: a mapper that swaps

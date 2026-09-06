@@ -14,7 +14,7 @@ bool HeadlessInputEngine::LoadScript(const string& text, double frameRate, strin
 	}
 
 	auto lock = _lock.AcquireSafe();
-	_steps = steps;
+	_steps = std::move(steps);
 	return true;
 }
 

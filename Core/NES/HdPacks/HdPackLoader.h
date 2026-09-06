@@ -31,6 +31,10 @@ private:
 	string _hdPackDefinitionFile;
 	string _hdPackFolder;
 	unordered_map<string, HdPackCondition*> _conditionsByName;
+	//Lower-cased name -> registered name, for the case-insensitive fallback in
+	//ParseConditionString; rebuilt when _conditionsByName grew since.
+	unordered_map<string, string> _conditionsByLower;
+	size_t _conditionsByLowerCount = 0;
 	unordered_map<string, HdPackBitmapInfo*> _backgroundsByName;
 	unordered_map<string, string> _packFilesByLower;
 	bool _packFilesIndexed = false;

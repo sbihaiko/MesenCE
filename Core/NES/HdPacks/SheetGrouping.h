@@ -23,6 +23,5 @@ namespace MesenSheets
 	//The half of the criterion that does not care where the edges came from,
 	//shared with SpriteGrouping (F9.5): components of 2..kSheetMaxObjectCells
 	//cells, then a BFS layout at each edge's Dx/Dy, biggest group first.
-	std::vector<std::vector<uint32_t>> BuildEdgeComponents(const std::vector<GroupEdge>& edges, uint32_t cellCount);
 	std::vector<SheetGroup> LayoutGroups(const Vocabulary& vocab, const std::vector<GroupEdge>& edges);
 }

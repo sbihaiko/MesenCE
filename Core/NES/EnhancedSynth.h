@@ -25,12 +25,13 @@ private:
 	//Diagnostics: "is the synth actually producing sound?" written to mesen.log
 	//when the answer changes (and at most every kDiagPeriodS), so a silent
 	//game in the GUI can be told apart from a silent APU without a debugger.
+	static constexpr double kDiagPeriodS = 10.0;
 	double _diagTimerS = 0;
 	int _diagState = -1; //-1 = nothing logged yet, 0 = silent, 1 = sounding
 
 public:
 	EnhancedSynth(Emulator* emu, NesConsole* console);
-	virtual ~EnhancedSynth();
+	~EnhancedSynth(); //non-virtual on purpose: final class owned as unique_ptr<EnhancedSynth>; IAudioProvider has no virtual dtor
 
 	//Clears delay lines and voice state, and re-reads EnhancedAudioPresets.cfg
 	//(so editing the file only needs a console reset, not a restart). Called
@@ -47,5 +48,5 @@ public:
 	ChannelRoleClassifier& GetClassifier() { return _roles; }
 
 private:
-	void LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg, uint32_t sampleCount, uint32_t sampleRate);
+	void LogDiagnostics(const EnhancedSynthEngine::Input& in, const EnhancedSynthEngine::RawChannel* raw, int32_t peakBefore, int32_t peakAfter, AudioConfig& cfg);
 };

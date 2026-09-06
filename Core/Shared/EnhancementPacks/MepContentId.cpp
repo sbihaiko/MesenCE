@@ -246,29 +246,34 @@ namespace
 
 string MepContentId::ComputeTree(const vector<Entry>& entries)
 {
-	vector<Entry> sorted = entries;
+	//Sort pointers, not entries: the file bytes never need to be copied
+	vector<const Entry*> sorted;
+	sorted.reserve(entries.size());
+	for(const Entry& entry : entries) {
+		sorted.push_back(&entry);
+	}
 	std::sort(sorted.begin(), sorted.end(),
-		[](const Entry& a, const Entry& b) { return a.Path < b.Path; });
+		[](const Entry* a, const Entry* b) { return a->Path < b->Path; });
 	string manifest;
-	for(const Entry& entry : sorted) {
-		if(IsExcluded(entry.Path)) {
+	for(const Entry* entry : sorted) {
+		if(IsExcluded(entry->Path)) {
 			continue;
 		}
-		if(entry.Path.size() >= 256) {
+		if(entry->Path.size() >= 256) {
 			return ""; //ADR-0139 path-length bound: hash undefined for this tree
 		}
-		string payload;
-		if(entry.Path == "pack.json" || (entry.Path.size() > 9 && entry.Path.compare(entry.Path.size() - 9, 9, "/pack.json") == 0)) {
-			payload = CanonicalPackJson(entry.Data);
+		string digestHex;
+		if(entry->Path == "pack.json" || (entry->Path.size() > 9 && entry->Path.compare(entry->Path.size() - 9, 9, "/pack.json") == 0)) {
+			string payload = CanonicalPackJson(entry->Data);
+			digestHex = SHA256::GetHash((const uint8_t*)payload.data(), payload.size());
 		} else {
-			payload.assign(entry.Data.begin(), entry.Data.end());
+			digestHex = SHA256::GetHash(entry->Data.data(), entry->Data.size());
 		}
-		string digestHex = SHA256::GetHash((uint8_t*)payload.data(), payload.size());
-		manifest += entry.Path;
-		manifest.push_back((char)entry.Path.size());
+		manifest += entry->Path;
+		manifest.push_back((char)entry->Path.size());
 		manifest += HexDecode(digestHex);
 	}
-	return SHA256::GetHash((uint8_t*)manifest.data(), manifest.size());
+	return SHA256::GetHash((const uint8_t*)manifest.data(), manifest.size());
 }
 
 string MepContentId::ComputeRecipe(const string& primaryTreeHash, const string& recipeHash,
@@ -281,7 +286,7 @@ string MepContentId::ComputeRecipe(const string& primaryTreeHash, const string& 
 	for(const auto& dep : deps) {
 		lines += "\n" + dep.second;
 	}
-	return SHA256::GetHash((uint8_t*)lines.data(), lines.size());
+	return SHA256::GetHash((const uint8_t*)lines.data(), lines.size());
 }
 
 string MepContentId::ComputeFolder(const string& folder)
@@ -300,12 +305,14 @@ string MepContentId::ComputeFolder(const string& folder)
 		if(!de.is_regular_file(ec)) {
 			continue;
 		}
-		string abs = de.path().string();
-		string rel = abs.substr(folder.size() + 1);
-		for(char& c : rel) {
-			if(c == '\\') {
-				c = '/';
-			}
+		//Relative path computed by the filesystem library, not by slicing the
+		//prefix off a narrow string (a trailing separator on "folder", or a
+		//non-UTF-8 narrow encoding on Windows, would corrupt the slice);
+		//generic_u8string already yields '/' separators on every platform
+		string abs = de.path().u8string();
+		string rel = fs::relative(de.path(), fs::u8path(folder), ec).generic_u8string();
+		if(ec || rel.empty()) {
+			return "";
 		}
 		string base = Basename(rel);
 		//Install/host metadata is not part of the editable pack content; keep
@@ -313,7 +320,7 @@ string MepContentId::ComputeFolder(const string& folder)
 		if(base == ".mep-install.json" || base == ".bootstrap") {
 			continue;
 		}
-		std::ifstream in(abs, std::ios::binary);
+		ifstream in(abs, std::ios::binary);
 		if(!in) {
 			continue;
 		}

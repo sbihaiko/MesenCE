@@ -2,13 +2,14 @@
 #include <filesystem>
 #include "Shared/EnhancementPacks/MepPackManager.h"
 #include "Shared/EnhancementPacks/MepZipExtract.h"
+#include "Shared/EnhancementPacks/MepFileIo.h"
 #include "Shared/MessageManager.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Utilities/VirtualFile.h"
 #include "Utilities/FolderUtilities.h"
 #include "Utilities/StringUtilities.h"
-#include "Utilities/ZipReader.h"
+#include "Utilities/miniz.h"
 #include "Utilities/JsonReader.h"
 #include "Utilities/sha1.h"
 #include "Shared/Interfaces/IConsole.h"
@@ -34,38 +35,70 @@ namespace
 		return false;
 	}
 
-	//ADR-0120 §4: the ZipReader-backed archive the extracted MepZipExtract
-	//pipeline reads through. ZipReader stays on this side of the seam so the
-	//unit-test link does not pull in ArchiveReader/SevenZip.
-	class ZipReaderArchive : public MepZipExtract::IArchive
+	//ADR-0120 §4: the archive the extracted MepZipExtract pipeline reads
+	//through. miniz is driven directly on a buffer this object owns for as
+	//long as the reader lives (mz_zip_reader_init_mem does not copy - the
+	//previous ZipReader::LoadArchive(vector&) call left the reader pointing at
+	//a dead local), and the per-entry declared sizes are exposed for the
+	//MepFileIo decompression caps. Same seam MepRecipeSource already uses.
+	class MinizZipArchive : public MepZipExtract::IArchive
 	{
 	public:
+		~MinizZipArchive() override
+		{
+			if(_loaded) {
+				mz_zip_reader_end(&_zip);
+			}
+		}
+
 		bool Load(const string& zipPath, vector<string>& entries, string& error) override
 		{
-			ifstream in(zipPath, std::ios::in | std::ios::binary);
-			if(!in) {
+			if(!MepFileIo::ReadWholeFile(zipPath, _bytes)) {
 				error = "cannot open zip";
 				return false;
 			}
-			std::stringstream ss;
-			ss << in.rdbuf();
-			string content = ss.str();
-			vector<uint8_t> zipData(content.begin(), content.end());
-			if(!_reader.LoadArchive(zipData)) {
+			memset(&_zip, 0, sizeof(_zip));
+			if(!mz_zip_reader_init_mem(&_zip, _bytes.data(), _bytes.size(), 0)) {
 				error = "not a valid zip archive";
 				return false;
 			}
-			entries = _reader.GetFileList();
+			_loaded = true;
+			for(mz_uint i = 0, len = mz_zip_reader_get_num_files(&_zip); i < len; i++) {
+				mz_zip_archive_file_stat stat;
+				if(mz_zip_reader_file_stat(&_zip, i, &stat)) {
+					entries.push_back(stat.m_filename);
+				}
+			}
+			return true;
+		}
+
+		bool GetUncompressedSize(const string& entry, uint64_t& size) override
+		{
+			int index = mz_zip_reader_locate_file(&_zip, entry.c_str(), nullptr, 0);
+			mz_zip_archive_file_stat stat;
+			if(index < 0 || !mz_zip_reader_file_stat(&_zip, (mz_uint)index, &stat)) {
+				return false;
+			}
+			size = stat.m_uncomp_size;
 			return true;
 		}
 
 		bool ExtractFile(const string& entry, vector<uint8_t>& content) override
 		{
-			return _reader.ExtractFile(entry, content);
+			size_t size = 0;
+			void* data = mz_zip_reader_extract_file_to_heap(&_zip, entry.c_str(), &size, 0);
+			if(!data) {
+				return false;
+			}
+			content.assign((uint8_t*)data, (uint8_t*)data + size);
+			mz_free(data);
+			return true;
 		}
 
 	private:
-		ZipReader _reader;
+		mz_zip_archive _zip{};
+		bool _loaded = false;
+		vector<uint8_t> _bytes;
 	};
 
 	//ADR-0145: true when the file at "path" is a BPS patch (magic "BPS1").
@@ -290,14 +323,25 @@ string MepPackManager::SystemFromExtension(const string& lowerExt)
 	return "";
 }
 
-bool MepPackManager::LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, MepPack& outPack)
+string MepPackManager::JoinPresentSections(const MepPack& pack)
+{
+	string sections;
+	for(int i = 0; i < kMepSectionCount; i++) {
+		if(pack.Sections[i].Present) {
+			sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
+		}
+	}
+	return sections;
+}
+
+bool MepPackManager::LoadConventionPack(const string& rootFolder, const string& containerName, MepPackOrigin origin, const string& humanPrefix, MepPack& outPack)
 {
 	outPack = MepPack();
 	outPack.RootFolder = rootFolder;
 	outPack.ContainerName = containerName;
 	outPack.Origin = origin;
 	outPack.FromZip = origin == MepPackOrigin::Zip;
-	if(!outPack.DetectConventionLayout()) {
+	if(!outPack.DetectConventionLayout(humanPrefix)) {
 		return false;
 	}
 	outPack.Synthetic = true;
@@ -330,30 +374,7 @@ bool MepPackManager::HasSiblingMepPack(const string& sibling) const
 	}
 	//A mep/pack.json alone also makes mep/ the human layer (metadata +
 	//identity, even before the convention probes are populated)
-	return (bool)std::ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(sibling, "mep"), "pack.json"));
-}
-
-bool MepPackManager::LoadMepSiblingPack(const string& sibling, MepPack& outPack)
-{
-	outPack = MepPack();
-	outPack.RootFolder = sibling;
-	outPack.ContainerName = _romName;
-	outPack.Origin = MepPackOrigin::Sibling;
-	outPack.FromZip = false;
-	if(!outPack.DetectConventionLayout("mep")) {
-		return false;
-	}
-	outPack.Synthetic = true;
-	outPack.SpecVersion = "1.1.0";
-	outPack.Name = _romName;
-	outPack.Version = "0.0.0";
-	outPack.License = "unspecified";
-	MepTarget target;
-	target.System = SystemFromExtension(_romExtension);
-	target.Sha1 = _romSha1;
-	target.Name = _romName;
-	outPack.Targets.push_back(target);
-	return true;
+	return (bool)ifstream(FolderUtilities::CombinePath(FolderUtilities::CombinePath(sibling, "mep"), "pack.json"));
 }
 
 void MepPackManager::ScanSiblingFolder()
@@ -415,12 +436,14 @@ void MepPackManager::ScanSiblingFolder()
 						ps.HasHuman = true;
 						ps.Path = ls.Path; //e.g. "mep/textures"
 					}
-				} else if(ps.Path.front() != '/') {
+				} else {
+					//(a declared path never starts with '/': Parse already ran
+					//NormalizeRelativePath on it)
 					ps.Path = "mep/" + ps.Path;
 				}
 			}
 		}
-	} else if(hasMep ? !LoadMepSiblingPack(sibling, pack) : !LoadConventionPack(sibling, _romName, MepPackOrigin::Sibling, pack)) {
+	} else if(!LoadConventionPack(sibling, _romName, MepPackOrigin::Sibling, humanPrefix, pack)) {
 		Log("sibling folder '" + sibling + "' has no textures/, audio/ or synth/ layer - ignored");
 		return;
 	}
@@ -468,12 +491,7 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 
 	if(!_packs.empty()) {
 		for(const MepPack& pack : _packs) {
-			string sections;
-			for(int i = 0; i < kMepSectionCount; i++) {
-				if(pack.Sections[i].Present) {
-					sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
-				}
-			}
+			string sections = JoinPresentSections(pack);
 			string origin = pack.Origin == MepPackOrigin::Sibling ? "sibling folder" : pack.FromZip ? "zip" :
 																																	"folder";
 			string matchNote = IsOptimistic(pack) ? " does not match ROM sha1 " + _romSha1 + " (optimistic, ADR-0145 - textures/BPS may still apply)" : " matches ROM sha1 " + _romSha1;
@@ -484,14 +502,7 @@ void MepPackManager::LoadForRom(VirtualFile& romFile)
 
 bool MepPackManager::ReadTextFile(const string& path, string& out)
 {
-	ifstream file(path, std::ios::in | std::ios::binary);
-	if(!file) {
-		return false;
-	}
-	std::stringstream ss;
-	ss << file.rdbuf();
-	out = ss.str();
-	return true;
+	return MepFileIo::ReadWholeFile(path, out);
 }
 
 void MepPackManager::ReadInstallIdentity(MepPack& pack)
@@ -530,7 +541,7 @@ bool MepPackManager::PrepareZip(const string& zipPath, const string& cacheRoot, 
 	//ADR-0120 §4: the pipeline itself (cache stamp, zip-slip validation, the
 	//root/fallback-subfolder decision, extraction) lives in MepZipExtract so
 	//scripts/core_unit_tests.cpp can drive it against real archive bytes.
-	ZipReaderArchive archive;
+	MinizZipArchive archive;
 	return MepZipExtract::PrepareZip(archive, zipPath, cacheRoot, _romName, outFolder, error);
 }
 
@@ -598,7 +609,7 @@ void MepPackManager::ScanAndMatch()
 				//"name" - is the one guaranteed to match the ROM, so the gate
 				//has to look there for the recovery to ever be reachable.
 				string rootLeaf = FolderUtilities::GetFilename(rootFolder, true);
-				if(StringUtilities::ToLower(rootLeaf) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, pack)) {
+				if(StringUtilities::ToLower(rootLeaf) == StringUtilities::ToLower(_romName) && LoadConventionPack(rootFolder, name, fromZip ? MepPackOrigin::Zip : MepPackOrigin::Folder, "", pack)) {
 					//ADR-0145: a name-matched convention pack is a definite
 					//match (its target *is* the current ROM), never optimistic
 					candidates.push_back({ StringUtilities::ToLower(name), std::move(pack), true });
@@ -646,6 +657,7 @@ void MepPackManager::ScanAndMatch()
 void MepPackManager::SetPackEnabled(const string& containerName, bool enabled)
 {
 	string key = StringUtilities::ToLower(containerName);
+	auto lock = _disabledLock.AcquireSafe();
 	if(enabled) {
 		_disabledContainers.erase(key);
 	} else {
@@ -655,7 +667,9 @@ void MepPackManager::SetPackEnabled(const string& containerName, bool enabled)
 
 bool MepPackManager::IsPackEnabled(const string& containerName) const
 {
-	return _disabledContainers.find(StringUtilities::ToLower(containerName)) == _disabledContainers.end();
+	string key = StringUtilities::ToLower(containerName);
+	auto lock = _disabledLock.AcquireSafe();
+	return _disabledContainers.find(key) == _disabledContainers.end();
 }
 
 bool MepPackManager::IsOptimistic(const MepPack& pack) const
@@ -779,12 +793,7 @@ string MepPackManager::GetPackListText() const
 {
 	string out;
 	for(const MepPack& pack : _packs) {
-		string sections;
-		for(int i = 0; i < kMepSectionCount; i++) {
-			if(pack.Sections[i].Present) {
-				sections += (sections.empty() ? "" : ",") + string(MepPack::GetSectionName((MepSectionType)i));
-			}
-		}
+		string sections = JoinPresentSections(pack);
 		MepPackIdentity identity;
 		auto identityIt = _packIdentityByContainer.find(StringUtilities::ToLower(pack.ContainerName));
 		if(identityIt != _packIdentityByContainer.end()) {

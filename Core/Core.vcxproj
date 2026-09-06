@@ -664,6 +664,7 @@
     <ClInclude Include="Shared\MemoryType.h" />
     <ClInclude Include="Shared\Audio\SoundMixer.h" />
     <ClInclude Include="Shared\HdPacks\HdTilePackBuilder.h" />
+    <ClInclude Include="Shared\HdPacks\HdTileDecode.h" />
     <ClInclude Include="Shared\HdPacks\HdTilePack.h" />
     <ClInclude Include="Shared\HdPacks\HdTileVideoFilter.h" />
     <ClInclude Include="Shared\Audio\EnhancedSynthEngine.h" />
@@ -734,11 +735,36 @@
     <ClCompile Include="NES\HdPacks\HdNesPack.cpp" />
     <ClCompile Include="NES\HdPacks\HdNesPpu.cpp" />
     <ClCompile Include="NES\HdPacks\HdPackBuilder.cpp" />
-    <ClCompile Include="NES\HdPacks\MetatileVocabulary.cpp" />
-    <ClCompile Include="NES\HdPacks\ScreenStitcher.cpp" />
-    <ClCompile Include="NES\HdPacks\SheetGrouping.cpp" />
-    <ClCompile Include="NES\HdPacks\SheetRender.cpp" />
-    <ClCompile Include="NES\HdPacks\SpriteGrouping.cpp" />
+    <ClCompile Include="NES\HdPacks\MetatileVocabulary.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="NES\HdPacks\ScreenStitcher.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="NES\HdPacks\SheetGrouping.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="NES\HdPacks\SheetRender.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="NES\HdPacks\SpriteGrouping.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Profile|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PGO Optimize|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="NES\HdPacks\HdPackLoader.cpp" />
     <ClCompile Include="NES\HdPacks\HdVideoFilter.cpp" />
     <ClCompile Include="NES\HdPacks\OggMixer.cpp" />

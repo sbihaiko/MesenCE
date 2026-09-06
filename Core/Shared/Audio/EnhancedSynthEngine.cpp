@@ -79,14 +79,28 @@ bool EnhancedSynthEngine::LoadSoundFont(const string& path)
 
 	//Read the whole file ourselves (TSF_NO_STDIO) so the path handling
 	//matches the rest of the emulator; a SoundFont is a few MB to ~200 MB.
+	//Sized up front (one read, no vector regrowth) and capped: tsf_load_memory
+	//takes an int size, and nothing this engine plays needs more than 256 MiB.
+	constexpr std::streamoff kMaxSoundFontBytes = 256ll * 1024 * 1024;
 	std::ifstream file(path, std::ios::binary);
 	if(!file) {
 		MessageManager::Log("[EnhancedAudio] SoundFont not found: " + path);
 		return false;
 	}
-	std::vector<char> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	if(data.empty()) {
+	file.seekg(0, std::ios::end);
+	std::streamoff size = file.tellg();
+	file.seekg(0, std::ios::beg);
+	if(size <= 0) {
 		MessageManager::Log("[EnhancedAudio] SoundFont is empty: " + path);
+		return false;
+	}
+	if(size > kMaxSoundFontBytes) {
+		MessageManager::Log("[EnhancedAudio] SoundFont is larger than 256 MiB, not loaded: " + path);
+		return false;
+	}
+	std::vector<char> data((size_t)size);
+	if(!file.read(data.data(), size)) {
+		MessageManager::Log("[EnhancedAudio] SoundFont could not be read: " + path);
 		return false;
 	}
 	_sf = tsf_load_memory(data.data(), (int)data.size());
@@ -598,7 +612,7 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		//keeps the preset choice; a FixedRole channel is exempt - item 6's
 		//human override always wins).
 		for(int ch = 0; ch < 3; ch++) {
-			if(!in.FamilyLocked[ch] && in.Family[ch] != ExpressionEnvelope::FamilySustained) {
+			if(!in.FamilyLocked[ch] && in.Family[ch] < 3 && in.Family[ch] != ExpressionEnvelope::FamilySustained) {
 				int fp = kFamilyPrograms[in.Family[ch]][ch];
 				if(fp >= 0) {
 					programs[ch] = fp;
@@ -814,10 +828,14 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		}
 
 		//Lead echo (single tap)
-		uint32_t echoRead = (_echoPos + echoSize - echoDelay) % echoSize;
+		//Ring-buffer indexes: the positions stay < size and the taps are
+		//clamped to size - 1 above, so one conditional wrap replaces each `%`
+		uint32_t echoRead = _echoPos >= echoDelay ? _echoPos - echoDelay : _echoPos + echoSize - echoDelay;
 		double echo = _echoBuf[echoRead];
 		_echoBuf[_echoPos] = (float)(useSf ? 0.5 * (sfL + sfR) * 0.6 : lead);
-		_echoPos = (_echoPos + 1) % echoSize;
+		if(++_echoPos >= echoSize) {
+			_echoPos = 0;
+		}
 
 		//Stereo image: harmony left, lead echo right, FM centered
 		double left = p.LeadGain * lead + p.EchoGainL * echo + 1.25 * p.HarmGain * harm + p.BassGain * bass + p.DrumGain * drum + p.LeadGain * fmBus + sfL;
@@ -826,12 +844,14 @@ void EnhancedSynthEngine::Render(int16_t* out, uint32_t sampleCount, uint32_t sa
 		//Light feedforward reverb (3 taps)
 		_revBufL[_revPos] = (float)left;
 		_revBufR[_revPos] = (float)right;
-		uint32_t t1 = (_revPos + revSize - revTap1) % revSize;
-		uint32_t t2 = (_revPos + revSize - revTap2) % revSize;
-		uint32_t t3 = (_revPos + revSize - revTap3) % revSize;
+		uint32_t t1 = _revPos >= revTap1 ? _revPos - revTap1 : _revPos + revSize - revTap1;
+		uint32_t t2 = _revPos >= revTap2 ? _revPos - revTap2 : _revPos + revSize - revTap2;
+		uint32_t t3 = _revPos >= revTap3 ? _revPos - revTap3 : _revPos + revSize - revTap3;
 		left += p.ReverbWet * (0.35 * _revBufL[t1] + 0.28 * _revBufL[t2] + 0.22 * _revBufL[t3]);
 		right += p.ReverbWet * (0.35 * _revBufR[t1] + 0.28 * _revBufR[t2] + 0.22 * _revBufR[t3]);
-		_revPos = (_revPos + 1) % revSize;
+		if(++_revPos >= revSize) {
+			_revPos = 0;
+		}
 
 		//SFX join after the sends: dry, centered
 		left += sfx;

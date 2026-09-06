@@ -1,4 +1,3 @@
-#include "pch.h"
 //ADR-0153 §3/§4 (Phase 9) - see SheetRender.h. Stateful partner: HdPackBuilder.
 #include "NES/HdPacks/SheetRender.h"
 #include <cmath>
@@ -239,7 +238,9 @@ namespace MesenSheets
 	SheetImage RenderMap(const StitchedMap& map, const Vocabulary& vocab, const TileLookup& lookup, NesPalette palette)
 	{
 		SheetImage image;
-		if(map.Width == 0 || map.Height == 0) {
+		//kMaxMapPixels: an empty image is the "refused" answer, checked by the
+		//caller before it names a file (HdPackBuilder::WriteMapSheets logs it).
+		if(map.Width == 0 || map.Height == 0 || (uint64_t)map.Width * map.Height > kMaxMapPixels) {
 			return image;
 		}
 		image.Reset(map.Width, map.Height);

@@ -2,6 +2,7 @@
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
 #include "Shared/EnhancementPacks/MepRecipeOps.h"
 #include "Shared/EnhancementPacks/MepContentId.h"
+#include "Shared/EnhancementPacks/MepFileIo.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/JsonReader.h"
 #include "Utilities/FolderUtilities.h"
@@ -29,7 +30,14 @@ namespace
 		if(version && version->IsNumber() && version->GetNumber() == 1.0) {
 			return true;
 		}
-		string got = version && version->IsNumber() ? std::to_string((long long)version->GetNumber()) : "<missing>";
+		string got = "<missing>";
+		if(version && version->IsNumber()) {
+			//Printed with %g rather than cast: a huge or non-finite value would
+			//make the (long long) conversion undefined
+			char buf[64];
+			snprintf(buf, sizeof(buf), "%g", version->GetNumber());
+			got = buf;
+		}
 		Log("recipe unsupported: recipe version " + got);
 		error = "unsupported recipe version";
 		return false;
@@ -68,22 +76,23 @@ namespace
 		return (v && v->IsBool()) ? v->GetBool() : def;
 	}
 
-	//Verifies `path`'s sha256 against `expectedHex` (case-insensitive on
-	//read, MEP-recipe-v1 §3.2/§3.3); fills `actualHexOut` (lowercase) on
-	//success.
-	bool VerifyArtifactHash(const string& path, const string& expectedHex, string& actualHexOut, string& error)
+	//Reads `path` once into `bytes` and verifies its sha256 against
+	//`expectedHex` (case-insensitive on read, MEP-recipe-v1 §3.2/§3.3);
+	//fills `actualHexOut` (lowercase) on success. The same bytes are then
+	//handed to MepRecipeSource::LoadBytes, so no artifact is read twice.
+	bool VerifyArtifactHash(const string& path, const string& expectedHex, vector<uint8_t>& bytes, string& actualHexOut, string& error)
 	{
 		std::error_code ec;
 		if(!fs::exists(fs::u8path(path), ec)) {
 			error = "artifact does not exist: " + path;
 			return false;
 		}
-		string expectedLower = StringUtilities::ToLower(expectedHex);
-		actualHexOut = StringUtilities::ToLower(SHA256::GetHash(path));
-		if(actualHexOut.empty()) {
+		if(!MepFileIo::ReadWholeFile(path, bytes)) {
 			error = "artifact could not be read: " + path;
 			return false;
 		}
+		string expectedLower = StringUtilities::ToLower(expectedHex);
+		actualHexOut = StringUtilities::ToLower(SHA256::GetHash(bytes.data(), bytes.size()));
 		if(actualHexOut != expectedLower) {
 			error = "sha256 mismatch for '" + path + "': expected " + expectedLower + ", got " + actualHexOut;
 			return false;
@@ -112,11 +121,12 @@ namespace
 				continue;
 			}
 			string actual;
-			if(!VerifyArtifactHash(pathIt->second, dep.GetString("sha256"), actual, error)) {
+			vector<uint8_t> bytes;
+			if(!VerifyArtifactHash(pathIt->second, dep.GetString("sha256"), bytes, actual, error)) {
 				return false;
 			}
 			depHashes[id] = actual;
-			if(!depSources[id].LoadFile(pathIt->second, error)) {
+			if(!depSources[id].LoadBytes(std::move(bytes), error)) {
 				return false;
 			}
 		}
@@ -146,14 +156,26 @@ namespace
 		return true;
 	}
 
-	bool PrepareOutputFolder(const string& outFolder, string& error)
+	//`created` is set when the folder did not exist before this call, so a
+	//later failure can roll it back (a pre-existing empty folder is the
+	//caller's and is left in place).
+	bool PrepareOutputFolder(const string& outFolder, bool& created, string& error)
 	{
 		std::error_code ec;
-		if(fs::exists(fs::u8path(outFolder), ec) && !fs::is_empty(fs::u8path(outFolder), ec)) {
-			error = "output folder is not empty: " + outFolder;
-			return false;
+		created = false;
+		if(fs::exists(fs::u8path(outFolder), ec)) {
+			if(!fs::is_empty(fs::u8path(outFolder), ec)) {
+				error = "output folder is not empty: " + outFolder;
+				return false;
+			}
+			return true;
 		}
 		fs::create_directories(fs::u8path(outFolder), ec);
+		if(ec) {
+			error = "cannot create output folder: " + outFolder;
+			return false;
+		}
+		created = true;
 		return true;
 	}
 
@@ -233,7 +255,13 @@ namespace
 			out << (v.GetBool() ? "true" : "false");
 		} else if(v.IsNumber()) {
 			double n = v.GetNumber();
-			(n == (long long)n) ? (out << (long long)n) : (out << n);
+			if(n == std::floor(n) && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
+				//Integral and within the exactly-representable range, so the
+				//(long long) cast is defined; anything else prints as a double
+				out << (long long)n;
+			} else {
+				out << n;
+			}
 		} else if(v.IsNull()) {
 			out << "null";
 		} else if(v.IsArray()) {
@@ -379,28 +407,87 @@ namespace
 	//declared `id` and the recipe-composite content_id; each is omitted when
 	//empty (a pack without an `id`, or a content_id a too-long path made
 	//undefined).
+	//ADR-0140 source (1): a pack `id` is a lowercase slug
+	//[a-z0-9][a-z0-9-]{2,63}. Anything else never reaches the stamp - the
+	//container then falls back to the `local:<container>` identity.
+	bool IsValidPackIdSlug(const string& id)
+	{
+		if(id.size() < 3 || id.size() > 64) {
+			return false;
+		}
+		for(size_t i = 0; i < id.size(); i++) {
+			char c = id[i];
+			bool alnum = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+			if(!alnum && !(i > 0 && c == '-')) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//MEP-recipe-v1 §3.3: a dep id is [A-Za-z][A-Za-z0-9_-]* and never
+	//"primary"
+	bool IsValidDepId(const string& id)
+	{
+		if(id.empty() || id == "primary") {
+			return false;
+		}
+		for(size_t i = 0; i < id.size(); i++) {
+			char c = id[i];
+			bool alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+			bool digit = c >= '0' && c <= '9';
+			if(!alpha && !(i > 0 && (digit || c == '_' || c == '-'))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	bool WriteInstallStamp(const string& recipeHash, const string& primarySha256,
 		const unordered_map<string, string>& depSha256, const string& packId, const string& contentId,
 		const string& outFolder, string& error)
 	{
+		for(const auto& dep : depSha256) {
+			if(!IsValidDepId(dep.first)) {
+				error = "invalid dep id '" + dep.first + "' (MEP-recipe-v1 §3.3)";
+				return false;
+			}
+		}
+		//Every key and value goes through the JSON string writer: the ids
+		//and digests come from the recipe document, not from this code
 		std::ostringstream out;
 		out << "{\n";
 		if(!packId.empty()) {
-			out << "  \"pack_id\": \"" << packId << "\",\n";
+			if(!IsValidPackIdSlug(packId)) {
+				Log("pack id '" + packId + "' is not an ADR-0140 slug - not recorded in .mep-install.json");
+			} else {
+				out << "  \"pack_id\": ";
+				WriteJsonString(out, packId);
+				out << ",\n";
+			}
 		}
 		if(!contentId.empty()) {
-			out << "  \"content_id\": \"" << contentId << "\",\n";
+			out << "  \"content_id\": ";
+			WriteJsonString(out, contentId);
+			out << ",\n";
 		}
-		out << "  \"recipe_hash\": \"" << recipeHash << "\",\n";
-		out << "  \"source\": { \"sha256\": \"" << primarySha256 << "\" },\n";
-		out << "  \"deps\": {";
+		out << "  \"recipe_hash\": ";
+		WriteJsonString(out, recipeHash);
+		out << ",\n  \"source\": { \"sha256\": ";
+		WriteJsonString(out, primarySha256);
+		out << " },\n  \"deps\": {";
 		size_t i = 0;
 		for(const auto& dep : depSha256) {
-			out << (i ? "," : "") << "\n    \"" << dep.first << "\": \"" << dep.second << "\"";
+			out << (i ? "," : "") << "\n    ";
+			WriteJsonString(out, dep.first);
+			out << ": ";
+			WriteJsonString(out, dep.second);
 			i++;
 		}
 		out << (depSha256.empty() ? "" : "\n  ") << "},\n";
-		out << "  \"installed_at\": \"" << CurrentIsoTimestamp() << "\"\n}\n";
+		out << "  \"installed_at\": ";
+		WriteJsonString(out, CurrentIsoTimestamp());
+		out << "\n}\n";
 
 		ofstream file(FolderUtilities::CombinePath(outFolder, ".mep-install.json"), std::ios::out | std::ios::binary);
 		if(!file) {
@@ -420,7 +507,9 @@ namespace
 	{
 		JsonValue Root;
 		string PrimaryHash;
+		vector<uint8_t> PrimaryBytes; //read once by ParseAndVerify, moved into PrimarySrc
 		MepRecipeSource PrimarySrc;
+		bool CreatedOutFolder = false; //rollback: remove the folder we created on failure
 		unordered_map<string, MepRecipeSource> DepSources;
 		unordered_map<string, string> DepHashes;
 		unordered_set<string> MissingIds;
@@ -441,7 +530,7 @@ namespace
 		}
 		const JsonValue* sources = state.Root.Get("sources");
 		const JsonValue* primary = sources ? sources->Get("primary") : nullptr;
-		if(!primary || !VerifyArtifactHash(primaryPath, primary->GetString("sha256"), state.PrimaryHash, error)) {
+		if(!primary || !VerifyArtifactHash(primaryPath, primary->GetString("sha256"), state.PrimaryBytes, state.PrimaryHash, error)) {
 			return false;
 		}
 		return VerifyDeps(*sources, depPaths, state.DepSources, state.DepHashes, state.MissingIds, state.UserSupplied, error)
@@ -450,10 +539,9 @@ namespace
 
 	//Phase 2: every hash checked out - create the output folder, open the
 	//primary source (discovering its pack root) and run the recipe's ops.
-	bool BuildContextAndRun(InstallState& state, const string& primaryPath, const string& romName,
-		const string& outFolder, string& error)
+	bool BuildContextAndRun(InstallState& state, const string& romName, const string& outFolder, string& error)
 	{
-		if(!PrepareOutputFolder(outFolder, error) || !state.PrimarySrc.LoadFile(primaryPath, error)) {
+		if(!PrepareOutputFolder(outFolder, state.CreatedOutFolder, error) || !state.PrimarySrc.LoadBytes(std::move(state.PrimaryBytes), error)) {
 			return false;
 		}
 		DiscoverPrimaryRoot(state.PrimarySrc, romName);
@@ -494,7 +582,7 @@ namespace
 		if(!pack || !WritePackJson(*pack, state.Ctx.IncludePatches, outFolder, error)) {
 			return false;
 		}
-		string recipeHash = SHA256::GetHash((uint8_t*)recipeJson.data(), recipeJson.size());
+		string recipeHash = SHA256::GetHash((const uint8_t*)recipeJson.data(), recipeJson.size());
 		string contentId;
 		vector<MepContentId::Entry> entries;
 		if(CollectTreeEntries(state.PrimarySrc, entries)) {
@@ -515,8 +603,14 @@ bool MepRecipeInstaller::Install(const string& recipeJson, const string& primary
 	result = MepRecipeInstallResult();
 	InstallState state;
 	if(!ParseAndVerify(recipeJson, primaryPath, depPaths, state, result.Error)
-		|| !BuildContextAndRun(state, primaryPath, romName, outFolder, result.Error)
+		|| !BuildContextAndRun(state, romName, outFolder, result.Error)
 		|| !WriteOutputs(state, recipeJson, outFolder, result.Error)) {
+		if(state.CreatedOutFolder) {
+			//Rollback: never leave a half-written pack where MepPackManager
+			//would discover it on the next scan
+			std::error_code ec;
+			fs::remove_all(fs::u8path(outFolder), ec);
+		}
 		return false;
 	}
 	result.Success = true;

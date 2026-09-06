@@ -31,7 +31,7 @@ private:
 
 public:
 	GbEnhancedSynth(Emulator* emu, Gameboy* console);
-	virtual ~GbEnhancedSynth();
+	~GbEnhancedSynth(); //non-virtual on purpose: final class owned as unique_ptr<GbEnhancedSynth>; IAudioProvider has no virtual dtor
 
 	void MixAudio(int16_t* out, uint32_t sampleCount, uint32_t sampleRate) override;
 };

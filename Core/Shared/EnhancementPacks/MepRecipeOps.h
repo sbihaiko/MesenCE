@@ -7,10 +7,11 @@ class JsonValue;
 //Everything MepRecipeInstaller.cpp needs to actually apply a parsed
 //MEP-recipe-v1 recipe (ADR-0138 §4, Clarification §37) once every hash has
 //verified: the read-only zip-backed source abstraction + §7 primary-root
-//discovery, the pure glob (§4.2) / rewrite-paths (§4.4) / path-safety
-//algorithms, the shared op-execution context, and the four op runners
-//themselves (§4). Not a standalone public API - MepRecipeInstaller.cpp is
-//the only caller of everything declared here.
+//discovery, the shared op-execution context, and the four op runners
+//themselves (§4). The pure path-safety / rewrite-paths (§4.4) helpers are
+//internal to MepRecipeOps.cpp; the glob matcher (§4.2) stays public so the
+//unit tests can pin its semantics directly. Not a standalone public API -
+//MepRecipeInstaller.cpp is the only caller of everything declared here.
 
 //A read-only view over one recipe artifact (always a zip - MEP-recipe-v1
 //§3.2/§3.3, both "primary" and every dep are downloaded/user-supplied zip
@@ -27,21 +28,28 @@ public:
 	bool LoadFile(const string& path, string& error);
 	bool LoadBytes(vector<uint8_t> bytes, string& error);
 	bool Exists(const string& rel) const;
+	//False when the entry is missing, cannot be inflated, or exceeds the
+	//MepFileIo decompression caps (declared size checked before inflating)
 	bool Read(const string& rel, vector<uint8_t>& out) const;
 	//Safe-normalized file paths under RootPrefix (directories excluded)
 	vector<string> ListRelative() const;
 	//Raw normalized entry names of the whole archive (RootPrefix NOT
-	//applied) - what root-discovery's probes scan
-	vector<string> RawEntries() const;
-	void SetRootPrefix(const string& prefix) { _rootPrefix = prefix; }
+	//applied) - what root-discovery's probes scan; cached at load time
+	const vector<string>& RawEntries() const { return _rawEntries; }
+	bool HasRawEntry(const string& normalized) const { return _normalizedToOriginal.count(normalized) > 0; }
 
 private:
+	//Only §7 discovery may move the root
+	friend string DiscoverPrimaryRoot(MepRecipeSource& src, const string& romName);
+
 	void Close();
+	void SetRootPrefix(const string& prefix) { _rootPrefix = prefix; }
 
 	mz_zip_archive _zip{};
 	bool _loaded = false;
 	vector<uint8_t> _bytes;
 	unordered_map<string, string> _normalizedToOriginal; //normalized -> raw zip entry name
+	vector<string> _rawEntries; //the keys of _normalizedToOriginal, in archive order
 	string _rootPrefix;
 };
 
@@ -53,30 +61,11 @@ private:
 //same as the Python reference.
 string DiscoverPrimaryRoot(MepRecipeSource& src, const string& romName);
 
-//True when `rel` (already safe-normalized) is a patch destination that
-//policy.apply_patch_only_if_complete withholds (MEP-recipe-v1 §6):
-//under patches/ or ending in .ips/.bps.
-bool IsPatchDest(const string& rel);
-
-//MEP-recipe-v1 §5: normalizes `raw` (MepPack::NormalizeRelativePath) and
-//additionally rejects the empty result - every path this interpreter
-//writes or reads MUST be non-empty once normalized.
-bool RequireSafeRel(const string& raw, string& out);
-
 //MEP-recipe-v1 §4.2: '*' matches one path segment, '**' matches zero or
-//more segments, '?' matches one character other than '/'.
+//more segments, '?' matches one character other than '/'. Iterative NFA
+//simulation - O(pattern x name), no recursion, so a hostile pattern cannot
+//blow the stack or go exponential.
 bool GlobMatch(const string& pattern, const string& name);
-
-//MEP-recipe-v1 §4.4: rewrites the bgm/sfx/img/background/patch file-path
-//token of every matching tagged line of `text`; `tags` is the op's own
-//tags list (only those tags are rewritten). Returns the rewritten text.
-string RewriteHiresText(const string& text, const vector<string>& tags, const string& prefix);
-
-//Every string entry of `parent`'s array member `key` (non-string entries
-//skipped); "" when the member is absent or not an array. Shared by every
-//op field that is a JSON array of strings (currently only rewrite-paths's
-//"tags").
-vector<string> CollectStringArray(const JsonValue& parent, const char* key);
 
 //Execution context shared by the four op runners below, built once by
 //MepRecipeInstaller per Install() call.

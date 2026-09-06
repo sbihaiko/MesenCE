@@ -6,6 +6,7 @@
 //pure math here.
 #include <cstdint>
 #include <string>
+#include <vector>
 
 enum class BorderScaleMode : uint8_t
 {
@@ -80,18 +81,35 @@ struct BorderLayout
 };
 
 //Standard source-over blend of one 0xAARRGGBB pixel (`src`, the border) onto
-//another (`dst`, the game/canvas). Integer arithmetic, /255 rounding-down;
-//alpha 255 returns src verbatim, alpha 0 returns dst verbatim.
+//another (`dst`, the game/canvas). Integer arithmetic; the /255 is the
+//round-to-nearest `(x + 128 + ((x + 128) >> 8)) >> 8` identity, exact whenever
+//the product is a multiple of 255 and within +-1 of the floor otherwise.
+//Alpha 255 returns src verbatim, alpha 0 returns dst verbatim.
 uint32_t BorderBlendOver(uint32_t dst, uint32_t src);
 
 //Nearest-neighbour copy of the srcWidth x srcHeight game frame into the
 //layout's viewport on a CanvasWidth x CanvasHeight `dst` surface. Viewport
 //pixels outside the canvas are skipped (clamping); canvas pixels outside the
-//viewport are left untouched.
+//viewport are left untouched. `sxLut` is caller-owned scratch (one source x
+//per clamped viewport column) so the per-frame path allocates nothing; the
+//two-argument-shorter overload owns a local one.
+void BorderDrawGameIntoViewport(uint32_t* dst, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight, std::vector<uint32_t>& sxLut);
 void BorderDrawGameIntoViewport(uint32_t* dst, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight);
+
+//What a composite produces wherever the game is *not* drawn, computed once
+//per border load: overlay mode = the border blended over transparent black,
+//underlay mode = the border verbatim. `backdrop` is resized to the canvas.
+void BorderPrepareBackdrop(std::vector<uint32_t>& backdrop, const uint32_t* border, const BorderLayout& layout);
+
+//Per-frame composite against a prepared backdrop: memcpy the backdrop, draw
+//the game into the clamped viewport, and (overlay mode only) blend the border
+//over that clamped viewport - the only pixels the game changed. Same output
+//as BorderCompositeFrame; O(viewport) instead of O(canvas) blend work.
+void BorderCompositePrepared(uint32_t* dst, const uint32_t* backdrop, const uint32_t* border, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight, std::vector<uint32_t>& sxLut);
 
 //Full composite of one frame: overlay mode clears `dst` to 0 (transparent
 //black), draws the game into the viewport and blends `border` on top;
 //underlay mode copies `border` then draws the game over the viewport. `dst` and
-//`border` are CanvasWidth * CanvasHeight pixels.
+//`border` are CanvasWidth * CanvasHeight pixels. Reference form of
+//BorderCompositePrepared (no cached backdrop), kept for the unit tests.
 void BorderCompositeFrame(uint32_t* dst, const uint32_t* border, const BorderLayout& layout, const uint32_t* src, uint32_t srcWidth, uint32_t srcHeight);

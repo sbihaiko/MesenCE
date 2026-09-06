@@ -46,7 +46,7 @@ private:
 	// 1) Volume-attack-from-silence: vol > kOnsetVolThreshold &&
 	//    lastVol <= kOnsetVolThreshold. This reuses the EXACT threshold
 	//    (0.001) that EnhancedSynthEngine::Retrigger uses to decide whether
-	//    to reset oscillator phases (Core/Shared/Audio/EnhancedSynthEngine.cpp:59-73)
+	//    to reset oscillator phases (EnhancedSynthEngine::Retrigger)
 	//    - the two decisions should agree, since both are asking "is this
 	//    voice starting a new note out of near-silence".
 	// 2) Pitch-jump-with-hysteresis: a voice already sounding whose pitch

@@ -3,6 +3,7 @@
 #include <map>
 #include "Shared/HdPacks/HdTilePackBuilder.h"
 #include "Shared/HdPacks/HdTilePack.h"
+#include "Shared/HdPacks/HdTileDecode.h"
 #include "Shared/Emulator.h"
 #include "Shared/MessageManager.h"
 #include "Utilities/xBRZ/xbrz.h"
@@ -17,7 +18,9 @@ HdTilePackBuilder::HdTilePackBuilder(Emulator* emu, string system, HdPackBuilder
 {
 	_emu = emu;
 	_system = system;
-	_saveFolder = options.SaveFolder;
+	//SaveFolder is a raw pointer from the UI; a null one means "the default
+	//HdPacks folder" (same fallback as NesConsole::StartExtractAudio)
+	_saveFolder = options.SaveFolder ? options.SaveFolder : FolderUtilities::CombinePath(FolderUtilities::GetHomeFolder(), "HdPacks");
 	_scale = std::max<uint32_t>(1, options.Scale);
 	_filterType = options.FilterType;
 	_sortByUsageFrequency = options.SortByUsageFrequency;
@@ -100,17 +103,13 @@ uint32_t HdTilePackBuilder::AddRomTiles(const vector<uint8_t>& rom)
 		uint8_t pixels[64];
 		bool flat = true;
 		for(int row = 0; row < 8; row++) {
+			if(fourBpp) {
+				HdTileDecode::Decode4bppPlanarRow(data + row * 4, pixels + row * 8);
+			} else {
+				HdTileDecode::Decode2bppRow(data[row * 2], data[row * 2 + 1], pixels + row * 8);
+			}
 			for(int x = 0; x < 8; x++) {
-				uint8_t value = 0;
-				if(fourBpp) {
-					for(int plane = 0; plane < 4; plane++) {
-						value |= ((data[row * 4 + plane] >> (7 - x)) & 0x01) << plane;
-					}
-				} else {
-					value = ((data[row * 2] >> (7 - x)) & 0x01) | (((data[row * 2 + 1] >> (7 - x)) & 0x01) << 1);
-				}
-				pixels[row * 8 + x] = value;
-				if(value != pixels[0]) {
+				if(pixels[row * 8 + x] != pixels[0]) {
 					flat = false;
 				}
 			}

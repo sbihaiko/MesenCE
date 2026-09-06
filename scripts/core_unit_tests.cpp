@@ -45,6 +45,7 @@
 #include "Shared/EnhancementPacks/AudioFingerprint.h"
 #include "Shared/EnhancementPacks/MepPack.h"
 #include "Shared/EnhancementPacks/MepRecipeInstaller.h"
+#include "Shared/EnhancementPacks/MepRecipeOps.h"
 #include "Shared/EnhancementPacks/MepContentId.h"
 #include "Shared/EnhancementPacks/MepZipExtract.h"
 #include "Shared/MessageManager.h"
@@ -1873,6 +1874,17 @@ namespace
 			return true;
 		}
 
+		bool GetUncompressedSize(const string& entry, uint64_t& size) override
+		{
+			int index = mz_zip_reader_locate_file(&_zip, entry.c_str(), nullptr, 0);
+			mz_zip_archive_file_stat stat;
+			if(index < 0 || !mz_zip_reader_file_stat(&_zip, (mz_uint)index, &stat)) {
+				return false;
+			}
+			size = stat.m_uncomp_size;
+			return true;
+		}
+
 		bool ExtractFile(const string& entry, vector<uint8_t>& content) override
 		{
 			size_t size = 0;
@@ -2072,6 +2084,79 @@ namespace
 		Check(StringUtilities::EndsWith(outFolder, "Contra80s"), "BlocoM: the fallback prefix is folded into the returned folder", outFolder);
 		Check(FileExists(std::filesystem::u8path(outFolder) / "pack.json"), "BlocoM: the wrapped pack.json is where the caller looks for it");
 		std::filesystem::remove_all(dir);
+	}
+
+	void TestZipFallbackCacheRecordsTheResolvedRoot()
+	{
+		//The .mep-source stamp carries the resolved root prefix as its second
+		//line, so a wrapped zip (ADR-0120 fallback) hits the cache on the next
+		//load - returning the prefixed folder - instead of being wiped and
+		//re-extracted every time.
+		std::filesystem::path dir = MakeTempPackDir("zip_fallback_cache");
+		vector<uint8_t> bytes = BuildZip({
+			{ "Contra80s/textures/hires.txt", "<ver>106\n" },
+			{ "readme.txt", "release notes" },
+		});
+
+		string outFolder;
+		string error;
+		Check(RunPrepareZip(dir, "Contra80s-HD-v3.zip", bytes, outFolder, error), "BlocoM: the hires-only wrapped zip extracts", error);
+		Check(StringUtilities::EndsWith(outFolder, "Contra80s"), "BlocoM: the wrapped hires-only pack resolves to the ROM-named folder", outFolder);
+
+		std::filesystem::path stampPath = std::filesystem::u8path(outFolder).parent_path() / ".mep-source";
+		string stampText = ReadFileBytes(stampPath.string());
+		Check(stampText.find("\nContra80s") != string::npos, "BlocoM: the stamp's second line records the resolved root prefix", stampText);
+
+		std::filesystem::path marker = std::filesystem::u8path(outFolder) / "marker.txt";
+		WriteTestFile(marker, "still here");
+		string secondFolder;
+		Check(PrepareZipAt(dir, "Contra80s-HD-v3.zip", secondFolder, error), "BlocoM: re-preparing the wrapped zip succeeds", error);
+		Check(secondFolder == outFolder, "BlocoM: a cache hit returns the prefixed folder, not the extraction root", secondFolder);
+		Check(FileExists(marker), "BlocoM: the wrapped hires-only pack is not re-extracted on a cache hit");
+
+		//A one-line stamp (written before the prefix was recorded) still
+		//counts as a hit for a root-level pack
+		std::filesystem::path rootDir = MakeTempPackDir("zip_oneline_stamp");
+		vector<uint8_t> rootBytes = BuildZip({
+			{ "pack.json", ZipPackJson("MEP one-line stamp") },
+			{ "textures/hires.txt", "<ver>106\n" },
+		});
+		string rootFolder;
+		Check(RunPrepareZip(rootDir, "oneline.zip", rootBytes, rootFolder, error), "BlocoM: the one-line-stamp fixture extracts", error);
+		std::filesystem::path rootStamp = std::filesystem::u8path(rootFolder) / ".mep-source";
+		string twoLine = ReadFileBytes(rootStamp.string());
+		WriteTestFile(rootStamp, twoLine.substr(0, twoLine.find('\n')));
+		std::filesystem::path rootMarker = std::filesystem::u8path(rootFolder) / "marker.txt";
+		WriteTestFile(rootMarker, "still here");
+		string rootAgain;
+		Check(PrepareZipAt(rootDir, "oneline.zip", rootAgain, error) && rootAgain == rootFolder && FileExists(rootMarker),
+			"BlocoM: a legacy one-line stamp is read as prefix \"\" and still hits the cache", error);
+
+		std::filesystem::remove_all(dir);
+		std::filesystem::remove_all(rootDir);
+	}
+
+	void TestRecipeGlobMatchSemantics()
+	{
+		//MEP-recipe-v1 §4.2: '*' one segment, '**' zero or more segments, '?'
+		//one non-'/' char - pinned directly on the iterative matcher.
+		Check(GlobMatch("**/*.ogg", "a/b/c.ogg"), "BlocoE: **/ spans several segments");
+		Check(GlobMatch("**/*.ogg", "c.ogg"), "BlocoE: **/ also matches zero segments");
+		Check(!GlobMatch("*.ogg", "a/c.ogg"), "BlocoE: a single * never crosses a '/'");
+		Check(GlobMatch("audio/*.ogg", "audio/track01.ogg"), "BlocoE: a literal segment plus * matches");
+		Check(!GlobMatch("audio/*.ogg", "audio/sub/track01.ogg"), "BlocoE: * stops at the next segment");
+		Check(GlobMatch("audio/**", "audio/sub/track01.ogg"), "BlocoE: a trailing ** matches the rest of the path");
+		Check(GlobMatch("track??.ogg", "track01.ogg"), "BlocoE: ? matches exactly one character");
+		Check(!GlobMatch("track?.ogg", "track01.ogg"), "BlocoE: ? does not match two characters");
+		Check(!GlobMatch("track?.ogg", "track/.ogg"), "BlocoE: ? never matches '/'");
+		Check(!GlobMatch("**/", "ab"), "BlocoE: a trailing **/ needs a '/' or nothing at all");
+		Check(GlobMatch("a/**/b", "a/b"), "BlocoE: a/**/b matches with zero middle segments");
+		Check(GlobMatch("a/**/b", "a/x/y/b"), "BlocoE: a/**/b matches with several middle segments");
+		//A pattern built to explode a backtracking matcher stays instant
+		string hostile(40, '*');
+		hostile += "x";
+		string name(200, 'a');
+		Check(!GlobMatch(hostile, name), "BlocoE: a pathological pattern is rejected without blowing up");
 	}
 
 	void TestZipUnwrappedNoPackJsonIsRejected()
@@ -4652,6 +4737,8 @@ int main()
 	TestZipNestedWrapperFolderFallback();
 	TestZipUnwrappedNoPackJsonIsRejected();
 	TestZipCacheIsReusedUntilTheZipChanges();
+	TestZipFallbackCacheRecordsTheResolvedRoot();
+	TestRecipeGlobMatchSemantics();
 	TestZipEmptyArchiveIsRejected();
 
 	TestAspectRatioPerSetting();
