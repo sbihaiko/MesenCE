@@ -68,6 +68,12 @@ bool StudyBoxLoader::LoadStudyBoxTape(vector<uint8_t>& studyBoxFile, StudyBoxDat
 		string cc = ReadFourCC(data);
 
 		if(cc == "PAGE") {
+			if(end - data < 12) {
+				//PAGE chunk is too small to contain its full header
+				Log("[Study Box] Invalid size value for PAGE chunk");
+				return false;
+			}
+
 			uint32_t pageSize = ReadInt(data);
 			uint32_t leadInOffset = ReadInt(data);
 			uint32_t audioOffset = ReadInt(data);
@@ -96,6 +102,12 @@ bool StudyBoxLoader::LoadStudyBoxTape(vector<uint8_t>& studyBoxFile, StudyBoxDat
 				return false;
 			}
 		} else if(cc == "AUDI") {
+			if(end - data < 8) {
+				//AUDI chunk is too small to contain its full header
+				Log("[Study Box] Invalid size value for AUDI chunk");
+				return false;
+			}
+
 			uint32_t audioSize = ReadInt(data);
 			uint32_t fileType = ReadInt(data);
 			if(fileType == 0) {
