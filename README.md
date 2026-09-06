@@ -161,7 +161,9 @@ No SDL2, no full core: the C++ harness compiles one object per source and links,
 
 **Built with AI, on purpose.** Implementation, review and the test suite are AI-assisted. That's what lets a small project move four cores, a synth engine and a pack ecosystem forward at once — with tests, not manual review alone, as the safety net. It's also why this is an independent fork: upstream's contribution policy doesn't accept AI-assisted PRs (Enhanced Audio was proposed as [PR #262](https://github.com/nesdev-org/MesenCE/pull/262) and closed for exactly that reason). Design decisions are recorded as an [ADR trail](docs/adr/), so the *why* stays reviewable. Upstream accuracy fixes from MesenCE/Mesen2 are ported in regularly, so enhancement doesn't mean drifting from accuracy.
 
-**[▶ Watch the commit history](https://github.com/sbihaiko/MesenCE/releases/download/media-v1/mesence.mp4)** — a [Gource](https://gource.io/) visualization of this fork's `git log`. The pace is the point: ~2,515 pre-2026 days averaged 1.4 commits/day; the ~247 AI-assisted days since 2026-01-01 average 4.0 commits/day — roughly 3× the throughput.
+A [Gource](https://gource.io/) visualization of this fork's `git log` — the pace is the point: 2,515 pre-2026 days averaged 1.4 commits/day; the 248 AI-assisted days since 2026-01-01 average 3.9 commits/day, roughly 3× the throughput (~2× the lines/day churn). More context, and the numbers behind it, in [issue #166](https://github.com/sbihaiko/MesenCE/issues/166).
+
+https://github.com/user-attachments/assets/b60ca23f-33a7-4f6c-9703-8f486c4e1c0f
 
 ## FAQ
 
