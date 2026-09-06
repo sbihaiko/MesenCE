@@ -8,6 +8,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 
 namespace Mesen.Services
 {
@@ -32,6 +34,9 @@ namespace Mesen.Services
 				return gate;
 			}
 			EmuApi.WriteLogEntry("[CommunityPackInstall] gates passed, outFolder=" + outFolder);
+			if(!TryCreateOutFolder(outFolder, out string createError)) {
+				return CommunityPackInstallOutcome.Failed(createError);
+			}
 
 			(Dictionary<string, string> depPaths, List<CommunityPackDepPrompt> pending) = ResolveDeps(entry, resolvedDepPaths, outFolder);
 
@@ -46,7 +51,7 @@ namespace Mesen.Services
 				//A legacy install has no recipe deps, but unresolved user_supplied
 				//prompts still get surfaced so the user knows what to drop where.
 				if(outcome.Status == CommunityPackInstallStatus.Installed) {
-					RecordInstall(entry, outFolder);
+					RecordInstall(entry, containerName, outFolder);
 				}
 				return pending.Count == 0 || outcome.Status != CommunityPackInstallStatus.Installed
 					? outcome
@@ -60,7 +65,7 @@ namespace Mesen.Services
 				EmuApi.GetRomInfo().GetRomName(), outFolder, out string resultText);
 			EmuApi.WriteLogEntry("[CommunityPackInstall] InstallMepRecipe returned success=" + success + " resultText=" + resultText.Replace("\n", "\\n"));
 			if(success) {
-				RecordInstall(entry, outFolder);
+				RecordInstall(entry, containerName, outFolder);
 				return CommunityPackInstallOutcome.Installed(containerName, ParseWithheld(resultText), pending);
 			}
 			return CommunityPackInstallOutcome.Failed(ParseError(resultText));
@@ -91,6 +96,12 @@ namespace Mesen.Services
 			if(File.Exists(stampPath) && Directory.Exists(outFolder)) {
 				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy reinstall - clearing " + outFolder);
 				ClearFolderForReinstall(outFolder);
+			} else if(Directory.Exists(outFolder) && Directory.EnumerateFileSystemEntries(outFolder).Any()) {
+				//ADR-0147, mirroring MepRecipeInstaller's own guard: a mep/ folder we
+				//did not stamp is the user's (a hand-made pack or an editor session)
+				//and is never overwritten by an auto-install.
+				EmuApi.WriteLogEntry("[CommunityPackInstall] hd-legacy install refused - output folder is not empty and carries no install stamp: " + outFolder);
+				return CommunityPackInstallOutcome.Failed("output folder is not empty: " + outFolder);
 			}
 
 			if(!TryExtractLegacyPack(primaryPackPath, texturesFolder, romName, out string error)) {
@@ -172,8 +183,10 @@ namespace Mesen.Services
 			return sb.ToString();
 		}
 
+		//Full JSON string escaping (quotes, backslashes and every control char
+		//< 0x20) - pack names come off the network catalog, not from us.
 		private static string JsonEscape(string value) =>
-			value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+			JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping).ToString();
 
 		//AutoInstallCommunityPacks master switch (ADR-0146) + 43(c) DisabledPacks gate, then the 43(a)/(b)
 		//reinstall verdict: Reinstall means our own prior install, safe to clear.
@@ -231,7 +244,7 @@ namespace Mesen.Services
 		}
 
 		//Clarification 46 scratch folder; downloaded/user-supplied deps live here by sha256.
-		public static string GetDownloadsCacheFolder() => Path.Combine(ConfigManager.EnhancementPackFolder, ".cache", "downloads");
+		public static string GetDownloadsCacheFolder() => CommunityPackPaths.DownloadsFolder;
 
 		//Resolves deps not already in resolvedDepPaths; unresolved becomes a prompt.
 		private static (Dictionary<string, string>, List<CommunityPackDepPrompt>) ResolveDeps(
@@ -290,14 +303,13 @@ namespace Mesen.Services
 		//ADR-0147: after a successful install, record the ROM -> pack mapping in
 		//the central cache (outside mep/) so Restore can recover the original
 		//even when the user has edited or removed the editable mep/ folder.
-		private static void RecordInstall(CommunityPackCatalogEntry entry, string outFolder)
+		private static void RecordInstall(CommunityPackCatalogEntry entry, string containerName, string outFolder)
 		{
-			string cacheRoot = Path.Combine(ConfigManager.EnhancementPackFolder, ".cache");
-			CommunityPackInstallRegistry.Write(cacheRoot, EmuApi.GetMepRomSha1(), new CommunityPackInstallRecord {
+			CommunityPackInstallRegistry.Write(CommunityPackPaths.CacheRoot, EmuApi.GetMepRomSha1(), new CommunityPackInstallRecord {
 				PackId = entry.PackId ?? "",
 				ContentId = entry.ContentId ?? "",
 				SourceSha256 = entry.Sha256,
-				Container = GetContainerName(entry),
+				Container = containerName,
 				MepPath = outFolder,
 				InstalledAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
 				BaselineContentId = EmuApi.GetMepContentId(outFolder),
@@ -309,8 +321,7 @@ namespace Mesen.Services
 		//conservative: an unknown state never gets silently clobbered by an update.
 		private static bool IsPackEdited(string romSha1, string outFolder)
 		{
-			string cacheRoot = Path.Combine(ConfigManager.EnhancementPackFolder, ".cache");
-			CommunityPackInstallRecord? record = CommunityPackInstallRegistry.Read(cacheRoot, romSha1);
+			CommunityPackInstallRecord? record = CommunityPackInstallRegistry.Read(CommunityPackPaths.CacheRoot, romSha1);
 			if(record == null || string.IsNullOrWhiteSpace(record.BaselineContentId)) {
 				return true; //no baseline - be safe
 			}
@@ -337,6 +348,9 @@ namespace Mesen.Services
 				}
 			} else {
 				ClearFolderForReinstall(outFolder);
+				if(!TryCreateOutFolder(outFolder, out error)) {
+					return false;
+				}
 				if(!EmuApi.InstallMepRecipe(
 					entry.Recipe?.GetRawText() ?? "", primaryPackPath, "",
 					EmuApi.GetRomInfo().GetRomName(), outFolder, out string resultText)) {
@@ -344,7 +358,7 @@ namespace Mesen.Services
 					return false;
 				}
 			}
-			RecordInstall(entry, outFolder);
+			RecordInstall(entry, containerName, outFolder);
 			error = "";
 			return true;
 		}
@@ -387,15 +401,12 @@ namespace Mesen.Services
 			//visible and editable beside the game (auto/ = recorder, mep/ = pack).
 			//Fall back to the central EnhancementPacks/<container> when the sibling
 			//is absent or not writable (ADR-0049's read-only-ROM-folder fallback).
+			//Pure path resolution - nothing is created here; Install()/Restore()
+			//call TryCreateOutFolder once every gate has passed, so a Skipped or
+			//UpdateAvailable verdict never leaves an empty mep/ beside the ROM.
 			string sibling = EmuApi.GetMepSiblingFolder();
-			if(!string.IsNullOrWhiteSpace(sibling)) {
-				string siblingMep = Path.GetFullPath(Path.Combine(sibling, "mep"));
-				try {
-					Directory.CreateDirectory(siblingMep);
-					return siblingMep;
-				} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) {
-					//ROM folder not writable - fall through to the central folder
-				}
+			if(!string.IsNullOrWhiteSpace(sibling) && IsWritableFolder(sibling)) {
+				return Path.GetFullPath(Path.Combine(sibling, "mep"));
 			}
 			string root = Path.GetFullPath(ConfigManager.EnhancementPackFolder);
 			string outFolder = Path.GetFullPath(Path.Combine(root, containerName));
@@ -403,6 +414,35 @@ namespace Mesen.Services
 				throw new InvalidOperationException("Community pack container name escaped the enhancement pack folder: " + containerName);
 			}
 			return outFolder;
+		}
+
+		//ADR-0049's read-only-ROM-folder fallback: the sibling is usable only
+		//when we can actually write beside the ROM.
+		private static bool IsWritableFolder(string folder)
+		{
+			try {
+				if(!Directory.Exists(folder)) {
+					return false;
+				}
+				string probe = Path.Combine(folder, ".mep-write-probe-" + Guid.NewGuid().ToString("N"));
+				using(File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+				return true;
+			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) {
+				return false;
+			}
+		}
+
+		private static bool TryCreateOutFolder(string outFolder, out string error)
+		{
+			try {
+				Directory.CreateDirectory(outFolder);
+				error = "";
+				return true;
+			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) {
+				error = "cannot create pack folder " + outFolder + ": " + ex.Message;
+				EmuApi.WriteLogEntry("[CommunityPackInstall] " + error);
+				return false;
+			}
 		}
 	}
 

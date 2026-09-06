@@ -18,7 +18,7 @@ public enum ConfigWindowTab
 	Gba = 8,
 	// 9 was PcEngine — do not reuse
 	Sms = 10,
-	Ws = 11,
+	// 11 was Ws — do not reuse
 	// 12 was OtherConsoles (ColecoVision) — do not reuse
 	//separator
 	Preferences = 14

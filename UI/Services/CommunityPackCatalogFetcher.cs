@@ -21,7 +21,7 @@ namespace Mesen.Services
 	//CommunityPackInstallCoordinator, T2): FetchMatchingPackAsync returns exactly a matched
 	//Mesen.Logic catalog-entry DTO plus the verified primary path and a dep-id -> verified path
 	//map for deps downloaded directly - never resolves a `user_supplied` dep (§4), never gates
-	//on CommunityPackReinstallDecision or the AutoInstallCommunityPacks switch (§43/ADR-0146), never calls
+	//on the CommunityCatalogUpdateDecision verdict or the AutoInstallCommunityPacks switch (§43/ADR-0146), never calls
 	//EmuApi.InstallMepRecipe (the coordinator owns everything downstream). §41 (PRIORITY 1):
 	//allow-list loaded ONLY via Assembly.GetExecutingAssembly().GetManifestResourceStream, never
 	//the on-disk file-path overload or a repo-relative path (verify_fetcher_no_filesystem_allowlist_load.sh).
@@ -29,9 +29,14 @@ namespace Mesen.Services
 	{
 		private const string CatalogUrl = "https://raw.githubusercontent.com/sbihaiko/MesenCE/main/docs/community-packs.json";
 		private const string AllowlistResourceName = "Mesen.pack_host_allowlist.json";
+		//Wall-clock budgets: the catalog is a small JSON file, an artifact may be
+		//up to 300MB on a slow link. Both bound a stalled transfer so a ROM load
+		//never keeps a background task alive indefinitely.
+		private static readonly TimeSpan CatalogTimeout = TimeSpan.FromSeconds(30);
+		private static readonly TimeSpan ArtifactTimeout = TimeSpan.FromMinutes(10);
 		//§46: <EnhancementPackFolder>/.cache/downloads/ (ADR-0040 scratch space, safe to delete).
-		private static string CacheFolder => Path.Combine(ConfigManager.EnhancementPackFolder, ".cache");
-		private static string DownloadsFolder => Path.Combine(CacheFolder, "downloads");
+		private static string CacheFolder => CommunityPackPaths.CacheRoot;
+		private static string DownloadsFolder => CommunityPackPaths.DownloadsFolder;
 		private static string CatalogCachePath => Path.Combine(CacheFolder, "community-packs.json");
 		private static string CatalogEtagPath => Path.Combine(CacheFolder, "community-packs.etag");
 
@@ -112,9 +117,19 @@ namespace Mesen.Services
 				CommunityCatalogCacheResult resolved = CommunityCatalogCacheDecision.Resolve(outcome, cachedETag, cachedBody);
 				EmuApi.WriteLogEntry("[CommunityPackFetch] catalog HTTP status=" + outcome.StatusCode + " cacheUsable=" + cacheUsable +
 					" resolvedBodyLen=" + (resolved.Body?.Length ?? 0));
-				CommunityPackCatalog? catalog = string.IsNullOrWhiteSpace(resolved.Body) ? null :
-					(CommunityPackCatalog?)JsonSerializer.Deserialize(resolved.Body, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
-				if(catalog?.Packs == null) {
+				CommunityPackCatalog? catalog = TryParseCatalog(resolved.Body);
+				if(catalog == null) {
+					//A fresh 200 whose body does not parse (truncated transfer, a
+					//half-published catalog) must not take the client offline when a
+					//previously-verified body is still on disk: fall back to it, and
+					//never overwrite the cache with the unparseable body.
+					if(cacheUsable && !ReferenceEquals(resolved.Body, cachedBody)) {
+						catalog = TryParseCatalog(cachedBody);
+						if(catalog != null) {
+							EmuApi.WriteLogEntry("[CommunityPackFetch] fetched catalog body failed to parse - using the disk cache instead");
+							return catalog;
+						}
+					}
 					EmuApi.WriteLogEntry("[CommunityPackFetch] catalog parse failed or empty (Packs==null)");
 					return null;
 				}
@@ -131,13 +146,28 @@ namespace Mesen.Services
 		//§50: the catalog GET goes through the same allow-list/no-redirect/size-capped primitive as the artifacts.
 		private static async Task<CommunityCatalogFetchOutcome> FetchCatalogOutcomeAsync(string? ifNoneMatchETag, IReadOnlyList<CommunityPackHostEntry> allowedHosts)
 		{
-			CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(CatalogUrl, allowedHosts, CommunityPackDownloader.MaxCatalogBytes, ifNoneMatchETag);
+			CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(CatalogUrl, allowedHosts, CommunityPackDownloader.MaxCatalogBytes, ifNoneMatchETag, CatalogTimeout);
 			if(response == null) {
 				//Network failure or refused hop: same as "nothing new" - Resolve() falls back to the disk cache, or Cold.
 				return new CommunityCatalogFetchOutcome(0, null, null);
 			}
 			string? body = response.Body == null ? null : System.Text.Encoding.UTF8.GetString(response.Body);
 			return new CommunityCatalogFetchOutcome(response.StatusCode, response.ETag, body);
+		}
+
+		//A catalog is real only when it parses AND carries a `packs` array - an
+		//explicit JSON "packs": null is as unusable as a non-JSON body.
+		private static CommunityPackCatalog? TryParseCatalog(string? body)
+		{
+			if(string.IsNullOrWhiteSpace(body)) {
+				return null;
+			}
+			try {
+				CommunityPackCatalog? catalog = (CommunityPackCatalog?)JsonSerializer.Deserialize(body, typeof(CommunityPackCatalog), MesenSerializerContext.Default);
+				return catalog?.Packs == null ? null : catalog;
+			} catch(JsonException) {
+				return null;
+			}
 		}
 
 		private static async Task WriteCatalogCacheAsync(string body, string? etag)
@@ -158,21 +188,15 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPackDownload] invalid url or sha256: url=" + url + " sha256=" + expectedSha256);
 				return null;
 			}
-			bool mutableRepoArchive = IsMutableRepoArchiveUrl(url);
+			//ADR-0006 D(1) / ADR-0148: the declared sha256 is the contract. A
+			//mismatch is always a failure - a mutable whole-repo branch archive
+			//whose head moved past its recorded hash is a stale catalog row to be
+			//re-hashed or de-listed by the pipeline, never bypassed client-side.
 			try {
 				Directory.CreateDirectory(DownloadsFolder);
 				string destPath = Path.Combine(DownloadsFolder, expectedSha256.ToLowerInvariant());
-				//ADR-0146: a whole-repo `archive/refs/heads/<branch>.zip` (or its
-				//codeload twin) is mutable, so the catalog's declared hash is a
-				//validation-time snapshot, not a guarantee. Reuse whatever was last
-				//fetched for it rather than re-verifying against the now-stale declared
-				//hash — avoids a re-download on every load.
-				if(mutableRepoArchive && File.Exists(destPath)) {
-					EmuApi.WriteLogEntry("[CommunityPackDownload] cache hit (mutable repo archive): " + destPath);
-					return destPath;
-				}
 				if(File.Exists(destPath)) {
-					string cachedSha = ComputeSha256(File.ReadAllBytes(destPath));
+					string cachedSha = ComputeSha256File(destPath);
 					if(string.Equals(cachedSha, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
 						EmuApi.WriteLogEntry("[CommunityPackDownload] cache hit: " + destPath);
 						return destPath;
@@ -180,25 +204,22 @@ namespace Mesen.Services
 					EmuApi.WriteLogEntry("[CommunityPackDownload] cache file present but sha256 mismatch (cached=" + cachedSha + " expected=" + expectedSha256 + ") - re-downloading");
 				}
 				EmuApi.WriteLogEntry("[CommunityPackDownload] downloading url=" + url);
-				CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(url, allowedHosts, CommunityPackDownloader.MaxArtifactBytes);
+				CommunityPackDownloader.Response? response = await CommunityPackDownloader.GetAsync(url, allowedHosts, CommunityPackDownloader.MaxArtifactBytes, timeout: ArtifactTimeout);
 				if(response?.Body == null) {
-					EmuApi.WriteLogEntry("[CommunityPackDownload] GetAsync returned null body (host not allowed, redirect rejected, size cap, or network error)");
+					EmuApi.WriteLogEntry("[CommunityPackDownload] GetAsync returned null body (host not allowed, redirect rejected, size cap, timeout, or network error)");
 					return null;
 				}
 				string actualSha256 = ComputeSha256(response.Body);
 				if(!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
-					if(mutableRepoArchive) {
-						//Optimistic install per ADR-0146: the artifact is the repo's current
-						//head, which legitimately differs from the recorded snapshot. Content
-						//still bounded by the host allow-list; a wrong pack self-heals via the
-						//ADR-0145 health signal / tile fall-through.
-						EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 mismatch on mutable repo archive (expected=" + expectedSha256 + " actual=" + actualSha256 + ") - installing optimistically per ADR-0146");
-					} else {
-						EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 MISMATCH: expected=" + expectedSha256 + " actual=" + actualSha256 + " bytes=" + response.Body.Length);
-						return null;
-					}
+					EmuApi.WriteLogEntry("[CommunityPackDownload] sha256 MISMATCH: expected=" + expectedSha256 + " actual=" + actualSha256 + " bytes=" + response.Body.Length);
+					return null;
 				}
-				await File.WriteAllBytesAsync(destPath, response.Body);
+				//Atomic publish: a crash mid-write must never leave a partial file
+				//under the verified-hash name (the cache check above would then
+				//re-hash and re-download it, but a reader racing us would not).
+				string tmpPath = destPath + ".part";
+				await File.WriteAllBytesAsync(tmpPath, response.Body);
+				File.Move(tmpPath, destPath, overwrite: true);
 				EmuApi.WriteLogEntry("[CommunityPackDownload] downloaded+verified, wrote " + destPath);
 				return destPath;
 			} catch(Exception ex) {
@@ -207,24 +228,17 @@ namespace Mesen.Services
 			}
 		}
 
-		//ADR-0146: a whole-repo `archive/refs/heads/<branch>.zip` (or its codeload
-		//twin `codeload.github.com/<owner>/<repo>/zip/refs/heads/<branch>`) tracks a
-		//moving branch head, so the artifact legitimately changes between loads and
-		//the catalog's declared sha256 is only a validation-time snapshot. Commit
-		//(`archive/<sha>`) and tag (`refs/tags/`) archives are immutable and keep the
-		//strict check. The URL is catalog network data (never a path), so substring
-		//detection is safe here.
-		private static bool IsMutableRepoArchiveUrl(string? url) =>
-			url != null && (url.Contains("/archive/refs/heads/", StringComparison.OrdinalIgnoreCase)
-				|| url.Contains("/zip/refs/heads/", StringComparison.OrdinalIgnoreCase));
-
 		private static bool IsSha256Hex(string? value) =>
 			value != null && value.Length == 64 && value.All(Uri.IsHexDigit);
 
-		private static string ComputeSha256(byte[] data)
+		private static string ComputeSha256(byte[] data) =>
+			Convert.ToHexString(SHA256.HashData(data));
+
+		//Streams the file instead of File.ReadAllBytes - artifacts go up to 300MB.
+		private static string ComputeSha256File(string path)
 		{
-			using SHA256 sha256 = SHA256.Create();
-			return BitConverter.ToString(sha256.ComputeHash(data)).Replace("-", "");
+			using FileStream stream = File.OpenRead(path);
+			return Convert.ToHexString(SHA256.HashData(stream));
 		}
 	}
 

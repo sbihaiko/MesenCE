@@ -124,16 +124,7 @@ namespace Mesen.ViewModels
 					options.ChrRamBankSize = 0x1000;
 				}
 
-				IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
-				try {
-					Marshal.StructureToPtr(options, optionsPtr, false);
-					EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
-						Shortcut = EmulatorShortcut.StartRecordHdPack,
-						ParamPtr = optionsPtr
-					});
-				} finally {
-					Marshal.FreeHGlobal(optionsPtr);
-				}
+				ExecuteWithOptions(options, EmulatorShortcut.StartRecordHdPack);
 			});
 		}
 
@@ -149,16 +140,7 @@ namespace Mesen.ViewModels
 				HdPackBuilderOptions options = Config.ToInterop(SaveFolder);
 				options.ChrRamBankSize = 0x1000;
 
-				IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
-				try {
-					Marshal.StructureToPtr(options, optionsPtr, false);
-					EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
-						Shortcut = EmulatorShortcut.ExportRomTilesHdPack,
-						ParamPtr = optionsPtr
-					});
-				} finally {
-					Marshal.FreeHGlobal(optionsPtr);
-				}
+				ExecuteWithOptions(options, EmulatorShortcut.ExportRomTilesHdPack);
 
 				Dispatcher.UIThread.Post(() => {
 					IsOpenFolderEnabled = true;
@@ -181,17 +163,30 @@ namespace Mesen.ViewModels
 			Task.Run(() => {
 				HdPackBuilderOptions options = Config.ToInterop(SaveFolder);
 
-				IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
-				try {
-					Marshal.StructureToPtr(options, optionsPtr, false);
-					EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
-						Shortcut = EmulatorShortcut.ExtractAudioHdPack,
-						ParamPtr = optionsPtr
-					});
-				} finally {
-					Marshal.FreeHGlobal(optionsPtr);
-				}
+				ExecuteWithOptions(options, EmulatorShortcut.ExtractAudioHdPack);
 			});
+		}
+
+		//Marshals the options struct for one shortcut call: StructureToPtr
+		//allocates unmanaged copies of the struct's string fields, so the
+		//matching DestroyStructure must run before FreeHGlobal or they leak.
+		private static void ExecuteWithOptions(HdPackBuilderOptions options, EmulatorShortcut shortcut)
+		{
+			IntPtr optionsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(options));
+			bool marshaled = false;
+			try {
+				Marshal.StructureToPtr(options, optionsPtr, false);
+				marshaled = true;
+				EmuApi.ExecuteShortcut(new ExecuteShortcutParams() {
+					Shortcut = shortcut,
+					ParamPtr = optionsPtr
+				});
+			} finally {
+				if(marshaled) {
+					Marshal.DestroyStructure<HdPackBuilderOptions>(optionsPtr);
+				}
+				Marshal.FreeHGlobal(optionsPtr);
+			}
 		}
 
 		public void StopRecording()

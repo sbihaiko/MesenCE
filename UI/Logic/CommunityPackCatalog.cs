@@ -34,12 +34,8 @@ namespace Mesen.Logic
 	//One `packs[]` entry (MEI-v1.md §2.2/§2.3). `Url`/`Sha256`/`Size` are the
 	//wire-flat primary-artifact fields (matching the real generator output
 	//and the MEI-v1.md example, which does NOT nest them under a "source"
-	//key); `Source` below is a host-free convenience grouping of those same
-	//three fields for callers that think in terms of "the pack's source
-	//artifact" (e.g. CommunityPackReinstallDecision comparing this entry's
-	//`Source.Sha256` against an installed `.mep-install.json`'s recorded
-	//`source.sha256` - ADR-0138 §4) - it is [JsonIgnore]d, not a second wire
-	//shape.
+	//key). CommunityCatalogUpdateDecision compares `Sha256`/`ContentId`
+	//against an installed `.mep-install.json`'s recorded fields (ADR-0138 §4).
 	public class CommunityPackCatalogEntry
 	{
 		[JsonPropertyName("kind")] public string? Kind { get; set; }
@@ -83,7 +79,6 @@ namespace Mesen.Logic
 		//`kind` defaults to "mep" when absent (§2.2/§2.3).
 		[JsonIgnore] public string EffectiveKind => string.IsNullOrEmpty(Kind) ? "mep" : Kind;
 		[JsonIgnore] public bool IsHdLegacy => string.Equals(EffectiveKind, "hd-legacy", StringComparison.OrdinalIgnoreCase);
-		[JsonIgnore] public CommunityPackSource Source => new CommunityPackSource(Url, Sha256, Size);
 		//§2.2: "an absent field is read as 'unknown'".
 		[JsonIgnore] public string LicenseOrUnknown => string.IsNullOrWhiteSpace(License) ? "unknown" : License;
 	}
@@ -126,30 +121,6 @@ namespace Mesen.Logic
 		[JsonPropertyName("crc32")] public string? Crc32 { get; set; }
 	}
 
-	//Host-free grouping of a downloadable artifact's location/identity
-	//(url + sha256 + size) - shared shape between a catalog entry's primary
-	//artifact (`CommunityPackCatalogEntry.Source`) and the trust rules MEI-v1
-	//§3 applies to it (sha256 verified before extraction, HTTPS required).
-	//Not a JSON-wire nesting of its own (see `CommunityPackCatalogEntry`
-	//above) - constructed from the entry's flat `url`/`sha256`/`size`
-	//fields, so it still needs registering in `MesenSerializerContext` for
-	//any call site that serializes/clones it standalone (`JsonHelper.Clone`).
-	public class CommunityPackSource
-	{
-		public CommunityPackSource() { }
-
-		public CommunityPackSource(string url, string sha256, long? size)
-		{
-			Url = url;
-			Sha256 = sha256;
-			Size = size;
-		}
-
-		[JsonPropertyName("url")] public string Url { get; set; } = "";
-		[JsonPropertyName("sha256")] public string Sha256 { get; set; } = "";
-		[JsonPropertyName("size")] public long? Size { get; set; }
-	}
-
 	//One `deps[]` item (MEI-v1.md §2.3): a third-party artifact the pack
 	//references but does not bundle. `Hints`/`UserSupplied` mirror
 	//MEP-recipe-v1's `sources.deps[]` shape (ADR-0138 §1/§4) for a dep the
@@ -168,11 +139,5 @@ namespace Mesen.Logic
 		[JsonPropertyName("license")] public string? License { get; set; }
 		[JsonPropertyName("hints")] public string[]? Hints { get; set; }
 		[JsonPropertyName("user_supplied")] public bool? UserSupplied { get; set; }
-
-		//§2.3: dep `license` SHOULD be present; the resolver-facing fallback
-		//is the literal "not declared" (ADR-0138), distinct from the
-		//catalog-level "unknown" default (§2.2) used for the pack's own
-		//`license` field.
-		[JsonIgnore] public string LicenseOrNotDeclared => string.IsNullOrWhiteSpace(License) ? "not declared" : License;
 	}
 }

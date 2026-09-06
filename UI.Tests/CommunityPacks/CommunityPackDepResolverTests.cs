@@ -20,7 +20,7 @@ namespace Mesen.Tests.CommunityPacks
 
 			CommunityPackDepResolution result = CommunityPackDepResolver.Resolve(DepSha256, packFolder, downloadsCache);
 
-			Assert.False(result.RequiresPrompt);
+			Assert.NotNull(result.ResolvedPath);
 			Assert.Equal("/rom/Zelda/audio.zip", result.ResolvedPath);
 		}
 
@@ -36,7 +36,7 @@ namespace Mesen.Tests.CommunityPacks
 
 			CommunityPackDepResolution result = CommunityPackDepResolver.Resolve(DepSha256, packFolder, downloadsCache);
 
-			Assert.False(result.RequiresPrompt);
+			Assert.NotNull(result.ResolvedPath);
 			Assert.Equal("/home/user/Downloads/zelda-hd-ogg.zip", result.ResolvedPath);
 		}
 
@@ -64,7 +64,7 @@ namespace Mesen.Tests.CommunityPacks
 
 			CommunityPackDepResolution result = CommunityPackDepResolver.Resolve(DepSha256, packFolder, new List<CommunityPackLocalFile>());
 
-			Assert.False(result.RequiresPrompt);
+			Assert.NotNull(result.ResolvedPath);
 			Assert.Equal("/rom/Zelda/audio.zip", result.ResolvedPath);
 		}
 
@@ -78,7 +78,7 @@ namespace Mesen.Tests.CommunityPacks
 				hints: "Download the audio archive from the forum thread linked in the pack README.",
 				license: "CC0-1.0");
 
-			Assert.True(result.RequiresPrompt);
+			Assert.Null(result.ResolvedPath);
 			Assert.Null(result.ResolvedPath);
 			Assert.Equal("Download the audio archive from the forum thread linked in the pack README.", result.Hints);
 			Assert.Equal("CC0-1.0", result.License);
@@ -94,7 +94,7 @@ namespace Mesen.Tests.CommunityPacks
 				hints: "See the issue thread.",
 				license: null);
 
-			Assert.True(result.RequiresPrompt);
+			Assert.Null(result.ResolvedPath);
 			Assert.Equal(CommunityPackDepResolver.LicenseNotDeclared, result.License);
 			Assert.Equal("not declared", result.License);
 		}
@@ -109,7 +109,7 @@ namespace Mesen.Tests.CommunityPacks
 				hints: null,
 				license: "   ");
 
-			Assert.True(result.RequiresPrompt);
+			Assert.Null(result.ResolvedPath);
 			Assert.Equal("not declared", result.License);
 			Assert.Equal("", result.Hints);
 		}
@@ -126,7 +126,7 @@ namespace Mesen.Tests.CommunityPacks
 
 			CommunityPackDepResolution result = CommunityPackDepResolver.Resolve(DepSha256, packFolder, downloadsCache);
 
-			Assert.True(result.RequiresPrompt);
+			Assert.Null(result.ResolvedPath);
 			Assert.Null(result.ResolvedPath);
 		}
 	}

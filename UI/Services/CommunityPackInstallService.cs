@@ -4,6 +4,7 @@ using Mesen.Interop;
 using Mesen.Utilities;
 using Mesen.Windows;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -29,13 +30,14 @@ namespace Mesen.Services
 		private static readonly HashSet<string> _attemptedRomSha1 = new(StringComparer.OrdinalIgnoreCase);
 		//P.6: community 👍 counts from the last catalog fetch (MEI `votes`), keyed
 		//by pack_id - the Player picker sorts by them (§5). Read-only for the
-		//UI; local-only packs have no entry and sort by name (votes 0).
-		private static readonly Dictionary<string, int> _catalogVotesByPackId = new(StringComparer.OrdinalIgnoreCase);
+		//UI; local-only packs have no entry and sort by name (votes 0). Written
+		//from the background install task, read on the UI thread - hence concurrent.
+		private static readonly ConcurrentDictionary<string, int> _catalogVotesByPackId = new(StringComparer.OrdinalIgnoreCase);
 
 		//ADR-0152: known-missing declarations from the last catalog fetch, keyed
 		//by pack_id. Display-only, like the votes above - a `miss` changes nothing
 		//in the installed tree, it only makes a reviewed gap legible in the picker.
-		private static readonly Dictionary<string, CommunityPackErrata> _catalogErrataByPackId = new(StringComparer.OrdinalIgnoreCase);
+		private static readonly ConcurrentDictionary<string, CommunityPackErrata> _catalogErrataByPackId = new(StringComparer.OrdinalIgnoreCase);
 
 		public static int GetVotes(string packId)
 		{
@@ -52,35 +54,48 @@ namespace Mesen.Services
 		//install registry (outside mep/) to confirm a catalog pack is installed
 		//for the loaded ROM, then re-fetches the artifact and rewrites mep/. A
 		//pack that left the catalog cannot be restored (nothing to fetch from).
+		//Shares the _running gate with the auto-install so the two never rewrite
+		//the same mep/ at once.
 		public static async Task<(bool Ok, string Error)> RestoreInstalledPack()
 		{
-			string romSha1 = EmuApi.GetMepRomSha1();
-			if(string.IsNullOrWhiteSpace(romSha1)) {
-				return (false, "no loaded ROM to restore a pack for");
+			if(Interlocked.CompareExchange(ref _running, 1, 0) != 0) {
+				return (false, "an install is already in progress");
 			}
-			string cacheRoot = Path.Combine(ConfigManager.EnhancementPackFolder, ".cache");
-			CommunityPackInstallRecord? record = CommunityPackInstallRegistry.Read(cacheRoot, romSha1);
-			if(record == null || string.IsNullOrWhiteSpace(record.SourceSha256)) {
-				return (false, "there is no catalog-installed pack to restore for this ROM");
+			try {
+				string romSha1 = EmuApi.GetMepRomSha1();
+				if(string.IsNullOrWhiteSpace(romSha1)) {
+					return (false, "no loaded ROM to restore a pack for");
+				}
+				CommunityPackInstallRecord? record = CommunityPackInstallRegistry.Read(CommunityPackPaths.CacheRoot, romSha1);
+				if(record == null || string.IsNullOrWhiteSpace(record.SourceSha256)) {
+					return (false, "there is no catalog-installed pack to restore for this ROM");
+				}
+				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
+				if(fetched == null) {
+					return (false, "the pack is no longer in the catalog (nothing to restore from)");
+				}
+				//Restore() is synchronous file/interop work - keep it off the UI thread.
+				(bool ok, string error) = await Task.Run(() => {
+					bool restored = CommunityPackInstallCoordinator.Restore(fetched.Entry, fetched.PrimaryPackPath, out string restoreError);
+					return (restored, restoreError);
+				});
+				if(!ok) {
+					return (false, error);
+				}
+				EmuApi.WriteLogEntry("[CommunityPack] RestoreInstalledPack: restored " + fetched.Entry.PackId + " to mep/");
+				return (true, "");
+			} finally {
+				Interlocked.Exchange(ref _running, 0);
 			}
-			CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
-			if(fetched == null || fetched.Entry == null) {
-				return (false, "the pack is no longer in the catalog (nothing to restore from)");
-			}
-			if(!CommunityPackInstallCoordinator.Restore(fetched.Entry, fetched.PrimaryPackPath, out string error)) {
-				return (false, error);
-			}
-			EmuApi.WriteLogEntry("[CommunityPack] RestoreInstalledPack: restored " + fetched.Entry.PackId + " to mep/");
-			return (true, "");
 		}
 
 		//Called from MainWindow.OnNotification(GameLoaded); power cycles are not new loads
 		//(a pack we just installed is applied through exactly such a power cycle).
 		public static void OnGameLoaded(bool isPowerCycle)
 		{
-			//DIAGNOSTIC (temporary, issue #142/community-pack investigation):
-			//trace every early-return so the mesen.log always shows why the
-			//auto-install did or didn't proceed, instead of pure silence.
+			//Every early return is traced so mesen.log always shows why an
+			//auto-install did or did not proceed (the flow is otherwise silent
+			//by design - §41/§42 - which made #142 hard to diagnose from a log).
 			EmuApi.WriteLogEntry("[CommunityPack] OnGameLoaded: isPowerCycle=" + isPowerCycle +
 				" AutoInstallCommunityPacks=" + ConfigManager.Config.EnhancementPacks.AutoInstallCommunityPacks);
 			if(isPowerCycle || !ConfigManager.Config.EnhancementPacks.AutoInstallCommunityPacks) {
@@ -128,17 +143,13 @@ namespace Mesen.Services
 				//Player picker sorts its competing packs by it (votes 0 when the
 				//entry carries none).
 				if(!string.IsNullOrWhiteSpace(fetched.Entry.PackId) && fetched.Entry.Votes is int votes) {
-					lock(_catalogVotesByPackId) {
-						_catalogVotesByPackId[fetched.Entry.PackId] = votes;
-					}
+					_catalogVotesByPackId[fetched.Entry.PackId] = votes;
 				}
 
 				//ADR-0152: same for the entry's known-missing declarations, so the
 				//picker can name the gap and who declared it.
 				if(!string.IsNullOrWhiteSpace(fetched.Entry.PackId) && fetched.Entry.Errata is CommunityPackErrata errata && errata.Count > 0) {
-					lock(_catalogErrataByPackId) {
-						_catalogErrataByPackId[fetched.Entry.PackId] = errata;
-					}
+					_catalogErrataByPackId[fetched.Entry.PackId] = errata;
 				}
 
 				CommunityPackInstallOutcome outcome = CommunityPackInstallCoordinator.Install(

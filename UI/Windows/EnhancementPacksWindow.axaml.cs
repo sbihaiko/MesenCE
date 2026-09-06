@@ -34,15 +34,21 @@ namespace Mesen.Windows
 			_model.Dispose();
 		}
 
+		//The three async void handlers below catch everything: an exception
+		//escaping an async void event handler crashes the process.
 		private async void Ok_OnClick(object sender, RoutedEventArgs e)
 		{
-			_model.ApplyChanges();
-			//Toggles apply on the next load (same rule as EnableHdPacks) - offer
-			//the power cycle right away, like InstallHdPack does
-			if(await MesenMsgBox.Show(this, "EnhancementPacksConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
-				LoadRomHelper.PowerCycle();
+			try {
+				_model.ApplyChanges();
+				//Toggles apply on the next load (same rule as EnableHdPacks) - offer
+				//the power cycle right away, like InstallHdPack does
+				if(await MesenMsgBox.Show(this, "EnhancementPacksConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+					LoadRomHelper.PowerCycle();
+				}
+				Close();
+			} catch(Exception ex) {
+				await MesenMsgBox.ShowException(ex);
 			}
-			Close();
 		}
 
 		private void Cancel_OnClick(object sender, RoutedEventArgs e)
@@ -52,19 +58,23 @@ namespace Mesen.Windows
 
 		private async void Install_OnClick(object sender, RoutedEventArgs e)
 		{
-			string? result = await _model.InstallPack(this);
-			if(result == null) {
-				return; //cancelled
+			try {
+				string? result = await _model.InstallPack(this);
+				if(result == null) {
+					return; //cancelled
+				}
+				if(result.Length > 0) {
+					await MesenMsgBox.Show(this, result, MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return;
+				}
+				if(await MesenMsgBox.Show(this, "InstallMepPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+					_model.ApplyChanges();
+					LoadRomHelper.PowerCycle();
+				}
+				_model.Refresh();
+			} catch(Exception ex) {
+				await MesenMsgBox.ShowException(ex);
 			}
-			if(result.Length > 0) {
-				await MesenMsgBox.Show(this, result, MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return;
-			}
-			if(await MesenMsgBox.Show(this, "InstallMepPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
-				_model.ApplyChanges();
-				LoadRomHelper.PowerCycle();
-			}
-			_model.Refresh();
 		}
 
 		//ADR-0147: explicit user action - discard local edits to the installed
@@ -72,15 +82,19 @@ namespace Mesen.Windows
 		//editor edits <Game>/mep/, this restores it fresh from the catalog zip.
 		private async void Restore_OnClick(object sender, RoutedEventArgs e)
 		{
-			(bool ok, string error) = await CommunityPackInstallService.RestoreInstalledPack();
-			if(!ok) {
-				await MesenMsgBox.Show(this, error, MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return;
-			}
-			_model.Refresh();
-			if(await MesenMsgBox.Show(this, "InstallMepPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
-				_model.ApplyChanges();
-				LoadRomHelper.PowerCycle();
+			try {
+				(bool ok, string error) = await CommunityPackInstallService.RestoreInstalledPack();
+				if(!ok) {
+					await MesenMsgBox.Show(this, error, MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return;
+				}
+				_model.Refresh();
+				if(await MesenMsgBox.Show(this, "InstallMepPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+					_model.ApplyChanges();
+					LoadRomHelper.PowerCycle();
+				}
+			} catch(Exception ex) {
+				await MesenMsgBox.ShowException(ex);
 			}
 		}
 	}

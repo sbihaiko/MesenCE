@@ -57,11 +57,21 @@ namespace Mesen.ViewModels
 			_pollTimer = null;
 		}
 
+		//The tab may be torn down while still selected (settings window closed):
+		//stop the timer so it does not keep polling a disposed view model.
+		protected override void DisposeView()
+		{
+			StopPolling();
+		}
+
 		public void Refresh()
 		{
 			uint count = InputApi.GetConnectedGamepadCount();
 			uint globalDeadzoneSize = ConfigManager.Config.Input.ControllerDeadzoneSize;
 			IReadOnlyList<DeviceDeadzoneOverride> overrides = ConfigManager.Config.Input.PerDeviceDeadzones;
+			//The static identity (name/backend/VID:PID) is re-read only when the
+			//set of connected pads changes; each 60 Hz tick reads just the state.
+			bool countChanged = Gamepads.Count != count;
 			while(Gamepads.Count < count) {
 				Gamepads.Add(new GamepadTestItem((uint)Gamepads.Count));
 			}
@@ -69,6 +79,9 @@ namespace Mesen.ViewModels
 				Gamepads.RemoveAt(Gamepads.Count - 1);
 			}
 			foreach(GamepadTestItem item in Gamepads) {
+				if(countChanged) {
+					item.RefreshInfo();
+				}
 				item.RefreshState(globalDeadzoneSize, overrides);
 			}
 			HasPads = Gamepads.Count > 0;
@@ -146,7 +159,9 @@ namespace Mesen.ViewModels
 			}
 		}
 
-		public void RefreshState(uint globalDeadzoneSize, IReadOnlyList<DeviceDeadzoneOverride> overrides)
+		//Static identity of the pad - called once per item (and again when the
+		//connected set changes), never per poll tick.
+		public void RefreshInfo()
 		{
 			if(InputApi.GetGamepadInfo(Index, out GamepadInfo info)) {
 				Name = info.Name;
@@ -159,7 +174,11 @@ namespace Mesen.ViewModels
 				HasRumble = info.HasRumble;
 				InfoText = $"{Backend} · Pad{Slot + 1} · VID:{VendorId} · PID:{ProductId}";
 			}
+		}
 
+		//Live state (buttons/axes) + the effective deadzone ring - the per-tick path.
+		public void RefreshState(uint globalDeadzoneSize, IReadOnlyList<DeviceDeadzoneOverride> overrides)
+		{
 			//Resolve the effective deadzone from the per-device overrides before
 			//rendering the ring, so a pad with its own setting shows that ring.
 			GlobalDeadzoneSize = globalDeadzoneSize;

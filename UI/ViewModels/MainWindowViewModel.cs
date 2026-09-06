@@ -162,11 +162,7 @@ namespace Mesen.ViewModels
 			UpdateCurrentPack(resolution);
 
 			bool open = PlayerPackPicker.ShouldOpen(hasSibling, PlayerPackPicker.DistinctPackIdCount(resolution.Candidates), resolution.PreferredContainer != null);
-			if(open) {
-				IsPlayerPackPickerVisible = true;
-			} else {
-				IsPlayerPackPickerVisible = false;
-			}
+			IsPlayerPackPickerVisible = open;
 			return open;
 		}
 
@@ -240,7 +236,7 @@ namespace Mesen.ViewModels
 
 			PlayerPackChoice? current = null;
 			if(resolution.PreferredContainer != null) {
-				current = PlayerPackChoices.FirstOrDefault(c => c.Container == resolution.PreferredContainer);
+				current = PlayerPackChoices.FirstOrDefault(c => c.Container.Equals(resolution.PreferredContainer, StringComparison.OrdinalIgnoreCase));
 			} else if(PlayerPackChoices.Count > 0) {
 				current = PlayerPackChoices[0];
 			}
@@ -308,29 +304,28 @@ namespace Mesen.ViewModels
 		//EnhancementPackConfig.
 		public void ToggleTextures()
 		{
-			Config.EnhancementPacks.EnableTextures = !Config.EnhancementPacks.EnableTextures;
-			Config.EnhancementPacks.ApplyConfig();
-			Config.Save();
-			IsTexturesEnabled = Config.EnhancementPacks.EnableTextures;
-			LoadRomHelper.ReloadRom();
+			IsTexturesEnabled = ToggleLayer(v => Config.EnhancementPacks.EnableTextures = v, Config.EnhancementPacks.EnableTextures);
 		}
 
 		public void ToggleAudio()
 		{
-			Config.EnhancementPacks.EnableAudio = !Config.EnhancementPacks.EnableAudio;
-			Config.EnhancementPacks.ApplyConfig();
-			Config.Save();
-			IsAudioEnabled = Config.EnhancementPacks.EnableAudio;
-			LoadRomHelper.ReloadRom();
+			IsAudioEnabled = ToggleLayer(v => Config.EnhancementPacks.EnableAudio = v, Config.EnhancementPacks.EnableAudio);
 		}
 
 		public void ToggleBorder()
 		{
-			Config.EnhancementPacks.EnableBorder = !Config.EnhancementPacks.EnableBorder;
+			IsBorderEnabled = ToggleLayer(v => Config.EnhancementPacks.EnableBorder = v, Config.EnhancementPacks.EnableBorder);
+		}
+
+		//Flips one MEP layer switch, persists it and reloads the ROM; returns the new value.
+		private bool ToggleLayer(Action<bool> setter, bool current)
+		{
+			bool next = !current;
+			setter(next);
 			Config.EnhancementPacks.ApplyConfig();
 			Config.Save();
-			IsBorderEnabled = Config.EnhancementPacks.EnableBorder;
 			LoadRomHelper.ReloadRom();
+			return next;
 		}
 
 		//WideScrn/HiRes (§6.1): restore-not-clobber via the host-free

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Mesen.Services
@@ -30,31 +31,47 @@ namespace Mesen.Services
 		public const long MaxArtifactBytes = 300L * 1024 * 1024;
 		public const long MaxCatalogBytes = 16L * 1024 * 1024;
 
+		//Default wall-clock budget for one GetAsync call (all hops + body read);
+		//the catalog fetch passes a much shorter one.
+		public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(10);
+
+		//One process-wide client: sockets are pooled across ROM loads instead of
+		//being torn down per request. Redirects are never followed automatically
+		//(each hop is re-checked against the allow-list in FetchAsync). No
+		//HttpClient.Timeout - the budget is a CancellationToken applied to
+		//SendAsync and every body read, so a stalled transfer is bounded too.
+		private static readonly HttpClient _client = new(new SocketsHttpHandler {
+			AllowAutoRedirect = false,
+			PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+		}) { Timeout = Timeout.InfiniteTimeSpan };
+
 		public sealed record Response(int StatusCode, string? ETag, byte[]? Body);
 
 		//Returns null when the entry is outside the allow-list, the redirect chain is too
-		//long, the body exceeds maxBytes, or any network/IO error occurs - never throws.
-		//A google-drive-kind URL is downloaded via the two-step dance; everything else via
-		//the redirect-checked GET loop.
-		public static async Task<Response?> GetAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag = null)
+		//long, the body exceeds maxBytes, the timeout elapses, or any network/IO error
+		//occurs - never throws. A google-drive-kind URL is downloaded via the two-step
+		//dance; everything else via the redirect-checked GET loop.
+		public static async Task<Response?> GetAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag = null, TimeSpan? timeout = null)
 		{
+			using CancellationTokenSource cts = new(timeout ?? DefaultTimeout);
+			CancellationToken ct = cts.Token;
 			CommunityPackHostEntry? matched = CommunityPackHostAllowlist.MatchHost(url, allowedHosts);
 			if(matched == null) {
 				EmuApi.WriteLogEntry("[CommunityPackDownloader] REJECTED (host not allow-listed): " + url);
 				return null;
 			}
 			if(string.Equals(matched.Kind, "google-drive", StringComparison.OrdinalIgnoreCase)) {
-				return await GetGoogleDriveAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+				return await GetGoogleDriveAsync(url, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			}
 			if(string.Equals(matched.Kind, "mediafire", StringComparison.OrdinalIgnoreCase)) {
-				return await GetMediaFireAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+				return await GetMediaFireAsync(url, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			}
-			return await GetDirectAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			return await GetDirectAsync(url, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 		}
 
-		private static async Task<Response?> GetDirectAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
+		private static async Task<Response?> GetDirectAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag, CancellationToken ct)
 		{
-			FetchResult? result = await FetchAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			FetchResult? result = await FetchAsync(url, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			return result == null ? null : new Response(result.StatusCode, result.ETag, result.Body);
 		}
 
@@ -62,7 +79,7 @@ namespace Mesen.Services
 		//uc?export=download first; when the response is the large-file virus-scan HTML
 		//page, one more hop to drive.usercontent.google.com with a confirm token fetches
 		//the real bytes. Small files come straight back from the first request.
-		private static async Task<Response?> GetGoogleDriveAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
+		private static async Task<Response?> GetGoogleDriveAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag, CancellationToken ct)
 		{
 			string? fileId = CommunityPackDrive.ExtractFileId(url);
 			if(fileId == null) {
@@ -70,14 +87,14 @@ namespace Mesen.Services
 				return null;
 			}
 			string firstUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
-			FetchResult? first = await FetchAsync(firstUrl, allowedHosts, maxBytes, ifNoneMatchETag);
+			FetchResult? first = await FetchAsync(firstUrl, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			if(first == null) {
 				return null;
 			}
 			string contentType = first.ContentType ?? "";
 			if(contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase)) {
 				string secondUrl = "https://drive.usercontent.google.com/download?id=" + fileId + "&export=download&confirm=t";
-				FetchResult? second = await FetchAsync(secondUrl, allowedHosts, maxBytes, ifNoneMatchETag);
+				FetchResult? second = await FetchAsync(secondUrl, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 				if(second == null) {
 					return null;
 				}
@@ -89,9 +106,9 @@ namespace Mesen.Services
 		//Mirror of scripts/fetch_pack.py::fetch_mediafire: the share page is HTML;
 		//the zip is the downloadN.mediafire.com href. A CDN URL pasted directly
 		//is kind "direct" (host_ends_with) and never lands here.
-		private static async Task<Response?> GetMediaFireAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
+		private static async Task<Response?> GetMediaFireAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag, CancellationToken ct)
 		{
-			FetchResult? first = await FetchAsync(url, allowedHosts, maxBytes, ifNoneMatchETag);
+			FetchResult? first = await FetchAsync(url, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			if(first == null) {
 				return null;
 			}
@@ -105,17 +122,15 @@ namespace Mesen.Services
 				EmuApi.WriteLogEntry("[CommunityPackDownloader] mediafire share page has no downloadN.mediafire.com link");
 				return null;
 			}
-			FetchResult? second = await FetchAsync(href, allowedHosts, maxBytes, ifNoneMatchETag);
+			FetchResult? second = await FetchAsync(href, allowedHosts, maxBytes, ifNoneMatchETag, ct);
 			return second == null ? null : new Response(second.StatusCode, second.ETag, second.Body);
 		}
 
 		private sealed record FetchResult(int StatusCode, string? ContentType, string? ETag, byte[]? Body);
 
-		private static async Task<FetchResult?> FetchAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag)
+		private static async Task<FetchResult?> FetchAsync(string url, IReadOnlyList<CommunityPackHostEntry> allowedHosts, long maxBytes, string? ifNoneMatchETag, CancellationToken ct)
 		{
 			try {
-				using HttpClientHandler handler = new() { AllowAutoRedirect = false };
-				using HttpClient client = new(handler) { MaxResponseContentBufferSize = maxBytes };
 				string current = url;
 				for(int hop = 0; hop <= MaxRedirects; hop++) {
 					CommunityPackHostEntry? matched = CommunityPackHostAllowlist.MatchHost(current, allowedHosts);
@@ -127,7 +142,7 @@ namespace Mesen.Services
 					if(ifNoneMatchETag != null) {
 						request.Headers.TryAddWithoutValidation("If-None-Match", ifNoneMatchETag);
 					}
-					using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+					using HttpResponseMessage response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 					int status = (int)response.StatusCode;
 					EmuApi.WriteLogEntry("[CommunityPackDownloader] hop " + hop + " GET " + current + " -> " + status);
 					if(CommunityPackHttpStatus.IsFollowableRedirect(status)) {
@@ -144,7 +159,7 @@ namespace Mesen.Services
 						EmuApi.WriteLogEntry("[CommunityPackDownloader] declared Content-Length " + declared + " exceeds cap " + maxBytes);
 						return null;
 					}
-					byte[]? body = status == (int)HttpStatusCode.OK ? await ReadCappedAsync(response, maxBytes) : null;
+					byte[]? body = status == (int)HttpStatusCode.OK ? await ReadCappedAsync(response, maxBytes, ct) : null;
 					if(status == (int)HttpStatusCode.OK && body == null) {
 						EmuApi.WriteLogEntry("[CommunityPackDownloader] body read failed or exceeded cap mid-transfer");
 						return null;
@@ -154,19 +169,22 @@ namespace Mesen.Services
 				}
 				EmuApi.WriteLogEntry("[CommunityPackDownloader] too many redirects (>" + MaxRedirects + ")");
 				return null; //too many redirects
+			} catch(OperationCanceledException) {
+				EmuApi.WriteLogEntry("[CommunityPackDownloader] timed out: " + url);
+				return null;
 			} catch(Exception ex) {
 				EmuApi.WriteLogEntry("[CommunityPackDownloader] GetAsync threw: " + ex);
 				return null;
 			}
 		}
 
-		private static async Task<byte[]?> ReadCappedAsync(HttpResponseMessage response, long maxBytes)
+		private static async Task<byte[]?> ReadCappedAsync(HttpResponseMessage response, long maxBytes, CancellationToken ct)
 		{
-			using Stream stream = await response.Content.ReadAsStreamAsync();
+			using Stream stream = await response.Content.ReadAsStreamAsync(ct);
 			using MemoryStream buffer = new();
 			byte[] chunk = new byte[81920];
 			int read;
-			while((read = await stream.ReadAsync(chunk, 0, chunk.Length)) > 0) {
+			while((read = await stream.ReadAsync(chunk, ct)) > 0) {
 				if(buffer.Length + read > maxBytes) {
 					return null;
 				}

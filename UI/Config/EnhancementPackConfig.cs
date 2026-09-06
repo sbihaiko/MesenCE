@@ -18,9 +18,10 @@ public partial class EnhancementPackConfig : BaseConfig<EnhancementPackConfig>
 	[ObservableProperty] public partial bool EnablePatches { get; set; } = true;
 	[ObservableProperty] public partial bool ApplyPatchOnHashMismatch { get; set; } = false;
 	[ObservableProperty] public partial bool BootstrapEnhancementFolder { get; set; } = true;
-	//ADR-0138 (F6.4): auto-install a matching community pack found via the
-	//MEP recipe catalog. No UI toggle yet - that's F6.4b's job; this just
-	//keeps the by-value marshaled struct in sync with the native side.
+	//ADR-0138/ADR-0146 (F6.4b): the single master switch for auto-installing a
+	//matching community pack from the MEP recipe catalog (default on; a per-pack
+	//DisabledPacks entry still overrides). Exposed in the Enhancement Packs
+	//settings and mirrored into the by-value marshaled struct for the native side.
 	[ObservableProperty] public partial bool AutoInstallCommunityPacks { get; set; } = true;
 	//ADR-0149 (F8): enhancement pack border layer (border/overlay frame)
 	[ObservableProperty] public partial bool EnableBorder { get; set; } = true;

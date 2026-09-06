@@ -191,24 +191,35 @@ namespace Mesen.Logic
 		//any ".." path segment (checked after normalizing '\' to '/', since a
 		//zip built on Windows may use either separator), and raw control
 		//characters (< 0x20) that a downstream extractor could mishandle.
+		//Delegates to LegacyHdPackInstall.NormalizeZipPath (the same MepPack::
+		//NormalizeRelativePath mirror) so the two zip-slip rules cannot drift;
+		//the one difference is kept on purpose: an entry that normalizes to
+		//nothing ("", "./", "a/..") is safe here (a directory entry the
+		//extractor skips), while NormalizeZipPath refuses it as a file path -
+		//path-cases.txt pins those verdicts.
 		public static bool IsSafePath(string entryFullName)
+		{
+			if(LegacyHdPackInstall.NormalizeZipPath(entryFullName) != null) {
+				return true;
+			}
+			return IsEmptyButSafe(entryFullName);
+		}
+
+		//True when the entry failed NormalizeZipPath only because it has no
+		//segments left (not because of an absolute path, a colon, a control
+		//character or a ".." segment).
+		private static bool IsEmptyButSafe(string entryFullName)
 		{
 			string normalized = entryFullName.Replace('\\', '/');
 			if(normalized.StartsWith("/") || normalized.Contains(':')) {
 				return false;
 			}
-
-			if(normalized.Split('/').Contains("..")) {
-				return false;
-			}
-
 			foreach(char c in normalized) {
 				if(c < 0x20) {
 					return false;
 				}
 			}
-
-			return true;
+			return !normalized.Split('/').Contains("..");
 		}
 	}
 }

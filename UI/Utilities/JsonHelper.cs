@@ -42,7 +42,6 @@ namespace Mesen.Utilities
 [JsonSerializable(typeof(CommunityPackCatalog))]
 [JsonSerializable(typeof(CommunityPackCatalogEntry))]
 [JsonSerializable(typeof(CommunityPackRom))]
-[JsonSerializable(typeof(CommunityPackSource))]
 [JsonSerializable(typeof(CommunityPackDep))]
 [JsonSerializable(typeof(CommunityPackErrata))]
 [JsonSerializable(typeof(CommunityPackKnownMissing))]

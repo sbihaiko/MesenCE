@@ -17,6 +17,12 @@ namespace Mesen.Logic
 	//ExtractToFolder unwraps a nested zip (if any) and writes the pack root.
 	public static class LegacyHdPackInstall
 	{
+		//Hard ceiling on the bytes a single pack extraction may write. A legacy
+		//HD pack is tens to a few hundred MB of PNGs; a zip whose entries inflate
+		//past this is a decompression bomb, not a pack (the download itself is
+		//already capped at 300MB compressed by CommunityPackDownloader).
+		public const long MaxExtractedBytes = 2L * 1024 * 1024 * 1024;
+
 		//Mirror of MepPack::NormalizeRelativePath (zip-slip): reject absolute
 		//paths, drive letters, control characters and any "."/".." segment;
 		//return the normalized '/' path, or null to refuse the whole entry.
@@ -168,8 +174,7 @@ namespace Mesen.Logic
 
 			string? rootPrefix = FindPackRoot(byNorm.Keys, romName);
 			if(rootPrefix != null) {
-				WriteUnderRoot(byNorm, rootPrefix, targetFolder);
-				return true;
+				return WriteUnderRoot(byNorm, rootPrefix, targetFolder, out error);
 			}
 
 			string? nested = FindNestedZip(byNorm.Keys) ?? FindGameFolderZip(byNorm.Keys, romName);
@@ -193,8 +198,7 @@ namespace Mesen.Logic
 				error = "not a legacy HD pack (no hires.txt)";
 				return false;
 			}
-			WriteUnderRoot(innerMap, rootPrefix, targetFolder);
-			return true;
+			return WriteUnderRoot(innerMap, rootPrefix, targetFolder, out error);
 		}
 
 		private static Dictionary<string, ZipArchiveEntry>? BuildNormMap(ZipArchive zip, out string error)
@@ -223,8 +227,13 @@ namespace Mesen.Logic
 			return ms.ToArray();
 		}
 
-		private static void WriteUnderRoot(Dictionary<string, ZipArchiveEntry> byNorm, string rootPrefix, string targetFolder)
+		//Writes every entry under rootPrefix, counting the bytes actually
+		//inflated; aborts (false + error) once the total passes MaxExtractedBytes.
+		private static bool WriteUnderRoot(Dictionary<string, ZipArchiveEntry> byNorm, string rootPrefix, string targetFolder, out string error)
 		{
+			error = "";
+			long written = 0;
+			byte[] buffer = new byte[81920];
 			foreach(KeyValuePair<string, ZipArchiveEntry> pair in byNorm) {
 				if(!pair.Key.StartsWith(rootPrefix, StringComparison.Ordinal)) {
 					continue;
@@ -237,8 +246,17 @@ namespace Mesen.Logic
 				Directory.CreateDirectory(Path.GetDirectoryName(dest) ?? targetFolder);
 				using Stream src = pair.Value.Open();
 				using FileStream outStream = new FileStream(dest, FileMode.Create, FileAccess.Write);
-				src.CopyTo(outStream);
+				int read;
+				while((read = src.Read(buffer, 0, buffer.Length)) > 0) {
+					written += read;
+					if(written > MaxExtractedBytes) {
+						error = "legacy HD pack inflates past " + (MaxExtractedBytes >> 30) + " GiB - refusing to extract";
+						return false;
+					}
+					outStream.Write(buffer, 0, read);
+				}
 			}
+			return true;
 		}
 	}
 }

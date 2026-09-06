@@ -5,6 +5,7 @@ using Mesen.Interop;
 using Mesen.Logic;
 using Mesen.Utilities;
 using Mesen.Windows;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -72,7 +73,7 @@ namespace Mesen.ViewModels
 				});
 			}
 			Packs = packs;
-			HasPacks = packs.Count > 0;
+			HasPacks = parsed.HasPacks;
 			RejectedInfo = parsed.RejectedInfo;
 			HasRejected = parsed.HasRejected;
 			RefreshPreference(packs);
@@ -192,8 +193,9 @@ namespace Mesen.ViewModels
 				}
 
 				string target = Path.Combine(PacksFolder, Path.GetFileName(filename));
-				File.Copy(filename, target, true);
-			} catch {
+				//A pack zip can be hundreds of MB - keep the copy off the UI thread.
+				await Task.Run(() => File.Copy(filename, target, true));
+			} catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException) {
 				return "InstallMepPackInvalidZipFile";
 			}
 

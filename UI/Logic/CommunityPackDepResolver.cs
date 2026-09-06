@@ -63,18 +63,16 @@ namespace Mesen.Logic
 	public sealed record CommunityPackLocalFile(string Path, string Sha256);
 
 	//Outcome of CommunityPackDepResolver.Resolve(): either a resolved local
-	//path, or a payload the caller shows in a prompt asking the user to
-	//supply the file by hand.
+	//path (ResolvedPath != null), or a payload (ResolvedPath == null) the
+	//caller shows in a prompt asking the user to supply the file by hand.
 	public sealed class CommunityPackDepResolution
 	{
-		public bool RequiresPrompt { get; }
 		public string? ResolvedPath { get; }
 		public string Hints { get; }
 		public string License { get; }
 
-		private CommunityPackDepResolution(bool requiresPrompt, string? resolvedPath, string hints, string license)
+		private CommunityPackDepResolution(string? resolvedPath, string hints, string license)
 		{
-			RequiresPrompt = requiresPrompt;
 			ResolvedPath = resolvedPath;
 			Hints = hints;
 			License = license;
@@ -82,12 +80,12 @@ namespace Mesen.Logic
 
 		public static CommunityPackDepResolution Found(string path)
 		{
-			return new CommunityPackDepResolution(false, path, "", "");
+			return new CommunityPackDepResolution(path, "", "");
 		}
 
 		public static CommunityPackDepResolution Prompt(string hints, string license)
 		{
-			return new CommunityPackDepResolution(true, null, hints, license);
+			return new CommunityPackDepResolution(null, hints, license);
 		}
 	}
 }

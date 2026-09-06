@@ -61,8 +61,8 @@ namespace Mesen.Interop
 		//Host input tester (PRD slice I.0): enumerate connected pads and read
 		//their raw state without touching the emulated PadN mapping.
 		[DllImport(DllPath)] public static extern UInt32 GetConnectedGamepadCount();
-		[DllImport(DllPath)] public static extern bool GetGamepadInfo(UInt32 index, out GamepadInfo info);
-		[DllImport(DllPath)] public static extern bool GetGamepadState(UInt32 index, out GamepadState state);
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool GetGamepadInfo(UInt32 index, out GamepadInfo info);
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool GetGamepadState(UInt32 index, out GamepadState state);
 		[DllImport(DllPath)] public static extern void TestForceFeedback(UInt32 index, UInt16 magnitudeRight, UInt16 magnitudeLeft);
 	}
 

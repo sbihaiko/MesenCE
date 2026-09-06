@@ -21,8 +21,10 @@ namespace Mesen.Logic
 	//(UI/AGENTS.md).
 	public static class CommunityPackHostAllowlist
 	{
-		//Repo-relative path to the shared allow-list, mirroring
-		//fetch_pack.py's DEFAULT_ALLOWLIST constant.
+		//Test-only helper: repo-relative path to the shared allow-list, mirroring
+		//fetch_pack.py's DEFAULT_ALLOWLIST constant. UI.Tests reads the real file
+		//through it; the client never does (ADR-0138 §41 - the fetcher loads the
+		//embedded resource only, enforced by verify_fetcher_no_filesystem_allowlist_load.sh).
 		public const string RepoRelativePath = "scripts/pack_host_allowlist.json";
 
 		//Parses the allow-list JSON body into entries. Pure: no I/O. Mirrors
@@ -45,9 +47,9 @@ namespace Mesen.Logic
 			return Parse(reader.ReadToEnd());
 		}
 
-		//Reads and parses the allow-list from a file path (typically
-		//RepoRelativePath, resolved by the caller against wherever the repo
-		//checkout / packaged app locates its scripts/ tree).
+		//Test-only helper: reads and parses the allow-list from a file path
+		//(typically RepoRelativePath resolved against the repo checkout). Not
+		//used by the client - see RepoRelativePath above.
 		public static IReadOnlyList<CommunityPackHostEntry> LoadFromFile(string path)
 		{
 			using FileStream stream = File.OpenRead(path);
