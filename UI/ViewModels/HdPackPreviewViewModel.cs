@@ -47,8 +47,22 @@ namespace Mesen.ViewModels
 
 		private void UpdateImages()
 		{
+			//Detach the outgoing previews first so stepping between pairs (and
+			//closing the window) does not accumulate the decoded pack PNGs
+			IImage? oldBefore = BeforeImage;
+			IImage? oldAfter = AfterImage;
 			BeforeImage = LoadBitmap(SelectedPair?.BeforePath);
 			AfterImage = LoadBitmap(SelectedPair?.AfterPath);
+			(oldBefore as IDisposable)?.Dispose();
+			(oldAfter as IDisposable)?.Dispose();
+		}
+
+		protected override void DisposeView()
+		{
+			(BeforeImage as IDisposable)?.Dispose();
+			(AfterImage as IDisposable)?.Dispose();
+			BeforeImage = null;
+			AfterImage = null;
 		}
 
 		private static IImage? LoadBitmap(string? path)

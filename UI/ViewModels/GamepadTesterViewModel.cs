@@ -8,6 +8,7 @@ using Mesen.Interop;
 using Mesen.Localization;
 using Mesen.Logic;
 using Mesen.Utilities;
+using Mesen.Views;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -266,10 +267,11 @@ namespace Mesen.ViewModels
 		private static string CategoryLabel(GamepadCircularityCategory category)
 		{
 			switch(category) {
-				case GamepadCircularityCategory.Excellent: return ResourceHelper.GetMessage("lblCircularityExcellent");
-				case GamepadCircularityCategory.Good: return ResourceHelper.GetMessage("lblCircularityGood");
-				case GamepadCircularityCategory.Fair: return ResourceHelper.GetMessage("lblCircularityFair");
-				default: return ResourceHelper.GetMessage("lblCircularityPoor");
+				//The lblCircularity* keys are <Control> IDs of InputConfigView, not Messages
+				case GamepadCircularityCategory.Excellent: return ResourceHelper.GetViewLabel(nameof(InputConfigView), "lblCircularityExcellent");
+				case GamepadCircularityCategory.Good: return ResourceHelper.GetViewLabel(nameof(InputConfigView), "lblCircularityGood");
+				case GamepadCircularityCategory.Fair: return ResourceHelper.GetViewLabel(nameof(InputConfigView), "lblCircularityFair");
+				default: return ResourceHelper.GetViewLabel(nameof(InputConfigView), "lblCircularityPoor");
 			}
 		}
 

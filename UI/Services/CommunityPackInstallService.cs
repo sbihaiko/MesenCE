@@ -73,7 +73,10 @@ namespace Mesen.Services
 				if(record == null || string.IsNullOrWhiteSpace(record.SourceSha256)) {
 					return (false, "there is no catalog-installed pack to restore for this ROM");
 				}
-				CommunityPackFetchResult? fetched = await CommunityPackCatalogFetcher.FetchMatchingPackAsync();
+				//The catalog fetch re-verifies an up-to-300MB artifact (SHA-256); start it
+				//on the thread pool so that CPU work and its continuations stay off the UI
+				//thread (this Restore is user-triggered from the Enhancement Packs window).
+				CommunityPackFetchResult? fetched = await Task.Run(() => CommunityPackCatalogFetcher.FetchMatchingPackAsync());
 				if(fetched == null) {
 					return (false, "the pack is no longer in the catalog (nothing to restore from)");
 				}

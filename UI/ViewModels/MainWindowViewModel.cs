@@ -431,10 +431,12 @@ namespace Mesen.ViewModels
 		partial void OnRomInfoChanged(RomInfo value)
 		{
 			bool showAudioPlayer = RomInfo.Format == RomFormat.Nsf || RomInfo.Format == RomFormat.Spc || RomInfo.Format == RomFormat.Gbs || RomInfo.Format == RomFormat.PceHes;
-			AudioPlayer?.Dispose();
-			if(AudioPlayer == null && showAudioPlayer) {
-				AudioPlayer = new AudioPlayerViewModel();
-			} else if(!showAudioPlayer) {
+			if(showAudioPlayer) {
+				AudioPlayer ??= new AudioPlayerViewModel();
+			} else {
+				//Drop the live player only when leaving a music ROM; switching between
+				//music ROMs keeps it (it mirrors AudioPlayerConfig, not per-ROM state)
+				AudioPlayer?.Dispose();
 				AudioPlayer = null;
 			}
 
