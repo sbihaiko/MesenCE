@@ -59,10 +59,15 @@ bool ArchiveReader::LoadArchive(std::istream& in)
 	in.seekg(0, std::ios::beg);
 
 	delete[] _buffer;
-	_buffer = new uint8_t[(uint32_t)filesize];
-	in.read((char*)_buffer, filesize);
+	if(filesize <= 0) {
+		_buffer = nullptr;
+		return false;
+	}
+	size_t fileSize = (size_t)filesize;
+	_buffer = new uint8_t[fileSize];
+	in.read((char*)_buffer, (std::streamsize)fileSize);
 	in.seekg(0, std::ios::beg);
-	bool result = LoadArchive(_buffer, (size_t)filesize);
+	bool result = LoadArchive(_buffer, fileSize);
 	return result;
 }
 
