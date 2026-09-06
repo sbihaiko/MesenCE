@@ -117,7 +117,10 @@ public abstract class ElfImporter
 				}
 
 				if(hasLen) {
-					int val = int.Parse(name.AsSpan(start, i - start));
+					//Reject unbounded digit runs instead of throwing on overflow
+					if(!int.TryParse(name.AsSpan(start, i - start), out int val)) {
+						break;
+					}
 
 					if(i + val <= name.Length) {
 						string part = name.Substring(i, val);

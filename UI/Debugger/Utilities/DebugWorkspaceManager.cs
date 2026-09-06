@@ -214,7 +214,8 @@ namespace Mesen.Debugger.Utilities
 			ISymbolProvider? symbolProvider = SymbolProvider;
 			SymbolProvider = null;
 
-			switch(Path.GetExtension(filename).ToLower().Substring(1)) {
+			string extension = Path.GetExtension(filename).ToLower();
+			switch(extension.Length > 0 ? extension.Substring(1) : "") {
 				case FileDialogHelper.DbgFileExt: LoadDbgSymbolFile(filename, showResult); break;
 				case FileDialogHelper.SymFileExt: LoadSymFile(filename, showResult); break;
 				case FileDialogHelper.CdbFileExt: LoadCdbFile(filename, showResult); break;

@@ -294,7 +294,7 @@ namespace Mesen.Debugger.ViewModels
 
 				case Format.X24: {
 					string str = ((IFormattable)value).ToString("X6", null);
-					return "$" + (str.Length > 7 ? str.Substring(str.Length - 6) : str);
+					return "$" + (str.Length > 6 ? str.Substring(str.Length - 6) : str);
 				}
 
 				case Format.X28: {

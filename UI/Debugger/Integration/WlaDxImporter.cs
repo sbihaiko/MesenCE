@@ -260,8 +260,13 @@ public abstract class WlaDxImporter : ISymbolProvider
 
 							AddressInfo absAddr = GetLabelAddress(bank, addr);
 							if(absAddr.Address >= 0) {
-								_addressByLine[_sourceFiles[fileId].Name + "_" + lineNumber.ToString()] = absAddr;
-								_linesByAddress[absAddr.Type.ToString() + absAddr.Address.ToString()] = new SourceCodeLocation(_sourceFiles[fileId], lineNumber);
+								if(_sourceFiles.TryGetValue(fileId, out SourceFileInfo? src) && src != null) {
+									_addressByLine[src.Name + "_" + lineNumber.ToString()] = absAddr;
+									_linesByAddress[absAddr.Type.ToString() + absAddr.Address.ToString()] = new SourceCodeLocation(src, lineNumber);
+								} else {
+									//Ignore mappings that reference a file absent from the [source files] section
+									errorCount++;
+								}
 							}
 						}
 					} else {
