@@ -42,6 +42,7 @@ Owns `docs/specs/` (CC0), `docs/roadmap/` (the consolidated PRD), `docs/adr/` (t
 
 - Specs: `python3 scripts/validate-specs.py` from the repo root.
 - ADRs: `python3 scripts/checks/verify_adr_refs.py` (also in `make doc-checks`) — every cited `ADR-NNNN` resolves to a file.
+- Upstream coexistence (ADR-0163): tiers = `scripts/upstream_tiers.py`; `Upstream-Delta:` trailer check = `scripts/checks/verify_upstream_delta.py`; sync = `scripts/sync-upstream.sh` (local, merge on `main`) + `.github/workflows/sync-upstream.yml` (scheduled PR when upstream moves).
 - `hd-pack-authoring.md`: `./scripts/checks/verify_hd_pack_authoring_doc.sh`.
 - Plans have no automated check.
 

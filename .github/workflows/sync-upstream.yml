@@ -1,0 +1,146 @@
+# .github/workflows/sync-upstream.yml
+#
+# Scheduled upstream sync (ADR-0163). When nesdev-org/MesenCE has commits this
+# fork does not yet have, merges them onto a `sync/upstream/<date>` branch with
+# `scripts/sync-upstream.sh` — rerere on, merge (never rebase), tier-D
+# delete/modify conflicts auto-resolved as "keep the fork's deletion" — pushes
+# the branch and opens a PR to `main` whose body lists what was merged and
+# what was resolved. It never merges to `main` itself: the PR is the human gate
+# and lets the normal CI run against the merged tree.
+#
+# Guards:
+#   * no-op when upstream has nothing new (exits 0, no branch, no PR);
+#   * when a sync PR for today's branch is already open, exits 0 without
+#     touching it (re-run protection);
+#   * when the merge leaves tier-B modify/modify conflicts (the one case
+#     automation refuses to guess), opens an Issue asking for a manual sync
+#     and fails the run — it never force-resolves a conflict it cannot justify.
+#
+# The default branch here is `main` (the product branch; `master` is a frozen
+# full-console snapshot). The GITHUB_TOKEN writes to this fork's own repo, so
+# no upstream access or PAT is involved.
+
+name: Sync upstream (MesenCE)
+
+on:
+  schedule:
+    - cron: '18 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_URL: https://github.com/nesdev-org/MesenCE.git
+  UPSTREAM_REF: upstream/master
+  BRANCH_PREFIX: sync/upstream
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (full history — the merge-base must exist locally)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Sync, push, and open the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config rerere.enabled true
+          git config rerere.autoUpdate true
+
+          git fetch origin main --no-tags
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch upstream master --no-tags
+
+          if git merge-base --is-ancestor "$UPSTREAM_REF" origin/main; then
+            echo "::notice::upstream is already merged into origin/main — nothing to sync."
+            exit 0
+          fi
+
+          MERGE_BASE=$(git merge-base origin/main "$UPSTREAM_REF")
+          UPSTREAM_SHA=$(git rev-parse "$UPSTREAM_REF")
+          BR="$(date +%Y-%m-%d)"
+          BR="$BRANCH_PREFIX/$BR"
+
+          # Re-run protection: an open PR on today's sync branch already
+          # represents this upstream state.
+          if gh pr list --repo "$GITHUB_REPOSITORY" --head "$BR" \
+              --state open --json number --jq 'length' | grep -q '^[1-9]'; then
+            echo "::notice::sync PR for $BR is already open — leaving it alone."
+            exit 0
+          fi
+
+          # Predicted-conflict counts, captured against origin/main BEFORE the
+          # merge, become the PR body.
+          git checkout -q "$(git rev-parse origin/main)"
+          python3 scripts/upstream_tiers.py --json > /tmp/pre.json
+          DM_COUNT=$(python3 -c 'import json;print(len(json.load(open("/tmp/pre.json")).get("predicted",{}).get("delete_modify",[])))')
+          MM_COUNT=$(python3 -c 'import json;print(len(json.load(open("/tmp/pre.json")).get("predicted",{}).get("modify_modify",[])))')
+
+          # The branch is ephemeral; guarded above that no open PR references
+          # it, so force-resetting a stale leftover from a failed run is safe.
+          git checkout -B "$BR" origin/main
+          echo "--- sync-upstream.sh ---"
+          if ! scripts/sync-upstream.sh --ref "$UPSTREAM_REF" 2>&1 | tee /tmp/sync.log; then
+            # tier-B modify/modify conflicts: automation refuses to guess.
+            TITLE="Manual upstream sync needed — merge of ${UPSTREAM_SHA:0:12} has tier-B conflicts"
+            # Guard against issue spam on repeated runs of the same stalled merge:
+            # open one issue only when no other "Manual upstream sync needed" issue exists.
+            if ! gh issue list --repo "$GITHUB_REPOSITORY" \
+                --search 'in:title "Manual upstream sync needed"' \
+                --state open --json number --jq 'length' | grep -q '^[1-9]'; then
+              { echo "A scheduled upstream sync stopped on conflicts that need a human decision."
+                echo
+                echo "Merge-base: $MERGE_BASE"
+                echo "Upstream:   $UPSTREAM_SHA"
+                echo
+                echo '```'
+                tail -n 40 /tmp/sync.log
+                echo '```'
+                echo
+                echo "Resolution (ADR-0163): keep every tier-D deletion; the"
+                echo "remaining conflicts are tier-B modify/modify. Do not restore"
+                echo "deleted console files to satisfy a merge."
+                echo
+                echo "Local: scripts/sync-upstream.sh --ref upstream/master"
+              } > /tmp/issue.md
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
+                --body-file /tmp/issue.md >/dev/null
+            fi
+            echo "::error::sync stopped on tier-B conflicts — see the issue opened for the details."
+            exit 1
+          fi
+
+          git push --force origin "$BR"
+
+          {
+            echo "Merge of upstream @ \`${UPSTREAM_SHA:0:12}\` (${MERGE_BASE:0:12}..${UPSTREAM_SHA:0:12}) into \`main\`."
+            echo
+            echo "Merge and tiers follow [ADR-0163](https://github.com/sbihaiko/MesenCE/blob/main/docs/adr/0163-fork-upstream-coexistence-policy.md): merge, never rebase; tier-D delete/modify conflicts auto-resolved as **keep the fork's deletion** (rerere records them)."
+            echo
+            echo "- upstream commits merged: $(git rev-list --count "$MERGE_BASE".."$UPSTREAM_REF")"
+            echo "- delete/modify auto-resolved (tier-D, kept deletions): $DM_COUNT"
+            echo "- modify/modify conflicts (tier-B, if any): $MM_COUNT"
+            echo
+            echo "Full log:"
+            echo '```'
+            cat /tmp/sync.log
+            echo '```'
+          } > /tmp/body.md
+
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BR" \
+            --title "Sync: merge upstream @ ${UPSTREAM_SHA:0:12}" \
+            --body-file /tmp/body.md
