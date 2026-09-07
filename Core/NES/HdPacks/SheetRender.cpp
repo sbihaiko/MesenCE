@@ -407,7 +407,7 @@ namespace MesenSheets
 	//so nothing is pruned and the degree totals a reader recomputes ADR-0153 §2
 	//from are exact; the sprites block keeps the far-field statistics the offset
 	//histogram cannot answer and prunes only within the 32 px histogram itself.
-	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup)
+	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup, const std::map<uint32_t, std::vector<ScreenSite>>& residentSites)
 	{
 		//One edge plus its direction, for the deterministic (a, b, dir) order.
 		struct Edge
@@ -459,8 +459,23 @@ namespace MesenSheets
 				<< ", \"count\": " << entry.Count
 				<< ", \"context\": \"" << ContextName(entry.Context) << "\""
 				<< ", \"outE\": " << outE[i] << ", \"outS\": " << outS[i]
-				<< ", \"inE\": " << inE[i] << ", \"inS\": " << inS[i]
-				<< ", \"tiles\": ";
+				<< ", \"inE\": " << inE[i] << ", \"inS\": " << inS[i];
+			auto sit = residentSites.find((uint32_t)i);
+			if(sit != residentSites.end() && !sit->second.empty()) {
+				//ADR-0166 (F9.18): the screens that own this node's pixels, so a
+				//reader crops them from backgrounds/<screen>.orig.png instead of
+				//failing. Only present on resident nodes - a node a sheet shows
+				//needs no screen source.
+				json << ", \"screens\": [";
+				for(size_t s = 0; s < sit->second.size(); s++) {
+					json << (s ? ", " : "")
+						<< "{ \"screen\": \"" << sit->second[s].Screen << "\""
+						<< ", \"x\": " << sit->second[s].X
+						<< ", \"y\": " << sit->second[s].Y << " }";
+				}
+				json << "]";
+			}
+			json << ", \"tiles\": ";
 			AppendTiles(json, entry.Key, background.Grid.Unit, lookup);
 			json << " }";
 		}

@@ -403,6 +403,31 @@ namespace MesenSheets
 		uint32_t OamFrames = 0;
 	};
 
+	//---- F9.18 (ADR-0166): the owning screen of a resident node -------------
+
+	//One captured frame showing a screen-resident node, and the node's grid
+	//position on it. Row/Col are the 8 px tile coordinates of the node's
+	//top-left tile (the same key CollectScreen places cells with), so the art
+	//origin in 1x NES pixels is (Col * 8, Row * 8) and a `unit`-pixel crop
+	//equals the node's tiles. `Frame` is the index into the retained GridFrame
+	//stream, which the builder maps to the screenNNN file that froze it.
+	struct ScreenSight
+	{
+		uint32_t Frame = 0;
+		uint32_t Row = 0;
+		uint32_t Col = 0;
+	};
+
+	//One owned-screen site the adjacency serializer persists on a resident
+	//background node: the file stem (matches textures/backgrounds/ and the
+	//hires.txt <background> the capture became) plus the 8 px grid position.
+	struct ScreenSite
+	{
+		std::string Screen; //"screenNNN"
+		uint32_t X = 0;     //8 px tile column of the node's top-left tile
+		uint32_t Y = 0;     //8 px tile row
+	};
+
 	//---- vocabulary --------------------------------------------------------
 
 	//A building block: 4 shapes (row-major) at grid unit 16, 1 shape + three

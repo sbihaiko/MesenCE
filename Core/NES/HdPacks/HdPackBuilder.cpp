@@ -672,6 +672,17 @@ void HdPackBuilder::OnFrameEnd()
 				//that was never written covers nothing.
 				if(_gridFrameLive && _hdData.BackgroundFileData.size() > before) {
 					_gridFrames.back().Captured = true;
+					//ADR-0166: the frame that just became backgrounds/screenNNN
+					//is the owning screen of the resident cells it shows; record
+					//its stem so the adjacency file can name it. The PNG number
+					//is the BackgroundFileData slot this capture appended
+					//(CaptureScreen numbers from size()+1 at its top).
+					if(_screenStems.size() < _gridFrames.size()) {
+						_screenStems.resize(_gridFrames.size());
+					}
+					char stem[16];
+					snprintf(stem, sizeof(stem), "screen%03u", (unsigned)(before + 1));
+					_screenStems.back() = stem;
 				}
 			}
 		}
@@ -783,6 +794,9 @@ void HdPackBuilder::RecordGridFrame()
 	}
 	frame.FrameNumber = (uint32_t)_gridFrames.size();
 	_gridFrames.push_back(frame);
+	//ADR-0166: keep the screen-stem plane parallel; a stem is filled in only
+	//when OnFrameEnd's capture of this frame actually succeeds.
+	_screenStems.push_back("");
 	_gridFrameLive = true;
 }
 
@@ -1217,7 +1231,38 @@ void HdPackBuilder::WriteAdjacencyFile(const string& folder, const MesenSheets::
 	if(!spriteVocab.Entries.empty()) {
 		stats = MesenSheets::AccumulateSpriteAdjacency(_oamFrames, spriteVocab);
 	}
-	string json = MesenSheets::SerializeAdjacency(vocab, spriteVocab, stats, lookup);
+	//ADR-0166 (F9.18): for the screen-resident nodes (cells no sheet shows
+	//because a captured screen owns them), which screenNNN freezes each one and
+	//at which 8 px placement. Only a frame that was really written out counts -
+	//a screen CaptureScreen bailed on covers nothing. Frames ascending, so the
+	//first site a reader meets is the earliest capture.
+	std::map<uint32_t, std::vector<MesenSheets::ScreenSite>> residentSites;
+	{
+		auto sights = MesenSheets::CollectScreenSights(_gridFrames, vocab);
+		for(const auto& kv : sights) {
+			for(const MesenSheets::ScreenSight& sight : kv.second) {
+				if(sight.Frame >= _screenStems.size() || _screenStems[sight.Frame].empty()) {
+					continue;
+				}
+				MesenSheets::ScreenSite site;
+				site.Screen = _screenStems[sight.Frame];
+				site.X = sight.Col;
+				site.Y = sight.Row;
+				std::vector<MesenSheets::ScreenSite>& list = residentSites[kv.first];
+				bool dup = false;
+				for(const MesenSheets::ScreenSite& existing : list) {
+					if(existing.Screen == site.Screen && existing.X == site.X && existing.Y == site.Y) {
+						dup = true;
+						break;
+					}
+				}
+				if(!dup) {
+					list.push_back(site);
+				}
+			}
+		}
+	}
+	string json = MesenSheets::SerializeAdjacency(vocab, spriteVocab, stats, lookup, residentSites);
 	ofstream out(FolderUtilities::CombinePath(folder, "adjacency.json"), ios::out);
 	if(!out) {
 		return;

@@ -188,6 +188,12 @@ private:
 	//F9.9: true while _gridFrames.back() is the frame OnFrameEnd is closing,
 	//so a captured screen flags its own grid frame and never an older one.
 	bool _gridFrameLive = false;
+	//ADR-0166 (F9.18): the screenNNN stem each captured grid frame froze as,
+	//parallel to _gridFrames (empty where a frame was never written out). The
+	//adjacency file records, per screen-resident node, the owning screen's
+	//stem and the node's on-screen placement, so a sheetless cell resolves to
+	//a crop from backgrounds/<stem>.orig.png.
+	vector<string> _screenStems;
 	uint32_t _screenResidentCells = 0; //cells the screen surface owns (ADR-0156)
 	unordered_map<HdTileKey, MesenSheets::ShapeId> _shapeIds;
 	vector<MesenSheets::SheetTileKey> _shapeTiles; //drawable art per shape id

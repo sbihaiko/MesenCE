@@ -118,5 +118,10 @@ namespace MesenSheets
 	//Deterministic - nodes by index, edges by (a, b, dir), pairs by (a, b),
 	//offsets by count then (dx, dy) - so two saves of one recording produce
 	//byte-identical bytes and content_id (ADR-0139) does not churn.
-	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup);
+	//`residentSites` (ADR-0166, F9.18) adds, on exactly the screen-resident
+	//background nodes it names, the screens[] field: the screenNNN each
+	//captured frame became and the node's 8 px placement on it, so a node no
+	//sheet shows resolves to a crop from backgrounds/<screen>.orig.png. Empty
+	//by default (older callers, and packs that predate the field).
+	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup, const std::map<uint32_t, std::vector<ScreenSite>>& residentSites = {});
 }

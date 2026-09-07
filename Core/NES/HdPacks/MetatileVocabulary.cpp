@@ -778,6 +778,31 @@ namespace MesenSheets
 		KeepBestPerOrphan(offPhase, covered, obs);
 	}
 
+	//ADR-0166 (F9.18): where each screen-resident node's art lives on disk.
+	//Reuses the same placements walk the residency test ran: a resident node is
+	//one every sighting of which a Captured frame shows, so collecting those
+	//frames here yields exactly the screens that own it.
+	std::map<uint32_t, std::vector<ScreenSight>> CollectScreenSights(const std::vector<GridFrame>& frames, const Vocabulary& vocab)
+	{
+		std::map<uint32_t, std::vector<ScreenSight>> out;
+		for(size_t i = 0; i < frames.size(); i++) {
+			if(!frames[i].Captured) {
+				continue;
+			}
+			Placements placements;
+			CollectScreen(frames[i], vocab.Grid, vocab.Grid.PhaseX, vocab.Grid.PhaseY, placements);
+			for(Placements::const_iterator it = placements.begin(); it != placements.end(); ++it) {
+				int32_t index = vocab.Find(it->second);
+				if(index < 0 || !vocab.Entries[(size_t)index].ScreenResident) {
+					continue;
+				}
+				ScreenSight sight = { (uint32_t)i, it->first.first, it->first.second };
+				out[(uint32_t)index].push_back(sight);
+			}
+		}
+		return out;
+	}
+
 	Vocabulary BuildVocabulary(const std::vector<GridFrame>& frames, const TileLookup& lookup)
 	{
 		Vocabulary vocab;

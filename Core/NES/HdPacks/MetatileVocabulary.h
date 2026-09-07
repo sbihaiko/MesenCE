@@ -35,6 +35,13 @@ namespace MesenSheets
 	//sighting that disqualifies a cell is precisely the one no screen captured.
 	void MarkScreenResidentCells(const std::vector<GridFrame>& frames, Vocabulary& vocab);
 
+	//ADR-0166 (F9.18): for every screen-resident node, the captured frames that
+	//show it and the 8 px placement (Row/Col) on each - the data the adjacency
+	//serializer needs to record which screenNNN owns a sheetless cell. Only
+	//Captured frames count (a screen the builder never wrote out covers
+	//nothing). Deterministic: frames ascending, placements in map order.
+	std::map<uint32_t, std::vector<ScreenSight>> CollectScreenSights(const std::vector<GridFrame>& frames, const Vocabulary& vocab);
+
 	//The whole F9.1 pass: stable screens -> HUD rows -> grid detection ->
 	//vocabulary with counts, contexts and E/S adjacency between entries.
 	Vocabulary BuildVocabulary(const std::vector<GridFrame>& frames, const TileLookup& lookup);
