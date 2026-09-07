@@ -646,6 +646,20 @@ def sheet_round_trip_tests(root: Path):
     else:
         fail(f"unknown sheet version: {out}")
 
+    # --- the adjacency sidecar (ADR-0164 §2) is skipped silently ---
+    # It is not a sheet: no cells[], no sheet PNG, nothing to slice - and a
+    # warning on every pack would train users to ignore warnings.
+    adj, _v, _c = make_sheet_folder(root, "sheets-adjacency")
+    (adj / "textures" / "sheets" / "adjacency.json").write_text(
+        '{"version": 1, "kind": "adjacency", "background": {"nodes": [], "edges": []}}',
+        encoding="utf-8")
+    out = run("build", str(adj))
+    warned = "unknown sheet kind 'adjacency'" in out or "names sheet 'adjacency.png'" in out
+    if out is not None and not warned and "metatiles.png" in out:
+        ok("the adjacency sidecar is skipped silently and the build still slices the sheets")
+    else:
+        fail(f"adjacency sidecar: {out}")
+
     edited_precedence_tests(root)
     screen_residency_tests(root)
 

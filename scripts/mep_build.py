@@ -244,6 +244,12 @@ def _load_sheet_docs(sheets_dir: Path):
                   "(this build only knows the ADR-0153 v1 schema)")
             continue
         kind = str(doc.get("kind") or "")
+        if kind == "adjacency":
+            #ADR-0164 §2: the adjacency sidecar is not a sheet - no cells[], no
+            #sheet PNG, nothing to slice - and warning on every pack would train
+            #users to ignore warnings. Its reader (an external composition tool)
+            #opens it on purpose; this build pipeline never does.
+            continue
         if kind not in _SHEET_RANK:
             print(f"warning: {jp.name}: unknown sheet kind {kind!r}, skipped")
             continue

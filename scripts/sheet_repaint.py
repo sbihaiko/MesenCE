@@ -273,6 +273,12 @@ def load_sheets(sheets_dir: Path, wanted=None):
             print(f"warning: {jp.name}: not an ADR-0153 v1 sidecar, skipped", file=sys.stderr)
             continue
         sheet = Sheet(jp, doc)
+        if sheet.kind == "adjacency":
+            #ADR-0164 §2: the adjacency sidecar is not a sheet - no cells[] to
+            #repaint, no control image - so it is skipped silently, the same
+            #posture as mep_build's loader. A warning on every pack would train
+            #users to ignore warnings.
+            continue
         if sheet.kind not in CONTACT_KINDS and sheet.kind != MAP_KIND:
             print(f"warning: {jp.name}: unknown sheet kind {sheet.kind!r}, skipped", file=sys.stderr)
             continue

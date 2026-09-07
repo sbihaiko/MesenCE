@@ -1062,6 +1062,49 @@ def test_seam_pass_multiple_neighbours():
     ok("the seam pass is order-independent — every read is taken before every write")
 
 
+def test_adjacency_sidecar_is_skipped_silently():
+    """ADR-0164 §2: the adjacency sidecar is not a sheet - no cells[] to
+    repaint, no control image - so sheet_repaint's loader skips it with no
+    warning, the same posture as mep_build's. An unknown kind still warns, so
+    the silence is adjacency-specific, not a symptom of the loader going quiet."""
+    import contextlib
+    import io
+    mod = _repaint_module()
+    with tempfile.TemporaryDirectory() as tmp:
+        sheets = Path(tmp) / "sheets"
+        sheets.mkdir()
+        (sheets / "metatiles.json").write_text(json.dumps({
+            "version": 1, "kind": "metatiles", "gridUnit": 16,
+            "cell": {"w": 16, "h": 16}, "gutter": 1, "columns": 1,
+            "sheet": "metatiles.png", "reference": "metatiles.orig.png", "cells": [],
+        }), encoding="utf-8")
+        (sheets / "metatiles.png").write_bytes(b"placeholder")
+        (sheets / "metatiles.orig.png").write_bytes(b"placeholder")
+
+        def write_adjacency(kind):
+            (sheets / "adjacency.json").write_text(json.dumps(
+                {"version": 1, "kind": kind, "background": {"nodes": [], "edges": []}}),
+                encoding="utf-8")
+
+        write_adjacency("adjacency")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            loaded = mod.load_sheets(sheets)
+        if sorted(s.stem for s in loaded) != ["metatiles"] or "adjacency" in err.getvalue():
+            fail(f"sheet_repaint did not skip the adjacency sidecar silently: {err.getvalue()!r}")
+            return
+        ok("sheet_repaint skips the adjacency sidecar without a warning")
+
+        write_adjacency("bogus")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            mod.load_sheets(sheets)
+        if "unknown sheet kind 'bogus'" not in err.getvalue():
+            fail("a genuinely unknown kind no longer warns - the loader went quiet, not just for adjacency")
+            return
+        ok("an unknown sidecar kind still warns - only 'adjacency' is exempt")
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -1083,6 +1126,7 @@ def main():
         test_palette_correspondence_is_positional()
         test_palette_variant_missing_index_is_identity()
         test_seam_pass_multiple_neighbours()
+        test_adjacency_sidecar_is_skipped_silently()
     print(f"{PASSED} check(s) passed, {'some failed' if FAILED else 'none failed'}")
     return 1 if FAILED else 0
 
