@@ -383,11 +383,60 @@ the native core built).
 
 - **F6.5 / the installer** — the OS file-picker step and a human
   confirming the prompt. Everything upstream is host-free and unit-tested.
-- **The OSD toast appearing** — no seam on the HUD surface today.
 - **Hardware** — a physical pad or keypress: I.2's polling half, I.3's
   end-to-end, and the 2C items.
 - **Subjective audio** — timbre quality (F5.4g Block B), the audible
   SFX-during-OGG end-to-end (Block C item 9), the P.5 toast-noise
   judgement.
 
-16:9 is no longer on this list.
+16:9 is no longer on this list. The OSD toast was the last item on it
+that was a structural code gap rather than a wall — **closed by wave 4
+below** (ADR-0167).
+
+## Wave 4 — the OSD toast seam (2026-09-07)
+
+Wave 3 left "the OSD toast appearing" as genuinely manual because no
+capture reached the HUD: `SystemHud::Draw` rasterises into a surface the
+frame capture never reads (the note above records that reasoning). ADR-0167
+attacks the root cause rather than the frame path: the HUD was not merely
+uncaptured — it is **never rasterised at all** in a headless run, because
+`VideoRenderer::RenderThread()`'s entire body is gated on `if(_renderer)`,
+and `headless_record`'s `InitializeEmu` passes null handles, so `_renderer`
+is null. The toast therefore lives only in `SystemHud`'s software message
+queue until a real render pass draws it.
+
+ADR-0167 (accepted; extends the F9.15 capture pattern) adds:
+
+- `VideoRenderer::CaptureSystemHud(w, h, out)` — draws the system HUD alone
+  into a caller-owned ARGB buffer, same-thread and software-only, modelled on
+  the `ProcessAviRecording` overlay path (no `_renderer`, no render thread).
+- `HeadlessCaptureHud` / `HeadlessReadCapturedHudPixels` exports, mirroring
+  F9.15's two-call shape, plus `HeadlessSetOsdEnabled` (see below).
+- `scripts/headless_record`'s `capture` output gains a third line
+  `capture hud: <W>x<H> checksum=0x… blank=<0|1>`, after F9.15's two
+  unchanged lines. A `hud-message=<title>|<message>` flag queues a toast via
+  the existing `DisplayMessage` export; `blank` is the toast oracle
+  (`FrameCaptureMath::MeasureBorders(...).IsBlank`, reused unmodified — a
+  checksum is diagnostic only, because a toast's opacity fade is wall-clock).
+
+Verifying against a real recording surfaced two obstacles the caller
+contract had to absorb (recorded in ADR-0167's Revision):
+
+1. **Every `LoadRom` enqueues a "game loaded" toast** (`Emulator.cpp`) that
+   never ages out of a short parked run (`UpdateHud` only runs on running
+   frames), so `blank=1` was unreachable with the OSD on. The harness gates
+   the OSD off across the load/run and on for the single instant it queues
+   its own toast.
+2. **`SystemHud::Draw` paints the pause icon on every paused frame**, and the
+   F9.15 harness pauses before capturing. The HUD capture is taken while the
+   emulator is running (a brief resume after the deterministic frame
+   capture), with a short settle.
+
+Closed with a real `Emulator` (no renderer) against `roms/Zelda.nes`: no
+`hud-message=` reads `blank=1` (5/5, identical empty-surface checksum);
+`hud-message=Headless|toast de teste` reads `blank=0` (20/20). The F9.15
+frame-capture lines keep their deterministic frame checksum in both, so
+`bootstrap_auto_packs.sh` and `accuracy_compare.py` are untouched.
+
+The installer/file-picker (F6.5), hardware and subjective-audio items below
+stay manual for the reasons already on record — those are walls, not gaps.
