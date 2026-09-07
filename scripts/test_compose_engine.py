@@ -393,6 +393,26 @@ def test_export_rejects_unknown_kind_and_noop():
             check(False, "empty composition rejected", "no ComposeError")
 
 
+def test_export_twice_to_same_dir_gets_distinct_names():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        pack = E.Pack(make_pack(root))
+        # to_dir differs from the pack's own sheets_dir, exactly as a real save
+        # into mep/ does (ADR-0165 §4) — the free-name scan must look at to_dir,
+        # not the pack's own auto/ sheets. Found via a real Mega Man 3 recording
+        # (F9.18 acceptance, 2026-09-07): exporting an object composition then a
+        # sprite composition into the same mep/ folder both landed on usr000,
+        # and the second write silently clobbered the first on disk.
+        out = root / "mep" / "textures" / "sheets"
+        out.mkdir(parents=True)
+        name_a = pack.export("object", [0, 2], seed=0, locked=[0], to_dir=out)
+        name_b = pack.export("sprite", [0, 1], seed=0, locked=[0], band=176, to_dir=out)
+        check(name_a != name_b, "second export to the same to_dir gets a distinct name",
+              f"{name_a} vs {name_b}")
+        check((out / f"{name_a}.json").exists() and (out / f"{name_b}.json").exists(),
+              "neither export's sidecar was overwritten by the other")
+
+
 def mep_build_load(sheets_dir):
     """mep_build's own sheet loader, kept behind a name so the suite does not
     pretend it needs more of mep_build than the engine already imports."""
@@ -411,6 +431,7 @@ def main():
         test_node_art_never_blank_and_alias_resolves,
         test_screen_owned_node_resolves_via_owning_screen,
         test_export_rejects_unknown_kind_and_noop,
+        test_export_twice_to_same_dir_gets_distinct_names,
     ]
     for t in tests:
         t()

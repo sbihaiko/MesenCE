@@ -397,9 +397,15 @@ class Pack:
 
     # -- export --------------------------------------------------------------
 
-    def next_free_name(self) -> str:
+    def next_free_name(self, in_dir: Path = None) -> str:
+        """First unused `usrNNN` stem in `in_dir` (default the pack's own sheets
+        dir). Exporting always writes into `to_dir` (ADR-0165 §4: `auto/` until
+        painted, `mep/` once it is), so the free-name scan must look there too
+        — scanning the pack's own dir regardless would let two exports to the
+        same `to_dir` collide and silently overwrite one another's PNG."""
+        in_dir = Path(in_dir) if in_dir is not None else self.sheets_dir
         taken = set()
-        for jp in self.sheets_dir.glob("usr*.json"):
+        for jp in in_dir.glob("usr*.json"):
             m = _COMPOSED_RE.match(jp.name)
             if m:
                 taken.add(int(m.group(1)))
@@ -453,7 +459,7 @@ class Pack:
                 "label": "",
                 "tiles": src.tiles if src else [],
             })
-        name = self.next_free_name()
+        name = self.next_free_name(to_dir)
         sheet_repaint.write_png(to_dir / f"{name}.png", canvas)
         sheet_repaint.write_png(to_dir / f"{name}.orig.png", canvas.clone())
         doc = {

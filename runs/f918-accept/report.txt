@@ -1,0 +1,50 @@
+F9.18 acceptance run — compose_engine.py / ADR-0166 against a real recording
+2026-09-07, Mega Man 3 (USA), 300 s (frame-counted, ADR-0157), generic
+mash-Start-then-move input script (same one bootstrap_auto_packs.sh bakes in,
+copied here as generic.play.txt for reproducibility). Recorder: scripts/
+headless_record <rom> 300 <prefix> bootstrap log input=generic.play.txt.
+
+Recording (rc=0): 6 static screens captured (backgrounds/screen001..006),
+62 sheets (metatiles/misc/object×21/sprite×37/sprites), adjacency.json with
+vocabularySize 379, distinctScreens 15, 77 background nodes carrying
+screens[] (ADR-0166) — a much richer pack than any synthetic fixture in
+test_compose_engine.py.
+
+What was exercised against it, headless:
+- Pack(root) opened the pack, 62 sheets loaded, 5 layer kinds.
+- background_rank: seeded the highest-outdegree node, locked its top-2
+  neighbours, recomputed — ranking changed sensibly (previously-leading
+  candidates dropped out of the top once locked, the next tier rose).
+- sprite_rank: floors() returned 29 quantised bands. The narrowest (band 8,
+  3 members) correctly returned no candidates — coFrames(seed, other) was 0
+  for both, i.e. never on screen together, so "not a candidate" is the
+  policy working, not a bug. Band 176 (the game's dominant ground line,
+  36 members) ranked candidates by coFrames as designed.
+- node_art: 30/30 ordinary background nodes resolved; 15/15 sampled
+  screen-owned (residency-only) nodes resolved via the ADR-0166 crop path.
+  Visual spot check (a 12-cell strip of screen-owned crops) shows real,
+  legible HUD/font glyph fragments — never blank, never garbage.
+- export(): composed an object sheet and a sprite-band sheet from the real
+  ranking, then loaded both back through mep_build._load_sheet_docs — both
+  round-trip as ordinary sheets, confirming the "no new format" claim.
+
+Bug found and fixed by this run (not caught by any synthetic fixture,
+because every existing test exports at most once per Pack instance):
+Pack.next_free_name() always scanned self.sheets_dir (the pack's own
+auto/textures/sheets), never to_dir. Exporting an object composition and
+then a sprite composition into the same mep/textures/sheets/ folder — the
+ordinary two-export sequence a real editing session produces — both landed
+on usr000, and the second export silently overwrote the first's PNG/JSON
+on disk. Fixed: next_free_name(in_dir) scans to_dir when the caller
+resolves one; export() passes its own to_dir through. Regression test
+test_export_twice_to_same_dir_gets_distinct_names added to
+test_compose_engine.py (defect-probed: fails 9/10 on the old code, the
+overwrite is real — usr000 vs usr000 — passes 10/10 fixed).
+
+Full verification after the fix: core_unit_tests 572/572, test_compose_
+engine.py 10/10, make doc-checks rc=0.
+
+Not exercised by this run (out of scope for F9.18's code acceptance,
+tracked separately as the Phase 9 human panel): cold-read / find-and-edit /
+seam legibility judgement on the composed output, and the tkinter GUI
+itself (compose_editor.py) on a real display.
