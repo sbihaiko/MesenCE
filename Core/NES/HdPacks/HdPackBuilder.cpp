@@ -950,7 +950,12 @@ void HdPackBuilder::BuildSheets()
 	WriteContextSheets(folder, vocab, lookup);
 	WriteMapSheets(folder, vocab, lookup);
 	WriteObjectSheets(folder, vocab, lookup);
-	WriteSpriteSheets(folder, lookup);
+	//F9.17 (ADR-0164): the sprite vocabulary has to be built exactly once - the
+	//sprites.png/sprNNN sheets and the adjacency statistics must cite the same
+	//indexes - so WriteSpriteSheets returns it and the adjacency file is written
+	//over that same vocabulary, after every sheet it describes is on disk.
+	MesenSheets::Vocabulary spriteVocab = WriteSpriteSheets(folder, lookup);
+	WriteAdjacencyFile(folder, vocab, spriteVocab, lookup);
 
 	MessageManager::Log("[HD Pack Builder] sheets: grid unit " + std::to_string(vocab.Grid.Unit) +
 		" (phase " + std::to_string(vocab.Grid.PhaseX) + "," + std::to_string(vocab.Grid.PhaseY) +
@@ -1138,11 +1143,13 @@ void HdPackBuilder::WriteObjectSheets(const string& folder, const MesenSheets::V
 //Sprites: the same mutual-predictability test over OAM offsets (ADR-0153 §2,
 //F9.5). Its vocabulary is its own - one 8x8 OAM shape per cell at grid unit 8 -
 //so a sprite cell never competes with a background metatile for an index.
-void HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup)
+//Returns the vocabulary it built: sprites.png/sprNNN and the adjacency file
+//(F9.17, ADR-0164) must address the same indexes.
+MesenSheets::Vocabulary HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup)
 {
 	_spriteSheetCount = 0;
 	if(_oamFrames.empty()) {
-		return;
+		return MesenSheets::Vocabulary();
 	}
 	MesenSheets::Vocabulary vocab = MesenSheets::BuildSpriteVocabulary(_oamFrames);
 
@@ -1196,6 +1203,31 @@ void HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::T
 		doc.Edges = group.Edges;
 		WriteSheetFiles(folder, buf, image, doc, lookup);
 	}
+	return vocab;
+}
+
+//F9.17 (ADR-0164): the adjacency statistics the sheet inference measured,
+//persisted beside the sheets so an external composition editor can re-rank
+//candidates under a lock without re-recording. Only writes bytes: the
+//serializer is host-free in SheetRender, the sprite far-field statistics are
+//accumulated in SpriteGrouping - this class already holds the OamFrame stream.
+void HdPackBuilder::WriteAdjacencyFile(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::Vocabulary& spriteVocab, const MesenSheets::TileLookup& lookup)
+{
+	MesenSheets::SpriteAdjacencyStats stats;
+	if(!spriteVocab.Entries.empty()) {
+		stats = MesenSheets::AccumulateSpriteAdjacency(_oamFrames, spriteVocab);
+	}
+	string json = MesenSheets::SerializeAdjacency(vocab, spriteVocab, stats, lookup);
+	ofstream out(FolderUtilities::CombinePath(folder, "adjacency.json"), ios::out);
+	if(!out) {
+		return;
+	}
+	out << json;
+	MessageManager::Log("[HD Pack Builder] adjacency: " + std::to_string(vocab.Entries.size()) +
+		" background nodes from " + std::to_string(vocab.DistinctScreens) + " distinct screens, " +
+		(spriteVocab.Entries.empty() ? string("no OAM stream")
+			: std::to_string(spriteVocab.Entries.size()) + " sprite nodes from " + std::to_string(_oamFrames.size()) + " OAM frames") +
+		" -> textures/sheets/adjacency.json");
 }
 
 void HdPackBuilder::CaptureScreen()

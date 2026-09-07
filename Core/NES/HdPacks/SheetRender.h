@@ -104,4 +104,19 @@ namespace MesenSheets
 	//shapes into the exact hires.txt keys, so a crop maps back to tile entries
 	//with no guessing. Deterministic: same input, same bytes.
 	std::string SerializeSheet(const SheetJsonDoc& doc, const TileLookup& lookup);
+
+	//ADR-0164 §1 (F9.17): serialises the sheets/adjacency.json sidecar - the
+	//adjacency statistics the sheet inference measured, kept so an external
+	//composition editor can re-rank candidates under a lock without re-recording.
+	//The background block comes from `background` (counts, contexts, the complete
+	//East/South edge map and the degree totals a reader needs to recompute
+	//ADR-0153 §2's probabilities without summing the list); the sprites block
+	//from `sprites` plus the floor/co-presence statistics `stats` carries
+	//(empty `sprites` emits no block - no OAM stream means no sprite sheets).
+	//Every node carries its own tiles[] resolved through `lookup`, so the file is
+	//self-contained for hires.txt keys even for a node no sheet shows (ADR-0156).
+	//Deterministic - nodes by index, edges by (a, b, dir), pairs by (a, b),
+	//offsets by count then (dx, dy) - so two saves of one recording produce
+	//byte-identical bytes and content_id (ADR-0139) does not churn.
+	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup);
 }

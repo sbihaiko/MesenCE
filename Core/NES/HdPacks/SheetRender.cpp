@@ -1,5 +1,6 @@
 //ADR-0153 §3/§4 (Phase 9) - see SheetRender.h. Stateful partner: HdPackBuilder.
 #include "NES/HdPacks/SheetRender.h"
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <sstream>
@@ -397,6 +398,123 @@ namespace MesenSheets
 			json << " }";
 		}
 		json << (doc.Cells.empty() ? "]\n" : "\n  ]\n");
+		json << "}\n";
+		return json.str();
+	}
+
+	//ADR-0164 §1 (F9.17): see SheetRender.h. The background block is cheap to
+	//make complete - the East/South maps are already bounded by the vocabulary,
+	//so nothing is pruned and the degree totals a reader recomputes ADR-0153 §2
+	//from are exact; the sprites block keeps the far-field statistics the offset
+	//histogram cannot answer and prunes only within the 32 px histogram itself.
+	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup)
+	{
+		//One edge plus its direction, for the deterministic (a, b, dir) order.
+		struct Edge
+		{
+			uint32_t A;
+			uint32_t B;
+			char Dir;
+			uint32_t Count;
+		};
+
+		std::vector<Edge> edges;
+		std::vector<uint32_t> outE(background.Entries.size(), 0), inE(background.Entries.size(), 0);
+		std::vector<uint32_t> outS(background.Entries.size(), 0), inS(background.Entries.size(), 0);
+		edges.reserve(background.East.size() + background.South.size());
+		for(const auto& entry : background.East) {
+			uint32_t a = entry.first.first;
+			uint32_t b = entry.first.second;
+			outE[a] += entry.second;
+			inE[b] += entry.second;
+			edges.push_back({ a, b, 'E', entry.second });
+		}
+		for(const auto& entry : background.South) {
+			uint32_t a = entry.first.first;
+			uint32_t b = entry.first.second;
+			outS[a] += entry.second;
+			inS[b] += entry.second;
+			edges.push_back({ a, b, 'S', entry.second });
+		}
+		std::sort(edges.begin(), edges.end(), [](const Edge& a, const Edge& b) {
+			if(a.A != b.A) { return a.A < b.A; }
+			if(a.B != b.B) { return a.B < b.B; }
+			return a.Dir < b.Dir;
+		});
+
+		std::stringstream json;
+		json << "{\n";
+		json << "  \"version\": 1,\n";
+		json << "  \"kind\": \"adjacency\",\n";
+		json << "  \"background\": {\n";
+		json << "    \"vocabulary\": \"metatiles.json\",\n";
+		json << "    \"vocabularySize\": " << background.Entries.size() << ",\n";
+		json << "    \"gridUnit\": " << background.Grid.Unit << ",\n";
+		json << "    \"distinctScreens\": " << background.DistinctScreens << ",\n";
+		json << "    \"nodes\": [";
+		for(size_t i = 0; i < background.Entries.size(); i++) {
+			const MetatileEntry& entry = background.Entries[i];
+			json << (i ? ",\n      " : "\n      ");
+			json << "{ \"cell\": " << i
+				<< ", \"count\": " << entry.Count
+				<< ", \"context\": \"" << ContextName(entry.Context) << "\""
+				<< ", \"outE\": " << outE[i] << ", \"outS\": " << outS[i]
+				<< ", \"inE\": " << inE[i] << ", \"inS\": " << inS[i]
+				<< ", \"tiles\": ";
+			AppendTiles(json, entry.Key, background.Grid.Unit, lookup);
+			json << " }";
+		}
+		json << (background.Entries.empty() ? "],\n" : "\n    ],\n");
+		json << "    \"edges\": [";
+		for(size_t i = 0; i < edges.size(); i++) {
+			json << (i ? ",\n      " : "\n      ");
+			json << "{ \"a\": " << edges[i].A << ", \"b\": " << edges[i].B
+				<< ", \"dir\": \"" << edges[i].Dir << "\", \"count\": " << edges[i].Count << " }";
+		}
+		json << (edges.empty() ? "]\n" : "\n    ]\n");
+		json << "  }";
+
+		if(!sprites.Entries.empty()) {
+			json << ",\n  \"sprites\": {\n";
+			json << "    \"vocabulary\": \"sprites.json\",\n";
+			json << "    \"vocabularySize\": " << sprites.Entries.size() << ",\n";
+			json << "    \"oamFrames\": " << stats.OamFrames << ",\n";
+			json << "    \"nodes\": [";
+			for(size_t i = 0; i < sprites.Entries.size(); i++) {
+				const MetatileEntry& entry = sprites.Entries[i];
+				json << (i ? ",\n      " : "\n      ");
+				json << "{ \"cell\": " << i
+					<< ", \"appearances\": " << entry.Count
+					<< ", \"floors\": [";
+				const std::vector<SpriteFloorBand> floors = i < stats.Floors.size() ? stats.Floors[i] : std::vector<SpriteFloorBand>();
+				for(size_t f = 0; f < floors.size(); f++) {
+					json << (f ? ", " : "");
+					json << "{ \"bottom\": " << floors[f].Bottom << ", \"count\": " << floors[f].Count << " }";
+				}
+				json << "], \"tiles\": ";
+				AppendTiles(json, entry.Key, sprites.Grid.Unit, lookup);
+				json << " }";
+			}
+			json << "\n    ],\n";
+			json << "    \"pairs\": [";
+			for(size_t i = 0; i < stats.Pairs.size(); i++) {
+				const SpritePairStat& pair = stats.Pairs[i];
+				json << (i ? ",\n      " : "\n      ");
+				json << "{ \"a\": " << pair.A << ", \"b\": " << pair.B
+					<< ", \"coFrames\": " << pair.CoFrames
+					<< ", \"count\": " << pair.Count
+					<< ", \"offsets\": [";
+				for(size_t o = 0; o < pair.Offsets.size(); o++) {
+					json << (o ? ", " : "");
+					json << "{ \"dx\": " << pair.Offsets[o].Dx << ", \"dy\": " << pair.Offsets[o].Dy << ", \"count\": " << pair.Offsets[o].Count << " }";
+				}
+				json << "], \"other\": " << pair.Other << " }";
+			}
+			json << (stats.Pairs.empty() ? "]\n" : "\n    ]\n");
+			json << "  }\n";
+		} else {
+			json << "\n";
+		}
 		json << "}\n";
 		return json.str();
 	}

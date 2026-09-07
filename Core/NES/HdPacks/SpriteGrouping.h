@@ -31,4 +31,14 @@ namespace MesenSheets
 
 	//Convenience overload using kSheetMinPairCount / kSheetMinPairProb.
 	std::vector<SheetGroup> BuildSprites(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
+
+	//ADR-0164 §1 (F9.17): the far-field sprite statistics sheets/adjacency.json
+	//persists, accumulated at save time from the same de-duplicated OamFrame
+	//stream SpriteGrouping reads: per-shape bottom-edge floor bands (no distance
+	//cap), per-pair co-presence (any distance), and the within-32 px offset
+	//histogram pruned to its top kAdjacencyMaxOffsets. Unlike SelectSpriteEdges
+	//it keeps *every* pair with CoFrames >= kAdjacencyMinPairCount and keeps the
+	//unpruned denominators, so a reader recomputes conditional probabilities
+	//under a lock instead of guessing at them.
+	SpriteAdjacencyStats AccumulateSpriteAdjacency(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
 }

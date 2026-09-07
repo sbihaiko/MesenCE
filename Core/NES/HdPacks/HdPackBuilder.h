@@ -175,7 +175,14 @@ private:
 	MesenSheets::OamFrame _frameOam;
 	uint32_t _spriteSheetCount = 0;
 	void RecordOamFrame();
-	void WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup);
+	//Returns the sprite vocabulary it built, so BuildSheets can persist the
+	//adjacency statistics over the same vocabulary the sheets cite.
+	MesenSheets::Vocabulary WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup);
+	//F9.17 (ADR-0164): writes textures/sheets/adjacency.json next to the other
+	//sheets whenever the sheet pipeline runs. The serializer lives in SheetRender
+	//(host-free, unit-tested); this class only accumulates the sprite far-field
+	//statistics from its OAM stream and writes the bytes, per ADR-0153 §5.
+	void WriteAdjacencyFile(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::Vocabulary& spriteVocab, const MesenSheets::TileLookup& lookup);
 
 	vector<MesenSheets::GridFrame> _gridFrames;
 	//F9.9: true while _gridFrames.back() is the frame OnFrameEnd is closing,

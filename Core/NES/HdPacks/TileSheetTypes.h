@@ -47,6 +47,15 @@ namespace MesenSheets
 	//4x4 block of 8x8 cells - half the kSheetMaxObjectCells budget - and past it
 	//a constant offset says "both were on screen", not "these move together".
 	constexpr int32_t kSpriteMaxOffset = 32;
+	//---- F9.17 (ADR-0164): sheets/adjacency.json -------------------------
+	//
+	//The sidecar keeps the top N within-cap offsets of a sprite pair and the
+	//top N bottom-edge bands of a sprite shape, and drops a pair whose
+	//co-sightings never reach this floor - one co-sighting is noise and would
+	//make the file scale with frames instead of with the vocabulary.
+	constexpr uint32_t kAdjacencyMaxOffsets = 8;
+	constexpr uint32_t kAdjacencyMaxFloors = 8;
+	constexpr uint32_t kAdjacencyMinPairCount = 2;
 	//Retained per-frame grids (de-duplicated); ~2.8 KB each since the ADR-0159
 	//amendment added the palette plane (1920 B of shape ids + 960 B of palette
 	//ids), i.e. ~11.5 MB with the stream full.
@@ -334,6 +343,64 @@ namespace MesenSheets
 		uint32_t RepeatCount = 1;
 
 		bool SameEntries(const OamFrame& o) const { return Entries == o.Entries; }
+	};
+
+	//---- F9.17 (ADR-0164): adjacency.json statistics ----------------------
+
+	//One bottom-edge band a sprite shape stood on: the OAM entry's bottom edge
+	//(Y + 8; an 8x16 sprite's lower half lands on the true bottom) quantised to
+	//8 px. Counted over the retained, de-duplicated OamFrame stream, no distance
+	//cap - the 32 px offset test drops a pair the moment the actors are further
+	//apart, which is exactly the far-field question floors[] is for. The band a
+	//composed usrNNN sprite layer records (ADR-0164 §5) is one such bottom.
+	struct SpriteFloorBand
+	{
+		uint32_t Bottom = 0;
+		uint32_t Count = 0;
+	};
+
+	//One within-cap relative offset a sprite pair held, in pixels: B sat at
+	//(A + Dx, A + Dy). The lower vocabulary index is the reference, matching
+	//SelectSpriteEdges, so P(B at d | A) recomputed from the file equals the
+	//value the grouping test divided by.
+	struct SpriteOffsetSample
+	{
+		int32_t Dx = 0;
+		int32_t Dy = 0;
+		uint32_t Count = 0;
+	};
+
+	//One unordered sprite pair's persisted statistics (A < B). Only offsets
+	//within kSpriteMaxOffset on both axes are counted at all; the histogram
+	//keeps the top kAdjacencyMaxOffsets by count and folds the rest into Other.
+	struct SpritePairStat
+	{
+		uint32_t A = 0;
+		uint32_t B = 0;
+		//Frames both shapes were on screen at all, any distance. Written for
+		//every pair with CoFrames >= kAdjacencyMinPairCount, so a pair may exist
+		//with Count 0 and empty Offsets - actors that share scenes but never
+		//come within 32 px of each other (a boss and a first-level enemy).
+		uint32_t CoFrames = 0;
+		uint32_t Count = 0; //within-cap directed sightings: sum(Offsets) + Other
+		std::vector<SpriteOffsetSample> Offsets;
+		uint32_t Other = 0;
+	};
+
+	//Everything the adjacency serializer needs from the OAM stream, beyond the
+	//sprite vocabulary itself (a node's appearances are its vocabulary Count).
+	struct SpriteAdjacencyStats
+	{
+		//Per sprite-vocabulary index: bottom-edge bands, most-seen first.
+		std::vector<std::vector<SpriteFloorBand>> Floors;
+		//Every unordered pair with CoFrames >= kAdjacencyMinPairCount, sorted
+		//by (A, B).
+		std::vector<SpritePairStat> Pairs;
+		//Retained, de-duplicated frames the counts above live in. The file
+		//states its sampling per block (distinctScreens for the background)
+		//rather than once in the header, so neither read as a fraction of the
+		//wrong universe.
+		uint32_t OamFrames = 0;
 	};
 
 	//---- vocabulary --------------------------------------------------------
