@@ -160,6 +160,16 @@ path that knows which ROM it installs for) — implement the parameter in the
 same change as that caller, porting the normalised comparison from
 `mep_lint.py` and covering it in `UI.Tests/Mep/MepZipValidatorTests.cs`.
 
+Re-verified 2026-09-07: the per-ROM caller this trigger names now exists —
+the ADR-0146/0147 community auto-install runs through
+`CommunityPackInstallService` into the `InstallMepRecipe` ABI, which carries
+the ROM name — but that path validates via the **authoritative C++
+`MepPackManager::PrepareZip`** (which already enforces the exact ROM match at
+load), never through the C# `MepZipValidator`, so a C# ROM-name parameter
+would still have no production caller able to supply a value. The deferral
+stands; pick the parameter up only if a C# path appears that both knows its
+ROM and pre-flights the zip itself.
+
 ### 4. Deferred: a standalone C++ E2E zip-pipeline test harness (implemented 2026-09-03)
 This task deliberately does **not** build a driver/executable that links
 `MepPackManager.cpp` + `ZipReader.cpp` + miniz + `ArchiveReader` to exercise
