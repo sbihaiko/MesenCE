@@ -106,7 +106,13 @@ i.e. B is the usual thing east of A **and** A is the usual thing west of B.
 Sand next to everything fails; a 2×2 boss door passes. Surviving edges feed a
 DSU; components with `2..kSheetMaxObjectCells (32)` cells become objects, laid
 out by BFS at their dominant offsets. The same test, applied to OAM entries that
-move together frame to frame, produces sprite sheets (F9.5).
+move together frame to frame, produces sprite sheets (F9.5); there the
+denominator is "every appearance of A", and only offsets within
+`kSpriteMaxOffset` (32 px) on both axes are counted at all — the criterion
+finds *figures*, and a metasprite wider than 32 px would have to be found
+through its intermediate cells. Anything two actors do at a distance (share
+a platform, chase each other) is outside this test by construction; ADR-0164
+records separate statistics for that.
 
 F5.4e's `# inferred … tileNearby` candidates keep their contract exactly:
 inert definitions, never auto-attached to a `<tile>`, so a wrong grouping can
@@ -128,7 +134,16 @@ sits between two trees:
 | `misc.png` / `.json` | unaligned or *isolated* cells (the noise budget) |
 | `map-NNN.png` / `.json` | one stitched region per connected map |
 | `objNNN.png` / `.json` | one object (≥ 2 cells, mutual predictability) |
+| `sprites.png` / `.json` | the whole OAM vocabulary, most-seen first, singletons included (F9.16, added 2026-09-07) |
 | `sprNNN.png` / `.json` | one sprite group (F9.5) |
+
+`sprites.png` is to OAM what `metatiles.png` is to the background: the front
+door. `sprNNN` only reaches a shape that holds a constant offset to another
+shape, so a lone projectile, a pickup or a shape-changing explosion had no
+sheet at all before 2026-09-07 — only its CHR-order fragment under
+`textures/chr/` (ADR-0160). The vocabulary sheet takes the same alias pass
+and the same OAM colour-0 punch-out as a group sheet; its `kind` is
+`"sprites"` (plural), ranked with `metatiles` in §4.
 
 Cells within a sheet are laid out **most-seen first** (`count` descending, ties
 in vocabulary order): the blocks the game is actually built out of meet the
@@ -248,8 +263,8 @@ scale factor N. Different means the cell is edited and claims the key; identical
 means it does not claim it. A painted cell always beats an untouched one,
 whatever their kinds. Between two painted cells — and, when no sheet painted the
 key at all, between the untouched ones, since the captured art still has to
-reach `hires.txt` — the static kind rank decides (`metatiles` < `misc` < `map` <
-`object`/`sprite` < `hud`/`font`, ties broken by sidecar file name, later wins).
+reach `hires.txt` — the static kind rank decides (`metatiles`/`sprites` < `misc` <
+`map` < `object`/`sprite` < `hud`/`font`, ties broken by sidecar file name, later wins).
 A sheet with no usable twin (`"reference": ""`, a missing or unreadable file, or
 a twin whose size is not exactly 1/N of the sheet) has nothing to diff against,
 so every one of its cells counts as painted and it relies on its static rank
@@ -355,12 +370,32 @@ The hot path keeps no dump code.
   `objNNN.png` with a sidecar. Any `auto/` pack recorded before this ADR keeps
   its old files until re-recorded — there is no migration, `auto/` is
   regenerable by construction.
-- Recording now costs up to ~8 MB of retained grids and one inference pass at
-  save time. `kMaxSheetFrames` bounds it; a long session drops the tail, which
-  costs late-game vocabulary, not correctness.
+- Recording now costs up to ~8 MB of retained grids (~11 MB once ADR-0159's
+  palette plane is included) and one inference pass at save time.
+  `kMaxSheetFrames` bounds it; a long session drops the tail, which costs
+  late-game vocabulary, not correctness. The save-time pass (vocabulary, DSU,
+  stitching, PNG encode) runs on the thread that called `SaveHdPack`, so a
+  GUI-initiated save stalls the UI for its duration; the headless bootstrap
+  does not care. Moving it off-thread is an implementation choice this ADR
+  leaves open.
 - Grid detection can pick 8 on a game that *does* have a 16×16 grid but was
   recorded almost entirely on non-aligned screens (menus, cutscenes). The
   failure mode is a larger, flatter vocabulary — legibility, never rendering.
+- The converse is also a cost, accepted in §1: a game built from free 8×8
+  tiles with no 16×16 design grid (dense text screens, some puzzle and board
+  games, vertical shooters) is still cut into 2×2 blocks at phase `(0,0)`
+  once it has 64 aligned placements, and those blocks are not units the
+  game's author ever drew. The vocabulary is then larger than the real tile
+  set and a block's neighbours are half-arbitrary. Legibility again, never
+  rendering — every 8×8 key still reaches `hires.txt` — and the alternative
+  (loose fragments, the CHR-order sheet) was measured to read worse.
+- HUD detection is **rows only** (`hudRows` at the top, `hudBottomRows` at the
+  bottom). A status panel laid out as a vertical column — arcade ports and
+  shmups with a side scoreboard — is not recognised: its digits and life
+  counters land in `metatiles.png` as scene cells and reach any stitched map
+  as a repeating band. Known gap, not addressed here; a column-wise
+  application of the same frozen/drawn ratios is the obvious slice when a
+  game in the library needs it.
 - `hud.png` and `font.png` come out **empty on both golden games**: Zelda's HUD
   is 3 rows and a unit-16 metatile covers 2, so its third row leaks out of the
   band (*stale as of 2026-09-05*: that 3 was measured before the quorum
@@ -382,6 +417,15 @@ The hot path keeps no dump code.
   human validation panel.
 
 ## Amendments (2026-09-06, code-review pass)
+
+## Amendments (2026-09-07, review of ADR-0164's premises)
+
+- §2 states the sprite criterion's 32 px offset cap and its consequence (it
+  finds figures, not co-actors); §3's table gained the `sprites.png`
+  vocabulary sheet (F9.16); Consequences gained the forced-16×16 cost on
+  grid-less 8×8 games, the rows-only HUD detection gap, and the save-time
+  stall. None of these changes a decision — they name costs the code already
+  paid so the next reader does not rediscover them as bugs.
 
 - §6 output contract: a stitched map whose 1x canvas exceeds
   `kMaxMapPixels` (64 Mi pixels, `TileSheetTypes.h`) is skipped with a log line

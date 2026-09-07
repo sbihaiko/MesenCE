@@ -3949,6 +3949,58 @@ namespace
 		Check(anyTransparentInsideACell, "BlocoP: OAM colour 0 is punched out of a sprite cell");
 	}
 
+	//F9.16: the sprites.png vocabulary sheet lists every OAM shape, grouped or
+	//not - the drifter the grouping criterion rejects still has a cell here.
+	void TestSpriteVocabularySheetListsEveryShape()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
+			indexes.push_back(i);
+		}
+		std::vector<SheetCell> cells;
+		SheetImage image = BuildContactSheet(vocab, indexes, SheetLookup(), SheetPalette(), 3, cells, true);
+
+		Check(cells.size() == 5, "BlocoP: the sprite vocabulary sheet has one cell per OAM shape, drifter included",
+			"cells=" + std::to_string(cells.size()));
+		//3 columns x 2 rows of 8px cells, one gutter around and between.
+		Check(image.Width == 3 * 9 + 1 && image.Height == 2 * 9 + 1,
+			"BlocoP: the sprite vocabulary sheet is 8px cells + gutters",
+			std::to_string(image.Width) + "x" + std::to_string(image.Height));
+
+		int32_t drifter = vocab.Find(MetatileKey{ { 9, kEmptyCell, kEmptyCell, kEmptyCell } });
+		bool drifterHasACell = false;
+		for(const SheetCell& cell : cells) {
+			drifterHasACell |= cell.Metatile == drifter;
+		}
+		Check(drifter >= 0 && drifterHasACell, "BlocoP: a sprite that joined no group still reaches sprites.png");
+
+		//Colour index 0 is punched out here too, or a lone sprite would ship
+		//with a backdrop box a grouped one does not have.
+		bool anyTransparentInsideACell = false;
+		for(uint32_t y = 1; y < 9; y++) {
+			for(uint32_t x = 1; x < 9; x++) {
+				anyTransparentInsideACell |= image.Row(y)[x] == 0;
+			}
+		}
+		Check(anyTransparentInsideACell, "BlocoP: OAM colour 0 is punched out of a vocabulary sprite cell");
+
+		SheetJsonDoc doc;
+		doc.Kind = "sprites";
+		doc.SheetFile = "sprites.png";
+		doc.ReferenceFile = "sprites.orig.png";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = 3;
+		doc.Cells = cells;
+		std::string json = SerializeSheet(doc, SheetLookup());
+		Check(json.find("\"kind\": \"sprites\"") != std::string::npos,
+			"BlocoP: the sprite vocabulary sidecar declares kind \"sprites\"");
+		Check(json.find("\"evidence\"") == std::string::npos,
+			"BlocoP: a vocabulary sheet carries no evidence[] - it grouped nothing");
+	}
+
 	void TestSpriteSheetJsonCarriesTheOffsetEvidence()
 	{
 		std::vector<OamFrame> frames = SpriteFigureFrames(12);
@@ -4791,6 +4843,7 @@ int main()
 	TestSheetJsonCarriesTheGridDecision();
 	TestSpriteOffsetGroupingRejectsADrifter();
 	TestSpriteGroupIsLaidOutAtItsOamOffsets();
+	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
 
 	TestHeadlessScriptUnitsAreExplicit();

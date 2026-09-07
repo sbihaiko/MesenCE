@@ -1145,6 +1145,39 @@ void HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::T
 		return;
 	}
 	MesenSheets::Vocabulary vocab = MesenSheets::BuildSpriteVocabulary(_oamFrames);
+
+	//F9.16 (ADR-0153 §3): sprites.png is the *whole* OAM vocabulary, most-seen
+	//first, singletons included. sprNNN below only covers shapes that hold a
+	//constant offset to another shape; a lone projectile, a pickup or a
+	//shape-changing explosion never joins a group and, before this sheet, had
+	//no front door but CHR order under textures/chr/. Same alias pass as the
+	//background contact sheets (one subject, one cell), same OAM colour-0
+	//punch-out as a group sheet.
+	{
+		vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
+			indexes.push_back(i);
+		}
+		vector<vector<uint32_t>> aliases;
+		indexes = MesenSheets::CollapseAliases(vocab, indexes, lookup, _palette, MesenSheets::kSheetAliasTolerance, aliases);
+		if(!indexes.empty()) {
+			uint32_t columns = MesenSheets::PreferredColumns(indexes.size());
+			MesenSheets::SheetJsonDoc doc;
+			MesenSheets::SheetImage image = MesenSheets::BuildContactSheet(vocab, indexes, lookup, _palette, columns, doc.Cells, true);
+			for(size_t i = 0; i < doc.Cells.size() && i < aliases.size(); i++) {
+				doc.Cells[i].Aliases = aliases[i];
+				for(uint32_t alias : aliases[i]) {
+					doc.Cells[i].AliasKeys.push_back(vocab.Entries[alias].Key);
+				}
+			}
+			doc.Kind = "sprites";
+			doc.Grid = vocab.Grid;
+			doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+			doc.Columns = columns;
+			WriteSheetFiles(folder, "sprites", image, doc, lookup);
+		}
+	}
+
 	vector<MesenSheets::SheetGroup> groups = MesenSheets::BuildSprites(_oamFrames, vocab);
 	for(const MesenSheets::SheetGroup& group : groups) {
 		MesenSheets::SheetJsonDoc doc;

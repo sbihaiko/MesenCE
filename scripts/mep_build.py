@@ -165,15 +165,17 @@ def _sheet_layout(path: Path, scale: int) -> int:
 # The rank below is the tie-break, applied among painted cells and, when
 # nobody painted anything, among untouched ones (the captured art still has
 # to reach hires.txt, or the identity round-trip breaks). It reads "most
-# specific last": the metatile vocabulary is the generic building block, a
-# map is the surface the artist actually paints, an object/sprite is a named
-# figure, and a HUD/font glyph is the most specific thing a tile can be. A
+# specific last": the metatile and sprite vocabularies are the generic
+# building blocks, a map is the surface the artist actually paints, an
+# object/sprite group is a named figure, and a HUD/font glyph is the most
+# specific thing a tile can be. A
 # legacy (ADR-0049, 16-column) sheet always loses to an ADR-0153 sheet. Ties
 # inside one rank are broken by sidecar file name, later wins. Every override
 # is logged, so a surprising win is visible in the build output rather than
 # silent.
 _SHEET_RANK = {
     "metatiles": 1,
+    "sprites": 1,
     "misc": 2,
     "map": 3,
     "object": 4,

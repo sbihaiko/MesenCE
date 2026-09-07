@@ -30,7 +30,10 @@ namespace MesenSheets
 	//Contact sheet of the given vocabulary indexes, `columns` per row, with a
 	//kSheetGutter-wide transparent gutter around and between cells. Fills
 	//outCells with each cell's sheet-pixel origin, count and context.
-	SheetImage BuildContactSheet(const Vocabulary& vocab, const std::vector<uint32_t>& indexes, const TileLookup& lookup, NesPalette palette, uint32_t columns, std::vector<SheetCell>& outCells);
+	//transparentIndex0 punches out colour index 0 (the OAM backdrop) - the
+	//sprites.png vocabulary sheet (ADR-0153 §3, F9.16) ships on transparency
+	//exactly like a sprNNN group.
+	SheetImage BuildContactSheet(const Vocabulary& vocab, const std::vector<uint32_t>& indexes, const TileLookup& lookup, NesPalette palette, uint32_t columns, std::vector<SheetCell>& outCells, bool transparentIndex0 = false);
 
 	//Nearest-neighbour upscale by an integer factor. The sheet PNG ships at the
 	//pack scale so the artist paints on the canvas the pack renders at, while
@@ -70,7 +73,7 @@ namespace MesenSheets
 	//kind-specific members are simply left empty when they do not apply.
 	struct SheetJsonDoc
 	{
-		std::string Kind;          //"metatiles" | "hud" | "font" | "misc" | "map" | "object" | "sprite"
+		std::string Kind;          //"metatiles" | "hud" | "font" | "misc" | "map" | "object" | "sprite" | "sprites"
 		std::string SheetFile;     //e.g. "metatiles.png"
 		std::string ReferenceFile; //e.g. "metatiles.orig.png" ("" when absent)
 		GridDetection Grid;

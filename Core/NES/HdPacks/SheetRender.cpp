@@ -200,7 +200,7 @@ namespace MesenSheets
 		return survivors;
 	}
 
-	SheetImage BuildContactSheet(const Vocabulary& vocab, const std::vector<uint32_t>& indexes, const TileLookup& lookup, NesPalette palette, uint32_t columns, std::vector<SheetCell>& outCells)
+	SheetImage BuildContactSheet(const Vocabulary& vocab, const std::vector<uint32_t>& indexes, const TileLookup& lookup, NesPalette palette, uint32_t columns, std::vector<SheetCell>& outCells, bool transparentIndex0)
 	{
 		SheetImage image;
 		outCells.clear();
@@ -229,7 +229,7 @@ namespace MesenSheets
 			cell.Context = entry.Context;
 			cell.Key = entry.Key;
 			cell.Metatile = (int32_t)vocabIndex;
-			RenderMetatile(entry.Key, lookup, palette, unit, image, cell.X, cell.Y);
+			RenderMetatile(entry.Key, lookup, palette, unit, image, cell.X, cell.Y, transparentIndex0);
 			outCells.push_back(cell);
 		}
 		return image;

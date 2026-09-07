@@ -98,7 +98,7 @@ import mep_build  # noqa: E402  — the tree's single PNG decoder (_png_pixels)
 
 SHEET_VERSION = 1
 # ADR-0153 §3 sheet kinds. `map` is the only one carrying placements[].
-CONTACT_KINDS = ("metatiles", "misc", "hud", "font", "object", "sprite")
+CONTACT_KINDS = ("metatiles", "sprites", "misc", "hud", "font", "object", "sprite")
 MAP_KIND = "map"
 DEFAULT_SCALE = 4
 DEFAULT_SEAM_WIDTH = 1
