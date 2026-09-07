@@ -4242,6 +4242,76 @@ namespace
 			"BlocoP: adjacency serialisation is deterministic");
 	}
 
+	//ADR-0166 (F9.18): a screen-resident background node (one no sheet shows,
+	//because a captured screen owns its pixels) carries the screens[] that can
+	//crop it back out of backgrounds/screenNNN.orig.png; a node a sheet shows
+	//carries none.
+	void TestAdjacencyResidentNodesCarryTheirOwningScreens()
+	{
+		Vocabulary bg;
+		bg.Grid.Unit = 16;
+		bg.DistinctScreens = 3;
+		MetatileEntry e0;
+		e0.Key.Tiles = { 1, 2, 3, 4 };
+		e0.Count = 5;
+		e0.Context = SheetContext::Scene;
+		e0.ScreenResident = true; //owned by a captured screen, not by a sheet
+		MetatileEntry e1;
+		e1.Key.Tiles = { 5, 6, 7, 8 };
+		e1.Count = 3;
+		e1.Context = SheetContext::Hud;
+		bg.Entries.push_back(e0);
+		bg.Entries.push_back(e1);
+		bg.Index[e0.Key] = 0;
+		bg.Index[e1.Key] = 1;
+
+		Vocabulary noSprites;
+		SpriteAdjacencyStats noStats;
+		std::map<uint32_t, std::vector<ScreenSite>> sites;
+		sites[0].push_back({ "screen003", 14, 11 });
+		sites[0].push_back({ "screen007", 1, 2 });
+		std::string json = SerializeAdjacency(bg, noSprites, noStats, SheetLookup(), sites);
+
+		Check(json.find("\"cell\": 0") != std::string::npos
+			&& json.find("\"screens\": [{ \"screen\": \"screen003\", \"x\": 14, \"y\": 11 }, { \"screen\": \"screen007\", \"x\": 1, \"y\": 2 }]") != std::string::npos,
+			"BlocoP: a resident node carries its owning screens in (screen, x, y) order");
+		//Node 1 is not resident (a sheet shows it), so it must not grow the field.
+		size_t n0 = json.find("\"cell\": 0");
+		size_t n1 = json.find("\"cell\": 1");
+		Check(n0 != std::string::npos && n1 != std::string::npos && n1 > n0,
+			"BlocoP: the resident node precedes the sheet node");
+		std::string tail = json.substr(n1);
+		Check(tail.find("\"screens\"") == std::string::npos,
+			"BlocoP: a node a sheet shows never carries screens[]");
+
+		JsonReader reader;
+		JsonValue root;
+		Check(reader.Parse(json, root), "BlocoP: screens[] keeps the sidecar strict-valid JSON", reader.GetError());
+		const JsonValue* background = root.Get("background");
+		const JsonValue* nodes = background ? background->Get("nodes") : nullptr;
+		if(nodes && nodes->GetArray().size() == 2) {
+			const JsonValue* screens = nodes->GetArray()[0].Get("screens");
+			Check(screens && screens->GetArray().size() == 2,
+				"BlocoP: node 0 carries its two owning-screen sites");
+			if(screens && screens->GetArray().size() == 2) {
+				const JsonValue& first = screens->GetArray()[0];
+				Check(first.Get("screen")->GetString() == "screen003" && first.Get("x")->GetNumber() == 14
+					&& first.Get("y")->GetNumber() == 11,
+					"BlocoP: the first screen site names its stem and 8 px placement");
+			}
+			Check(nodes->GetArray()[1].Get("screens") == nullptr,
+				"BlocoP: a sheet node carries no screens field at all");
+		} else {
+			Check(false, "BlocoP: the background nodes array round-trips", "");
+		}
+		Check(SerializeAdjacency(bg, noSprites, noStats, SheetLookup(), sites) == json,
+			"BlocoP: screens[] serialisation is deterministic");
+		//The default (no sites) emits no screens[] anywhere - old callers and
+		//packs that predate the field stay byte-identical to before this ADR.
+		Check(SerializeAdjacency(bg, noSprites, noStats, SheetLookup()).find("\"screens\"") == std::string::npos,
+			"BlocoP: no resident sites means no screens[] field");
+	}
+
 	//The sprite block round-trips through the strict reader with its sampling
 	//stated per block, and every node resolves its tiles[] to a hires.txt key.
 	void TestAdjacencySpriteSidecarRoundTrips()
@@ -5091,6 +5161,7 @@ int main()
 	TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept();
 	TestAdjacencySpritePairFarApartCarriesNoOffsets();
 	TestAdjacencyBackgroundSidecarCarriesDegreesAndEdges();
+	TestAdjacencyResidentNodesCarryTheirOwningScreens();
 	TestAdjacencySpriteSidecarRoundTrips();
 
 	TestHeadlessScriptUnitsAreExplicit();
