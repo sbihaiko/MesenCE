@@ -4037,6 +4037,248 @@ namespace
 		Check(SerializeSheet(doc, SheetLookup()) == json, "BlocoP: sprite serialisation is deterministic");
 	}
 
+	//ADR-0164 §1 (F9.17): the far-field statistics sheets/adjacency.json is
+	//built from. The offset histogram answers "what holds a constant offset to
+	//this shape" (a *figure*); floors[] + coFrames answer "who shares this
+	//shape's ground and moment" - the two queries §5's layered editor separates.
+	void TestAdjacencySpriteStatsCarryFloorsAndCoFrames()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		SpriteAdjacencyStats stats = AccumulateSpriteAdjacency(frames, vocab);
+
+		Check(stats.OamFrames == 12, "BlocoP: the adjacency stats name the retained OAM frame count",
+			std::to_string(stats.OamFrames));
+		Check(stats.Floors.size() == 5, "BlocoP: every sprite shape gets a floor histogram",
+			std::to_string(stats.Floors.size()));
+
+		int32_t topLeft = vocab.Find(MetatileKey{ { 1, kEmptyCell, kEmptyCell, kEmptyCell } });
+		int32_t topRight = vocab.Find(MetatileKey{ { 2, kEmptyCell, kEmptyCell, kEmptyCell } });
+		int32_t bottomLeft = vocab.Find(MetatileKey{ { 3, kEmptyCell, kEmptyCell, kEmptyCell } });
+		Check(topLeft >= 0 && topRight >= 0 && bottomLeft >= 0,
+			"BlocoP: the fixture's figure tiles are in the sprite vocabulary");
+
+		//shape 1 (the 2x2 figure's top-left tile) always sits at Y = 90 + (f % 5),
+		//so its bottom edge Y + 8 lands in band 96 on every frame; shape 3 (the
+		//lower-left half) sits one 8x8 cell lower, band 104. The band records the
+		//bottom, not the top, so a tall figure and a short one on one floor agree.
+		Check(stats.Floors[(size_t)topLeft].size() == 1 && stats.Floors[(size_t)topLeft][0].Bottom == 96
+			&& stats.Floors[(size_t)topLeft][0].Count == 12,
+			"BlocoP: a top-row tile's floor band is its quantised bottom edge");
+		Check(stats.Floors[(size_t)bottomLeft].size() == 1 && stats.Floors[(size_t)bottomLeft][0].Bottom == 104
+			&& stats.Floors[(size_t)bottomLeft][0].Count == 12,
+			"BlocoP: the lower half of an 8x16 figure lands in the ground band");
+
+		uint32_t a = (uint32_t)std::min(topLeft, topRight);
+		uint32_t b = (uint32_t)std::max(topLeft, topRight);
+		const SpritePairStat* pair = nullptr;
+		for(const SpritePairStat& candidate : stats.Pairs) {
+			if(candidate.A == a && candidate.B == b) {
+				pair = &candidate;
+			}
+		}
+		Check(pair, "BlocoP: the two top-row tiles co-occur and reach the pair list");
+		if(pair) {
+			Check(pair->CoFrames == 12 && pair->Count == 12 && pair->Other == 0 && pair->Offsets.size() == 1,
+				"BlocoP: a constant-offset pair carries one full-count offset sample",
+				"coFrames=" + std::to_string(pair->CoFrames));
+			//The right tile sits 8 px *east* of the left one every frame: dx/dy are
+			//pixels, and the direction is B relative to A.
+			Check(pair->Offsets[0].Dx == 8 && pair->Offsets[0].Dy == 0 && pair->Offsets[0].Count == 12,
+				"BlocoP: the offset is where B sits relative to A, in pixels");
+		}
+	}
+
+	//The drifter reaches a *new* offset every frame, so its pair with a figure
+	//tile is within cap but never predictive: the histogram prunes to the top
+	//kAdjacencyMaxOffsets and folds the rest into other, and Count stays the
+	//unpruned total so a reader recomputing P(b at d | a) divides by the same
+	//mass SelectSpriteEdges saw.
+	void TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		SpriteAdjacencyStats stats = AccumulateSpriteAdjacency(frames, vocab);
+
+		int32_t figure = vocab.Find(MetatileKey{ { 1, kEmptyCell, kEmptyCell, kEmptyCell } });
+		int32_t drifter = vocab.Find(MetatileKey{ { 9, kEmptyCell, kEmptyCell, kEmptyCell } });
+		uint32_t a = (uint32_t)std::min(figure, drifter);
+		uint32_t b = (uint32_t)std::max(figure, drifter);
+		const SpritePairStat* pair = nullptr;
+		for(const SpritePairStat& candidate : stats.Pairs) {
+			if(candidate.A == a && candidate.B == b) {
+				pair = &candidate;
+			}
+		}
+		Check(pair, "BlocoP: the drifter co-occurs with the figure tile every frame");
+		if(pair) {
+			uint32_t kept = 0;
+			for(const SpriteOffsetSample& sample : pair->Offsets) {
+				kept += sample.Count;
+			}
+			Check(pair->CoFrames == 12 && pair->Count == 12,
+				"BlocoP: the pair count is the unpruned within-cap total",
+				"count=" + std::to_string(pair->Count));
+			Check(pair->Offsets.size() == kAdjacencyMaxOffsets && pair->Other == 12 - kept,
+				"BlocoP: the offset histogram keeps the top 8 and folds the rest into other",
+				std::to_string(pair->Offsets.size()) + " offsets, other=" + std::to_string(pair->Other));
+		}
+	}
+
+	//coFrames is written with no distance cap, so a pair that shares scenes but
+	//never comes within 32 px still exists - with Count 0 and no offsets. That
+	//is the "same platform, same moment" query §5 is built on.
+	void TestAdjacencySpritePairFarApartCarriesNoOffsets()
+	{
+		std::vector<OamFrame> frames;
+		for(uint32_t f = 0; f < 3; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			OamEntry hero;
+			hero.Shape = 1;
+			hero.X = 10;
+			hero.Y = 16;
+			frame.Entries.push_back(hero);
+			OamEntry farEnemy;
+			farEnemy.Shape = 2;
+			farEnemy.X = 200;
+			farEnemy.Y = 200;
+			frame.Entries.push_back(farEnemy);
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		SpriteAdjacencyStats stats = AccumulateSpriteAdjacency(frames, vocab);
+		Check(stats.Pairs.size() == 1, "BlocoP: a far apart but co-present pair still reaches the file",
+			"pairs=" + std::to_string(stats.Pairs.size()));
+		if(stats.Pairs.size() == 1) {
+			Check(stats.Pairs[0].CoFrames == 3 && stats.Pairs[0].Count == 0 && stats.Pairs[0].Offsets.empty() && stats.Pairs[0].Other == 0,
+				"BlocoP: beyond 32 px a pair has coFrames and nothing else");
+		}
+		//And the floor bands still say both stand somewhere, whatever the offsets say.
+		Check(stats.Floors.size() == 2 && stats.Floors[0][0].Bottom == 24 && stats.Floors[1][0].Bottom == 208,
+			"BlocoP: floor bands are quantised bottom edges (Y + 8, no distance cap)");
+	}
+
+	//A hand-built background vocabulary, so the degree totals and the complete
+	//edge map are asserted exactly: sum(edges where a == X, dir == E) must equal
+	//outE(X), and the JSON must round-trip through the strict reader.
+	void TestAdjacencyBackgroundSidecarCarriesDegreesAndEdges()
+	{
+		Vocabulary bg;
+		bg.Grid.Unit = 16;
+		bg.DistinctScreens = 4;
+		MetatileEntry e0;
+		e0.Key.Tiles = { 1, 2, 3, 4 };
+		e0.Count = 5;
+		e0.Context = SheetContext::Scene;
+		MetatileEntry e1;
+		e1.Key.Tiles = { 5, 6, 7, 8 };
+		e1.Count = 3;
+		e1.Context = SheetContext::Hud;
+		MetatileEntry e2;
+		e2.Key.Tiles = { 9, 10, 11, 12 };
+		e2.Count = 1;
+		e2.Context = SheetContext::Misc;
+		bg.Entries.push_back(e0);
+		bg.Entries.push_back(e1);
+		bg.Entries.push_back(e2);
+		bg.Index[e0.Key] = 0;
+		bg.Index[e1.Key] = 1;
+		bg.Index[e2.Key] = 2;
+		//A self edge (a metatile east of itself - flat ground), a 2x2 figure,
+		//and a north/south pair the far-field sprite rule must not confuse.
+		bg.East[{ 0, 1 }] = 5;
+		bg.East[{ 0, 0 }] = 2;
+		bg.South[{ 0, 2 }] = 3;
+		bg.South[{ 1, 0 }] = 7;
+
+		Vocabulary noSprites;
+		SpriteAdjacencyStats noStats;
+		std::string json = SerializeAdjacency(bg, noSprites, noStats, SheetLookup());
+
+		Check(json.find("\"kind\": \"adjacency\"") != std::string::npos,
+			"BlocoP: the adjacency sidecar declares kind \"adjacency\"");
+		Check(json.find("\"sprites\"") == std::string::npos,
+			"BlocoP: no OAM stream means no sprites block");
+		Check(json.find("\"gridUnit\": 16") != std::string::npos && json.find("\"distinctScreens\": 4") != std::string::npos,
+			"BlocoP: the background block states its sampling universe");
+		//Node 0: outE 5+2 (its self edge counts), outS 3, inE 2 (the self edge),
+		//inS 7 (cell 1 sits north of it).
+		Check(json.find("\"cell\": 0") != std::string::npos && json.find("\"outE\": 7") != std::string::npos
+			&& json.find("\"outS\": 3") != std::string::npos && json.find("\"inE\": 2") != std::string::npos
+			&& json.find("\"inS\": 7") != std::string::npos,
+			"BlocoP: a background node carries its four degree totals");
+		Check(json.find("\"context\": \"hud\"") != std::string::npos && json.find("\"context\": \"misc\"") != std::string::npos,
+			"BlocoP: a node's context mirrors its vocabulary entry");
+
+		JsonReader reader;
+		JsonValue root;
+		Check(reader.Parse(json, root), "BlocoP: the adjacency sidecar is strict-valid JSON", reader.GetError());
+		const JsonValue* background = root.Get("background");
+		const JsonValue* edges = background ? background->Get("edges") : nullptr;
+		Check(background && edges && edges->GetArray().size() == 4,
+			"BlocoP: the background block carries the complete four-edge map");
+		if(background && edges && edges->GetArray().size() == 4) {
+			const std::vector<JsonValue>& list = edges->GetArray();
+			//Deterministic order: (a, b, dir), so the self edge (0,0,E) is first.
+			Check(list[0].Get("a")->GetNumber() == 0 && list[0].Get("b")->GetNumber() == 0
+				&& list[0].Get("dir")->GetString() == "E" && list[0].Get("count")->GetNumber() == 2,
+				"BlocoP: edges are ordered by (a, b, dir) and self edges survive");
+			Check(list[1].Get("a")->GetNumber() == 0 && list[1].Get("b")->GetNumber() == 1
+				&& list[1].Get("count")->GetNumber() == 5,
+				"BlocoP: the East edge follows the self edge");
+			Check(list[2].Get("a")->GetNumber() == 0 && list[2].Get("dir")->GetString() == "S"
+				&& list[2].Get("count")->GetNumber() == 3,
+				"BlocoP: South edges come after every East edge of the same pair");
+			double outE0 = 0;
+			for(const JsonValue& edge : list) {
+				if(edge.Get("a")->GetNumber() == 0 && edge.Get("dir")->GetString() == "E") {
+					outE0 += edge.Get("count")->GetNumber();
+				}
+			}
+			Check(outE0 == 7, "BlocoP: a reader can recompute outE(X) by summing the complete edge list");
+		}
+		Check(SerializeAdjacency(bg, noSprites, noStats, SheetLookup()) == json,
+			"BlocoP: adjacency serialisation is deterministic");
+	}
+
+	//The sprite block round-trips through the strict reader with its sampling
+	//stated per block, and every node resolves its tiles[] to a hires.txt key.
+	void TestAdjacencySpriteSidecarRoundTrips()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		SpriteAdjacencyStats stats = AccumulateSpriteAdjacency(frames, vocab);
+
+		Vocabulary noBackground;
+		std::string json = SerializeAdjacency(noBackground, vocab, stats, SheetLookup());
+
+		JsonReader reader;
+		JsonValue root;
+		Check(reader.Parse(json, root), "BlocoP: the sprite adjacency block is strict-valid JSON", reader.GetError());
+		const JsonValue* sprites = root.Get("sprites");
+		Check(sprites && sprites->Get("vocabularySize")->GetNumber() == 5,
+			"BlocoP: the sprite block states its vocabulary size");
+		Check(sprites && sprites->Get("oamFrames")->GetNumber() == 12,
+			"BlocoP: the sprite block names its OAM frame universe");
+		const JsonValue* nodes = sprites ? sprites->Get("nodes") : nullptr;
+		const JsonValue* pairs = sprites ? sprites->Get("pairs") : nullptr;
+		Check(nodes && nodes->GetArray().size() == 5, "BlocoP: one sprite node per OAM shape");
+		Check(pairs && pairs->GetArray().size() == stats.Pairs.size(), "BlocoP: one pair entry per kept pair");
+		if(nodes && nodes->GetArray().size() == 5) {
+			const JsonValue& node = nodes->GetArray()[0];
+			Check(node.Get("cell")->GetNumber() == 0 && node.Get("appearances")->GetNumber() == 12,
+				"BlocoP: a sprite node carries its unpruned appearance count");
+			const JsonValue* tiles = node.Get("tiles");
+			Check(tiles && tiles->GetArray().size() == 1,
+				"BlocoP: a sprite node's tiles[] resolves to its single 8x8 key");
+			if(tiles && tiles->GetArray().size() == 1) {
+				Check(tiles->GetArray()[0].Get("tile")->GetString().size() == 32,
+					"BlocoP: a node's tile key is the exact 32-hex hires.txt key");
+			}
+		}
+	}
+
 	void TestSheetJsonCarriesTheGridDecision()
 	{
 		SheetJsonDoc doc;
@@ -4845,6 +5087,11 @@ int main()
 	TestSpriteGroupIsLaidOutAtItsOamOffsets();
 	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
+	TestAdjacencySpriteStatsCarryFloorsAndCoFrames();
+	TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept();
+	TestAdjacencySpritePairFarApartCarriesNoOffsets();
+	TestAdjacencyBackgroundSidecarCarriesDegreesAndEdges();
+	TestAdjacencySpriteSidecarRoundTrips();
 
 	TestHeadlessScriptUnitsAreExplicit();
 	TestHeadlessScriptBareNumberIsAnError();
