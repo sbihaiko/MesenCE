@@ -35,10 +35,25 @@ class ComposeError(Exception):
     the bootstrap, compose from the screen layer) — never a silent blank."""
 
 
+def _nearest_downscale(img, scale):
+    """Nearest-neighbour reduction of an N x capture crop back to 1x. The
+    screen reference twin was upscaled by N without resampling, so sampling
+    every Nth pixel recovers the original art exactly — no soft edge, which
+    ADR-0154 §7 forbids on 8-bit tile art."""
+    w, h = img.width // scale, img.height // scale
+    out = sheet_repaint.Image(w, h)
+    for y in range(h):
+        for x in range(w):
+            src = img.offset(x * scale, y * scale)
+            dst = out.offset(x, y)
+            out.px[dst:dst + 4] = img.px[src:src + 4]
+    return out
+
+
 # ---- adjacency.json --------------------------------------------------------
 
 class _AdjNode:
-    __slots__ = ("cell", "count", "context", "out_e", "out_s", "in_e", "in_s", "tiles")
+    __slots__ = ("cell", "count", "context", "out_e", "out_s", "in_e", "in_s", "tiles", "screens")
 
     def __init__(self, d):
         self.cell = int(d["cell"])
@@ -49,6 +64,18 @@ class _AdjNode:
         self.in_e = int(d.get("inE") or 0)
         self.in_s = int(d.get("inS") or 0)
         self.tiles = d.get("tiles") or []
+        # ADR-0166 (F9.18): the screens that own this node's pixels, each with
+        # the 8 px placement of the node's top-left tile on that screen.
+        self.screens = []
+        for s in (d.get("screens") or []):
+            try:
+                self.screens.append({
+                    "screen": str(s["screen"]),
+                    "x": int(s["x"]),
+                    "y": int(s["y"]),
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
 
 
 class _SpriteNode:
@@ -225,6 +252,9 @@ class Pack:
                 raise ComposeError(f"{folder}: not a pack folder with textures/sheets/")
         self.folder = folder
         self.sheets_dir = sheets_dir
+        # ADR-0166: whole-screen captures live one level up from the sheets.
+        self.backgrounds_dir = (sheets_dir.parent / "backgrounds"
+                                if sheets_dir.name == "sheets" else folder.parent / "backgrounds")
         self.docs, self.claimed = mep_build._load_sheet_docs(sheets_dir)
         self.sheets = [Sheet(sheets_dir, sd) for sd in self.docs]
         self.adjacency = Adjacency.load(sheets_dir / "adjacency.json")
@@ -280,20 +310,42 @@ class Pack:
     def node_art(self, node: int, sprite: bool):
         """The 1x pixels of a node — the source the composition pastes.
 
-        Background resolution mirrors ADR-0164 §3: a node no sheet shows is one
-        a captured screen owns, and the sidecar does not name which screen, so
-        the tool raises with the fix rather than paste a blank (the adjacency
-        map keeps no routed-screen pointer; compose it from the background/map
-        layer instead)."""
+        Background resolution mirrors ADR-0164 §3 then ADR-0166: a node a sheet
+        shows is cropped from that sheet's `*.orig.png`; a node no sheet shows
+        is one a captured screen owns (ADR-0156), and since ADR-0166 the
+        adjacency sidecar records which `screenNNN` froze it and where, so the
+        tool crops it from `backgrounds/<screen>.orig.png` at the pack's scale.
+        A node with neither is still an error, never a silent blank."""
         home = self.sprite_home(node) if sprite else self.background_home(node)
         if home is not None:
             return home[0].cell_image(home[1])
         if sprite:
             raise ComposeError(f"no sheet shows sprite node {node} — re-run the bootstrap")
-        raise ComposeError(
-            f"no sheet shows background node {node}; it is a screen-owned cell "
-            "(ADR-0156) and adjacency.json records no routed screen per node — "
-            "compose it from the map/background layer, not as a bare cell")
+        return self._screen_art(node)
+
+    def _screen_art(self, node: int):
+        """Crop a screen-owned background node out of its owning capture."""
+        bg = self.adjacency.bg.get(node)
+        if not bg or not bg.screens:
+            raise ComposeError(
+                f"no sheet shows background node {node}; it is a screen-owned cell (ADR-0156) and "
+                "adjacency.json records no owning screen for it (a pack recorded before ADR-0166 "
+                "lacks the screens[] field) — compose it from the map/background layer, or re-run "
+                "the bootstrap")
+        site = bg.screens[0]
+        path = self.backgrounds_dir / f"{site['screen']}.orig.png"
+        if not path.is_file():
+            raise ComposeError(f"{site['screen']}.orig.png is missing under backgrounds/")
+        img = sheet_repaint.read_png(path)
+        scale = img.width // 256
+        if scale < 1 or img.width != 256 * scale or img.height != 240 * scale:
+            raise ComposeError(f"{path.name} is not a 256x240 NES capture at an integer scale")
+        unit = self.adjacency.grid_unit
+        x0, y0 = site["x"] * 8 * scale, site["y"] * 8 * scale
+        if x0 < 0 or y0 < 0 or x0 + unit * scale > img.width or y0 + unit * scale > img.height:
+            raise ComposeError(f"{site['screen']}: node {node} art falls outside the capture")
+        crop = img.crop(x0, y0, unit * scale, unit * scale)
+        return _nearest_downscale(crop, scale) if scale > 1 else crop
 
     # -- the two §5 queries --------------------------------------------------
 

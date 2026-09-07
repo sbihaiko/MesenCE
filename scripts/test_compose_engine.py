@@ -165,6 +165,17 @@ def make_pack(root: Path, with_obj_sheet: bool = True):
     sprite_cells = [_sprite_cell(idx, m, (3000, 500, 400, 900)[idx]) for idx, m in enumerate((0, 1, 2, 3))]
     _write_sheet(sheets, "sprites", "sprites", sprite_cells, 8, 4)
 
+    # ADR-0166 (F9.18): whole-screen captures the screen-owned nodes live on.
+    # Node 7 is resident (no sheet cell) and is drawn on two captures, at scale
+    # 1 and scale 2, at 8 px tile position (x=3, y=2) -> 1x pixel origin (24,16).
+    backgrounds = root / "textures" / "backgrounds"
+    backgrounds.mkdir(parents=True)
+    for cap, scale in (("screen001", 1), ("screen002", 2)):
+        frame = sheet_repaint.Image(256 * scale, 240 * scale)
+        frame.paste(_solid(16, _node_color(7)).upscale(scale), 24 * scale, 16 * scale)
+        sheet_repaint.write_png(backgrounds / f"{cap}.png", frame)
+        sheet_repaint.write_png(backgrounds / f"{cap}.orig.png", frame.clone())
+
     bg_nodes = []
     for node, (out_e, out_s, in_e, in_s, count) in _BG_NODES.items():
         bg_nodes.append({
@@ -172,6 +183,16 @@ def make_pack(root: Path, with_obj_sheet: bool = True):
             "outE": out_e, "outS": out_s, "inE": in_e, "inS": in_s,
             "tiles": _tiles(),
         })
+    # Two more background nodes: 7 is screen-owned (captures above show it),
+    # 8 is resident per the marker but a stale/pre-0166 pack would carry no
+    # screens[] — both have no sheet cell, so only 7 resolves to pixels.
+    for node, count in ((7, 240), (8, 120)):
+        bg_nodes.append({"cell": node, "count": count, "context": "scene",
+                         "outE": 0, "outS": 0, "inE": 0, "inS": 0, "tiles": _tiles()})
+    bg_nodes[7]["screens"] = [
+        {"screen": "screen002", "x": 3, "y": 2},  # first: exercises the scale-2 crop
+        {"screen": "screen001", "x": 3, "y": 2},
+    ]
     sp_nodes = [
         {"cell": 0, "appearances": 3000,
          "floors": [{"bottom": 176, "count": 2900}, {"bottom": 144, "count": 100}],
@@ -192,7 +213,7 @@ def make_pack(root: Path, with_obj_sheet: bool = True):
         "kind": "adjacency",
         "background": {
             "vocabulary": "metatiles.json",
-            "vocabularySize": 7,
+            "vocabularySize": 9,
             "gridUnit": 16,
             "distinctScreens": 4,
             "nodes": bg_nodes,
@@ -334,6 +355,27 @@ def test_node_art_never_blank_and_alias_resolves():
         check(art_a != art_b, "distinct nodes carry distinct pixels", f"{art_a} vs {art_b}")
 
 
+def test_screen_owned_node_resolves_via_owning_screen():
+    with tempfile.TemporaryDirectory() as td:
+        pack = E.Pack(make_pack(Path(td)))
+        # Node 7 has no sheet cell (a captured screen owns it). Since ADR-0166
+        # the adjacency sidecar names the capture, so the engine crops it from
+        # backgrounds/screenNNN.orig.png at the pack's scale and reduces back
+        # to 1x — here through the scale-2 capture, the first site listed.
+        art = pack.node_art(7, sprite=False)
+        px = art.get(0, 0)
+        want = _node_color(7)
+        check(px == want, "screen-owned node crops out of its owning capture", f"{px} vs {want}")
+        check(art.width == 16, "screen crop is downscaled to the 1x grid unit", str(art.width))
+        # Node 8 is marked resident but carries no screens[] (a stale pack).
+        try:
+            pack.node_art(8, sprite=False)
+        except E.ComposeError as e:
+            check("screen-owned" in str(e), "resident node without screens[] still raises", str(e))
+        else:
+            check(False, "resident node without screens[] still raises", "no ComposeError")
+
+
 def test_export_rejects_unknown_kind_and_noop():
     with tempfile.TemporaryDirectory() as td:
         pack = E.Pack(make_pack(Path(td)))
@@ -367,6 +409,7 @@ def main():
         test_export_object_is_legal_mep_build_input,
         test_export_sprite_band_records_band_and_twin,
         test_node_art_never_blank_and_alias_resolves,
+        test_screen_owned_node_resolves_via_owning_screen,
         test_export_rejects_unknown_kind_and_noop,
     ]
     for t in tests:
