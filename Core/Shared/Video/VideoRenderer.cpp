@@ -394,6 +394,30 @@ void VideoRenderer::UnregisterRenderingDevice(IRenderingDevice* renderer)
 	}
 }
 
+void VideoRenderer::CaptureSystemHud(uint32_t width, uint32_t height, vector<uint32_t>& out)
+{
+	//Fully transparent, not the previous call's leftovers - unlike the render
+	//thread's _rendererHud/_emuHudSurface pair, there is no earlier frame this
+	//buffer is diffed against, so every pixel a toast does not touch must read
+	//as blank rather than as whatever a stale allocation happened to hold.
+	out.assign((size_t)width * height, 0);
+
+	//Same two-step pattern as ProcessAviRecording's HUD overlay: a local,
+	//one-shot DebugHud collects the system HUD's draw commands, then
+	//rasterises them directly onto the caller's buffer. No render thread, no
+	//IRenderingDevice, so this runs whether or not one exists - _hudLock is
+	//still required, because _systemHud's message queue is shared with
+	//whichever thread does have a render loop running (UpdateFrame's
+	//UpdateHud() call, RenderThread's Draw() call).
+	DebugHud hud;
+	{
+		auto lock = _hudLock.AcquireSafe();
+		_systemHud->Draw(&hud, width, height);
+	}
+	FrameInfo frameSize = { width, height };
+	hud.Draw(out.data(), frameSize, {}, 0, {});
+}
+
 void VideoRenderer::ProcessAviRecording(RenderedFrame& frame)
 {
 	shared_ptr<IVideoRecorder> recorder = _recorder.lock();

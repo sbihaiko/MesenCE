@@ -122,4 +122,14 @@ public:
 	void AddRecordingSound(int16_t* soundBuffer, uint32_t sampleCount, uint32_t sampleRate);
 	void StopRecording();
 	bool IsRecording();
+
+	//ADR-0167: draws the system HUD (toasts) alone into a caller-owned buffer,
+	//with no render thread and no IRenderingDevice - the same same-thread,
+	//software-only path ProcessAviRecording already uses for its own HUD
+	//overlay. `out` is resized to width*height and starts fully transparent
+	//(0x00000000 everywhere), so a caller measuring it with
+	//FrameCaptureMath::MeasureBorders reads IsBlank as "nothing drew" (no
+	//toast queued) rather than depending on a checksum that a toast's wall
+	//clock fade animation would perturb between otherwise-identical runs.
+	void CaptureSystemHud(uint32_t width, uint32_t height, vector<uint32_t>& out);
 };
