@@ -98,6 +98,15 @@ extern "C"
 	//F9.15 - in-memory frame capture (same wrapper file)
 	bool HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount);
 	uint32_t HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels);
+	//ADR-0167 - HUD-only capture (same wrapper file); DisplayMessage already
+	//existed for the GUI (InteropDLL/EmuApiWrapper.cpp) and HeadlessSetOsdEnabled
+	//is the sibling seam added in EmuApiWrapperHeadless.cpp - declared here so a
+	//headless run can gate the OSD queue and queue a deterministic toast before
+	//capturing it.
+	bool HeadlessCaptureHud(uint32_t width, uint32_t height, uint32_t* outWidth, uint32_t* outHeight, uint32_t* outPixelCount);
+	uint32_t HeadlessReadCapturedHudPixels(uint32_t* outPixels, uint32_t maxPixels);
+	void DisplayMessage(char* title, char* message, char* param1);
+	void HeadlessSetOsdEnabled(bool osdEnabled);
 	NesConfig GetNesConfig();
 	void ExecuteShortcut(ExecuteShortcutParamsAbi params);
 	void TakeScreenshot();
@@ -144,7 +153,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [capture] [log] [bootstrap] [filter=<name>] [mep-off]\n"
 			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
-			"       [state=<file.mss>] [input=<script>] [realtime]\n", argv[0]);
+			"       [state=<file.mss>] [input=<script>] [realtime] [hud-message=<title>|<msg>]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -168,6 +177,11 @@ int main(int argc, char** argv)
 	std::string inputScriptText;
 	std::string inputScriptPath;
 	bool realtime = false;
+	//ADR-0167: queued right before a "capture" run's settle sleep, so a test
+	//can assert the HUD capture's blank flag flips. title|message, split on
+	//the first '|' (neither Localize()'d key needs one).
+	std::string hudMessageTitle;
+	std::string hudMessageText;
 	for(int i = 4; i < argc; i++) {
 		if(strcmp(argv[i], "pal") == 0) {
 			pal = true;
@@ -234,6 +248,15 @@ int main(int argc, char** argv)
 			realtime = true;
 		} else if(strncmp(argv[i], "mep-disable=", 12) == 0) {
 			mepDisable = argv[i] + 12;
+		} else if(strncmp(argv[i], "hud-message=", 12) == 0) {
+			std::string spec = argv[i] + 12;
+			size_t sep = spec.find('|');
+			if(sep == std::string::npos) {
+				fprintf(stderr, "hud-message= needs a '|' between title and message: %s\n", spec.c_str());
+				return 1;
+			}
+			hudMessageTitle = spec.substr(0, sep);
+			hudMessageText = spec.substr(sep + 1);
 		}
 	}
 
@@ -364,6 +387,13 @@ int main(int argc, char** argv)
 	//this thread was calling into the DLL".
 	HeadlessSetPauseFrame(1);
 
+	//ADR-0167: with the OSD on (the default), LoadRom enqueues a "game loaded"
+	//toast (Emulator.cpp) that never ages out of a short parked run, so a HUD
+	//capture could never read blank. Gate it off for the load and the run;
+	//HeadlessSetOsdEnabled(true) is turned on for the one instant a capture run
+	//queues its own test toast (see the capture block below).
+	HeadlessSetOsdEnabled(false);
+
 	if(!LoadRom((char*)rom.c_str(), (char*)"")) {
 		fprintf(stderr, "failed to load ROM: %s\n", rom.c_str());
 		return 1;
@@ -451,6 +481,10 @@ int main(int argc, char** argv)
 	Resume();
 	bool reachedTarget = waitForPause("recording");
 
+	//The hud-message toast is emitted inside the capture block below, not here:
+	//with the OSD gated off across the load/run, a DisplayMessage before the
+	//OSD is re-enabled for the capture would go to the log instead of the queue.
+
 	if(screenshot || capture) {
 		//The video decoder runs on its own thread; give it a moment to drain
 		//so what we read is the paused frame and not the one before it. This
@@ -484,6 +518,69 @@ int main(int argc, char** argv)
 					width, height, frameNumber, pixelCount, FrameCaptureMath::Checksum(pixels.data(), pixelCount));
 				printf("capture borders: left=%u right=%u top=%u bottom=%u colour=0x%08X blank=%d\n",
 					borders.Left, borders.Right, borders.Top, borders.Bottom, borders.Colour, borders.IsBlank ? 1 : 0);
+
+				//ADR-0167: same canvas size as the frame capture above (the
+				//base frame size when no video filter is active). Additive -
+				//the two lines above are unchanged, so an existing consumer's
+				//parsing does not break.
+				//
+				//Two details keep the blank flag meaningful:
+				//1. The queue holds exactly the messages a test queues. The OSD
+				//   has been off since before LoadRom, so no "game loaded" toast
+				//   is resident; a hud-message= run re-enables it for just the
+				//   DisplayMessage below and disables it again, so the queue
+				//   gains exactly that one toast and nothing the resumed run may
+				//   throw at the OSD in the meantime.
+				//2. The capture is taken *while the emulator is running*, not on
+				//   the paused frame the captures above used. SystemHud::Draw
+				//   paints the pause icon on every paused frame - its one
+				//   always-on element - so a paused HUD capture could never read
+				//   blank=1, and blank=0 would not mean a message was queued.
+				//   Resuming here (the run's pause latch was consumed when it
+				//   stopped at its target frame, so the emulator runs until
+				//   re-armed below) drops that icon from the draw.
+				//Together they restore the ADR's meaning for blank: uniform
+				//transparent = no message, anything else = one is queued.
+				bool queuedToast = !hudMessageTitle.empty();
+				if(queuedToast) {
+					HeadlessSetOsdEnabled(true);
+					DisplayMessage((char*)hudMessageTitle.c_str(), (char*)hudMessageText.c_str(), (char*)"");
+					HeadlessSetOsdEnabled(false);
+				}
+				Resume();
+				if(queuedToast) {
+					//The run's pause latch was consumed, so the emulator is now
+					//running frames. Give the decode pipeline a moment to run its
+					//first UpdateFrame(s) after the resume before capturing: a HUD
+					//capture taken in the first instants after Resume() would
+					//occasionally miss the just-queued toast (observed ~1/3 of
+					//runs with no settle, 0/N with this one) - the same class of
+					//decode-thread transient the 200ms settle above drains before
+					//the frame capture. 100ms is comfortably inside the toast's
+					//3000ms lifetime.
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				}
+				uint32_t hudWidth = 0, hudHeight = 0, hudPixelCount = 0;
+				if(!HeadlessCaptureHud(width, height, &hudWidth, &hudHeight, &hudPixelCount)) {
+					fprintf(stderr, "hud capture failed: degenerate size %ux%u\n", width, height);
+					captureFailed = true;
+				} else {
+					std::vector<uint32_t> hudPixels(hudPixelCount);
+					uint32_t hudCopied = HeadlessReadCapturedHudPixels(hudPixels.data(), hudPixelCount);
+					if(hudCopied != hudPixelCount) {
+						fprintf(stderr, "hud capture failed: read %u of %u pixels\n", hudCopied, hudPixelCount);
+						captureFailed = true;
+					} else {
+						FrameBorders hudBorders = FrameCaptureMath::MeasureBorders(hudPixels.data(), hudWidth, hudHeight);
+						printf("capture hud: %ux%u checksum=0x%08X blank=%d\n",
+							hudWidth, hudHeight, FrameCaptureMath::Checksum(hudPixels.data(), hudPixelCount), hudBorders.IsBlank ? 1 : 0);
+					}
+				}
+				//Re-arm the pause latch at the frame the run has reached so the
+				//emulator parks again (within a frame of this call) instead of
+				//free-running into the tail's Stop(). Nothing after this reads
+				//the frame count as a contract, but the run should end parked.
+				HeadlessSetPauseFrame(HeadlessGetFrameCount());
 			}
 		}
 	}
