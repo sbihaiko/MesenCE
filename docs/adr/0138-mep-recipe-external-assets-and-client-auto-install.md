@@ -156,12 +156,18 @@ one unauthenticated, cacheable request. The Markdown stays the human view.
      `recipe_hash`, `installed_at`) in the pack folder.
 - Output location is the central per-ROM folder of ADR-0040 (the same place
   HdPacks use), so discovery precedence and the sibling-folder convention
-  (ADR-0049) are unchanged.
+  (ADR-0049) are unchanged. *Superseded by ADR-0147 (2026-09-01) for catalog
+  installs: the output is the sibling's `mep/` layer — `mep/` over the
+  bootstrap `auto/` — with the central `EnhancementPacks/<container>/`
+  per-ROM folder as the fallback when the ROM folder is not writable; the
+  sibling-folder convention is ADR-0049 as amended by ADR-0147.*
 - Auto-install is a setting in EnhancementPackConfig (`AutoInstallCommunityPacks`,
   default **on** for accepted packs whose deps are all downloadable, i.e. no
   `user_supplied` dep; packs needing user files prompt instead of installing
   silently). A pack whose catalog `source.sha256` differs from the installed
-  `.mep-install.json` is reinstalled.
+  `.mep-install.json` is reinstalled. *Amended by ADR-0141: the
+  reinstall/update trigger is the catalog entry's `content_id`, not a
+  `source.sha256` difference — see the §37 note.*
 - **No LLM, no scripting**: the installer is a fixed interpreter of the four
   ops. Unknown op or `recipe` version → skip with a `[MEP] recipe unsupported`
   log and UI notice.
