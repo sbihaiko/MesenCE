@@ -440,3 +440,6 @@ frame-capture lines keep their deterministic frame checksum in both, so
 
 The installer/file-picker (F6.5), hardware and subjective-audio items below
 stay manual for the reasons already on record — those are walls, not gaps.
+They are consolidated, with the composition-editor GUI panel and the
+ExtractAudio click, into one runnable pass:
+`docs/validation/real-app-acceptance-runbook.md`.
