@@ -47,3 +47,33 @@ The 1x pixels of a node come from whichever sheet shows it — the cell whose `m
 - One more artist tool and its test files under `scripts/`; no `Core/`/`UI/` change, no `Core.vcxproj` entry (ADR-0007). tkinter is assumed on the artist's machine (system Python; some distros need `python3-tk`); the engine and all tests never import it, so headless/CI are unaffected.
 - The tool only means something on packs recorded since F9.17 (they carry `adjacency.json`); older packs get the re-bootstrap message. An edit written into an `auto/` sheet is lost on the next bootstrap unless it has been promoted to `mep/` — the promotion rule of ADR-0164 §4, surfaced in the save dialog rather than papered over.
 - The sprite layer is the risky part and the reason the band criterion exists: its queries are over `floors[]`/`coFrames` accumulated with no distance cap, so the acceptance test on the Ryu band is what proves the far-field statistics are enough — no fallback to the thin `evidence[]` of the group sheets.
+
+## Revision (2026-09-07, same day, after implementation)
+
+Two clauses read more literally than the pipeline supports; both are recorded
+here rather than diverged from silently, with the evidence that forced them.
+
+- **"Cells edited in place" (§Decision 3) is external painting, not a tool
+  write-back.** The compose tool's write path is always a new `usrNNN` sheet
+  (kind `object`/`sprite`) whose PNG and `*.orig.png` twin start identical;
+  the artist then paints `usrNNN.png` in an image editor and `mep_build.py`
+  fans the painted cells out, as for any sheet. The tool never pastes pixels
+  back into the builder's own `hud`/`font`/`metatiles`/`object` sheets,
+  because doing so would *duplicate* an already-present cell: `mep_build.py`
+  keys precedence on a PNG differing from its `*.orig.png` twin, so a copy
+  pasted into the source sheet (and mirrored into the twin to keep the twin
+  pixel-exact) either changes nothing or — mirrored — marks the copied cell
+  untouched and ties against the very sheet it came from. "Edit in place" is
+  therefore satisfied as ADR-0153 §4 always meant it: the artist repaints
+  the sheet's PNG and the unchanged pipeline picks the painted cell up.
+- **A screen-owned background node cannot be resolved to pixels from disk
+  alone.** §Decision 4 and ADR-0164 §3 say the tool takes a node no sheet
+  shows "from the `backgrounds/screenNNN.orig.png` the routing named" — but
+  the ADR-0164 §1 sidecar records no routed screen (and no position) per
+  node, and nothing else in the pack names one either. The engine therefore
+  raises a `ComposeError` ("it is a screen-owned cell (ADR-0156) — compose
+  it from the map/background layer, not as a bare cell") instead of pasting
+  a blank. Closing the gap is a sidecar-format decision (persist the routed
+  screen + offset per node in `adjacency.json`) and is out of scope here;
+  it is the precondition for composing a bare screen-owned cell from the
+  object layer.
