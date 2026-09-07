@@ -496,7 +496,7 @@ int64_t ExpressionEvaluator::Evaluate(ExpressionData& data, EvalResultType& resu
 
 				//Unary operators
 				case EvalOperators::Plus: token = right; break;
-				case EvalOperators::Minus: token = (int64_t)(-(uint64_t)right); break;
+				case EvalOperators::Minus: token = (int64_t)((uint64_t)0 - (uint64_t)right); break;
 				case EvalOperators::BinaryNot: token = ~right; break;
 				case EvalOperators::LogicalNot: token = (bool)!right; break;
 				case EvalOperators::AbsoluteAddress: token = right >= 0 ? _debugger->GetAbsoluteAddress({ (int32_t)right, _cpuMemory }).Address : -1; break;
