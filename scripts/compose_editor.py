@@ -1,16 +1,20 @@
 """The composition editor (ADR-0165 / F9.18) — a tkinter layered canvas over
-the host-free `compose_engine`.
+the host-free `compose_engine`, wired through an MVVM split.
 
 `scripts/compose_editor.py [pack folder]` opens a pack recorded since F9.17
 and lets an artist build a scene by the two queries ADR-0164 §5 defines:
 seed -> rank -> lock -> recompute over the background adjacency (an object
 layer) or inside a sprite Y band (floor-sharing shapes), then export the
-kept cells as a composed `usrNNN` sheet. The engine never imports tkinter;
-this view is a thin controller over it.
+kept cells as a composed `usrNNN` sheet. `compose_engine.Pack` is the Model,
+`compose_viewmodel.ComposeViewModel` is the ViewModel (seed/lock/swap/export
+state, no tkinter), and `EditorApp` below is the View: it renders the
+ViewModel's state and forwards tkinter events into its methods, nothing more.
 
 This is the interactive half and is judged by the human Phase 9 panel — the
-automated half is `test_compose_engine.py`, which covers the engine's two
-acceptance tests headless.
+automated half is `test_compose_engine.py` (the engine's two ADR-0164
+acceptance tests) and `test_compose_viewmodel.py` (a full seed/lock/swap/
+export composition run headless through the ViewModel, so the state machine
+this file draws is verified before a human ever opens the window).
 """
 
 import argparse
@@ -22,6 +26,7 @@ from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compose_engine as E  # noqa: E402
+from compose_viewmodel import ComposeViewModel  # noqa: E402
 
 
 def _backdrop_rgb(rgba, backdrop=(0x22, 0x22, 0x2A)):
@@ -68,13 +73,9 @@ class EditorApp:
     def __init__(self, root: tk.Tk, folder: Path):
         self.root = root
         root.title("MesenCE — composition editor (F9.18)")
-        self.pack = None
-        self.kept = []        # locked node ids, in lock order (seed excluded)
-        self.seed = None
-        self.mode = "object"  # the layer being composed: object or sprite
+        self.vm = ComposeViewModel()
         self._imgs = []       # keep PhotoImage references alive
-        self.bg_members = []  # (node, sheet, cell) for the background tab
-        self.sp_members = []  # (node, sheet, cell) for the sprite tab
+        self._cell_imgs = []
 
         top = ttk.Frame(root, padding=6)
         top.pack(fill="x")
@@ -90,14 +91,30 @@ class EditorApp:
         self.status = tk.StringVar(value="no pack open")
         ttk.Label(root, textvariable=self.status, foreground="#555").pack(fill="x", padx=6)
 
-        nb = ttk.Notebook(root)
-        nb.pack(fill="both", expand=True, padx=6, pady=4)
+        body = ttk.Frame(root)
+        body.pack(fill="both", expand=True, padx=6, pady=(2, 2))
+        nb = ttk.Notebook(body)
+        nb.pack(side="left", fill="both", expand=True)
         self.sprite_tab = ttk.Frame(nb)
         self.bg_tab = ttk.Frame(nb)
         nb.add(self.bg_tab, text="Background (object layer)")
         nb.add(self.sprite_tab, text="Sprites (Y bands)")
         self._build_bg_tab()
         self._build_sprite_tab()
+        self._bind_selection_preview()
+
+        # Selection preview — the actual pixels of the highlighted cell, so a
+        # composer sees the art instead of decoding "#47".
+        side = ttk.Frame(body)
+        side.pack(side="right", fill="y", padx=(8, 0))
+        ttk.Label(side, text="Selection", foreground="#aaa").pack(anchor="w")
+        self.preview = tk.Canvas(side, width=132, height=132, background="#1e1e24",
+                                 highlightthickness=0)
+        self.preview.pack()
+        self.preview_tk = None   # keep the PhotoImage alive
+        self.preview_lbl = tk.StringVar(value="—")
+        ttk.Label(side, textvariable=self.preview_lbl, foreground="#aaa",
+                  wraplength=124).pack(anchor="w", pady=(4, 0))
 
         self.canvas = tk.Canvas(root, height=120, background="#2b2b33", highlightthickness=0)
         self.canvas.pack(fill="x", padx=6, pady=(0, 6))
@@ -114,23 +131,15 @@ class EditorApp:
 
     def load_pack(self, folder: Path):
         try:
-            pack = E.Pack(folder)
+            self.status.set(self.vm.load(folder))
         except E.ComposeError as e:
             messagebox.showerror("Cannot compose", str(e))
             self.status.set(str(e))
             return
-        self.pack = pack
-        self.out_var.set(str(pack.sheets_dir))
-        bg = pack.adjacency.bg_vocab_size
-        sp = pack.adjacency.sp_vocab_size if pack.adjacency.sprites_present else 0
-        kinds = ", ".join(pack.layer_kinds())
-        self.status.set(f"{pack.sheets_dir} — {bg} background nodes, {sp} sprite nodes; layers: {kinds}")
-        self.bg_members = pack.background_cells()
-        self.sp_members = pack.sprite_cells()
+        self.out_var.set(str(self.vm.pack.sheets_dir))
         self._fill_bg_seed_list()
         self._fill_band_selector()
-        self.kept, self.seed = [], None
-        self._refresh_kept()
+        self.refresh_all()
 
     # ---- background / object layer ------------------------------------------
 
@@ -140,57 +149,83 @@ class EditorApp:
         left.pack(side="left", fill="y", padx=4, pady=4)
         self.bg_seed = tk.Listbox(left, width=46, height=22)
         self.bg_seed.pack()
-        ttk.Button(left, text="Seed selected", command=lambda: self.seed_from(self.bg_seed)).pack(pady=2)
+        ttk.Button(left, text="Seed selected", command=self._seed_bg).pack(pady=2)
         mid = ttk.LabelFrame(f, text="Ranked neighbours — lock to compose", padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
         self.bg_sugg = tk.Listbox(mid, width=46, height=22)
         self.bg_sugg.pack(fill="both", expand=True)
-        ttk.Button(mid, text="Lock suggestion", command=lambda: self.lock_from(self.bg_sugg)).pack(pady=2)
-        ttk.Button(mid, text="Recompute (seed + locks)", command=self.refresh_bg).pack(pady=2)
+        ttk.Button(mid, text="Lock suggestion", command=self._lock_bg).pack(pady=2)
+        ttk.Button(mid, text="Recompute (seed + locks)", command=self.refresh_all).pack(pady=2)
 
     def _fill_bg_seed_list(self):
         self.bg_seed.delete(0, "end")
-        for node, _sheet, cell in self.bg_members:
+        for node, _sheet, cell in self.vm.bg_members:
             self.bg_seed.insert("end", f"#{node}  count {cell.get('count')}  x{cell.get('x')}y{cell.get('y')}")
-        self.refresh_bg()
 
-    def refresh_bg(self):
-        if not self.pack:
+    def _seed_bg(self):
+        node = self._selected_node(self.bg_seed)
+        if node is None:
             return
+        self.vm.seed_object(node)
+        self.refresh_all()
+
+    def _lock_bg(self):
+        node = self._selected_node(self.bg_sugg)
+        if node is None:
+            return
+        self.vm.lock(node, "object")
+        self.refresh_all()
+
+    def _refresh_bg_sugg(self):
         self.bg_sugg.delete(0, "end")
-        base = self.locked_list()
-        if not base:
-            return
-        for node, score in self.pack.background_rank(base):
+        for node, score in self.vm.background_rank():
             self.bg_sugg.insert("end", f"#{node}  score {score:.3f}")
 
     # ---- sprites / Y band ---------------------------------------------------
 
     def _build_sprite_tab(self):
         f = self.sprite_tab
-        sel = ttk.LabelFrame(f, text="Floor band (bottom edge, 8 px)", padding=4)
+        sel = ttk.LabelFrame(f, text="Floor band (bottom edge, 8 px) — seed palette", padding=4)
         sel.pack(side="left", fill="y", padx=4, pady=4)
         self.band_var = tk.StringVar()
         self.band_box = ttk.Combobox(sel, textvariable=self.band_var, state="readonly", width=12)
         self.band_box.pack()
-        self.sp_seed = tk.Listbox(sel, width=30, height=20)
+        self.sp_seed = tk.Listbox(sel, width=24, height=18)
         self.sp_seed.pack(pady=4)
-        ttk.Button(sel, text="Seed selected", command=lambda: self.seed_from(self.sp_seed)).pack(pady=2)
-        mid = ttk.LabelFrame(f, text="Ranked band members — lock to compose", padding=4)
+        ttk.Button(sel, text="Seed selected", command=self._seed_sprite).pack(pady=2)
+
+        # The gradeado (ADR-0165 GUI): one cell per sprite of the composed band,
+        # clickable — click a + cell to lock the engine's next pick, click a
+        # locked cell to swap it for the next recommendation (the butterfly: the
+        # lock set changed, so the whole row re-ranks), right-click to remove a
+        # lock. Removing the last lock clears the composition.
+        mid = ttk.LabelFrame(
+            f, text="Composed band — click + to lock · click a locked cell to swap · right-click to remove",
+            padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
-        self.sp_sugg = tk.Listbox(mid, width=34, height=22)
+        self._ROW_N = 8
+        self._CELL_W = 66
+        self._CELL_H = 84
+        self.row_canvas = tk.Canvas(mid, height=30, background="#1e1e24", highlightthickness=0)
+        self.row_canvas.pack(fill="x")
+        self.row_canvas.bind("<Button-1>", self._row_left)
+        self.row_canvas.bind("<Button-3>", self._row_right)
+        sugg = ttk.LabelFrame(mid, text="Ranked band members (coFrames) — or lock a pick here", padding=2)
+        sugg.pack(fill="both", expand=True, pady=(4, 0))
+        self.sp_sugg = tk.Listbox(sugg, width=42, height=12)
         self.sp_sugg.pack(fill="both", expand=True)
-        ttk.Button(mid, text="Lock suggestion", command=lambda: self.lock_from(self.sp_sugg)).pack(pady=2)
-        ttk.Button(mid, text="Recompute", command=self.refresh_sprites).pack(pady=2)
+        btns = ttk.Frame(sugg)
+        btns.pack(fill="x", pady=(2, 0))
+        ttk.Button(btns, text="Lock selected suggestion", command=self._lock_sprite).pack(side="left", padx=(0, 4))
+        ttk.Button(btns, text="Recompute", command=self.refresh_all).pack(side="left")
         self.band_box.bind("<<ComboboxSelected>>", lambda _e: self._on_band())
 
     def _fill_band_selector(self):
-        adj = self.pack.adjacency if self.pack else None
-        bands = adj.floors() if adj and adj.sprites_present else []
+        bands = self.vm.bands()
         self.band_box["values"] = [f"{b} px" for b in bands]
         if bands:
-            self.band_var.set(f"{bands[-1]} px")  # default: the most common ground
-        self._on_band()
+            self.band_var.set(f"{self.vm.band} px")
+        self._fill_sp_seed_list()
 
     def _current_band(self):
         try:
@@ -199,76 +234,176 @@ class EditorApp:
             return None
 
     def _on_band(self):
-        if not self.pack or not self.pack.adjacency.sprites_present:
-            return
-        band = self._current_band()
-        self.sp_seed.delete(0, "end")
-        for node in self.pack.adjacency.band_members(band) if band is not None else []:
-            self.sp_seed.insert("end", f"#{node}")
-        self.kept, self.seed = [], None
-        self.mode = "sprite"
-        self.refresh_sprites()
-
-    def refresh_sprites(self):
-        if not self.pack or not self.pack.adjacency.sprites_present:
-            return
         band = self._current_band()
         if band is None:
             return
-        self.sp_sugg.delete(0, "end")
-        locked = self.locked_list()
-        base = locked if locked else ([self.seed] if self.seed is not None else [])
-        if not base:
+        self.vm.set_band(band)
+        self._fill_sp_seed_list()
+        self.refresh_all()
+
+    def _fill_sp_seed_list(self):
+        self.sp_seed.delete(0, "end")
+        for node in self.vm.band_members():
+            self.sp_seed.insert("end", f"#{node}")
+
+    def _seed_sprite(self):
+        node = self._selected_node(self.sp_seed)
+        if node is None:
             return
-        for node, co in self.pack.sprite_rank(band, locked=base):
-            name = self._shape_name(node)
+        self.vm.seed_sprite(node)
+        self.refresh_all()
+
+    def _lock_sprite(self):
+        node = self._selected_node(self.sp_sugg)
+        if node is None:
+            return
+        self.vm.lock(node, "sprite")
+        self.refresh_all()
+
+    def _refresh_sp_sugg(self):
+        self.sp_sugg.delete(0, "end")
+        if self.vm.mode != "sprite":
+            return
+        for node, co in self.vm.sprite_rank():
+            name = self.vm.shape_name(node)
             self.sp_sugg.insert("end", f"#{node}  coFrames {co}{'  ' + name if name else ''}")
 
-    def _shape_name(self, node):
-        tiles = self.pack.adjacency.sp.get(node).tiles if self.pack else None
-        return tiles[0].get("tile", "")[:6] if tiles else ""
+    # ---- sprite band gradeado (the clickable composition row) ---------------
+
+    def _refresh_row(self):
+        self.row_canvas.delete("all")
+        self._cell_imgs.clear()
+        c = self.row_canvas
+        if not self.vm.pack or self.vm.mode != "sprite":
+            c.config(height=30)
+            c.create_text(8, 15, anchor="w", fill="#556",
+                          text="the row composes the sprite floor band — seed one on this tab")
+            return
+        spec = self.vm.row_spec()
+        if not spec:
+            c.config(height=30)
+            c.create_text(8, 15, anchor="w", fill="#556",
+                          text="seed a band member (left) — it becomes the first locked cell")
+            return
+        rows = (len(spec) + self._ROW_N - 1) // self._ROW_N
+        c.config(width=self._ROW_N * self._CELL_W, height=rows * self._CELL_H)
+        for i, cell in enumerate(spec):
+            col, row = divmod(i, self._ROW_N)
+            self._draw_row_cell(cell, col * self._CELL_W, row * self._CELL_H,
+                                is_seed=(i == 0 and cell["node"] is not None))
+
+    def _draw_row_cell(self, cell, x0, y0, is_seed):
+        box = self._CELL_W - 8
+        bx, by = x0 + (self._CELL_W - box) // 2, y0 + 2
+        c = self.row_canvas
+        if cell["node"] is None:
+            cand = cell.get("add")
+            c.create_rectangle(bx, by, bx + box, by + box, outline="#5a6b85", dash=(3, 2))
+            c.create_text(bx + box // 2, by + box // 2, text="+", fill="#93a7c4",
+                          font=("", 16, "bold"))
+            if cand is not None:
+                c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12,
+                              text=f"#{cand}", fill="#5f6f8a", font=("", 8))
+            return
+        node = cell["node"]
+        try:
+            art = self.vm.node_art(node, sprite=True)
+        except E.ComposeError:
+            c.create_rectangle(bx, by, bx + box, by + box, outline="#c06058", width=2)
+            c.create_text(bx + box // 2, by + box // 2, text="?", fill="#c06058", font=("", 14, "bold"))
+            c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12, text=f"#{node}",
+                          fill="#d7a3a3", font=("", 8))
+            return
+        unit = art.width
+        scale = max(1, (box - 8) // unit)
+        img, w, h = strip_photo([art], scale, gap=0)
+        self._cell_imgs.append(img)
+        c.create_image(bx + (box - w) // 2, by + (box - h) // 2, image=img, anchor="nw")
+        outline = "#ffd27d" if is_seed else "#7fa7e0"
+        fill = "#ffe2a8" if is_seed else "#cfd8e6"
+        c.create_rectangle(bx, by, bx + box, by + box, outline=outline, width=2)
+        c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12, text=f"#{node}",
+                      fill=fill, font=("", 8))
+
+    def _row_index_at(self, event):
+        return (event.y // self._CELL_H) * self._ROW_N + (event.x // self._CELL_W)
+
+    def _row_left(self, event):
+        if not self.vm.pack:
+            return
+        spec = self.vm.row_spec()
+        i = self._row_index_at(event)
+        if not (0 <= i < len(spec)):
+            return
+        cell = spec[i]
+        if cell["node"] is not None:
+            self.vm.swap_cell(i)
+            self.refresh_all()
+            return
+        node = cell.get("add")
+        if node is None:
+            return
+        if self.vm.lock(node, "sprite"):
+            self.refresh_all()
+
+    def _row_right(self, event):
+        if not self.vm.pack:
+            return
+        spec = self.vm.row_spec()
+        i = self._row_index_at(event)
+        if not (0 <= i < len(spec)):
+            return
+        node = spec[i]["node"]
+        if node is None:
+            return
+        self.vm.unlock(node)
+        self.refresh_all()
 
     # ---- shared -------------------------------------------------------------
 
-    def locked_list(self):
-        ids = ([self.seed] if self.seed is not None else []) + self.kept
-        seen = []
-        for n in ids:
-            if n is not None and n not in seen:
-                seen.append(n)
-        return seen
-
-    def seed_from(self, listbox):
+    def _selected_node(self, listbox):
         sel = listbox.curselection()
         if not sel:
-            return
-        text = listbox.get(sel[0])
-        node = int(text.split()[0][1:])
-        self.seed = node
-        self.kept = []
-        self.mode = "sprite" if listbox is self.sp_seed else "object"
-        self.status.set(f"seed {node} ({self.mode})")
-        self._refresh_suggestions()
+            return None
+        return int(listbox.get(sel[0]).split()[0][1:])
 
-    def lock_from(self, listbox):
-        sel = listbox.curselection()
-        if not sel:
-            return
-        text = listbox.get(sel[0])
-        node = int(text.split()[0][1:])
-        self.mode = "sprite" if listbox is self.sp_sugg else "object"
-        if node == self.seed:
-            return
-        if node not in self.kept:
-            self.kept.append(node)
-            self.status.set(f"locked {len(self.kept)} cells after seed {self.seed}")
-        self._refresh_suggestions()
+    def _bind_selection_preview(self):
+        for lb in (self.bg_seed, self.bg_sugg, self.sp_seed, self.sp_sugg):
+            lb.bind("<<ListboxSelect>>", lambda _e, b=lb: self._show_selected(b))
 
-    def _refresh_suggestions(self):
-        if not self.pack:
+    def _show_selected(self, listbox):
+        """Show the actual pixels of the highlighted cell in the preview panel,
+        so a composer sees the art instead of decoding "#47"."""
+        self.preview.delete("all")
+        self.preview_lbl.set("—")
+        self.preview_tk = None
+        if not self.vm.pack:
             return
-        self.refresh_bg()
-        self.refresh_sprites()
+        node = self._selected_node(listbox)
+        if node is None:
+            return
+        sprite = listbox in (self.sp_seed, self.sp_sugg)
+        kind = "sprite" if sprite else "object"
+        try:
+            art = self.vm.node_art(node, sprite=sprite)
+        except E.ComposeError as e:
+            self.status.set(str(e))
+            self.preview_lbl.set(f"#{node} ({kind}) — {e}")
+            return
+        unit = art.width
+        scale = max(1, min(16, 124 // unit))
+        img, _w, _h = strip_photo([art], scale)
+        self.preview_tk = img
+        self.preview.create_image(66, 66, image=img)
+        self.preview_lbl.set(f"#{node} ({kind})")
+
+    def refresh_all(self):
+        """Pull every view from the ViewModel's current state — the single
+        redraw path every command (seed/lock/unlock/swap/band change) calls."""
+        self.status.set(self.vm.status)
+        self._refresh_bg_sugg()
+        self._refresh_sp_sugg()
+        self._refresh_row()
         self._refresh_kept()
 
     def _refresh_kept(self):
@@ -276,13 +411,15 @@ class EditorApp:
         layer is being composed."""
         self._imgs.clear()
         self.canvas.delete("all")
-        if not self.pack or (self.seed is None and not self.kept):
+        if not self.vm.pack:
             return
-        order = self.locked_list()
+        order = self.vm.locked_list()
+        if not order:
+            return
         arts = []
         for node in order:
             try:
-                arts.append(self.pack.node_art(node, sprite=(self.mode == "sprite")))
+                arts.append(self.vm.node_art(node))
             except E.ComposeError as e:
                 self.status.set(str(e))
                 return
@@ -295,20 +432,13 @@ class EditorApp:
         self.canvas.create_image(2, 2, image=img, anchor="nw")
 
     def export(self):
-        if not self.pack:
+        if not self.vm.pack:
             return
-        order = self.locked_list()
-        if not order:
+        if not self.vm.can_export():
             messagebox.showwarning("Nothing to export", "Seed a cell first.")
             return
         try:
-            if self.mode == "sprite":
-                band = self._current_band()
-                name = self.pack.export("sprite", order, seed=self.seed, locked=self.kept,
-                                        band=band, to_dir=Path(self.out_var.get()))
-            else:
-                name = self.pack.export("object", order, seed=self.seed, locked=self.kept,
-                                        to_dir=Path(self.out_var.get()))
+            name = self.vm.export(Path(self.out_var.get()))
         except E.ComposeError as e:
             messagebox.showerror("Export failed", str(e))
             return
