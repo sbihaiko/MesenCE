@@ -194,6 +194,13 @@ UI/Dependencies.zip
 roms
 roms/*
 roms/**
+
+# headless run scratch (recorded packs, mesen-home sandboxes, screenshots,
+# probe exports). Only small text summaries under runs/ are versioned - add
+# a new one deliberately with `git add -f`, matching the roms/ rule above.
+runs
+runs/*
+runs/**
 claudei.sh
 
 
