@@ -17,6 +17,15 @@
 //(EmulationSpeed 0): speed is a free variable that no longer changes what a
 //recording contains. Pass "realtime" to keep it on.
 //
+//<seconds> is *emulated* seconds, and it is the argument, not a frame count -
+//passing a frame count by mistake asks for hours of emulation. Measured on an
+//M-series host, 2026-09-07: 600 emulated seconds (36060 frames) take 59s of
+//wall clock plain and 173s with "bootstrap", i.e. the builder costs about 3x
+//the emulator. Budget a validation recording at <= 2 minutes of wall clock -
+//roughly 400 emulated seconds with "bootstrap", 1200 without. A recording
+//that runs past 5 minutes is a mistake in the invocation, not a slow tool:
+//check the unit of <seconds> first.
+//
 //Default mode writes <output_prefix>.mid and <output_prefix>.vgm from the
 //ROM's first N seconds of audio (power-on attract/title music - no input is
 //ever fed). With the "hdpack" flag it records an HD pack skeleton instead
