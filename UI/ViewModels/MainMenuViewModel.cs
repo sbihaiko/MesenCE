@@ -858,12 +858,20 @@ namespace Mesen.ViewModels
 				DynamicIcon = () => RecordApi.LiveRecordingIsRecording() ? "MediaStop" : "Record",
 				IsEnabled = () => IsGameRunning || RecordApi.LiveRecordingIsRecording(),
 				OnClick = () => {
+					//Logged on both sides of the interop boundary: the toggle is the
+					//only way a human starts a run, and when the slot stays empty
+					//there is otherwise no way to tell "the click never arrived"
+					//from "the core refused" or "the core ran and published
+					//nothing". The Core half is LiveFrameRecorder's own logging.
 					if(RecordApi.LiveRecordingIsRecording()) {
 						RecordApi.LiveRecordingStop();
+						EmuApi.WriteLogEntry("[LiveRecording] UI: stop requested");
 					} else {
 						//Convention root only - the current-session slot. The
 						//viewer finds it the same way, so no path is ever typed.
-						RecordApi.LiveRecordingStart(ConfigManager.LiveRecordingFolder, LiveIntervalMs);
+						string dir = ConfigManager.LiveRecordingFolder;
+						bool started = RecordApi.LiveRecordingStart(dir, LiveIntervalMs);
+						EmuApi.WriteLogEntry("[LiveRecording] UI: start requested (" + dir + ", " + LiveIntervalMs + "ms) -> " + (started ? "started" : "REFUSED"));
 					}
 				}
 			};

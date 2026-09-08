@@ -101,6 +101,14 @@ public:
 	NesSoundMixer* GetSoundMixer() { return _mixer.get(); }
 	HdAudioDevice* GetHdAudioDevice() { return _hdAudioDevice.get(); }
 
+	//True when a loaded pack actually replaces pixels - the same condition
+	//InitializeRam uses to swap in HdNesPpu/HdVideoFilter, so an audio-only
+	//pack (which also fills _hdData) reads as false. A consumer that compares
+	//the composed frame against PPU data (scripts/record_viewer.py through
+	//LiveSnapshot::HdPackActive) needs this: with substitution on, the frame
+	//shows the pack's art while CHR/nametables still hold the original tiles.
+	bool IsHdPackVideoActive();
+
 	//F5.3: start recording the played music into <audioFolder> (fingerprints +
 	//MIDI, written when the console is destroyed or the bootstrap stops)
 	void StartAudioBootstrap(const string& audioFolder);

@@ -40,13 +40,52 @@ struct LiveSnapshot
 	uint8_t FineScrollX = 0;    //loopy "x", 0-7 - the fine X the game wrote
 	std::vector<uint8_t> Nametables; //$2000-$2FFF (4KB), mapper-resolved (mirroring included)
 
+	//ADR-0169 2026-09-08 update ("mid-frame raster splits"): loopy v (bits
+	//0-14) packed with fine X (bits 15-17) and the background pattern table
+	//select bit (bit 18) as they stood right after cycle 257's horizontal-
+	//bits copy, one entry per visible scanline (BaseNesPpu::
+	//GetScanlineScrollTrace / _scanlineVideoRamAddr's own comment).
+	//TmpVideoRamAddr/FineScrollX/BackgroundPatternAddr above are only the
+	//LAST value this frame held - wrong for any row drawn before a mid-frame
+	//rewrite (a status-bar split, raster parallax); this is the per-row value
+	//the reconstruction should use instead. Always 240 entries when
+	//HasBackground is set.
+	std::vector<uint32_t> ScanlineScroll;
+
+	//ADR-0169 2026-09-08 update ("mid-frame CHR bank splits"): 240 rows * 32
+	//slots (BaseNesPpu::GetScanlineChrBankTrace / _scanlineChrBankOffsets'
+	//own comment) of CHR-ROM byte offsets, one per 256-byte PPU-side page. A
+	//mapper whose CHR bank registers get rewritten mid-frame (Gauntlet's
+	//title screen, mapper 206/Namco 108 - an MMC3 derivative with CHR bank
+	//switching but no scanline IRQ) reuses the SAME nametable tile indices
+	//for two different sets of actual graphics across two bands of the
+	//screen - invisible to the single end-of-frame Chr[] snapshot above,
+	//which only ever resolves the LAST bank in effect. Indexes into
+	//ChrRomFull below, same as the CHR-latch case does. Empty whenever the
+	//mapper has no CHR-ROM at all (CHR-RAM games - Chr[] already carries the
+	//right content for those, nothing to add here).
+	std::vector<uint32_t> ScanlineChrBank;
+
 	//MMC2/MMC4 CHR-latch extension (BaseMapper::HasChrBankLatch, ADR-0169
 	//2026-09-08 update): populated only for a mapper whose CHR bank flips
 	//mid-frame via a tile-index latch. ChrRomFull is the raw, latch-independent
 	//CHR-ROM (GetChrRomData()/GetChrRomSize()) - reading it needs no side
 	//effects and is stable frame to frame - so the reconstruction can pick
 	//either bank per half per tile, instead of trusting the one bank the
-	//normal Chr[] snapshot resolved to.
+	//normal Chr[] snapshot resolved to. Also published (2026-09-08 update)
+	//whenever ScanlineChrBank above is non-empty, even for a mapper without a
+	//latch (Namco 108's plain bank registers) - the same raw dump backs both
+	//mechanisms.
+	//ADR-0169 2026-09-08 update ("HD pack substitution is not reconstructable"):
+	//true when the console renders through an HD pack that replaces pixels
+	//(NesConsole::IsHdPackVideoActive). The frame then shows the pack's redrawn
+	//art while Chr/Nametables/Oam above still describe the original NES tiles,
+	//so the two panes CANNOT agree - there is no data channel that carries the
+	//substituted graphics back to a reconstruction. A consumer must say so
+	//instead of reporting a meaningless match: the fix is to turn HD packs off
+	//(NesConfig::EnableHdPacks, or headless_record's "hdpack-off").
+	bool HdPackActive = false;
+
 	bool HasChrLatch = false;
 	std::vector<uint8_t> ChrRomFull;
 	uint16_t ChrLatchPageSize = 0;
@@ -79,5 +118,7 @@ namespace LiveRecordFormat
 	//background.json). Empty ("{}"-less nothing written) when !HasChrLatch.
 	std::string ComposeChrLatchJson(const LiveSnapshot& snapshot);
 
-	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec);
+	//hdPackActive publishes LiveSnapshot::HdPackActive - see its comment: a
+	//consumer that compares panes must warn rather than score when it is set.
+	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive);
 }

@@ -989,6 +989,19 @@ template<class T> void NesPpu<T>::ProcessScanlineImpl()
 			if(_scanline == -1 && _cycle >= 280 && _cycle <= 304) {
 				//copy vertical scrolling value from t
 				_videoRamAddr = (_videoRamAddr & ~0x7BE0) | (_tmpVideoRamAddr & 0x7BE0);
+
+				//ADR-0169 2026-09-08 update ("mid-frame raster splits", pre-render
+				//fix): cycle 257's own capture below into _scanlineVideoRamAddr[0]
+				//ran BEFORE this vertical-bits copy - v still had the PREVIOUS
+				//frame's leftover vertical bits at that point (whatever row
+				//rendering last touched), not this frame's fresh top row. Refresh
+				//the slot on every cycle in this window so it ends up holding v as
+				//it stands once the copy is done (cycle 304), same as every other
+				//row already gets from its own scanline's cycle-257 snapshot.
+				//A static (non-scrolling) screen like Gauntlet's title showed this
+				//starkly: row 0 decoded to a garbage mid-screen tile/attribute
+				//address instead of the top of the nametable.
+				_scanlineVideoRamAddr[0] = (uint32_t)_videoRamAddr | ((uint32_t)_xScroll << 15) | ((uint32_t)(_control.BackgroundPatternAddr != 0) << 18);
 			}
 			// Load the extra sprites before tile loading starts (which matters for MMC5)
 			// The CHR banks are switched back to the bg tileset in LoadTileInfo on cycle 321
@@ -1009,6 +1022,32 @@ template<class T> void NesPpu<T>::ProcessScanlineImpl()
 
 				//This is reset during dots 256.5-257.0, overriding the increment that would happen in 257.
 				_secondaryOamAddr = 0;
+			}
+
+			//ADR-0169 2026-09-08 update ("mid-frame raster splits"): v (plus
+			//fine X and the background pattern table select bit, packed into
+			//the high bits - see _scanlineVideoRamAddr's comment on why they
+			//travel separately from v/t) right after this scanline's
+			//horizontal copy is exactly the scroll/pattern-table basis the
+			//NEXT scanline's row renders from (this same copy is what real
+			//hardware uses to fetch that row's first tiles during this
+			//scanline's cycles 321-340). _scanline is -1 on the pre-render
+			//line, so +1 lands it at index 0 (the first visible row); 239's
+			//own copy governs a vblank row nothing reads, so it's skipped.
+			int16_t governedScanline = _scanline + 1;
+			if(governedScanline >= 0 && governedScanline < 240) {
+				_scanlineVideoRamAddr[governedScanline] = (uint32_t)_videoRamAddr | ((uint32_t)_xScroll << 15) | ((uint32_t)(_control.BackgroundPatternAddr != 0) << 18);
+
+				//ADR-0169 2026-09-08 update ("mid-frame CHR bank splits"): same
+				//"governs the next scanline" timing as the scroll capture just
+				//above - unlike loopy v/t, a mapper's CHR bank registers have no
+				//hardware-mandated refresh window of their own (a plain
+				//$8000/$8001 write takes effect the instant it happens), so no
+				//pre-render-line special case is needed here the way row 0's
+				//scroll capture needed one.
+				if(_mapper) {
+					_mapper->GetChrPageOffsets(_scanlineChrBankOffsets[governedScanline]);
+				}
 			}
 		}
 	} else if(_cycle >= 321 && _cycle <= 336) {

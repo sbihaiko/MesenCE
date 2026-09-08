@@ -81,6 +81,28 @@ extern "C"
 		return _emu->GetFrameCount();
 	}
 
+	//ADR-0169 2026-09-08 update ("frame/state capture race"): HeadlessCaptureFrame
+	//reads the video filter's own buffer without parking the emulation thread,
+	//while HeadlessCaptureNesSpriteLayer does (Emulator::Lock). A caller taking
+	//both back to back with nothing in between can have the console render one
+	//or more further frames between the two, so the pixels and the PPU/OAM/
+	//palette/VRAM state it reads next disagree about which frame they describe -
+	//visible as a live recording's composite pane showing a different moment
+	//(a screen transition, a cycled backdrop color) than its reconstruction.
+	//These two exports let a caller (scripts/headless_record's CaptureLiveSnapshot)
+	//park the thread first and read both under the same freeze; SimpleLock is
+	//reentrant by thread (see Utilities/SimpleLock.cpp), so nesting this around
+	//HeadlessCaptureNesSpriteLayer's own Lock/Unlock is safe.
+	DllExport void __stdcall HeadlessLockEmulator()
+	{
+		_emu->Lock();
+	}
+
+	DllExport void __stdcall HeadlessUnlockEmulator()
+	{
+		_emu->Unlock();
+	}
+
 	//Capture the frame the emulator is currently showing into the DLL-side
 	//buffer, filtered exactly like a saved screenshot would be. Returns false
 	//when nothing has been decoded yet; the out parameters are always written.
@@ -156,6 +178,20 @@ extern "C"
 		MessageManager::SetOptions(osdEnabled, false);
 	}
 
+	//ADR-0169 2026-09-08 update: does this run render through an HD pack that
+	//replaces pixels? See LiveRecordFormat.h's HdPackActive comment - a
+	//captured frame then shows the pack's art while the sprite/background layer
+	//below still describes the original NES tiles, so the harness has to
+	//publish the flag instead of letting a consumer score two panes that cannot
+	//agree. Kept as its own export rather than another out-param on
+	//HeadlessCaptureNesSpriteLayer: it is per-run, not per-capture. False for a
+	//non-NES console.
+	DllExport bool __stdcall HeadlessIsNesHdPackVideoActive()
+	{
+		NesConsole* nes = dynamic_cast<NesConsole*>(_emu->GetConsole().get());
+		return nes ? nes->IsHdPackVideoActive() : false;
+	}
+
 	//ADR-0169: read a NES run's sprite layer straight off the console - OAM and
 	//palette from their registered buffers (NesPpu.cpp), the mapper-resolved
 	//pattern tables through NesConsole::DebugReadVram and the $2000 sprite-
@@ -179,7 +215,7 @@ extern "C"
 	//and ScrollX) - no new struct field required.
 	DllExport bool __stdcall HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, uint8_t* nametables, NesPpuState* ppuState,
 		bool* outHasChrLatch, uint16_t* outChrLatchPageSize, uint8_t* outLeftFdBank, uint8_t* outLeftFeBank, uint8_t* outRightFdBank, uint8_t* outRightFeBank,
-		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize)
+		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize, uint32_t* outScanlineScroll, uint32_t* outScanlineChrBank)
 	{
 		_emu->Lock();
 
@@ -207,6 +243,11 @@ extern "C"
 					nametables[i] = nes->DebugReadVram((uint16_t)(0x2000 + i));
 				}
 			}
+			//ADR-0169 2026-09-08 update ("mid-frame raster splits") - see
+			//BaseNesPpu::GetScanlineScrollTrace's own comment.
+			if(outScanlineScroll) {
+				nes->GetPpu()->GetScanlineScrollTrace(outScanlineScroll);
+			}
 
 			//MMC2/MMC4 CHR-latch extension (BaseMapper::HasChrBankLatch,
 			//ADR-0169 2026-09-08 update) - see LiveFrameRecorder.cpp's identical
@@ -222,6 +263,19 @@ extern "C"
 				}
 				if(outLeftFdBank && outLeftFeBank && outRightFdBank && outRightFeBank) {
 					mapper->GetChrLatchBanks(*outLeftFdBank, *outLeftFeBank, *outRightFdBank, *outRightFeBank);
+				}
+			}
+
+			//ADR-0169 2026-09-08 update ("mid-frame CHR bank splits") - see
+			//LiveRecordFormat.h's ScanlineChrBank comment. Unlike the latch
+			//case above, this covers ANY ROM-backed mapper's plain CHR bank
+			//registers (Namco 108/mapper 206 has neither RAM nor a latch), so
+			//outChrFull is populated whenever CHR-ROM exists at all, not just
+			//when hasLatch is set.
+			bool hasChrRom = mapper && mapper->GetChrRomSize() > 0;
+			if(hasChrRom) {
+				if(outScanlineChrBank) {
+					nes->GetPpu()->GetScanlineChrBankTrace(outScanlineChrBank);
 				}
 				if(outChrFull && outChrFullSize) {
 					uint32_t romSize = std::min(mapper->GetChrRomSize(), maxChrFullSize);

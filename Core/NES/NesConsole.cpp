@@ -272,6 +272,13 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 	return result;
 }
 
+bool NesConsole::IsHdPackVideoActive()
+{
+	//Same condition InitializeRam checks before swapping in HdNesPpu (above) -
+	//kept in one place so the two can't drift.
+	return _hdData && _hdData->HasVideoContent();
+}
+
 void NesConsole::LoadHdPack(VirtualFile& romFile)
 {
 	_hdData.reset();

@@ -295,6 +295,28 @@ public:
 	virtual uint16_t GetChrLatchPageSize() { return 0; }
 	virtual void GetChrLatchBanks(uint8_t& leftFdBank, uint8_t& leftFeBank, uint8_t& rightFdBank, uint8_t& rightFeBank) { leftFdBank = leftFeBank = rightFdBank = rightFeBank = 0; }
 
+	//ADR-0169 2026-09-08 update ("mid-frame CHR bank splits"): the current
+	//CHR-ROM byte offset each 256-byte PPU-side page ($0000-$1FFF, 32 slots)
+	//resolves to - _chrPages is already normalized to this granularity
+	//regardless of a mapper's own bank-size scheme (SelectChrPage/
+	//SelectChrPage2x/4x/8x), so this one accessor covers every ROM-backed
+	//mapper without a per-mapper capture (unlike HasChrBankLatch above,
+	//which is MMC2/4-specific). 0xFFFFFFFF marks a slot that isn't backed by
+	//_chrRom right now (CHR-RAM, or no CHR-ROM at all) - the reconstruction
+	//falls back to the plain Chr[] snapshot for that slot, same as it always
+	//has for a CHR-RAM game.
+	void GetChrPageOffsets(uint32_t* outOffsets)
+	{
+		for(int i = 0; i < 0x20; i++) {
+			uint8_t* page = _chrPages[i];
+			if(page && _chrRom && page >= _chrRom && page < _chrRom + _chrRomSize) {
+				outOffsets[i] = (uint32_t)(page - _chrRom);
+			} else {
+				outOffsets[i] = 0xFFFFFFFF;
+			}
+		}
+	}
+
 	//Debugger Helper Functions
 	bool HasChrRam();
 	bool HasChrRom();

@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>] [live=<ms>]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [hdpack-off|mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>] [live=<ms>]
 //
 //F9.14 (ADR-0157): a run is a number of *emulated frames*, never a number of
 //host seconds. <seconds> keeps its name and its meaning for the caller, but is
@@ -122,6 +122,10 @@ extern "C"
 	void HeadlessSetPauseFrame(uint32_t frame);
 	uint32_t HeadlessGetScriptFrameCount();
 	uint32_t HeadlessGetFrameCount();
+	//ADR-0169 2026-09-08 update ("frame/state capture race") - see
+	//EmuApiWrapperHeadless.cpp's comment on HeadlessLockEmulator.
+	void HeadlessLockEmulator();
+	void HeadlessUnlockEmulator();
 	//ADR-0169 - the sprite layer is read, not rendered (Decision section 2): the
 	//wrapper export holds the emulation thread at an end-of-frame boundary
 	//(Emulator::Lock) and reads the OAM/palette buffers, the mapper-resolved
@@ -134,9 +138,22 @@ extern "C"
 	//The outHasChrLatch.. outChrFullSize params (same date, MMC2/MMC4 CHR-latch
 	//extension) are populated only when the loaded mapper has a tile-index CHR
 	//latch (BaseMapper::HasChrBankLatch) - see EmuApiWrapperHeadless.cpp.
+	//outScanlineScroll (added 2026-09-08, ADR-0169 "mid-frame raster splits"):
+	//240 loopy-v snapshots, one per visible scanline - see
+	//BaseNesPpu::GetScanlineScrollTrace's own comment.
+	//outScanlineChrBank (added 2026-09-08, ADR-0169 "mid-frame CHR bank
+	//splits"): 240*32 CHR-ROM byte offsets, one per 256-byte PPU-side page per
+	//visible scanline - see BaseNesPpu::GetScanlineChrBankTrace's own comment.
+	//outChrFull is populated for ANY ROM-backed mapper now, not just the
+	//MMC2/4 latch case (EmuApiWrapperHeadless.cpp).
 	bool HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, uint8_t* nametables, NesPpuState* ppuState,
 		bool* outHasChrLatch, uint16_t* outChrLatchPageSize, uint8_t* outLeftFdBank, uint8_t* outLeftFeBank, uint8_t* outRightFdBank, uint8_t* outRightFeBank,
-		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize);
+		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize, uint32_t* outScanlineScroll, uint32_t* outScanlineChrBank);
+	//ADR-0169 2026-09-08 update - is HD pack texture substitution live for this
+	//run? Published into status.json so the viewer warns instead of scoring two
+	//panes that cannot agree (LiveRecordFormat.h's HdPackActive comment). The
+	//"hdpack-off" flag below is the switch that turns it off.
+	bool HeadlessIsNesHdPackVideoActive();
 	//F9.15 - in-memory frame capture (same wrapper file)
 	bool HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount);
 	uint32_t HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels);
@@ -195,12 +212,21 @@ namespace
 	//read taken with the run parked for an instant (Decision section 2).
 	bool CaptureLiveSnapshot(LiveSnapshot& snapshot, bool readSpriteLayer)
 	{
+		//Park the emulation thread for the whole capture (ADR-0169 2026-09-08
+		//update, "frame/state capture race") - HeadlessCaptureFrame alone does
+		//not lock, so without this the console could render further frames
+		//between the pixel capture below and the PPU/OAM/palette/VRAM read in
+		//HeadlessCaptureNesSpriteLayer, publishing a composite and a
+		//reconstruction that disagree about which frame they describe.
+		HeadlessLockEmulator();
 		uint32_t pixelCount = 0;
 		if(!HeadlessCaptureFrame(&snapshot.Width, &snapshot.Height, &snapshot.CaptureFrame, &pixelCount)) {
+			HeadlessUnlockEmulator();
 			return false; //nothing decoded yet
 		}
 		snapshot.Pixels.assign(pixelCount, 0);
 		if(HeadlessReadCapturedPixels(snapshot.Pixels.data(), pixelCount) != pixelCount) {
+			HeadlessUnlockEmulator();
 			return false;
 		}
 		if(readSpriteLayer) {
@@ -216,12 +242,21 @@ namespace
 			static const uint32_t kMaxChrFull = 1024 * 1024;
 			snapshot.ChrRomFull.assign(kMaxChrFull, 0);
 			uint32_t chrFullSize = 0;
+			snapshot.ScanlineScroll.assign(240, 0);
+			snapshot.ScanlineChrBank.assign(240 * 0x20, 0);
 			if(!HeadlessCaptureNesSpriteLayer(snapshot.Oam, snapshot.Palette, snapshot.Chr.data(), snapshot.Nametables.data(), &ppu,
 				&snapshot.HasChrLatch, &snapshot.ChrLatchPageSize, &snapshot.LeftChrFdBank, &snapshot.LeftChrFeBank, &snapshot.RightChrFdBank, &snapshot.RightChrFeBank,
-				snapshot.ChrRomFull.data(), kMaxChrFull, &chrFullSize)) {
+				snapshot.ChrRomFull.data(), kMaxChrFull, &chrFullSize, snapshot.ScanlineScroll.data(), snapshot.ScanlineChrBank.data())) {
+				HeadlessUnlockEmulator();
 				return false; //not a NES console - no sprite layer to publish
 			}
 			snapshot.ChrRomFull.resize(chrFullSize);
+			if(chrFullSize == 0) {
+				//No CHR-ROM (CHR-RAM game, or not a ROM-backed mapper) - the
+				//per-scanline bank trace has nothing to index into, matching
+				//LiveFrameRecorder.cpp's own gating.
+				snapshot.ScanlineChrBank.clear();
+			}
 			snapshot.SpritePatternAddr = ppu.Control.SpritePatternAddr;
 			snapshot.LargeSprites = ppu.Control.LargeSprites;
 			snapshot.SpritesEnabled = ppu.Mask.SpritesEnabled;
@@ -232,6 +267,9 @@ namespace
 			//is inverted here rather than at every reader.
 			snapshot.LeftColumnClip = !ppu.Mask.SpriteMask;
 			snapshot.HasSprites = true;
+			//See LiveRecordFormat.h's HdPackActive comment - mirrors
+			//LiveFrameRecorder::CaptureSnapshot's own line.
+			snapshot.HdPackActive = HeadlessIsNesHdPackVideoActive();
 
 			snapshot.BackgroundPatternAddr = ppu.Control.BackgroundPatternAddr;
 			snapshot.BackgroundEnabled = ppu.Mask.BackgroundEnabled;
@@ -243,6 +281,7 @@ namespace
 			snapshot.FineScrollX = ppu.ScrollX;
 			snapshot.HasBackground = true;
 		}
+		HeadlessUnlockEmulator();
 		return true;
 	}
 }
@@ -252,7 +291,7 @@ int main(int argc, char** argv)
 	if(argc < 4) {
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [capture] [log] [bootstrap] [filter=<name>] [mep-off]\n"
-			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
+			"       [hdpack-off] [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
 			"       [state=<file.mss>] [input=<script>] [realtime] [hud-message=<title>|<msg>]\n"
 			"       [live=<ms>]\n", argv[0]);
 		return 1;
@@ -262,6 +301,7 @@ int main(int argc, char** argv)
 	std::string prefix = argv[3];
 	bool pal = false;
 	bool hdPack = false;
+	bool hdPackOff = false;
 	bool romTiles = false;
 	bool screenshot = false;
 	bool capture = false;
@@ -328,6 +368,14 @@ int main(int argc, char** argv)
 			dumpLog = true;
 		} else if(strcmp(argv[i], "mep-off") == 0) {
 			mep.EnableMepPacks = false;
+		} else if(strcmp(argv[i], "hdpack-off") == 0) {
+			//The player's own switch (NesConfig::EnableHdPacks), not an
+			//approximation of it: "mep-off" only takes MEP-installed packs out
+			//of discovery, while a loose HdPacks/<rom>/ pack (MEP-v1 §5.1) still
+			//loads and still replaces pixels. A run that has to compare the
+			//composed frame against PPU data needs substitution off at the one
+			//gate NesConsole::LoadHdPack checks first.
+			hdPackOff = true;
 		} else if(strcmp(argv[i], "mep-notextures") == 0) {
 			mep.EnableTextures = false;
 		} else if(strcmp(argv[i], "mep-nosynth") == 0) {
@@ -389,6 +437,24 @@ int main(int argc, char** argv)
 			fprintf(stderr, "live: cannot create %s (%s) - live view disabled, recording continues\n", liveDir.c_str(), liveError.message().c_str());
 			liveDir.clear();
 			liveMs = 0;
+		} else {
+			//Empty the folder of a previous run's publish set - the interactive
+			//producer does the same in LiveFrameRecorder::ClearSlot, see its
+			//comment for the cross-ROM contamination this prevents. Reusing a
+			//<prefix> across two ROMs is the case that bites: a run only writes
+			//the files its own mapper has data for, and the viewer selects a
+			//reconstruction path by a file's mere presence.
+			static const char* kPublishFiles[] = {
+				"frame.ppm", "sprites.json", "chr.bin", "palette.json", "nametables.bin",
+				"background.json", "scanlinescroll.bin", "scanlinechrbank.bin",
+				"chrfull.bin", "chrlatch.json", "status.json"
+			};
+			for(const char* name : kPublishFiles) {
+				std::error_code ignored;
+				std::filesystem::path path = std::filesystem::path(liveDir) / name;
+				std::filesystem::remove(path, ignored);
+				std::filesystem::remove(path.string() + ".tmp", ignored);
+			}
 		}
 	}
 
@@ -456,6 +522,9 @@ int main(int argc, char** argv)
 	//input script has nothing to drive.
 	nes.Port1.Type = ControllerType::NesController;
 	nes.RamPowerOnState = RamState::AllZeros; //see the SmsConfig note above
+	if(hdPackOff) {
+		nes.EnableHdPacks = false; //see the "hdpack-off" argument above
+	}
 	SetNesConfig(nes);
 
 	//Pin the GB model to the ROM extension so the HD pack capture path
@@ -635,13 +704,20 @@ int main(int argc, char** argv)
 			ok = LiveRecordFormat::AtomicWrite(liveDir + "/sprites.json", LiveRecordFormat::ComposeSpritesJson(snapshot, cpuFrame)) && ok;
 			ok = LiveRecordFormat::AtomicWrite(liveDir + "/chr.bin", snapshot.Chr.data(), snapshot.Chr.size()) && ok;
 			ok = LiveRecordFormat::AtomicWrite(liveDir + "/nametables.bin", snapshot.Nametables.data(), snapshot.Nametables.size()) && ok;
+			ok = LiveRecordFormat::AtomicWrite(liveDir + "/scanlinescroll.bin", snapshot.ScanlineScroll.data(), snapshot.ScanlineScroll.size() * sizeof(uint32_t)) && ok;
 			ok = LiveRecordFormat::AtomicWrite(liveDir + "/background.json", LiveRecordFormat::ComposeBackgroundJson(snapshot)) && ok;
-			if(snapshot.HasChrLatch) {
+			if(!snapshot.ScanlineChrBank.empty()) {
+				ok = LiveRecordFormat::AtomicWrite(liveDir + "/scanlinechrbank.bin", snapshot.ScanlineChrBank.data(), snapshot.ScanlineChrBank.size() * sizeof(uint32_t)) && ok;
+			}
+			//ADR-0169 2026-09-08 update: chrfull.bin now covers any ROM-backed
+			//mapper's CHR-ROM, not just the MMC2/4 latch case - see
+			//LiveFrameRecorder.cpp's identical block.
+			if(!snapshot.ChrRomFull.empty()) {
 				ok = LiveRecordFormat::AtomicWrite(liveDir + "/chrfull.bin", snapshot.ChrRomFull.data(), snapshot.ChrRomFull.size()) && ok;
 				ok = LiveRecordFormat::AtomicWrite(liveDir + "/chrlatch.json", LiveRecordFormat::ComposeChrLatchJson(snapshot)) && ok;
 			}
 		}
-		ok = LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(false, cpuFrame, totalFrames, elapsed())) && ok;
+		ok = LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(false, cpuFrame, totalFrames, elapsed(), snapshot.HdPackActive)) && ok;
 		if(!ok) {
 			fprintf(stderr, "live: cannot write %s - live view disabled, recording continues\n", liveDir.c_str());
 			liveDir.clear();
@@ -679,7 +755,7 @@ int main(int argc, char** argv)
 	//ADR-0169: one final status so the viewer can show "done" rather than stale
 	//- the run stops being published the moment it parks on its target frame.
 	if(liveMs > 0 && !liveDir.empty()) {
-		LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed()));
+		LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed(), HeadlessIsNesHdPackVideoActive()));
 	}
 
 	//The hud-message toast is emitted inside the capture block below, not here:

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <filesystem>
 #include "Shared/LiveFrameRecorder.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
@@ -10,6 +11,7 @@
 #include "NES/NesTypes.h"
 #include "Utilities/LiveRecordFormat.h"
 #include "Utilities/FolderUtilities.h"
+#include "Shared/MessageManager.h"
 
 LiveFrameRecorder::LiveFrameRecorder(Emulator* emu) : _emu(emu)
 {
@@ -21,23 +23,61 @@ LiveFrameRecorder::~LiveFrameRecorder()
 	StopRecording();
 }
 
+void LiveFrameRecorder::ClearSlot(const string& liveDir)
+{
+	//The slot is one directory by convention (ADR-0169 section 4), reused by
+	//every run, and a run only writes the files its own ROM has data for. Left
+	//alone, a run inherits the previous ROM's leftovers for everything it does
+	//not rewrite - and the viewer cannot tell the difference, because presence
+	//is the signal it selects a reconstruction path with. Observed: a CHR-latch
+	//ROM (Punch-Out, MMC2) left chrlatch.json + chrfull.bin behind, the next run
+	//(Bubble Bobble, no latch) never rewrote either, and record_viewer.py took
+	//the latch path resolving Bubble Bobble's tiles against Punch-Out's CHR-ROM,
+	//rendering garbage. So the slot is emptied of the whole publish set here,
+	//before the first tick: whatever a file's presence means to the viewer, it
+	//now means it about THIS run. The .tmp siblings go too - AtomicWrite renames
+	//over the target, but a run killed mid-write can leave one.
+	static const char* kPublishFiles[] = {
+		"frame.ppm", "sprites.json", "chr.bin", "palette.json", "nametables.bin",
+		"background.json", "scanlinescroll.bin", "scanlinechrbank.bin",
+		"chrfull.bin", "chrlatch.json", "status.json"
+	};
+	for(const char* name : kPublishFiles) {
+		string path = FolderUtilities::CombinePath(liveDir, name);
+		std::error_code ignored;
+		std::filesystem::remove(path, ignored);
+		std::filesystem::remove(path + ".tmp", ignored);
+	}
+	//palette.json is written once per run from the first capture that fills it
+	//(see ThreadLoop) - clearing the file has to clear that latch too, or the
+	//next run publishes nothing and the viewer colors it with no palette at all.
+	_paletteJson.clear();
+}
+
 bool LiveFrameRecorder::StartRecording(string liveDir, int intervalMs)
 {
+	//Every exit is logged: an empty slot has three very different causes (the
+	//click never reached here, this refused, or the thread ran and never got a
+	//decoded frame) and they are indistinguishable from the filesystem alone.
 	if(intervalMs < 50 || IsRecording()) {
+		MessageManager::Log("[LiveRecording] start refused: intervalMs=" + std::to_string(intervalMs) + (IsRecording() ? " (already recording)" : " (below the 50ms floor)"));
 		return false;
 	}
 
 	auto lock = _stopStartLock.AcquireSafe();
 	if(_thread) {
+		MessageManager::Log("[LiveRecording] start refused: a thread is already running");
 		return false;
 	}
 
 	FolderUtilities::CreateFolder(liveDir);
+	ClearSlot(liveDir);
 	_liveDir = liveDir;
 	_intervalMs = intervalMs;
 	_wallClock.Reset();
 	_stopFlag = false;
 	_thread.reset(new std::thread(&LiveFrameRecorder::ThreadLoop, this));
+	MessageManager::Log("[LiveRecording] started, publishing to " + liveDir + " every " + std::to_string(intervalMs) + "ms");
 	return true;
 }
 
@@ -55,7 +95,7 @@ void LiveFrameRecorder::StopRecording()
 			//so targetFrames stays 0 (the viewer reads that as "no target").
 			if(!_liveDir.empty()) {
 				LiveRecordFormat::AtomicWrite(_liveDir + "/status.json",
-					LiveRecordFormat::ComposeStatusJson(true, _emu->GetFrameCount(), 0, _wallClock.GetElapsedMS() / 1000.0));
+					LiveRecordFormat::ComposeStatusJson(true, _emu->GetFrameCount(), 0, _wallClock.GetElapsedMS() / 1000.0, _hdPackActive.load()));
 			}
 		}
 	}
@@ -68,22 +108,29 @@ bool LiveFrameRecorder::IsRecording()
 
 bool LiveFrameRecorder::CaptureSnapshot(LiveSnapshot& snapshot)
 {
+	//Same channel scripts/headless_record uses (ADR-0169 Decision section 2):
+	//Emulator::Lock() parks the emulation thread at an end-of-frame boundary
+	//without attaching a debugger, so a live recording never stalls the game
+	//the way GetMemoryState/GetPpuState would. Called here from this
+	//recorder's own thread - never the emulation thread itself.
+	//
+	//Locked *before* CaptureScreenshot (2026-09-08 ADR-0169 update, "frame/state
+	//capture race"): CaptureScreenshot doesn't park the thread on its own, so
+	//taking it first and locking afterwards let the console render further
+	//frames in between, publishing pixels and PPU/OAM/palette/VRAM state that
+	//describe two different frames - visible as the composite pane showing a
+	//screen transition or a cycled color the reconstruction pane never sees.
+	_emu->Lock();
 	vector<uint32_t> pixels;
 	ScreenshotCapture info = _emu->GetVideoDecoder()->CaptureScreenshot(pixels);
 	if(info.IsEmpty()) {
+		_emu->Unlock();
 		return false; //nothing decoded yet
 	}
 	snapshot.Width = info.Width;
 	snapshot.Height = info.Height;
 	snapshot.CaptureFrame = info.FrameNumber;
 	snapshot.Pixels = std::move(pixels);
-
-	//Same channel scripts/headless_record uses (ADR-0169 Decision section 2):
-	//Emulator::Lock() parks the emulation thread at an end-of-frame boundary
-	//without attaching a debugger, so a live recording never stalls the game
-	//the way GetMemoryState/GetPpuState would. Called here from this
-	//recorder's own thread - never the emulation thread itself.
-	_emu->Lock();
 	NesConsole* nes = dynamic_cast<NesConsole*>(_emu->GetConsole().get());
 	if(nes) {
 		NesPpuState ppu = {};
@@ -110,6 +157,11 @@ bool LiveFrameRecorder::CaptureSnapshot(LiveSnapshot& snapshot)
 		//inverted here rather than at every reader.
 		snapshot.LeftColumnClip = !ppu.Mask.SpriteMask;
 		snapshot.HasSprites = true;
+		//See LiveRecordFormat.h's HdPackActive comment: with texture
+		//substitution on, frame.ppm carries the pack's art while the CHR /
+		//nametable / OAM bytes above carry the original tiles, so the viewer
+		//must warn instead of scoring the two panes against each other.
+		snapshot.HdPackActive = nes->IsHdPackVideoActive();
 
 		//The background layer, read the same instant as the sprite layer above
 		//(2026-09-08 ADR-0169 update: "capture every layer" so the viewer can
@@ -131,16 +183,38 @@ bool LiveFrameRecorder::CaptureSnapshot(LiveSnapshot& snapshot)
 		snapshot.FineScrollX = ppu.ScrollX;
 		snapshot.HasBackground = true;
 
+		//Per-scanline loopy v (2026-09-08 ADR-0169 update, "mid-frame raster
+		//splits") - see BaseNesPpu::GetScanlineScrollTrace's own comment for why
+		//TmpVideoRamAddr alone is not enough whenever the game rewrites scroll
+		//mid-frame (a status-bar split, raster parallax).
+		snapshot.ScanlineScroll.assign(240, 0);
+		nes->GetPpu()->GetScanlineScrollTrace(snapshot.ScanlineScroll.data());
+
+		//ADR-0169 2026-09-08 update ("mid-frame CHR bank splits") - see
+		//LiveRecordFormat.h's ScanlineChrBank comment. Any ROM-backed mapper
+		//(not just the MMC2/4 latch case below) can rewrite its CHR bank
+		//registers mid-frame, so this is captured unconditionally whenever
+		//CHR-ROM exists, regardless of HasChrBankLatch.
+		BaseMapper* mapper = nes->GetMapper();
+		bool chrBankTraceNeeded = mapper && mapper->GetChrRomSize() > 0;
+		if(chrBankTraceNeeded) {
+			snapshot.ScanlineChrBank.assign(240 * 0x20, 0);
+			nes->GetPpu()->GetScanlineChrBankTrace(snapshot.ScanlineChrBank.data());
+		}
+
 		//MMC2/MMC4 CHR-latch extension (BaseMapper::HasChrBankLatch): the raw
-		//CHR-ROM plus both banks per half, published only for a mapper that
+		//CHR-ROM plus both banks per half, published for a mapper that
 		//actually has the latch (Mike Tyson's Punch-Out and its sequel) - see
 		//BaseMapper.h's comment for why the plain Chr[] snapshot above cannot
-		//be trusted for these.
-		BaseMapper* mapper = nes->GetMapper();
-		if(mapper && mapper->HasChrBankLatch()) {
-			snapshot.HasChrLatch = true;
-			snapshot.ChrLatchPageSize = mapper->GetChrLatchPageSize();
-			mapper->GetChrLatchBanks(snapshot.LeftChrFdBank, snapshot.LeftChrFeBank, snapshot.RightChrFdBank, snapshot.RightChrFeBank);
+		//be trusted for these. Also published (2026-09-08 update) whenever
+		//chrBankTraceNeeded above is true, even without a latch - the raw dump
+		//backs ScanlineChrBank's offsets the same way it backs the latch banks.
+		if(mapper && (mapper->HasChrBankLatch() || chrBankTraceNeeded)) {
+			snapshot.HasChrLatch = mapper->HasChrBankLatch();
+			if(snapshot.HasChrLatch) {
+				snapshot.ChrLatchPageSize = mapper->GetChrLatchPageSize();
+				mapper->GetChrLatchBanks(snapshot.LeftChrFdBank, snapshot.LeftChrFeBank, snapshot.RightChrFdBank, snapshot.RightChrFeBank);
+			}
 			uint8_t* romData = mapper->GetChrRomData();
 			uint32_t romSize = mapper->GetChrRomSize();
 			snapshot.ChrRomFull.assign(romData, romData + romSize);
@@ -174,10 +248,24 @@ bool LiveFrameRecorder::CaptureSnapshot(LiveSnapshot& snapshot)
 void LiveFrameRecorder::ThreadLoop()
 {
 	bool paletteWritten = false;
+	//One line for the first tick that publishes and one for the first that does
+	//not: "the loop is alive but nothing has been decoded yet" is the failure
+	//mode that looks exactly like "the recorder never started" from outside.
+	bool loggedFirstPublish = false;
+	bool loggedFirstSkip = false;
 	while(!_stopFlag.load()) {
 		double elapsed = _wallClock.GetElapsedMS();
 		LiveSnapshot snapshot;
-		if(CaptureSnapshot(snapshot)) {
+		bool captured = CaptureSnapshot(snapshot);
+		if(!captured && !loggedFirstSkip) {
+			MessageManager::Log("[LiveRecording] tick skipped: nothing decoded yet (no frame to publish)");
+			loggedFirstSkip = true;
+		}
+		if(captured) {
+			if(!loggedFirstPublish) {
+				MessageManager::Log("[LiveRecording] first frame published: " + std::to_string(snapshot.Width) + "x" + std::to_string(snapshot.Height) + ", sprites=" + (snapshot.HasSprites ? "yes" : "no") + ", background=" + (snapshot.HasBackground ? "yes" : "no") + ", hdPack=" + (snapshot.HdPackActive ? "on" : "off"));
+				loggedFirstPublish = true;
+			}
 			LiveRecordFormat::AtomicWrite(_liveDir + "/frame.ppm", LiveRecordFormat::ComposePpm(snapshot));
 			if(snapshot.HasSprites) {
 				LiveRecordFormat::AtomicWrite(_liveDir + "/sprites.json", LiveRecordFormat::ComposeSpritesJson(snapshot, _emu->GetFrameCount()));
@@ -193,13 +281,24 @@ void LiveFrameRecorder::ThreadLoop()
 			if(snapshot.HasBackground) {
 				LiveRecordFormat::AtomicWrite(_liveDir + "/nametables.bin", snapshot.Nametables.data(), snapshot.Nametables.size());
 				LiveRecordFormat::AtomicWrite(_liveDir + "/background.json", LiveRecordFormat::ComposeBackgroundJson(snapshot));
+				LiveRecordFormat::AtomicWrite(_liveDir + "/scanlinescroll.bin", snapshot.ScanlineScroll.data(), snapshot.ScanlineScroll.size() * sizeof(uint32_t));
+				if(!snapshot.ScanlineChrBank.empty()) {
+					LiveRecordFormat::AtomicWrite(_liveDir + "/scanlinechrbank.bin", snapshot.ScanlineChrBank.data(), snapshot.ScanlineChrBank.size() * sizeof(uint32_t));
+				}
 			}
-			if(snapshot.HasChrLatch) {
+			//ADR-0169 2026-09-08 update: chrfull.bin is written whenever
+			//ChrRomFull got populated - either the MMC2/4 latch case
+			//(HasChrLatch) or any other ROM-backed mapper's plain CHR bank
+			//registers (ScanlineChrBank non-empty) - both need the raw dump to
+			//resolve a non-current bank. chrlatch.json stays gated on the
+			//actual latch flag; ComposeChrLatchJson already no-ops otherwise.
+			if(!snapshot.ChrRomFull.empty()) {
 				LiveRecordFormat::AtomicWrite(_liveDir + "/chrfull.bin", snapshot.ChrRomFull.data(), snapshot.ChrRomFull.size());
 				LiveRecordFormat::AtomicWrite(_liveDir + "/chrlatch.json", LiveRecordFormat::ComposeChrLatchJson(snapshot));
 			}
+			_hdPackActive.store(snapshot.HdPackActive);
 			LiveRecordFormat::AtomicWrite(_liveDir + "/status.json",
-				LiveRecordFormat::ComposeStatusJson(false, _emu->GetFrameCount(), 0, elapsed / 1000.0));
+				LiveRecordFormat::ComposeStatusJson(false, _emu->GetFrameCount(), 0, elapsed / 1000.0, snapshot.HdPackActive));
 		}
 
 		//Sleep the remainder of the interval, not the whole interval - the

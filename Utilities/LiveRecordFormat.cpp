@@ -87,7 +87,7 @@ std::string LiveRecordFormat::ComposeChrLatchJson(const LiveSnapshot& s)
 	return j;
 }
 
-std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec)
+std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive)
 {
 	char wall[32];
 	snprintf(wall, sizeof(wall), "%.1f", wallSec);
@@ -95,6 +95,7 @@ std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint3
 	s += "  \"frame\": " + std::to_string(frame) + ",\n";
 	s += "  \"targetFrames\": " + std::to_string(targetFrames) + ",\n";
 	s += std::string("  \"elapsedWallSec\": ") + wall + ",\n";
+	s += std::string("  \"hdPackActive\": ") + (hdPackActive ? "true" : "false") + ",\n";
 	s += std::string("  \"done\": ") + (done ? "true" : "false") + "\n";
 	s += "}\n";
 	return s;

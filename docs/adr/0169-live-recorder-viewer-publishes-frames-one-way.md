@@ -76,6 +76,103 @@
   composite artifact) that a palette-indexed reconstruction cannot and does
   not try to reproduce — the same category of disclosed gap as the
   8-sprites-per-scanline limit.
+- Updated: 2026-09-08 ("frame/state capture race") — a batch run of the
+  composite-vs-reconstruction comparison across 30 NES ROMs (per the /goal
+  "testar as duas telas do player por similaridade para todas as ROMs")
+  surfaced a second, generalizable bug distinct from the CHR-latch and
+  mask-polarity ones above: both producers captured the composite pixels
+  (CaptureScreenshot/HeadlessCaptureFrame) before taking Emulator::Lock() for
+  the PPU/OAM/palette/VRAM read, instead of after. Lock() is what parks the
+  emulation thread at an end-of-frame boundary (Consequences bullet 1);
+  reading the pixels first and locking afterwards left a window in which the
+  console could render one or more further frames before the state read, so
+  the two halves of one published snapshot could describe two different
+  frames outright. Symptoms scaled with how much changes frame to frame:
+  Super Mario Bros. briefly showed the reconstruction's backdrop color from
+  the frame after the composite's (a fast palette-cycle title screen), and
+  Golf showed the reconstruction on a menu screen while the composite had
+  already advanced to the course view — a full scene change, not a color
+  glitch. It also explains what "nem todos os sprites estao com borda" turned
+  out to be: a sprite's OAM entry and the composite pixels it is outlined
+  against could belong to different frames, so a real, visible sprite's
+  bounding box would land on the wrong position or not be drawn at all;
+  re-verified on Punch-Out after the fix (every visible face/logo sprite in a
+  fresh capture gets its box, and the two sprites that legitimately don't are
+  the mapper's own 0xFD/0xFE latch-trigger dummies, invisible by design).
+  Fixed by reordering both producers to lock first: Core/Shared/
+  LiveFrameRecorder.cpp's CaptureSnapshot now calls _emu->Lock() before
+  CaptureScreenshot, not after; scripts/headless_record.cpp's
+  CaptureLiveSnapshot has no direct Emulator* (it talks to the DLL through the
+  Headless* export surface), so two new exports, HeadlessLockEmulator/
+  HeadlessUnlockEmulator (thin wrappers over _emu->Lock()/Unlock(),
+  InteropDLL/EmuApiWrapperHeadless.cpp), let it park the thread around both
+  HeadlessCaptureFrame and HeadlessCaptureNesSpriteLayer in one hold;
+  SimpleLock is reentrant per thread (_lockCount), so this nests safely inside
+  HeadlessCaptureNesSpriteLayer's own internal Lock/Unlock without
+  deadlocking. Measured effect across the 30-ROM batch (mep-off, to isolate
+  the reconstruction engine from HD-pack visual substitution — see below):
+  Super Mario Bros. 43.09% → 99.80%, Golf 12.85% → 37.65%, Mike Tyson's
+  Punch-Out 92.15% → 98.29%; 24 of 30 ROMs now land at 97%+ (many 99-100%),
+  up from a batch where several titles were under 2%.
+- Updated: 2026-09-08 ("HD packs are not a reconstruction target") — the same
+  batch run's worst scores before the race fix (Castlevania 0.89%, Donkey Kong
+  0.01%, Metroid 0.00%, Mega Man 1.82%, The Legend of Zelda 0.18%, Contra
+  39.83%) turned out not to be reconstruction bugs at all: ADR-0146 auto-loads
+  every registered community HD pack, so the composite frame these titles
+  render is community-drawn replacement art (visually confirmed — e.g.
+  "METROID -HIGH DEFINITION-", "CONTRA 80's Reimagined By: Tastic"), which the
+  reconstruction engine has no way to know about from CHR-ROM/VRAM alone: it
+  is not the pixels the console is generating, so a palette-indexed
+  reconstruction of the original tiles will never match it. There is no data
+  channel that could carry a substituted tile back to a reconstruction: the
+  matcher (`HdNesPack::GetMatchingTile`) is stateful and runs on the video
+  thread, and the pack's art is not derivable from any PPU state the capture
+  reads. So the recorder publishes the *condition* instead of guessing at the
+  pixels: `LiveSnapshot::HdPackActive` (from `NesConsole::IsHdPackVideoActive`,
+  the same `_hdData && HasVideoContent()` test that swaps in `HdNesPpu`) goes
+  out in status.json from both producers, and record_viewer.py replaces its
+  reconstruction caveat with an explicit "substitution is ON, these two panes
+  are not comparable, turn Enable HD Packs off" rather than showing a score
+  that reads as a fidelity failure.
+- Updated: 2026-09-08 ("hdpack-off is the switch, not mep-off") — measuring
+  reconstruction fidelity needs substitution off at the gate the player itself
+  uses, `NesConfig::EnableHdPacks` (checked first in
+  `NesConsole::LoadHdPack`). `mep-off` only takes MEP-installed packs out of
+  discovery; a loose `HdPacks/<rom>/` pack (MEP-v1 §5.1) still loads and still
+  replaces pixels, so it is an approximation of the player's own switch, not
+  the switch. headless_record gained `hdpack-off` for exactly that, and the
+  30-ROM batch re-run with it — each line asserting the run's own published
+  `hdPackActive=false`, so "substitution really was off" is measured rather
+  than assumed — lands **every one of the 30 ROMs at 98.10% or better**
+  (mean per-pixel RGB delta 3.6-6.3 of 765 on the worst six). The titles that
+  had scored 0-2% with packs auto-loaded now read Castlevania 99.59%, Donkey
+  Kong 99.95%, Metroid 99.85%, Mega Man 100.00%, The Legend of Zelda 98.10%.
+  Per-pixel diff maps on the worst three attribute the whole residual to
+  animation drift between the composite poll and the state read (Zelda II's
+  twinkling stars and cycling sword glow, Bubble Bobble's drifting bubble
+  sprites) or to the MMC2 latch path picking a neighbouring bank for a few
+  portrait/logo tiles (Punch-Out) — adjacent-palette-entry swaps along tile
+  edges, not a layer or priority error.
+- Updated: 2026-09-08 ("mid-frame raster splits are still out of reach") — of
+  the 30-ROM batch, six titles remain well below the rest even after the two
+  fixes above, and diagnosis traced every one to the same disclosed gap this
+  ADR has named since section 2: a single end-of-frame snapshot cannot see a
+  mid-frame PPU/mapper register write. Golf and Zelda II (status-bar split:
+  scroll changes partway down the screen, a fixed HUD above a scrolling
+  playfield below) reconstruct the top half of the screen correctly and go
+  black below (or vice versa); Life Force/Super Mario Bros. 3's title screen
+  (a mid-frame CHR-bank or nametable-pointer switch — the captured
+  nametables.bin genuinely holds tile index 0 for the region in question,
+  confirming the read is faithful, just to a snapshot the game already moved
+  past) go blank in exactly the region the game redraws with a second raster
+  pass; Gauntlet's title art and Lemmings' title screen (a mid-frame CHR-bank
+  switch reusing the same tile indices for font glyphs in one bank and
+  picture art in another) show scrambled tiles for the same reason. Seeing
+  this correctly would need capturing every relevant register write with its
+  scanline/cycle timestamp for the whole frame — a materially bigger capture
+  format than this ADR's single end-of-frame read, and out of scope for this
+  pass. Left as a documented, disclosed limitation alongside the
+  8-sprites-per-scanline cap and the NTSC-blend residual.
 - Related: ADR-0050 (bootstrap screen backgrounds), ADR-0157 (headless input in
   emulated frames), ADR-0164 (adjacency sidecar), ADR-0165 (the composition
   editor is an external stdlib Python tool), ADR-0167 (HUD-only capture seam),

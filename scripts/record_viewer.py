@@ -95,6 +95,18 @@ SPRITES_ONLY_CAVEAT = (
     "rebuilt from OAM only (this recording predates the background capture) — "
     "sprites drawn over the backdrop color, no priority to multiplex")
 
+# status.json's hdPackActive (LiveRecordFormat.h's LiveSnapshot::HdPackActive):
+# with HD pack texture substitution live, the frame above is the pack's redrawn
+# art while the CHR/nametable/OAM bytes this pane rebuilds from still hold the
+# original NES tiles. There is no data channel that carries a substituted tile
+# back to a reconstruction, so the two panes are simply describing different
+# graphics - say so instead of letting the pane read as a fidelity failure.
+HD_PACK_CAVEAT = (
+    "HD pack substitution is ON for this run — the frame above shows the pack's "
+    "redrawn art, this pane shows the original NES tiles it replaced, so the two "
+    "are not comparable. Turn off Settings > NES > Enable HD Packs (or run "
+    "headless_record with hdpack-off) to compare the reconstruction itself")
+
 
 def emulator_live_dir():
     """The convention slot the emulator's own live recorder publishes to
@@ -173,6 +185,61 @@ def parse_background_json(text):
     }
 
 
+def parse_scanline_scroll(raw):
+    """240 per-scanline scroll snapshots (uint32 LE), one per visible scanline -
+    written by both producers alongside nametables.bin (2026-09-08 ADR-0169
+    update, "mid-frame raster splits"; see BaseNesPpu::GetScanlineScrollTrace's
+    own comment on the array's semantics). Each value packs loopy v (bits 0-14,
+    the same bit layout as tmpScroll) with that row's fine X (bits 15-17) and
+    background pattern table select bit (bit 18). A raster effect that
+    rewrites either mid-frame - Life Force's diagonal parallax (fine X),
+    Gauntlet's title screen splitting its background graphics into two CHR
+    halves via a bare $2000 write (pattern table select) - would be invisible
+    to a v-only trace, since neither bit lives inside v/t's own bits. Absent
+    for a recording made before this update; callers fall back to the single
+    background.json tmpScroll/patternAddr then."""
+    import struct
+    count = len(raw) // 4
+    return list(struct.unpack(f"<{count}I", raw[:count * 4]))
+
+
+def parse_scanline_chr_bank(raw):
+    """240 rows * 32 slots of CHR-ROM byte offsets (uint32 LE), flat in the
+    same layout BaseNesPpu::_scanlineChrBankOffsets publishes - written by
+    both producers alongside scanlinescroll.bin (2026-09-08 ADR-0169 update,
+    "mid-frame CHR bank splits"; see LiveRecordFormat.h's ScanlineChrBank
+    comment). Row py's slot s (s in 0..0x1F, the 256-byte PPU-side page
+    $0000-$1FFF is addressed in) holds the byte offset into chrfull.bin that
+    page resolved to while scanline py rendered; 0xFFFFFFFF marks a page the
+    mapper does not back with CHR-ROM right now (CHR-RAM, or none at all), for
+    which the flat chr.bin snapshot stays authoritative. Index it as
+    rows[py * 0x20 + slot]. Absent for a recording made before this update or
+    for a CHR-RAM mapper - callers fall back to the single chr.bin snapshot."""
+    import struct
+    count = len(raw) // 4
+    return list(struct.unpack(f"<{count}I", raw[:count * 4]))
+
+
+def decode_scroll_row(t):
+    """One scanline's (world_x_base, world_y, pattern_addr) from a packed
+    per-scanline snapshot (parse_scanline_scroll): fine X (bits 15-17),
+    background pattern table select (bit 18, 0 or 0x1000) plus loopy v's own
+    bits - NT select (10-11), coarse X/Y (0-4 / 5-9), fine Y (12-14). world_y
+    is the exact nametable row this scanline fetches (v already walked there
+    one row at a time), so - unlike a single frame-wide scroll - no per-row
+    "+py" accumulation is needed on top of it."""
+    fine_x = (t >> 15) & 0x07
+    pattern_addr = 0x1000 if (t >> 18) & 1 else 0
+    coarse_x = t & 0x1F
+    h_sel = (t >> 10) & 1
+    coarse_y = (t >> 5) & 0x1F
+    v_sel = (t >> 11) & 1
+    fine_y = (t >> 12) & 7
+    world_x = h_sel * 256 + coarse_x * 8 + fine_x
+    world_y = v_sel * 240 + coarse_y * 8 + fine_y
+    return world_x, world_y, pattern_addr
+
+
 def parse_chrlatch_json(text):
     """Validate and normalise one chrlatch.json into a plain dict (ADR-0169
     2026-09-08 "MMC2/MMC4 CHR-latch" update). Published only for a mapper
@@ -223,7 +290,7 @@ def deduce_initial_chr_latch(chr_flat, chr_full, latch):
     return left, right
 
 
-def build_planes_with_chr_latch(bg, nametables, sprites, chr_full, latch, initial_left, initial_right):
+def build_planes_with_chr_latch(bg, nametables, sprites, chr_full, latch, initial_left, initial_right, scanline_scroll=None):
     """Background + sprite planes for a frame from a CHR-latch mapper (MMC2/
     MMC4 — BaseMapper::HasChrBankLatch, e.g. Mike Tyson's Punch-Out's boxer
     portrait), used instead of build_background_plane/build_sprite_planes
@@ -290,15 +357,27 @@ def build_planes_with_chr_latch(bg, nametables, sprites, chr_full, latch, initia
         fine_x0 = bg["fineScrollX"]
         scroll_x = ((t >> 10) & 1) * 256 + (t & 0x1F) * 8 + fine_x0
         scroll_y = ((t >> 11) & 1) * 240 + ((t >> 5) & 0x1F) * 8 + ((t >> 12) & 7)
+    has_trace = scanline_scroll is not None and len(scanline_scroll) == NATIVE_H
     clip_left_bg = bg["leftColumnClip"] if bg_enabled else False
 
     for row_y in range(NATIVE_H):
         # ---- this row's background tiles, left to right (fetched first — see
         # this function's docstring on fetch order) ----
         if bg_enabled:
-            world_y = scroll_y + row_y
-            if world_y >= 480:
-                world_y -= 480
+            # 2026-09-08 ADR-0169 update ("mid-frame raster splits") - see
+            # build_background_plane's docstring on scanline_scroll. Each trace
+            # value already packs its row's own fine X (bits 15-17) and
+            # background pattern table select (bit 18), so no frame-wide
+            # fine_x0/bg_half is applied on top of it.
+            if has_trace:
+                row_wx, world_y, row_pattern_addr = decode_scroll_row(scanline_scroll[row_y])
+                row_bg_half = (row_pattern_addr >> 12) & 1
+            else:
+                row_wx = scroll_x
+                world_y = scroll_y + row_y
+                if world_y >= 480:
+                    world_y -= 480
+                row_bg_half = bg_half
             v_sel, y_in_page = divmod(world_y, 240)
             row_in_nt, fine_y = divmod(y_in_page, 8)
             page_base = v_sel << 11
@@ -307,7 +386,7 @@ def build_planes_with_chr_latch(bg, nametables, sprites, chr_full, latch, initia
             quad_y = (row_in_nt & 2) << 1
             out_row = row_y * NATIVE_W
             p = 0
-            wx = scroll_x
+            wx = row_wx
             while p < NATIVE_W:
                 col_world = (wx >> 3) & 0x3F
                 h_sel = col_world >> 5
@@ -315,7 +394,7 @@ def build_planes_with_chr_latch(bg, nametables, sprites, chr_full, latch, initia
                 tile_index = nametables[page_base + h_sel * 0x400 + row_base + col_in_nt]
                 attr = nametables[page_base + h_sel * 0x400 + 0x3C0 + attr_row + (col_in_nt >> 2)]
                 subpal = ((attr >> (quad_y | (col_in_nt & 2))) & 3) << 2
-                low, high = fetch(bg_half, tile_index, fine_y)
+                low, high = fetch(row_bg_half, tile_index, fine_y)
                 run = 8 - (wx & 7)
                 if p + run > NATIVE_W:
                     run = NATIVE_W - p
@@ -475,7 +554,8 @@ def build_sprite_planes(sprites, chr_bytes, show_front=True, show_behind=True):
     return plane, behind, touched
 
 
-def build_background_plane(bg, nametables, chr_bytes):
+def build_background_plane(bg, nametables, chr_bytes, scanline_scroll=None,
+                           scanline_chr_bank=None, chr_rom_full=None):
     """Background layer at native 256x240, as (plane, opaque): plane[i] is the
     pixel's palette-RAM slot (0 = the universal backdrop color), opaque[i] is 1
     when the pixel comes from a tile's own 2-bit color — a behind-background
@@ -489,20 +569,43 @@ def build_background_plane(bg, nametables, chr_bytes):
     (page << 10) + offset reproduces what the PPU fetches at that nametable
     page, where page = vertical_select*2 + horizontal_select.
 
-    Layout uses loopy "t" (bg['tmpScroll'], the scroll the game wrote — at an
-    end-of-frame boundary loopy "v" has already scanned the whole frame, so t is
-    the only stable base) plus fine X: t's coarse X (bits 0-4) and horizontal
-    page bit (10) and coarse Y (5-9), vertical page bit (11) and fine Y (12-14)
-    place the screen's top-left in a 512x480 2x2-nametable world."""
+    scanline_scroll (2026-09-08 ADR-0169 update, "mid-frame raster splits"):
+    240 per-row snapshots (parse_scanline_scroll), used instead of one
+    frame-wide scroll/pattern-table whenever present - each row decodes its
+    OWN world_y/world_x_base/pattern-table select from its own snapshot
+    (decode_scroll_row), so a status-bar split, a raster-parallax rewrite, or
+    a bare $2000 pattern-table split reproduces correctly instead of the whole
+    screen assuming bg['tmpScroll']/bg['patternAddr']'s single end-of-frame
+    value. Absent (None, or the wrong length) for a recording made before this
+    update - the caller then gets the old single-scroll behavior, unchanged.
+
+    scanline_chr_bank + chr_rom_full (2026-09-08 ADR-0169 update, "mid-frame
+    CHR bank splits"): the per-scanline CHR-ROM offset trace
+    (parse_scanline_chr_bank) and the raw CHR-ROM it indexes into. The plain
+    chr_bytes snapshot (chr.bin) only ever holds whichever CHR banks were in
+    effect at end of frame - wrong for any row drawn before a mapper rewrote
+    its CHR bank registers mid-frame (Gauntlet's title screen splits one
+    nametable's tile indices across two different sets of actual graphics via
+    plain $8000/$8001 writes at scanline ~119, no scanline IRQ). When both are
+    present and the trace is the full 240*32 entries, each tile's two bitplane
+    bytes (which always share one 256-byte CHR page - a tile is 16-byte
+    aligned) are read from chr_rom_full at that row's recorded page offset;
+    a 0xFFFFFFFF page (CHR-RAM, or not ROM-backed) falls back to chr_bytes,
+    which DebugReadVram already resolved for it. Absent for a CHR-RAM mapper
+    or a recording made before this update - unchanged single-snapshot
+    behavior."""
     plane = bytearray(NATIVE_W * NATIVE_H)
     opaque = bytearray(NATIVE_W * NATIVE_H)
     if not bg["enabled"]:
         return plane, opaque
 
-    t = bg["tmpScroll"]
     fine_x0 = bg["fineScrollX"]
+    t = bg["tmpScroll"]
     scroll_x = ((t >> 10) & 1) * 256 + (t & 0x1F) * 8 + fine_x0
     scroll_y = ((t >> 11) & 1) * 240 + ((t >> 5) & 0x1F) * 8 + ((t >> 12) & 7)
+    has_trace = scanline_scroll is not None and len(scanline_scroll) == NATIVE_H
+    has_chr_trace = (scanline_chr_bank is not None and chr_rom_full is not None
+                     and len(scanline_chr_bank) == NATIVE_H * 0x20)
     pattern = bg["patternAddr"]
     nt = nametables
 
@@ -513,9 +616,14 @@ def build_background_plane(bg, nametables, chr_bytes):
     # basis, so page/row-in-page here must come from a divmod by 240/30, not a
     # bit shift assuming 256/32 - mixing the two silently reads the wrong page.
     for py in range(NATIVE_H):
-        world_y = scroll_y + py
-        if world_y >= 480:
-            world_y -= 480  # a 256-tall viewport never crosses more than one edge
+        if has_trace:
+            row_wx, world_y, row_pattern = decode_scroll_row(scanline_scroll[py])
+        else:
+            row_wx = scroll_x
+            world_y = scroll_y + py
+            if world_y >= 480:
+                world_y -= 480  # a 256-tall viewport never crosses more than one edge
+            row_pattern = pattern
         v_sel, y_in_page = divmod(world_y, 240)
         row_in_nt, fine_y = divmod(y_in_page, 8)
         page_base = (v_sel << 11)  # vertical select is address bit 11
@@ -524,7 +632,7 @@ def build_background_plane(bg, nametables, chr_bytes):
         quad_y = (row_in_nt & 2) << 1
         out_row = py * NATIVE_W
         p = 0
-        wx = scroll_x
+        wx = row_wx
         while p < NATIVE_W:
             # The screen's columns are the world's columns starting at scroll_x;
             # each loop body decodes one 8px tile, then advances past it. A page
@@ -536,9 +644,22 @@ def build_background_plane(bg, nametables, chr_bytes):
             tile_index = nt[page_base + h_sel * 0x400 + row_base + col_in_nt]
             attr = nt[page_base + h_sel * 0x400 + 0x3C0 + attr_row + (col_in_nt >> 2)]
             subpal = ((attr >> (quad_y | (col_in_nt & 2))) & 3) << 2
-            ta = pattern + (tile_index << 4) + fine_y
-            low = chr_bytes[ta]
-            high = chr_bytes[ta + 8]
+            ta = row_pattern + (tile_index << 4) + fine_y
+            if has_chr_trace:
+                # A tile's two bitplane bytes share one 256-byte CHR page (the
+                # tile is 16-byte aligned), so one slot lookup covers both - see
+                # this function's docstring for the 0xFFFFFFFF fallback.
+                bank_off = scanline_chr_bank[py * 0x20 + (ta >> 8)]
+                in_page = ta & 0xFF
+                if bank_off != 0xFFFFFFFF and bank_off + in_page + 8 <= len(chr_rom_full):
+                    low = chr_rom_full[bank_off + in_page]
+                    high = chr_rom_full[bank_off + in_page + 8]
+                else:
+                    low = chr_bytes[ta]
+                    high = chr_bytes[ta + 8]
+            else:
+                low = chr_bytes[ta]
+                high = chr_bytes[ta + 8]
             run = 8 - (wx & 7)  # pixels left in this tile before the next one
             if p + run > NATIVE_W:
                 run = NATIVE_W - p
@@ -616,7 +737,8 @@ class RecordViewerApp:
         self._status_text = None
         self._last_mark_data = None  # (sprites, touched) of the last draw
         self._last_sprite_state = None  # (sprites, chr, colors, w, h, scale) of the last draw
-        self._last_bg_state = None   # (bg dict, nametables bytes) of the last draw, or None
+        self._last_bg_state = None   # (bg dict, nametables bytes, scanlineScroll list-or-None,
+                                     #  scanlineChrBank list-or-None, chrfull bytes-or-None) of the last draw, or None
         self._last_chrlatch_state = None  # (chrlatch dict, chrfull bytes) of the last draw, or None
         self._composite_raw = None      # unzoomed PhotoImage decoded from frame.ppm
         self._composite_native_wh = None  # (w, h) of frame.ppm, before display zoom
@@ -766,19 +888,36 @@ class RecordViewerApp:
             except (ValueError, OSError):
                 out["background"] = None
                 out["nametables"] = None
-        # CHR-latch extension (2026-09-08 ADR-0169 update): chrlatch.json and
-        # chrfull.bin are written together, only for a mapper with the latch
-        # (BaseMapper::HasChrBankLatch — MMC2/MMC4). Either being absent means
-        # this run's mapper has none; the flat chr.bin path above is correct
-        # for it and every other mapper.
+            # Per-scanline scroll trace (2026-09-08 ADR-0169 update, "mid-frame
+            # raster splits") - absent for a recording made before this update;
+            # None here just means build_background_plane falls back to the
+            # single tmpScroll value, same as always.
+            scroll_path, scroll_ns, _scroll_size = self._file_stamp("scanlinescroll.bin")
+            out["scanlineScroll"] = parse_scanline_scroll(scroll_path.read_bytes()) if scroll_ns is not None else None
+        # Raw CHR-ROM + per-scanline CHR-bank trace (2026-09-08 ADR-0169
+        # update, "mid-frame CHR bank splits"). chrfull.bin is written by both
+        # producers for ANY ROM-backed mapper (LiveRecordFormat.h's
+        # ChrRomFull comment), so reading it cannot stay gated on
+        # chrlatch.json's presence - that file only accompanies the MMC2/MMC4
+        # latch case below. scanlinechrbank.bin goes out alongside it in the
+        # same publish tick; both are absent only for a CHR-RAM mapper or a
+        # recording made before this update.
+        chrfull_path, chrfull_ns, _chrfull_size = self._file_stamp("chrfull.bin")
+        out["chrfull"] = chrfull_path.read_bytes() if chrfull_ns is not None else None
+        bank_path, bank_ns, _bank_size = self._file_stamp("scanlinechrbank.bin")
+        if bank_ns is not None:
+            out["scanlineChrBank"] = parse_scanline_chr_bank(bank_path.read_bytes())
+        # CHR-latch record, present only for a mapper whose CHR bank flips via
+        # a tile-index latch (BaseMapper::HasChrBankLatch — MMC2/MMC4); its
+        # absence for every other mapper is not an error, the plain chr.bin
+        # path (and scanlineChrBank above) covers those.
+        out["chrlatch"] = None
         latch_path, latch_ns, _latch_size = self._file_stamp("chrlatch.json")
         if latch_ns is not None:
             try:
                 out["chrlatch"] = parse_chrlatch_json((self.live_dir / "chrlatch.json").read_text())
-                out["chrfull"] = (self.live_dir / "chrfull.bin").read_bytes()
             except (ValueError, OSError):
                 out["chrlatch"] = None
-                out["chrfull"] = None
         return out
 
     def _poll(self):
@@ -835,13 +974,24 @@ class RecordViewerApp:
         else:
             tail = "live"  # interactive: no target - frames run until stopped
         state_text = f"frame {frame} {tail} · wall {wall}s"
+        # Absent in a recording made before the flag existed - treat that as
+        # "unknown, assume off" rather than warning about every old run.
+        hd_pack_active = bool(status.get("hdPackActive"))
+        if hd_pack_active:
+            state_text += " · HD pack ON (panes not comparable)"
         if state["sprites"] is not None:
             sp = state["sprites"]
             state_text += f" · capture {sp['captureFrame']}"
             if not sp["spritesEnabled"]:
                 state_text += " · sprites disabled on this frame (OAM may be stale)"
             has_bg = state.get("background") is not None and state.get("nametables") is not None
-            caveat = RECONSTRUCTION_CAVEAT if has_bg else SPRITES_ONLY_CAVEAT
+            # The HD-pack caveat replaces the usual one rather than appending to
+            # it: with substitution on, the per-scanline limits the normal text
+            # names are not what makes the panes differ.
+            if hd_pack_active:
+                caveat = HD_PACK_CAVEAT
+            else:
+                caveat = RECONSTRUCTION_CAVEAT if has_bg else SPRITES_ONLY_CAVEAT
             if has_bg:
                 self.bg_filter_check.config(state="normal")
                 bg = state["background"]
@@ -892,7 +1042,10 @@ class RecordViewerApp:
         self._last_sprite_state = (sprites, chr_bytes, colors, w, h, scale)
         bg = state.get("background")
         nt = state.get("nametables")
-        self._last_bg_state = (bg, nt) if bg is not None and nt is not None else None
+        scroll = state.get("scanlineScroll")
+        chr_bank = state.get("scanlineChrBank")
+        chr_rom_full = state.get("chrfull")
+        self._last_bg_state = (bg, nt, scroll, chr_bank, chr_rom_full) if bg is not None and nt is not None else None
         chrlatch, chrfull = state.get("chrlatch"), state.get("chrfull")
         self._last_chrlatch_state = (chrlatch, chrfull) if chrlatch is not None and chrfull is not None else None
         self._draw_sprite_pane()
@@ -925,11 +1078,14 @@ class RecordViewerApp:
         # docstring); every other mapper keeps the simpler two-function path.
         if self._last_chrlatch_state is not None and self._last_bg_state is not None:
             chrlatch, chrfull = self._last_chrlatch_state
-            bg_dict, nametables = self._last_bg_state
+            # The latch path resolves CHR through chrfull by walking the frame
+            # in fetch order (build_planes_with_chr_latch), so the bank trace
+            # in _last_bg_state is irrelevant here - those slots are skipped.
+            bg_dict, nametables, scanline_scroll, _chr_bank, _chr_rom_full = self._last_bg_state
             init_left, init_right = deduce_initial_chr_latch(chr_bytes, chrfull, chrlatch)
             bg_plane, bg_opaque, sp_plane, sp_behind, touched = build_planes_with_chr_latch(
                 bg_dict if self.show_bg_var.get() else None, nametables, sprites,
-                chrfull, chrlatch, init_left, init_right)
+                chrfull, chrlatch, init_left, init_right, scanline_scroll)
             if not self.show_front_var.get() or not self.show_behind_var.get():
                 # The latch path draws every sprite as it fetches (the trigger
                 # tiles have to be walked in fetch order regardless); honour a
@@ -951,8 +1107,10 @@ class RecordViewerApp:
                 show_front=self.show_front_var.get(),
                 show_behind=self.show_behind_var.get())
             if self._last_bg_state is not None and self.show_bg_var.get():
-                bg_dict, nametables = self._last_bg_state
-                bg_plane, bg_opaque = build_background_plane(bg_dict, nametables, chr_bytes)
+                bg_dict, nametables, scanline_scroll, chr_bank, chr_rom_full = self._last_bg_state
+                bg_plane, bg_opaque = build_background_plane(
+                    bg_dict, nametables, chr_bytes, scanline_scroll,
+                    scanline_chr_bank=chr_bank, chr_rom_full=chr_rom_full)
             else:
                 bg_plane, bg_opaque = empty_background_plane()
         plane = compose_reconstruction(bg_plane, bg_opaque, sp_plane, sp_behind)

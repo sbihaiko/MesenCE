@@ -40,7 +40,17 @@ private:
 	//NES console yields the first capture.
 	string _paletteJson;
 
+	//Last published LiveSnapshot::HdPackActive, so the final "stopped" status
+	//StopRecording() writes (which has no snapshot in hand) keeps saying it.
+	std::atomic<bool> _hdPackActive{false};
+
 	void ThreadLoop();
+
+	//Empties the convention slot of the whole publish set before a run starts -
+	//see the implementation's comment for the cross-ROM contamination this
+	//prevents (a leftover chrlatch.json/chrfull.bin sending the viewer down the
+	//CHR-latch path with the previous ROM's data).
+	void ClearSlot(const string& liveDir);
 
 	//Fills 'snapshot' from whatever the console has decoded/holds right now.
 	//Returns false when nothing has been decoded yet (snapshot.Width/Height
