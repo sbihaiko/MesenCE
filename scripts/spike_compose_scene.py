@@ -27,6 +27,7 @@ Run:  python3 scripts/spike_compose_scene.py <pack folder> [-o out.png]
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -36,6 +37,39 @@ import sheet_repaint as SR  # noqa: E402
 from compose_viewmodel import ComposeViewModel  # noqa: E402
 
 SCREEN_W, SCREEN_H = 256, 240
+
+#A sprite tile's transparent pixels carry a leftover RGB under a zero alpha,
+#and `Image.paste` is a raw row copy, so pasting a character over a scene
+#stamps that leftover as an opaque box. Every sprite paste in this file goes
+#through the alpha-aware version instead.
+_ALPHA_CUTOFF = 128
+
+#Share of the strongest edge's count below which a group edge is treated as a
+#cross-pose accident rather than a neighbour relation. See `shape_layout`.
+_EDGE_COUNT_FLOOR = 0.25
+
+#How hard a background node's score is damped per cell it already occupies.
+#See `fill_background`.
+_REUSE_DAMPING = 0.35
+
+#Jaccard overlap between two composed screens' node sets above which the
+#second one is redundant on the board. See `seed_candidates`.
+_PANEL_OVERLAP = 0.5
+
+#Share of the best candidate's perplexity below which a composed screen is too
+#empty to be worth a panel. See `seed_candidates`.
+_PANEL_SCORE_FLOOR = 0.5
+
+
+def paste_alpha(dst, src, x, y):
+    for row in range(src.height):
+        for col in range(src.width):
+            px = src.get(col, row)
+            if px[3] < _ALPHA_CUTOFF:
+                continue
+            tx, ty = x + col, y + row
+            if 0 <= tx < dst.width and 0 <= ty < dst.height:
+                dst.set(tx, ty, px)
 
 
 # -- sprite shapes: a `sprNNN` group reassembled into one character ----------
@@ -54,6 +88,15 @@ def shape_layout(sheets_dir: Path, stem: str):
     if not nodes:
         return {}
     edges = sorted(doc.get("evidence", []), key=lambda e: -e.get("count", 0))
+    #Tiles of the same pose co-occur every frame that pose is drawn; tiles of
+    #two different poses only meet in the handful of frames the animation
+    #crosses over. Dropping the faint tail of the count distribution is what
+    #keeps a walk from wandering out of one pose and into the next, which the
+    #free-slot rule alone does not prevent (it happily puts pose two *beside*
+    #pose one). The cut is a judgement call, not a measured threshold.
+    if edges:
+        floor = edges[0].get("count", 0) * _EDGE_COUNT_FLOOR
+        edges = [e for e in edges if e.get("count", 0) >= floor]
     pos = {nodes[0]: (0, 0)}
     taken = {(0, 0)}
     progress = True
@@ -89,7 +132,7 @@ def shape_image(pack: E.Pack, sheets_dir: Path, stem: str):
     img = SR.Image(w, h)
     for node, (x, y) in sorted(pos.items()):
         try:
-            img.paste(pack.node_art(node, sprite=True), (x - x0) * 8, (y - y0) * 8)
+            paste_alpha(img, pack.node_art(node, sprite=True), (x - x0) * 8, (y - y0) * 8)
         except E.ComposeError:
             continue  # a tile no sheet shows: skip it, never blank the shape
     return img
@@ -119,21 +162,46 @@ def pick_seed(pack: E.Pack, members, cols, rows, budget=60):
     Frequency alone is a bad seed criterion twice over: the top node is a flat
     filler, and the next ones are title-screen art whose evidence only ever
     leads back to itself, so the fill degenerates into one tile repeated. The
-    honest criterion is the outcome — run the fill and keep the seed that
-    lands the most distinct nodes on screen. Ties by node id, so the pick is
+    honest criterion is the outcome — run the fill and score the screen it
+    produces (`fill_perplexity`). Ties by node id, so the pick is
     deterministic."""
-    best, best_score = None, -1
+    best, best_score = None, -1.0
     for node, _sheet, _cell in members[:budget]:
         try:
             if is_flat(pack.node_art(node, sprite=False)):
                 continue
         except E.ComposeError:
             continue
-        grid = fill_background(pack, node, cols, rows)
-        distinct = len({n for row in grid for n in row})
-        if distinct > best_score:
-            best, best_score = node, distinct
+        score = fill_perplexity(fill_background(pack, node, cols, rows))
+        if score > best_score:
+            best, best_score = node, score
     return best if best is not None else members[0][0]
+
+
+def fill_perplexity(grid):
+    """Effective vocabulary of a filled screen: `exp(H)` over the node counts.
+
+    Counting *distinct* nodes was the first attempt and it picks the wrong
+    seed: the title-screen logo tiles a whole screen with one glyph plus a
+    scattering of neighbours, which scores high on distinctness while looking
+    like wallpaper. Perplexity asks the honest question instead — how many
+    nodes is this screen *effectively* made of — so one node covering most
+    cells is penalised however many rare companions it drags along."""
+    counts = {}
+    total = 0
+    for row in grid:
+        for node in row:
+            if node is None:
+                continue
+            counts[node] = counts.get(node, 0) + 1
+            total += 1
+    if not total:
+        return 0.0
+    h = 0.0
+    for c in counts.values():
+        p = c / total
+        h -= p * math.log(p)
+    return math.exp(h)
 
 
 def fill_background(pack: E.Pack, seed: int, cols: int, rows: int):
@@ -143,11 +211,20 @@ def fill_background(pack: E.Pack, seed: int, cols: int, rows: int):
     the direction kept, so each cell is scored against the two already-placed
     neighbours that constrain it — the one to its west (an `E` edge) and the
     one to its north (an `S` edge) — using the same conditional mass ADR-0164
-    persists. Deterministic: best score, ties by node id."""
+    persists. Deterministic: best score, ties by node id.
+
+    Taking the plain argmax at every cell was the first version and it
+    collapses: the single most likely successor of a sky tile is another sky
+    tile, so the screen fills with one node and the level's structure never
+    appears. Reuse is therefore damped — a node's score is divided by how many
+    cells it already occupies — which keeps the choice deterministic while
+    letting the second- and third-most-likely neighbours through. The damping
+    strength is a judgement call, not a measured constant."""
     adj = pack.adjacency
     grid = [[None] * cols for _ in range(rows)]
     grid[0][0] = seed
     vocab = list(adj.bg.keys())
+    used = {seed: 1}
 
     def score(cand, west, north):
         s = 0.0
@@ -157,7 +234,7 @@ def fill_background(pack: E.Pack, seed: int, cols: int, rows: int):
             out = adj.out_degree(a, direction)
             if out:
                 s += adj.edge_count(a, cand, direction) / out
-        return s
+        return s / (1.0 + _REUSE_DAMPING * used.get(cand, 0))
 
     for y in range(rows):
         for x in range(cols):
@@ -170,7 +247,9 @@ def fill_background(pack: E.Pack, seed: int, cols: int, rows: int):
                 s = score(cand, west, north)
                 if s > best_s:
                     best, best_s = cand, s
-            grid[y][x] = best if best_s > 0 else seed
+            pick = best if best_s > 0 else seed
+            grid[y][x] = pick
+            used[pick] = used.get(pick, 0) + 1
     return grid
 
 
@@ -217,6 +296,94 @@ def draw_unit_comparison(pack: E.Pack, sheets_dir: Path, band_nodes, stems, gap=
     return img
 
 
+# -- the artist board -------------------------------------------------------
+
+def seed_candidates(pack: E.Pack, members, cols, rows, want=6):
+    """The seeds worth showing an artist, best-scoring first.
+
+    Two filters before the score, both learned the hard way. Flat nodes are
+    dropped (`is_flat`): a sky tile fills a screen with nothing. Rare nodes are
+    dropped too — a node seen a handful of times has a sharp, confident-looking
+    successor distribution built on almost no evidence, and it wins the score
+    while composing a screen out of noise. What is left is the game's bulk art,
+    ranked by `fill_perplexity`.
+
+    No single winner is returned, and that is the finding, not a shortcut: on a
+    real recording the candidates split into two families - the game's menu
+    screens, which are static and so have the crispest adjacency evidence in
+    the whole pack, and its levels. Nothing in `adjacency.json` says which is
+    which, and picking for the artist would just be guessing on their behalf.
+    ADR-0164's editor already puts the seed in their hands; this board is the
+    same choice, laid out so it can be made by eye.
+
+    Which is why the panels are picked for spread, not for score alone. Two
+    seeds a few cells apart in the same region walk into the same neighbours
+    and compose the same screen twice; six near-identical panels are not a
+    choice. A candidate is kept only when its vocabulary overlaps every panel
+    already taken by less than `_PANEL_OVERLAP`."""
+    bg = pack.adjacency.bg
+    supported = sorted((n for n, _s, _c in members if n in bg),
+                       key=lambda n: (-bg[n].count, n))
+    floor_at = max(1, len(supported) // 3)
+    pool = supported[:floor_at] if len(supported) > 12 else supported
+    scored = []
+    for node in pool:
+        try:
+            if is_flat(pack.node_art(node, sprite=False)):
+                continue
+        except E.ComposeError:
+            continue
+        grid = fill_background(pack, node, cols, rows)
+        scored.append((fill_perplexity(grid), node, grid))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+
+    #A screen whose fill collapses to a couple of nodes is a blank panel: the
+    #diversity rule would still admit it, precisely because it looks like
+    #nothing else on the board. Judge it against the best candidate instead.
+    if scored:
+        keep_at = scored[0][0] * _PANEL_SCORE_FLOOR
+        scored = [e for e in scored if e[0] >= keep_at]
+
+    picked, seen = [], []
+    for entry in scored:
+        vocab = {n for row in entry[2] for n in row}
+        if any(len(vocab & other) / len(vocab | other) >= _PANEL_OVERLAP
+               for other in seen):
+            continue
+        picked.append(entry)
+        seen.append(vocab)
+        if len(picked) == want:
+            break
+    return picked
+
+
+def draw_board(pack: E.Pack, panels, figures, unit, cols=3, gap=6):
+    """Candidate scenes in a grid, each with the reassembled figures standing
+    on its floor, over a strip of the same figures on their own."""
+    cols = min(cols, len(panels))
+    rows = (len(panels) + cols - 1) // cols
+    strip_h = max((f.height for _stem, f in figures), default=0) + gap * 2
+    board = SR.Image(cols * (SCREEN_W + gap) + gap,
+                     rows * (SCREEN_H + gap) + gap + strip_h)
+    for i, (_score, _node, grid) in enumerate(panels):
+        panel = draw_background(pack, grid, unit)
+        x = unit
+        floor_y = SCREEN_H - 2 * unit
+        for _stem, fig in figures:
+            if x + fig.width > SCREEN_W - unit:
+                break
+            paste_alpha(panel, fig, x, floor_y - fig.height)
+            x += fig.width + unit
+        board.paste(panel, gap + (i % cols) * (SCREEN_W + gap),
+                    gap + (i // cols) * (SCREEN_H + gap))
+    x = gap
+    y = rows * (SCREEN_H + gap) + gap
+    for _stem, fig in figures:
+        paste_alpha(board, fig, x, y + strip_h - gap - fig.height)
+        x += fig.width + gap
+    return board
+
+
 # -- the scene --------------------------------------------------------------
 
 def build_scene(folder: Path, out_path: Path):
@@ -230,7 +397,10 @@ def build_scene(folder: Path, out_path: Path):
     #    pick the most-seen node as the seed, then lock the top suggestions so
     #    the exported composition is the same one this scene draws.
     cols, rows = SCREEN_W // unit, SCREEN_H // unit
-    seed = pick_seed(pack, vm.bg_members, cols, rows)
+    panels = seed_candidates(pack, vm.bg_members, cols, rows)
+    if not panels:
+        raise E.ComposeError("no seed candidate survived the flat/rare filters")
+    seed = panels[0][1]
     vm.seed_object(seed)
     ranked = vm.background_rank()
     for node, _score in ranked[:8]:
@@ -260,7 +430,7 @@ def build_scene(folder: Path, out_path: Path):
     for stem, img in shapes:
         if x + img.width > SCREEN_W - unit:
             break
-        scene.paste(img, x, floor_y - img.height)
+        paste_alpha(scene, img, x, floor_y - img.height)
         placed.append(f"{stem} ({img.width}x{img.height})")
         x += img.width + unit
     print(f"sprites: assembled {len(placed)} shapes -> {', '.join(placed)}")
@@ -283,6 +453,15 @@ def build_scene(folder: Path, out_path: Path):
     cmp_path = out_path.with_name("spike-units.png")
     SR.write_png(cmp_path, cmp_img.upscale(3))
     print(f"units: {cmp_path} (top row = sprite nodes, bottom row = sprNNN shapes)")
+
+    # 5. The artist's board. Automatic seed choice is not decidable from the
+    #    recording (see `seed_candidates`), so every surviving candidate is
+    #    drawn side by side and the choice stays with the artist.
+    board = draw_board(pack, panels, shapes, unit)
+    board_path = out_path.with_name("spike-board.png")
+    SR.write_png(board_path, board.upscale(2))
+    ids = ", ".join(f"#{node} (H={score:.1f})" for score, node, _g in panels)
+    print(f"board: {board_path} - panels in reading order: {ids}")
     return scene
 
 
