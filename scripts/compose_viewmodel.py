@@ -73,7 +73,7 @@ class ComposeViewModel:
         self.status = f"seed {node} (object)"
 
     def seed_sprite(self, node) -> bool:
-        """Re-seeding the sprite gradeado swaps only the first cell — the rest
+        """Re-seeding the sprite row swaps only the first cell — the rest
         of a band the artist already built is kept, not wiped."""
         self.mode = "sprite"
         if self.seed is not None or self.kept:
@@ -164,7 +164,7 @@ class ComposeViewModel:
         return self.pack.adjacency.band_members(self.band)
 
     def row_spec(self) -> list:
-        """The clickable gradeado's cells: the locked row (seed first), plus
+        """The clickable row's cells: the locked row (seed first), plus
         one '+' ghost carrying the engine's next pick when a candidate still
         fits the composed set."""
         cells = [{"node": n} for n in self.locked_list()]
@@ -187,6 +187,19 @@ class ComposeViewModel:
 
     def can_export(self) -> bool:
         return bool(self.locked_list())
+
+    def preview_sheet(self, to_dir=None):
+        """The composed sheet as `export` would write it, plus the name it would
+        take in `to_dir`. Returns `(canvas, columns, unit, name)`, or None when
+        nothing is composed yet - the View draws these very pixels, so what the
+        artist approves is the file."""
+        order = self.locked_list()
+        if not self.pack or not order:
+            return None
+        canvas, _cells, columns, unit = self.pack.compose_sheet(self.mode, order)
+        where = Path(to_dir) if to_dir else self.pack.sheets_dir
+        name = self.pack.next_free_name(where) if where.is_dir() else "usr???"
+        return canvas, columns, unit, name
 
     def export(self, to_dir) -> str:
         order = self.locked_list()

@@ -458,7 +458,13 @@
     <ClCompile Include="Shared\Emulator.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
+    <ClCompile Include="Shared\LiveFrameRecorder.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
     <ClInclude Include="Shared\Emulator.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="Shared\LiveFrameRecorder.h">
       <Filter>Shared</Filter>
     </ClInclude>
     <ClCompile Include="Shared\EmulatorLock.cpp">

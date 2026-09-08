@@ -44,6 +44,7 @@
 #include "Utilities/PlatformUtilities.h"
 #include "Utilities/FolderUtilities.h"
 #include "Shared/EnhancementPacks/MepPackManager.h"
+#include "Shared/LiveFrameRecorder.h"
 #include "Shared/MemoryOperationType.h"
 #include "Shared/EventType.h"
 
@@ -61,6 +62,7 @@ Emulator::Emulator()
 	  _movieManager(new MovieManager(this)),
 	  _historyViewer(new HistoryViewer(this)),
 	  _mepPackManager(new MepPackManager(this)),
+	  _liveFrameRecorder(new LiveFrameRecorder(this)),
 	  _gameServer(new GameServer(this)),
 	  _gameClient(new GameClient(this)),
 	  _rewindManager(new RewindManager(this)),

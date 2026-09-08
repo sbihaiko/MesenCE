@@ -414,14 +414,13 @@ class Pack:
             n += 1
         return f"usr{n:03d}"
 
-    def export(self, kind: str, nodes: list, seed, locked: list, band=None,
-               to_dir: Path = None):
-        """Write a composed sheet (`usrNNN`) to `to_dir` (default the pack's own
-        sheets dir). `kind` is `object` or `sprite`; `nodes` are the kept node
-        ids in sheet order; `band` is the quantised bottom for a sprite band.
-        Returns the sidecar stem. The PNG and its `*.orig.png` twin start
-        identical (1x); the artist paints `usrNNN.png` in an image editor and
-        `mep_build.py` fans the painted cells back out, as for any sheet."""
+    def compose_sheet(self, kind: str, nodes: list):
+        """Lay the kept cells out as the composed sheet, without touching disk.
+
+        Returns `(canvas, cells, columns, unit)` - the pixels `export` writes
+        and the sidecar cell records that describe them. `export` is this plus
+        the file names, so the editor can show a preview that is the sheet and
+        not a second drawing of it: one layout, or the preview lies."""
         if kind not in ("object", "sprite"):
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
@@ -438,11 +437,7 @@ class Pack:
         columns = max(1, min(len(nodes), 16))
         stride = unit + GUTTER
         rows = (len(nodes) + columns - 1) // columns
-        width, height = columns * stride + GUTTER, rows * stride + GUTTER
-        canvas = sheet_repaint.Image(width, height)
-        to_dir = Path(to_dir) if to_dir is not None else self.sheets_dir
-        if not to_dir.is_dir():
-            raise ComposeError(f"{to_dir}: not a folder")
+        canvas = sheet_repaint.Image(columns * stride + GUTTER, rows * stride + GUTTER)
         adj = self.adjacency
         cells = []
         for i, node in enumerate(nodes):
@@ -459,6 +454,24 @@ class Pack:
                 "label": "",
                 "tiles": src.tiles if src else [],
             })
+        return canvas, cells, columns, unit
+
+    def export(self, kind: str, nodes: list, seed, locked: list, band=None,
+               to_dir: Path = None):
+        """Write a composed sheet (`usrNNN`) to `to_dir` (default the pack's own
+        sheets dir). `kind` is `object` or `sprite`; `nodes` are the kept node
+        ids in sheet order; `band` is the quantised bottom for a sprite band.
+        Returns the sidecar stem. The PNG and its `*.orig.png` twin start
+        identical (1x); the artist paints `usrNNN.png` in an image editor and
+        `mep_build.py` fans the painted cells back out, as for any sheet."""
+        if kind not in ("object", "sprite"):
+            raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
+        if not nodes:
+            raise ComposeError("nothing to export")
+        canvas, cells, columns, unit = self.compose_sheet(kind, nodes)
+        to_dir = Path(to_dir) if to_dir is not None else self.sheets_dir
+        if not to_dir.is_dir():
+            raise ComposeError(f"{to_dir}: not a folder")
         name = self.next_free_name(to_dir)
         sheet_repaint.write_png(to_dir / f"{name}.png", canvas)
         sheet_repaint.write_png(to_dir / f"{name}.orig.png", canvas.clone())

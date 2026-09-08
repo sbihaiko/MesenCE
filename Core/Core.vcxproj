@@ -558,6 +558,7 @@
     <ClInclude Include="Netplay\ClientConnectionData.h" />
     <ClInclude Include="Debugger\DebugUtilities.h" />
     <ClInclude Include="Shared\Emulator.h" />
+    <ClInclude Include="Shared\LiveFrameRecorder.h" />
     <ClInclude Include="Gameboy\Gameboy.h" />
     <ClInclude Include="Gameboy\Debugger\GameboyDisUtils.h" />
     <ClInclude Include="Gameboy\GameboyHeader.h" />
@@ -860,6 +861,7 @@
     <ClCompile Include="Debugger\Disassembler.cpp" />
     <ClCompile Include="Debugger\DisassemblyInfo.cpp" />
     <ClCompile Include="Shared\Emulator.cpp" />
+    <ClCompile Include="Shared\LiveFrameRecorder.cpp" />
     <ClCompile Include="Gameboy\Gameboy.cpp" />
     <ClCompile Include="Gameboy\Debugger\GameboyDisUtils.cpp" />
     <ClCompile Include="Gameboy\APU\GbApu.cpp" />

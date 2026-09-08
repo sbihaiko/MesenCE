@@ -7,6 +7,7 @@
 #include "Core/Shared/Video/FrameCapture.h"
 #include "Core/NES/NesConsole.h"
 #include "Core/NES/BaseNesPpu.h"
+#include "Core/NES/BaseMapper.h"
 #include "Core/NES/NesTypes.h"
 #include "Utilities/StringUtilities.h"
 
@@ -169,7 +170,16 @@ extern "C"
 	//below is one consistent end-of-frame state. The run's own pause/stop
 	//machinery (_paused, the input engine's pause latch) is never touched, so
 	//the recording still parks on its target frame.
-	DllExport bool __stdcall HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, NesPpuState* ppuState)
+	//2026-09-08 ADR-0169 update ("capture every layer"): nametables is the
+	//background's tile+attribute bytes, read the same instant as the sprite
+	//layer so a viewer can multiplex sprites over the background the way the
+	//PPU does. ppuState already carries everything else the background needs
+	//(Control.BackgroundPatternAddr, Mask.BackgroundEnabled/BackgroundMask,
+	//TmpVideoRamAddr - loopy "t", the base scroll at an end-of-frame boundary -
+	//and ScrollX) - no new struct field required.
+	DllExport bool __stdcall HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, uint8_t* nametables, NesPpuState* ppuState,
+		bool* outHasChrLatch, uint16_t* outChrLatchPageSize, uint8_t* outLeftFdBank, uint8_t* outLeftFeBank, uint8_t* outRightFdBank, uint8_t* outRightFeBank,
+		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize)
 	{
 		_emu->Lock();
 
@@ -191,6 +201,35 @@ extern "C"
 				for(uint32_t i = 0; i < 0x2000; i++) {
 					chr[i] = nes->DebugReadVram((uint16_t)i);
 				}
+			}
+			if(nametables) {
+				for(uint32_t i = 0; i < 0x1000; i++) {
+					nametables[i] = nes->DebugReadVram((uint16_t)(0x2000 + i));
+				}
+			}
+
+			//MMC2/MMC4 CHR-latch extension (BaseMapper::HasChrBankLatch,
+			//ADR-0169 2026-09-08 update) - see LiveFrameRecorder.cpp's identical
+			//block for why the plain chr[] above cannot be trusted for these.
+			BaseMapper* mapper = nes->GetMapper();
+			bool hasLatch = mapper && mapper->HasChrBankLatch();
+			if(outHasChrLatch) {
+				*outHasChrLatch = hasLatch;
+			}
+			if(hasLatch) {
+				if(outChrLatchPageSize) {
+					*outChrLatchPageSize = mapper->GetChrLatchPageSize();
+				}
+				if(outLeftFdBank && outLeftFeBank && outRightFdBank && outRightFeBank) {
+					mapper->GetChrLatchBanks(*outLeftFdBank, *outLeftFeBank, *outRightFdBank, *outRightFeBank);
+				}
+				if(outChrFull && outChrFullSize) {
+					uint32_t romSize = std::min(mapper->GetChrRomSize(), maxChrFullSize);
+					memcpy(outChrFull, mapper->GetChrRomData(), romSize);
+					*outChrFullSize = romSize;
+				}
+			} else if(outChrFullSize) {
+				*outChrFullSize = 0;
 			}
 		}
 

@@ -34,39 +34,25 @@ def _backdrop_rgb(rgba, backdrop=(0x22, 0x22, 0x2A)):
     return tuple(int(round(rgba[i] * a + backdrop[i] * (1.0 - a))) for i in range(3))
 
 
-def strip_photo(arts, scale, gap=3):
-    """One scaled RGB strip image of the kept cells (alpha blended over a dark
-    backdrop so transparency reads as background, not as black art)."""
-    unit = arts[0].width if arts else 8
-    n = len(arts)
-    pad = 4
-    width = pad * 2 + n * unit * scale + (n - 1) * gap
-    height = pad * 2 + unit * scale
-    rows = []
+def image_photo(img, scale, backdrop=(0x22, 0x22, 0x2A)):
+    """One nearest-scaled RGB PhotoImage of a composed image, alpha blended over
+    a dark backdrop so transparency reads as background, not as black art.
+
+    Used for both the export preview and the band row's cells - tkinter has no
+    RGBA source of its own, so every pixel the editor shows goes through here."""
+    width, height = img.width * scale, img.height * scale
+    data = bytearray(b"P6\n%d %d\n255\n" % (width, height))
     for y in range(height):
         row = bytearray()
         for x in range(width):
-            row += bytes((0x22, 0x22, 0x2A))
-        rows.append(row)
-    for i, art in enumerate(arts):
-        for sy in range(unit):
-            for sx in range(unit):
-                c = _backdrop_rgb(art.get(sx, sy))
-                x0 = pad + i * (unit * scale + gap) + sx * scale
-                y0 = pad + sy * scale
-                for dy in range(scale):
-                    off = (y0 + dy) * width * 3 + x0 * 3
-                    for dx in range(scale):
-                        rows[y0 + dy][off + dx * 3:off + dx * 3 + 3] = bytes(c)
-    data = bytearray(b"P6\n%d %d\n255\n" % (width, height))
-    for row in rows:
+            row += bytes(_backdrop_rgb(img.get(x // scale, y // scale), backdrop))
         data += row
     with tempfile.NamedTemporaryFile(suffix=".ppm", delete=False) as f:
         f.write(data)
         path = f.name
-    img = tk.PhotoImage(file=path)
+    photo = tk.PhotoImage(file=path)
     Path(path).unlink(missing_ok=True)
-    return img, width, height
+    return photo, width, height
 
 
 class EditorApp:
@@ -116,8 +102,15 @@ class EditorApp:
         ttk.Label(side, textvariable=self.preview_lbl, foreground="#aaa",
                   wraplength=124).pack(anchor="w", pady=(4, 0))
 
-        self.canvas = tk.Canvas(root, height=120, background="#2b2b33", highlightthickness=0)
-        self.canvas.pack(fill="x", padx=6, pady=(0, 6))
+        # The export preview: the pixels `Export` writes, drawn from the very
+        # image the engine composes (ADR-0165 - the artist approves the file,
+        # not a second drawing of it), with the name and size it will take.
+        pane = ttk.LabelFrame(root, text="Export preview — the sheet Export writes", padding=4)
+        pane.pack(fill="x", padx=6, pady=(0, 6))
+        self.export_lbl = tk.StringVar(value="nothing composed yet — seed a cell")
+        ttk.Label(pane, textvariable=self.export_lbl, foreground="#888").pack(anchor="w")
+        self.canvas = tk.Canvas(pane, height=120, background="#2b2b33", highlightthickness=0)
+        self.canvas.pack(fill="x")
         if folder.is_dir():
             self.load_pack(folder)
 
@@ -194,7 +187,7 @@ class EditorApp:
         self.sp_seed.pack(pady=4)
         ttk.Button(sel, text="Seed selected", command=self._seed_sprite).pack(pady=2)
 
-        # The gradeado (ADR-0165 GUI): one cell per sprite of the composed band,
+        # The composed band row (ADR-0165 GUI): one cell per sprite of the composed band,
         # clickable — click a + cell to lock the engine's next pick, click a
         # locked cell to swap it for the next recommendation (the butterfly: the
         # lock set changed, so the whole row re-ranks), right-click to remove a
@@ -268,7 +261,7 @@ class EditorApp:
             name = self.vm.shape_name(node)
             self.sp_sugg.insert("end", f"#{node}  coFrames {co}{'  ' + name if name else ''}")
 
-    # ---- sprite band gradeado (the clickable composition row) ---------------
+    # ---- sprite band row (the clickable composition row) --------------------
 
     def _refresh_row(self):
         self.row_canvas.delete("all")
@@ -316,7 +309,7 @@ class EditorApp:
             return
         unit = art.width
         scale = max(1, (box - 8) // unit)
-        img, w, h = strip_photo([art], scale, gap=0)
+        img, w, h = image_photo(art, scale)
         self._cell_imgs.append(img)
         c.create_image(bx + (box - w) // 2, by + (box - h) // 2, image=img, anchor="nw")
         outline = "#ffd27d" if is_seed else "#7fa7e0"
@@ -392,7 +385,7 @@ class EditorApp:
             return
         unit = art.width
         scale = max(1, min(16, 124 // unit))
-        img, _w, _h = strip_photo([art], scale)
+        img, _w, _h = image_photo(art, scale)
         self.preview_tk = img
         self.preview.create_image(66, 66, image=img)
         self.preview_lbl.set(f"#{node} ({kind})")
@@ -407,29 +400,33 @@ class EditorApp:
         self._refresh_kept()
 
     def _refresh_kept(self):
-        """Preview the kept cells (seed first) as one strip, from whichever
-        layer is being composed."""
+        """Draw the composed sheet exactly as `Export` will write it - same
+        grid, same gutter - and name the file it would become."""
         self._imgs.clear()
         self.canvas.delete("all")
         if not self.vm.pack:
+            self.export_lbl.set("no pack open")
             return
-        order = self.vm.locked_list()
-        if not order:
+        try:
+            composed = self.vm.preview_sheet(self.out_var.get())
+        except E.ComposeError as e:
+            self.export_lbl.set(str(e))
+            self.canvas.config(height=24)
             return
-        arts = []
-        for node in order:
-            try:
-                arts.append(self.vm.node_art(node))
-            except E.ComposeError as e:
-                self.status.set(str(e))
-                return
-        if not arts:
+        if composed is None:
+            self.export_lbl.set("nothing composed yet — seed a cell")
+            self.canvas.config(height=24)
             return
-        scale = max(1, min(16, 96 // arts[0].width))
-        img, w, h = strip_photo(arts, scale)
+        sheet, columns, unit, name = composed
+        cells = len(self.vm.locked_list())
+        scale = max(1, min(8, 480 // max(1, sheet.width)))
+        img, w, h = image_photo(sheet, scale)
         self._imgs.append(img)
-        self.canvas.config(width=w + 4, height=h + 4)
+        self.canvas.config(height=h + 4)
         self.canvas.create_image(2, 2, image=img, anchor="nw")
+        self.export_lbl.set(
+            f"{name}.png — {cells} cell(s), {columns} column(s) of {unit}px, "
+            f"{sheet.width}×{sheet.height} px (shown at {scale}×)")
 
     def export(self):
         if not self.vm.pack:

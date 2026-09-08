@@ -709,6 +709,10 @@ namespace Mesen.ViewModels
 				GetVideoRecorderMenu(wnd),
 				GetMusicRecorderMenu(wnd),
 
+				new ContextMenuSeparator(),
+
+				GetLiveRecorderMenu(wnd),
+
 				new ContextMenuSeparator() {
 					IsVisible = () => IsHdPackMenuVisible()
 				},
@@ -835,6 +839,31 @@ namespace Mesen.ViewModels
 							RecordApi.MidiStop();
 							RecordApi.VgmStop();
 						}
+					}
+				}
+			};
+		}
+
+		private MainMenuAction GetLiveRecorderMenu(MainWindow wnd)
+		{
+			//Single start/stop toggle with no dialog and no user-typed fields: the
+			//recorder publishes to the LiveRecordingFolder convention slot
+			//(ADR-0169), which the live viewer (scripts/record_viewer.py)
+			//auto-attaches to, keeping the recorder synchronized with whatever ROM
+			//is open and whichever controller the human is playing with.
+			const int LiveIntervalMs = 250;
+			return new MainMenuAction() {
+				ActionType = ActionType.Custom,
+				DynamicText = () => RecordApi.LiveRecordingIsRecording() ? "Stop Live Recording" : "Start Live Recording",
+				DynamicIcon = () => RecordApi.LiveRecordingIsRecording() ? "MediaStop" : "Record",
+				IsEnabled = () => IsGameRunning || RecordApi.LiveRecordingIsRecording(),
+				OnClick = () => {
+					if(RecordApi.LiveRecordingIsRecording()) {
+						RecordApi.LiveRecordingStop();
+					} else {
+						//Convention root only - the current-session slot. The
+						//viewer finds it the same way, so no path is ever typed.
+						RecordApi.LiveRecordingStart(ConfigManager.LiveRecordingFolder, LiveIntervalMs);
 					}
 				}
 			};

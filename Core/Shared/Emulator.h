@@ -35,6 +35,7 @@ class SystemActionManager;
 class AudioPlayerHud;
 class GameServer;
 class GameClient;
+class LiveFrameRecorder;
 
 class IInputRecorder;
 class IInputProvider;
@@ -88,6 +89,11 @@ private:
 	const unique_ptr<MovieManager> _movieManager;
 	const unique_ptr<HistoryViewer> _historyViewer;
 	const unique_ptr<MepPackManager> _mepPackManager;
+	//Declared after _videoDecoder/_settings/_mepPackManager so it is destroyed
+	//before them: its destructor joins the publish thread, which reads
+	//GetVideoDecoder()/GetSettings() up to its last tick (reverse declaration
+	//order = reverse destruction order).
+	const unique_ptr<LiveFrameRecorder> _liveFrameRecorder;
 
 	const shared_ptr<GameServer> _gameServer;
 	const shared_ptr<GameClient> _gameClient;
@@ -219,6 +225,7 @@ public:
 	MovieManager* GetMovieManager() { return _movieManager.get(); }
 	HistoryViewer* GetHistoryViewer() { return _historyViewer.get(); }
 	MepPackManager* GetEnhancementPackManager() { return _mepPackManager.get(); }
+	LiveFrameRecorder* GetLiveFrameRecorder() { return _liveFrameRecorder.get(); }
 	GameServer* GetGameServer() { return _gameServer.get(); }
 	GameClient* GetGameClient() { return _gameClient.get(); }
 	shared_ptr<SystemActionManager> GetSystemActionManager() { return _systemActionManager; }

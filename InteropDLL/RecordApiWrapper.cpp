@@ -3,6 +3,7 @@
 #include "Core/Shared/Video/VideoRenderer.h"
 #include "Core/Shared/Audio/SoundMixer.h"
 #include "Core/Shared/Movies/MovieManager.h"
+#include "Core/Shared/LiveFrameRecorder.h"
 
 extern unique_ptr<Emulator> _emu;
 
@@ -98,5 +99,25 @@ extern "C"
 	DllExport void __stdcall MovieRecord(RecordMovieOptions options)
 	{
 		_emu->GetMovieManager()->Record(options);
+	}
+
+	//Live recording (ADR-0169's interactive producer): publishes frames + the
+	//sprite layer from the running emulator to liveDir, while a human plays with
+	//a real controller. Start/stop here never take the emulator lock - the
+	//recorder's own thread acquires it briefly per published frame. liveDir is a
+	//UTF-8 path.
+	DllExport bool __stdcall LiveRecordingStart(char* liveDir, int intervalMs)
+	{
+		return _emu->GetLiveFrameRecorder()->StartRecording(string(liveDir), intervalMs);
+	}
+
+	DllExport void __stdcall LiveRecordingStop()
+	{
+		_emu->GetLiveFrameRecorder()->StopRecording();
+	}
+
+	DllExport bool __stdcall LiveRecordingIsRecording()
+	{
+		return _emu->GetLiveFrameRecorder()->IsRecording();
 	}
 }

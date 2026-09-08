@@ -115,6 +115,19 @@ protected:
 	}
 
 public:
+	//BaseMapper's CHR-latch extension (see its declaration): the recorder reads
+	//these to publish both banks per half, not just whichever _leftLatch/
+	//_rightLatch happens to have selected at the capture instant.
+	bool HasChrBankLatch() override { return true; }
+	uint16_t GetChrLatchPageSize() override { return GetChrPageSize(); }
+	void GetChrLatchBanks(uint8_t& leftFdBank, uint8_t& leftFeBank, uint8_t& rightFdBank, uint8_t& rightFeBank) override
+	{
+		leftFdBank = _leftChrPage[0];
+		leftFeBank = _leftChrPage[1];
+		rightFdBank = _rightChrPage[0];
+		rightFeBank = _rightChrPage[1];
+	}
+
 	void NotifyVramAddressChange(uint16_t addr) override
 	{
 		if(_needChrUpdate) {

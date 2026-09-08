@@ -245,6 +245,13 @@ namespace Mesen.Config
 		public static string GameConfigFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "GameConfig"), null, false); } }
 		public static string SatellaviewFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "Satellaview"), null, false); } }
 
+		//Single convention slot for live recording (ADR-0169): the interactive
+		//recorder publishes here while a human plays, and the live viewer
+		//(scripts/record_viewer.py) auto-attaches by convention - no dialog, no
+		//user-typed path. One slot, current session only; it is scratch space,
+		//not an archive.
+		public static string LiveRecordingFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "LiveRecording"), null, false); } }
+
 		public static string DebuggerFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "Debugger"), null, false); } }
 		public static string FirmwareFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "Firmware"), null, false); } }
 		public static string BackupFolder { get { return GetFolder(Path.Combine(ConfigManager.HomeFolder, "Backups"), null, false); } }

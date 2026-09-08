@@ -282,6 +282,19 @@ public:
 
 	void CopyChrTile(uint32_t address, uint8_t* dest);
 
+	//ADR-0169 "capture every layer" MMC2/MMC4 extension: those mappers swap a
+	//CHR bank mid-frame via a tile-index latch ($FD/$FE), so a single
+	//end-of-frame CHR read only ever sees whichever bank the latch last
+	//resolved to - wrong for any tile drawn while the other bank was active
+	//(observed on Mike Tyson's Punch-Out's boxer portrait). A mapper with a
+	//latch overrides these so the live recorder can publish every bank the
+	//latch can select, plus the two page numbers per half, and let the
+	//reconstruction simulate the same latch in tile-fetch order instead of
+	//trusting the one resolved snapshot. Default: no latch, nothing published.
+	virtual bool HasChrBankLatch() { return false; }
+	virtual uint16_t GetChrLatchPageSize() { return 0; }
+	virtual void GetChrLatchBanks(uint8_t& leftFdBank, uint8_t& leftFeBank, uint8_t& rightFdBank, uint8_t& rightFeBank) { leftFdBank = leftFeBank = rightFdBank = rightFeBank = 0; }
+
 	//Debugger Helper Functions
 	bool HasChrRam();
 	bool HasChrRom();

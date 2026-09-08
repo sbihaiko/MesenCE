@@ -33,6 +33,12 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern void MovieStop();
 		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool MoviePlaying();
 		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool MovieRecording();
+
+		//Live recording: publish the running game's frames + sprite layer to
+		//liveDir (UTF-8) at ~intervalMs intervals while a human plays (ADR-0169).
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool LiveRecordingStart([MarshalAs(UnmanagedType.LPUTF8Str)] string liveDir, int intervalMs);
+		[DllImport(DllPath)] public static extern void LiveRecordingStop();
+		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool LiveRecordingIsRecording();
 	}
 
 	public enum RecordMovieFrom

@@ -71,6 +71,7 @@
 //HeadlessCaptureNesSpriteLayer, and the $2000 sprite-control bits come back in
 //a NesPpuState. NesTypes.h keeps the ABI the exact one the core was built with.
 #include "NES/NesTypes.h"
+#include "Utilities/LiveRecordFormat.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -127,7 +128,15 @@ extern "C"
 	//pattern tables and the $2000 sprite-control bits (NesPpuState) straight off
 	//the NES console - no Debugger is attached, because a run under a live
 	//debugger never parks on its target frame.
-	bool HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, NesPpuState* ppuState);
+	//nametables (added 2026-09-08, ADR-0169 "capture every layer") is the
+	//background's $2000-$2FFF tile+attribute bytes, mapper-resolved, read the
+	//same instant as the sprite layer above.
+	//The outHasChrLatch.. outChrFullSize params (same date, MMC2/MMC4 CHR-latch
+	//extension) are populated only when the loaded mapper has a tile-index CHR
+	//latch (BaseMapper::HasChrBankLatch) - see EmuApiWrapperHeadless.cpp.
+	bool HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, uint8_t* nametables, NesPpuState* ppuState,
+		bool* outHasChrLatch, uint16_t* outChrLatchPageSize, uint8_t* outLeftFdBank, uint8_t* outLeftFeBank, uint8_t* outRightFdBank, uint8_t* outRightFeBank,
+		uint8_t* outChrFull, uint32_t maxChrFullSize, uint32_t* outChrFullSize);
 	//F9.15 - in-memory frame capture (same wrapper file)
 	bool HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount);
 	uint32_t HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels);
@@ -179,27 +188,11 @@ namespace
 		return kCpuTypeSms; //.sms/.gg/.sg/.col
 	}
 
-	//ADR-0169: one published live snapshot - the composed frame the run just
-	//decoded plus, on a NES run, the sprite layer as data the viewer draws.
-	//Nothing here renders; the bytes come from a direct console read taken with
-	//the run parked for an instant (Decision section 2).
-	struct LiveSnapshot
-	{
-		uint32_t Width = 0;
-		uint32_t Height = 0;
-		uint32_t CaptureFrame = 0;
-		std::vector<uint32_t> Pixels; //0xAARRGGBB - the composed frame
-
-		bool HasSprites = false;
-		uint16_t SpritePatternAddr = 0;
-		bool LargeSprites = false;
-		bool SpritesEnabled = true;
-		bool LeftColumnClip = false;
-		uint8_t Palette[0x20] = {};
-		uint8_t Oam[0x100] = {};
-		std::vector<uint8_t> Chr; //$0000-$1FFF pattern tables, mapper-resolved
-	};
-
+	//LiveSnapshot and the ComposePpm/ComposeSpritesJson/ComposeStatusJson/
+	//AtomicWrite composers now live in Utilities/LiveRecordFormat.{h,cpp}
+	//(shared with the interactive UI's LiveFrameRecorder, 2026-09-08 ADR-0169
+	//update) - this scripted run only needs to fill one from a direct console
+	//read taken with the run parked for an instant (Decision section 2).
 	bool CaptureLiveSnapshot(LiveSnapshot& snapshot, bool readSpriteLayer)
 	{
 		uint32_t pixelCount = 0;
@@ -216,92 +209,41 @@ namespace
 			//consistent state - the run's pause/stop machinery is untouched.
 			NesPpuState ppu = {};
 			snapshot.Chr.assign(0x2000, 0); //the $0000-$1FFF pattern tables
-			if(!HeadlessCaptureNesSpriteLayer(snapshot.Oam, snapshot.Palette, snapshot.Chr.data(), &ppu)) {
+			snapshot.Nametables.assign(0x1000, 0); //the $2000-$2FFF background tile+attribute bytes
+			//The CHR-latch extension needs an upper bound to size outChrFull -
+			//no NES cartridge exceeds 1MB of CHR-ROM (the largest known mapper 9/10
+			//titles ship 128KB), so this leaves ample headroom.
+			static const uint32_t kMaxChrFull = 1024 * 1024;
+			snapshot.ChrRomFull.assign(kMaxChrFull, 0);
+			uint32_t chrFullSize = 0;
+			if(!HeadlessCaptureNesSpriteLayer(snapshot.Oam, snapshot.Palette, snapshot.Chr.data(), snapshot.Nametables.data(), &ppu,
+				&snapshot.HasChrLatch, &snapshot.ChrLatchPageSize, &snapshot.LeftChrFdBank, &snapshot.LeftChrFeBank, &snapshot.RightChrFdBank, &snapshot.RightChrFeBank,
+				snapshot.ChrRomFull.data(), kMaxChrFull, &chrFullSize)) {
 				return false; //not a NES console - no sprite layer to publish
 			}
+			snapshot.ChrRomFull.resize(chrFullSize);
 			snapshot.SpritePatternAddr = ppu.Control.SpritePatternAddr;
 			snapshot.LargeSprites = ppu.Control.LargeSprites;
 			snapshot.SpritesEnabled = ppu.Mask.SpritesEnabled;
-			snapshot.LeftColumnClip = ppu.Mask.SpriteMask;
+			//Mask.SpriteMask/BackgroundMask are a "show" flag, not a "clip" one
+			//(NesPpu.cpp's own comment: "BackgroundMask = false: Hide background
+			//in leftmost 8 pixels") - LeftColumnClip/BackgroundLeftColumnClip name
+			//the wire field for what it actually gates (clipping), so the polarity
+			//is inverted here rather than at every reader.
+			snapshot.LeftColumnClip = !ppu.Mask.SpriteMask;
 			snapshot.HasSprites = true;
+
+			snapshot.BackgroundPatternAddr = ppu.Control.BackgroundPatternAddr;
+			snapshot.BackgroundEnabled = ppu.Mask.BackgroundEnabled;
+			snapshot.BackgroundLeftColumnClip = !ppu.Mask.BackgroundMask;
+			//Loopy "v" (VideoRamAddr) has already scanned the whole frame at this
+			//end-of-frame capture point, so the base scroll comes from loopy "t"
+			//(TmpVideoRamAddr) - the scroll the game wrote for the frame to render.
+			snapshot.TmpVideoRamAddr = ppu.TmpVideoRamAddr;
+			snapshot.FineScrollX = ppu.ScrollX;
+			snapshot.HasBackground = true;
 		}
 		return true;
-	}
-
-	//Atomically replace 'finalPath': write finalPath.tmp, then rename() over the
-	//target. A reader sees either the whole old file or the whole new one, never
-	//a torn write - lossy-latest on purpose (ADR-0169 Decision section 1).
-	bool AtomicWrite(const std::string& finalPath, const void* data, size_t size)
-	{
-		std::string tmpPath = finalPath + ".tmp";
-		FILE* f = fopen(tmpPath.c_str(), "wb");
-		if(!f) {
-			return false;
-		}
-		bool ok = fwrite(data, 1, size, f) == size;
-		if(fclose(f) != 0) {
-			ok = false;
-		}
-		if(!ok) {
-			std::remove(tmpPath.c_str());
-			return false;
-		}
-		return std::rename(tmpPath.c_str(), finalPath.c_str()) == 0;
-	}
-
-	bool AtomicWrite(const std::string& finalPath, const std::string& text)
-	{
-		return AtomicWrite(finalPath, text.data(), text.size());
-	}
-
-	std::string ComposePpm(const LiveSnapshot& snapshot)
-	{
-		std::string ppm = "P6\n" + std::to_string(snapshot.Width) + " " + std::to_string(snapshot.Height) + "\n255\n";
-		ppm.reserve(ppm.size() + snapshot.Pixels.size() * 3);
-		for(uint32_t px : snapshot.Pixels) {
-			ppm += (char)((px >> 16) & 0xFF);
-			ppm += (char)((px >> 8) & 0xFF);
-			ppm += (char)(px & 0xFF);
-		}
-		return ppm;
-	}
-
-	//The per-capture sprite record of ADR-0169 Decision section 2. ASCII only
-	//(numbers, brackets, booleans), so it is composed with plain concatenation.
-	std::string ComposeSpritesJson(const LiveSnapshot& s, uint32_t cpuFrame)
-	{
-		std::string j = "{\n";
-		j += "  \"frame\": " + std::to_string(cpuFrame) + ",\n";
-		j += "  \"captureFrame\": " + std::to_string(s.CaptureFrame) + ",\n";
-		j += "  \"patternAddr\": " + std::to_string(s.SpritePatternAddr) + ",\n";
-		j += std::string("  \"largeSprites\": ") + (s.LargeSprites ? "true" : "false") + ",\n";
-		j += std::string("  \"spritesEnabled\": ") + (s.SpritesEnabled ? "true" : "false") + ",\n";
-		j += std::string("  \"leftColumnClip\": ") + (s.LeftColumnClip ? "true" : "false") + ",\n";
-		j += "  \"palette\": [";
-		for(int i = 0; i < 0x20; i++) {
-			if(i) j += ",";
-			j += std::to_string(s.Palette[i]);
-		}
-		j += "],\n  \"oam\": [";
-		for(int i = 0; i < 64; i++) {
-			if(i) j += ",";
-			j += "[" + std::to_string(s.Oam[i * 4]) + "," + std::to_string(s.Oam[i * 4 + 1]) + "," + std::to_string(s.Oam[i * 4 + 2]) + "," + std::to_string(s.Oam[i * 4 + 3]) + "]";
-		}
-		j += "]\n}\n";
-		return j;
-	}
-
-	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec)
-	{
-		char wall[32];
-		snprintf(wall, sizeof(wall), "%.1f", wallSec);
-		std::string s = "{\n";
-		s += "  \"frame\": " + std::to_string(frame) + ",\n";
-		s += "  \"targetFrames\": " + std::to_string(targetFrames) + ",\n";
-		s += std::string("  \"elapsedWallSec\": ") + wall + ",\n";
-		s += std::string("  \"done\": ") + (done ? "true" : "false") + "\n";
-		s += "}\n";
-		return s;
 	}
 }
 
@@ -688,12 +630,18 @@ int main(int argc, char** argv)
 			return; //no decoded frame yet - try on the next tick
 		}
 		uint32_t cpuFrame = HeadlessGetFrameCount();
-		bool ok = AtomicWrite(liveDir + "/frame.ppm", ComposePpm(snapshot));
+		bool ok = LiveRecordFormat::AtomicWrite(liveDir + "/frame.ppm", LiveRecordFormat::ComposePpm(snapshot));
 		if(liveReadSprites) {
-			ok = AtomicWrite(liveDir + "/sprites.json", ComposeSpritesJson(snapshot, cpuFrame)) && ok;
-			ok = AtomicWrite(liveDir + "/chr.bin", snapshot.Chr.data(), snapshot.Chr.size()) && ok;
+			ok = LiveRecordFormat::AtomicWrite(liveDir + "/sprites.json", LiveRecordFormat::ComposeSpritesJson(snapshot, cpuFrame)) && ok;
+			ok = LiveRecordFormat::AtomicWrite(liveDir + "/chr.bin", snapshot.Chr.data(), snapshot.Chr.size()) && ok;
+			ok = LiveRecordFormat::AtomicWrite(liveDir + "/nametables.bin", snapshot.Nametables.data(), snapshot.Nametables.size()) && ok;
+			ok = LiveRecordFormat::AtomicWrite(liveDir + "/background.json", LiveRecordFormat::ComposeBackgroundJson(snapshot)) && ok;
+			if(snapshot.HasChrLatch) {
+				ok = LiveRecordFormat::AtomicWrite(liveDir + "/chrfull.bin", snapshot.ChrRomFull.data(), snapshot.ChrRomFull.size()) && ok;
+				ok = LiveRecordFormat::AtomicWrite(liveDir + "/chrlatch.json", LiveRecordFormat::ComposeChrLatchJson(snapshot)) && ok;
+			}
 		}
-		ok = AtomicWrite(liveDir + "/status.json", ComposeStatusJson(false, cpuFrame, totalFrames, elapsed())) && ok;
+		ok = LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(false, cpuFrame, totalFrames, elapsed())) && ok;
 		if(!ok) {
 			fprintf(stderr, "live: cannot write %s - live view disabled, recording continues\n", liveDir.c_str());
 			liveDir.clear();
@@ -717,7 +665,7 @@ int main(int argc, char** argv)
 				colors += hex;
 			}
 			colors += "]\n}\n";
-			AtomicWrite(liveDir + "/palette.json", colors);
+			LiveRecordFormat::AtomicWrite(liveDir + "/palette.json", colors);
 		}
 		liveNextWall = 0.0; //publish on the first tick of the recording wait
 	}
@@ -731,7 +679,7 @@ int main(int argc, char** argv)
 	//ADR-0169: one final status so the viewer can show "done" rather than stale
 	//- the run stops being published the moment it parks on its target frame.
 	if(liveMs > 0 && !liveDir.empty()) {
-		AtomicWrite(liveDir + "/status.json", ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed()));
+		LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed()));
 	}
 
 	//The hud-message toast is emitted inside the capture block below, not here:

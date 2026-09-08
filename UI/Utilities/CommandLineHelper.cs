@@ -28,6 +28,7 @@ public class CommandLineHelper
 	public bool Fullscreen { get; private set; }
 	public bool LoadLastSessionRequested { get; private set; }
 	public string? MovieToRecord { get; private set; } = null;
+	public bool LiveRecordingRequested { get; private set; }
 	public int TestRunnerTimeout { get; private set; } = 100;
 	public List<string> LuaScriptsToLoad { get; private set; } = new();
 	public List<string> FilesToLoad { get; private set; } = new();
@@ -63,6 +64,7 @@ public class CommandLineHelper
 					case "fullscreen": Fullscreen = true; break;
 					case "enablestdout": ConfigApi.SetEmulationFlag(EmulationFlags.OutputToStdout, true); break;
 					case "donotsavesettings": ConfigManager.DisableSaveSettings = true; break;
+					case "recordlive": LiveRecordingRequested = true; break;
 					case "loadlastsession": LoadLastSessionRequested = true; break;
 					default:
 						if(switchArg.StartsWith("recordmovie=")) {
@@ -153,6 +155,14 @@ public class CommandLineHelper
 			}
 			RecordMovieOptions options = new RecordMovieOptions(MovieToRecord, "", "", RecordMovieFrom.StartWithSaveData);
 			RecordApi.MovieRecord(options);
+		}
+
+		if(LiveRecordingRequested) {
+			//Same code path as the Tools > Live Recording toggle: publish to the
+			//LiveRecordingFolder convention slot while a game is open. One-shot,
+			//so a later ROM load does not silently restart it.
+			RecordApi.LiveRecordingStart(ConfigManager.LiveRecordingFolder, 250);
+			LiveRecordingRequested = false;
 		}
 
 		if(Fullscreen) {
