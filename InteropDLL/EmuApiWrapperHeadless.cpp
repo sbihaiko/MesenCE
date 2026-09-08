@@ -5,6 +5,9 @@
 #include "Core/Shared/Video/VideoDecoder.h"
 #include "Core/Shared/Video/VideoRenderer.h"
 #include "Core/Shared/Video/FrameCapture.h"
+#include "Core/NES/NesConsole.h"
+#include "Core/NES/BaseNesPpu.h"
+#include "Core/NES/NesTypes.h"
 #include "Utilities/StringUtilities.h"
 
 //F9.14 (ADR-0157), F9.15 and ADR-0167: the DLL surface scripts/headless_record
@@ -150,5 +153,48 @@ extern "C"
 	DllExport void __stdcall HeadlessSetOsdEnabled(bool osdEnabled)
 	{
 		MessageManager::SetOptions(osdEnabled, false);
+	}
+
+	//ADR-0169: read a NES run's sprite layer straight off the console - OAM and
+	//palette from their registered buffers (NesPpu.cpp), the mapper-resolved
+	//pattern tables through NesConsole::DebugReadVram and the $2000 sprite-
+	//control bits from NesPpu::GetState - WITHOUT constructing a Debugger.
+	//GetMemoryState/GetPpuState (DebugApiWrapper) are not usable here: they
+	//attach the debugger, and a run under a live debugger never parks on its
+	//target frame (HeadlessInputEngine::ApplyFrame refuses to pause when
+	//IsDebugging()).
+	//
+	//Lock() holds the emulation thread at an end-of-frame boundary (it spins in
+	//WaitForLock with _threadPaused set) while this thread reads, so every byte
+	//below is one consistent end-of-frame state. The run's own pause/stop
+	//machinery (_paused, the input engine's pause latch) is never touched, so
+	//the recording still parks on its target frame.
+	DllExport bool __stdcall HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, NesPpuState* ppuState)
+	{
+		_emu->Lock();
+
+		NesConsole* nes = dynamic_cast<NesConsole*>(_emu->GetConsole().get());
+		bool ready = nes != nullptr;
+		if(ready) {
+			if(ppuState) {
+				nes->GetPpu()->GetState(*ppuState);
+			}
+			ConsoleMemoryInfo oamMem = _emu->GetMemory(MemoryType::NesSpriteRam);
+			if(oam && oamMem.Memory) {
+				memcpy(oam, oamMem.Memory, std::min(oamMem.Size, (uint32_t)0x100));
+			}
+			ConsoleMemoryInfo palMem = _emu->GetMemory(MemoryType::NesPaletteRam);
+			if(palette && palMem.Memory) {
+				memcpy(palette, palMem.Memory, std::min(palMem.Size, (uint32_t)0x20));
+			}
+			if(chr) {
+				for(uint32_t i = 0; i < 0x2000; i++) {
+					chr[i] = nes->DebugReadVram((uint16_t)i);
+				}
+			}
+		}
+
+		_emu->Unlock();
+		return ready;
 	}
 }

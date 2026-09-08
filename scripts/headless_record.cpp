@@ -5,7 +5,7 @@
 //corrupting memory at run time.
 //
 //Build:   make capture-tool
-//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>]
+//Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>] [live=<ms>]
 //
 //F9.14 (ADR-0157): a run is a number of *emulated frames*, never a number of
 //host seconds. <seconds> keeps its name and its meaning for the caller, but is
@@ -51,10 +51,26 @@
 //The mep-* flags exercise EnhancementPackConfig / SetMepPackEnabled (F3.3).
 //"romtiles" runs the static ROM tile export (ExportRomTilesHdPack) into
 //<output_prefix>-hdpack/ instead of recording.
+//With "live=<ms>" the run publishes itself while it plays (ADR-0169), into a
+//scratch folder named <output_prefix>-live/ that is never part of the pack:
+//frame.ppm (the composed frame, P6), status.json (frame, target, wall clock)
+//and - on a NES run - the sprite layer as data: sprites.json (per-capture OAM,
+//palette and the $2000 sprite-control bits from a direct console read, taken
+//with the emulation thread held at an end-of-frame boundary) plus chr.bin (the
+//mapper-resolved pattern tables) and one palette.json written at startup with
+//the exact RGB the run renders with. The viewer that draws these
+//is scripts/record_viewer.py. Publishing is lossy-latest on purpose (a slow
+//viewer must skip, never block the run) and off by default; if the folder
+//cannot be written the run logs one line and continues.
 //A scratch home folder is created next to the output; the NES game database
 //is copied into it automatically when the tool runs from the repo root.
 #include "Core/Shared/SettingTypes.h"
 #include "Core/Shared/Video/FrameCapture.h"
+//ADR-0169: the live sprite layer is published as data - OAM, palette and the
+//mapper-resolved pattern tables are read off the console by the wrapper export
+//HeadlessCaptureNesSpriteLayer, and the $2000 sprite-control bits come back in
+//a NesPpuState. NesTypes.h keeps the ABI the exact one the core was built with.
+#include "NES/NesTypes.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -64,6 +80,7 @@
 #include <filesystem>
 #include <thread>
 #include <chrono>
+#include <functional>
 
 struct TimingInfoAbi
 {
@@ -104,6 +121,13 @@ extern "C"
 	void HeadlessSetPauseFrame(uint32_t frame);
 	uint32_t HeadlessGetScriptFrameCount();
 	uint32_t HeadlessGetFrameCount();
+	//ADR-0169 - the sprite layer is read, not rendered (Decision section 2): the
+	//wrapper export holds the emulation thread at an end-of-frame boundary
+	//(Emulator::Lock) and reads the OAM/palette buffers, the mapper-resolved
+	//pattern tables and the $2000 sprite-control bits (NesPpuState) straight off
+	//the NES console - no Debugger is attached, because a run under a live
+	//debugger never parks on its target frame.
+	bool HeadlessCaptureNesSpriteLayer(uint8_t* oam, uint8_t* palette, uint8_t* chr, NesPpuState* ppuState);
 	//F9.15 - in-memory frame capture (same wrapper file)
 	bool HeadlessCaptureFrame(uint32_t* outWidth, uint32_t* outHeight, uint32_t* outFrameNumber, uint32_t* outPixelCount);
 	uint32_t HeadlessReadCapturedPixels(uint32_t* outPixels, uint32_t maxPixels);
@@ -154,6 +178,131 @@ namespace
 		}
 		return kCpuTypeSms; //.sms/.gg/.sg/.col
 	}
+
+	//ADR-0169: one published live snapshot - the composed frame the run just
+	//decoded plus, on a NES run, the sprite layer as data the viewer draws.
+	//Nothing here renders; the bytes come from a direct console read taken with
+	//the run parked for an instant (Decision section 2).
+	struct LiveSnapshot
+	{
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+		uint32_t CaptureFrame = 0;
+		std::vector<uint32_t> Pixels; //0xAARRGGBB - the composed frame
+
+		bool HasSprites = false;
+		uint16_t SpritePatternAddr = 0;
+		bool LargeSprites = false;
+		bool SpritesEnabled = true;
+		bool LeftColumnClip = false;
+		uint8_t Palette[0x20] = {};
+		uint8_t Oam[0x100] = {};
+		std::vector<uint8_t> Chr; //$0000-$1FFF pattern tables, mapper-resolved
+	};
+
+	bool CaptureLiveSnapshot(LiveSnapshot& snapshot, bool readSpriteLayer)
+	{
+		uint32_t pixelCount = 0;
+		if(!HeadlessCaptureFrame(&snapshot.Width, &snapshot.Height, &snapshot.CaptureFrame, &pixelCount)) {
+			return false; //nothing decoded yet
+		}
+		snapshot.Pixels.assign(pixelCount, 0);
+		if(HeadlessReadCapturedPixels(snapshot.Pixels.data(), pixelCount) != pixelCount) {
+			return false;
+		}
+		if(readSpriteLayer) {
+			//The wrapper export holds the emulation thread at an end-of-frame
+			//boundary (Emulator::Lock) and reads the sprite layer as one
+			//consistent state - the run's pause/stop machinery is untouched.
+			NesPpuState ppu = {};
+			snapshot.Chr.assign(0x2000, 0); //the $0000-$1FFF pattern tables
+			if(!HeadlessCaptureNesSpriteLayer(snapshot.Oam, snapshot.Palette, snapshot.Chr.data(), &ppu)) {
+				return false; //not a NES console - no sprite layer to publish
+			}
+			snapshot.SpritePatternAddr = ppu.Control.SpritePatternAddr;
+			snapshot.LargeSprites = ppu.Control.LargeSprites;
+			snapshot.SpritesEnabled = ppu.Mask.SpritesEnabled;
+			snapshot.LeftColumnClip = ppu.Mask.SpriteMask;
+			snapshot.HasSprites = true;
+		}
+		return true;
+	}
+
+	//Atomically replace 'finalPath': write finalPath.tmp, then rename() over the
+	//target. A reader sees either the whole old file or the whole new one, never
+	//a torn write - lossy-latest on purpose (ADR-0169 Decision section 1).
+	bool AtomicWrite(const std::string& finalPath, const void* data, size_t size)
+	{
+		std::string tmpPath = finalPath + ".tmp";
+		FILE* f = fopen(tmpPath.c_str(), "wb");
+		if(!f) {
+			return false;
+		}
+		bool ok = fwrite(data, 1, size, f) == size;
+		if(fclose(f) != 0) {
+			ok = false;
+		}
+		if(!ok) {
+			std::remove(tmpPath.c_str());
+			return false;
+		}
+		return std::rename(tmpPath.c_str(), finalPath.c_str()) == 0;
+	}
+
+	bool AtomicWrite(const std::string& finalPath, const std::string& text)
+	{
+		return AtomicWrite(finalPath, text.data(), text.size());
+	}
+
+	std::string ComposePpm(const LiveSnapshot& snapshot)
+	{
+		std::string ppm = "P6\n" + std::to_string(snapshot.Width) + " " + std::to_string(snapshot.Height) + "\n255\n";
+		ppm.reserve(ppm.size() + snapshot.Pixels.size() * 3);
+		for(uint32_t px : snapshot.Pixels) {
+			ppm += (char)((px >> 16) & 0xFF);
+			ppm += (char)((px >> 8) & 0xFF);
+			ppm += (char)(px & 0xFF);
+		}
+		return ppm;
+	}
+
+	//The per-capture sprite record of ADR-0169 Decision section 2. ASCII only
+	//(numbers, brackets, booleans), so it is composed with plain concatenation.
+	std::string ComposeSpritesJson(const LiveSnapshot& s, uint32_t cpuFrame)
+	{
+		std::string j = "{\n";
+		j += "  \"frame\": " + std::to_string(cpuFrame) + ",\n";
+		j += "  \"captureFrame\": " + std::to_string(s.CaptureFrame) + ",\n";
+		j += "  \"patternAddr\": " + std::to_string(s.SpritePatternAddr) + ",\n";
+		j += std::string("  \"largeSprites\": ") + (s.LargeSprites ? "true" : "false") + ",\n";
+		j += std::string("  \"spritesEnabled\": ") + (s.SpritesEnabled ? "true" : "false") + ",\n";
+		j += std::string("  \"leftColumnClip\": ") + (s.LeftColumnClip ? "true" : "false") + ",\n";
+		j += "  \"palette\": [";
+		for(int i = 0; i < 0x20; i++) {
+			if(i) j += ",";
+			j += std::to_string(s.Palette[i]);
+		}
+		j += "],\n  \"oam\": [";
+		for(int i = 0; i < 64; i++) {
+			if(i) j += ",";
+			j += "[" + std::to_string(s.Oam[i * 4]) + "," + std::to_string(s.Oam[i * 4 + 1]) + "," + std::to_string(s.Oam[i * 4 + 2]) + "," + std::to_string(s.Oam[i * 4 + 3]) + "]";
+		}
+		j += "]\n}\n";
+		return j;
+	}
+
+	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec)
+	{
+		char wall[32];
+		snprintf(wall, sizeof(wall), "%.1f", wallSec);
+		std::string s = "{\n";
+		s += "  \"frame\": " + std::to_string(frame) + ",\n";
+		s += "  \"targetFrames\": " + std::to_string(targetFrames) + ",\n";
+		s += std::string("  \"elapsedWallSec\": ") + wall + ",\n";
+		s += std::string("  \"done\": ") + (done ? "true" : "false") + "\n";
+		s += "}\n";
+		return s;
+	}
 }
 
 int main(int argc, char** argv)
@@ -162,7 +311,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [capture] [log] [bootstrap] [filter=<name>] [mep-off]\n"
 			"       [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
-			"       [state=<file.mss>] [input=<script>] [realtime] [hud-message=<title>|<msg>]\n", argv[0]);
+			"       [state=<file.mss>] [input=<script>] [realtime] [hud-message=<title>|<msg>]\n"
+			"       [live=<ms>]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -186,6 +336,12 @@ int main(int argc, char** argv)
 	std::string inputScriptText;
 	std::string inputScriptPath;
 	bool realtime = false;
+	//ADR-0169: live=<ms> publishing interval in wall-clock milliseconds (0=off);
+	//the publish lambda below and the scratch folder <prefix>-live/ it writes.
+	int liveMs = 0;
+	std::string liveDir;
+	bool liveReadSprites = false;
+	double liveNextWall = 0.0;
 	//ADR-0167: queued right before a "capture" run's settle sleep, so a test
 	//can assert the HUD capture's blank flag flips. title|message, split on
 	//the first '|' (neither Localize()'d key needs one).
@@ -266,12 +422,33 @@ int main(int argc, char** argv)
 			}
 			hudMessageTitle = spec.substr(0, sep);
 			hudMessageText = spec.substr(sep + 1);
+		} else if(strncmp(argv[i], "live=", 5) == 0) {
+			//ADR-0169: publish cadence in wall-clock milliseconds. Below ~50ms the
+			//capture+publish itself costs more than the interval - just spin disk.
+			liveMs = atoi(argv[i] + 5);
+			if(liveMs < 50) {
+				fprintf(stderr, "live= needs a wall-clock interval of at least 50 ms: %s\n", argv[i]);
+				return 1;
+			}
 		}
 	}
 
 	std::filesystem::path outDir = std::filesystem::absolute(prefix).parent_path();
 	std::filesystem::path home = outDir / "mesen-home";
 	std::filesystem::create_directories(home);
+
+	if(liveMs > 0) {
+		//ADR-0169: the live folder is scratch, created up front so a failure to
+		//write it disables the feature before the run starts, never mid-run.
+		liveDir = std::filesystem::absolute(prefix + "-live").string();
+		std::error_code liveError;
+		std::filesystem::create_directories(liveDir, liveError);
+		if(liveError) {
+			fprintf(stderr, "live: cannot create %s (%s) - live view disabled, recording continues\n", liveDir.c_str(), liveError.message().c_str());
+			liveDir.clear();
+			liveMs = 0;
+		}
+	}
 
 	//NES mapper detection wants the game DB in the home folder; copy it from
 	//the repo checkout when available (silently skipped elsewhere).
@@ -422,7 +599,7 @@ int main(int argc, char** argv)
 	const double stallTimeout = 90.0;
 	auto t0 = std::chrono::steady_clock::now();
 	auto elapsed = [&t0]() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
-	auto waitForPause = [&](const char* what) {
+	auto waitForPause = [&](const char* what, std::function<void()> onTick = std::function<void()>()) {
 		uint32_t lastFrame = HeadlessGetFrameCount();
 		double lastProgress = elapsed();
 		while(!IsPaused()) {
@@ -437,6 +614,9 @@ int main(int argc, char** argv)
 			} else if(elapsed() - lastProgress > stallTimeout) {
 				fprintf(stderr, "STALLED: no frame in %.1fs of wall clock while %s (stuck on frame %u, %.1fs into the run)\n", elapsed() - lastProgress, what, frame, elapsed());
 				return false;
+			}
+			if(onTick) {
+				onTick();
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(2));
 		}
@@ -484,11 +664,75 @@ int main(int argc, char** argv)
 		printf("recording: midi=%d vgm=%d\n", MidiIsRecording(), VgmIsRecording());
 	}
 
+	//ADR-0169 live publish. The sprite layer is read, not rendered (Decision
+	//section 2): OAM, palette and the mapper-resolved pattern tables come off
+	//the console, and the $2000 control bits (sprite pattern table, 8x16) out
+	//of the PPU state snapshot - the viewer rebuilds sprite pixels from them.
+	//CaptureLiveSnapshot holds the emulation thread at an end-of-frame boundary
+	//(Emulator::Lock) for the instant the bytes are read - no Debugger is
+	//attached, so the run still parks on its target frame; the cost of that hold
+	//is the "must be measured" of the ADR's Consequences, measured against the
+	//plain run below.
+	auto publishLive = [&]() {
+		if(liveMs <= 0 || liveDir.empty()) {
+			return;
+		}
+		double now = elapsed();
+		if(now < liveNextWall) {
+			return;
+		}
+		liveNextWall = now + (double)liveMs / 1000.0;
+
+		LiveSnapshot snapshot;
+		if(!CaptureLiveSnapshot(snapshot, liveReadSprites)) {
+			return; //no decoded frame yet - try on the next tick
+		}
+		uint32_t cpuFrame = HeadlessGetFrameCount();
+		bool ok = AtomicWrite(liveDir + "/frame.ppm", ComposePpm(snapshot));
+		if(liveReadSprites) {
+			ok = AtomicWrite(liveDir + "/sprites.json", ComposeSpritesJson(snapshot, cpuFrame)) && ok;
+			ok = AtomicWrite(liveDir + "/chr.bin", snapshot.Chr.data(), snapshot.Chr.size()) && ok;
+		}
+		ok = AtomicWrite(liveDir + "/status.json", ComposeStatusJson(false, cpuFrame, totalFrames, elapsed())) && ok;
+		if(!ok) {
+			fprintf(stderr, "live: cannot write %s - live view disabled, recording continues\n", liveDir.c_str());
+			liveDir.clear();
+		}
+	};
+	if(liveMs > 0) {
+		//NES runs read the sprite layer too; GB/SMS/GG runs publish frames only.
+		liveReadSprites = CpuTypeFromExtension(rom) == kCpuTypeNes;
+		if(liveReadSprites) {
+			//palette.json: the exact RGB this run renders with, so the viewer
+			//colors reconstructed sprites like the composed frame. Written once,
+			//and the viewer treats it as immutable for the run. The sprite bytes
+			//themselves come from a direct console read at publish time
+			//(HeadlessCaptureNesSpriteLayer), so no debugger is attached here
+			//and the run keeps parking on its target frame.
+			std::string colors = "{\n  \"colors\": [";
+			char hex[16];
+			for(int i = 0; i < 64; i++) {
+				if(i) colors += ",";
+				snprintf(hex, sizeof(hex), "\"#%06X\"", kDefaultNesPalette[i] & 0xFFFFFF);
+				colors += hex;
+			}
+			colors += "]\n}\n";
+			AtomicWrite(liveDir + "/palette.json", colors);
+		}
+		liveNextWall = 0.0; //publish on the first tick of the recording wait
+	}
+
 	//The run itself: resume, and let the provider stop it from inside the
 	//frame it was told to stop on. Nothing here decides how many frames run.
 	HeadlessSetPauseFrame(totalFrames);
 	Resume();
-	bool reachedTarget = waitForPause("recording");
+	bool reachedTarget = waitForPause("recording", publishLive);
+
+	//ADR-0169: one final status so the viewer can show "done" rather than stale
+	//- the run stops being published the moment it parks on its target frame.
+	if(liveMs > 0 && !liveDir.empty()) {
+		AtomicWrite(liveDir + "/status.json", ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed()));
+	}
 
 	//The hud-message toast is emitted inside the capture block below, not here:
 	//with the OSD gated off across the load/run, a DisplayMessage before the
