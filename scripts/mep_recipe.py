@@ -103,14 +103,6 @@ def _split_from(value, where: str):
     return source_id, rest
 
 
-def _known_source_ids(recipe: dict) -> set:
-    ids = {"primary"}
-    for dep in (recipe.get("sources") or {}).get("deps") or []:
-        if isinstance(dep, dict) and isinstance(dep.get("id"), str):
-            ids.add(dep["id"])
-    return ids
-
-
 def validate_recipe(recipe: dict, require_allowlisted_hosts: bool = False, hosts=None) -> list:
     """Returns a list of error strings; empty means the recipe is valid.
 

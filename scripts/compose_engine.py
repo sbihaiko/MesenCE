@@ -203,20 +203,6 @@ class Sheet:
     def name(self) -> str:
         return self.png_path.name
 
-    def cell_for_node(self, node: int):
-        """The sheet's cell that shows `node`: canonical (`metatile`) first, then
-        an alias that absorbed it (F9.7)."""
-        for c in self.cells:
-            if isinstance(c, dict) and c.get("metatile") == node:
-                return c
-        for c in self.cells:
-            if not isinstance(c, dict):
-                continue
-            for al in c.get("aliases") or []:
-                if isinstance(al, dict) and al.get("metatile") == node:
-                    return c
-        return None
-
     def cell_image(self, cell: dict):
         """The cell's 1x art, cropped from the `*.orig.png` twin (the reference,
         never the possibly-painted sheet). Raises when the twin is unusable."""
@@ -269,9 +255,6 @@ class Pack:
         kinds = sorted({s.kind for s in self.sheets if s.kind in _ALL_SHEET_KINDS},
                        key=lambda k: order.get(k, 99))
         return kinds
-
-    def sheets_of(self, kind: str) -> list:
-        return [s for s in self.sheets if s.kind == kind]
 
     # -- node -> art ---------------------------------------------------------
 
@@ -518,8 +501,3 @@ class Pack:
                     seen.add(m)
                     out.append((m, sheet, cell))
         return sorted(out, key=lambda t: -getattr(node_map[t[0]], freq_key))
-
-    def group_sheets(self):
-        """The `objNNN`/`sprNNN` group sheets — the builder's own layouts, shown
-        as layers an artist may open (their art is not a paste source)."""
-        return [s for s in self.sheets if s.kind in ("object", "sprite")]

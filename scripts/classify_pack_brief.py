@@ -226,12 +226,6 @@ def build_brief(pack_path: Path, lint_path: Path | None) -> str:
     return brief
 
 
-def cap_text(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    return text[: limit - 24] + "\n\n… truncated\n"
-
-
 def main(argv):
     if len(argv) < 2:
         print(__doc__)

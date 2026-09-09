@@ -156,28 +156,6 @@ def is_flat(img):
     return all(img.get(x, y) == first for y in range(img.height) for x in range(img.width))
 
 
-def pick_seed(pack: E.Pack, members, cols, rows, budget=60):
-    """The seed whose fill is the richest scene, among the most-seen art nodes.
-
-    Frequency alone is a bad seed criterion twice over: the top node is a flat
-    filler, and the next ones are title-screen art whose evidence only ever
-    leads back to itself, so the fill degenerates into one tile repeated. The
-    honest criterion is the outcome — run the fill and score the screen it
-    produces (`fill_perplexity`). Ties by node id, so the pick is
-    deterministic."""
-    best, best_score = None, -1.0
-    for node, _sheet, _cell in members[:budget]:
-        try:
-            if is_flat(pack.node_art(node, sprite=False)):
-                continue
-        except E.ComposeError:
-            continue
-        score = fill_perplexity(fill_background(pack, node, cols, rows))
-        if score > best_score:
-            best, best_score = node, score
-    return best if best is not None else members[0][0]
-
-
 def fill_perplexity(grid):
     """Effective vocabulary of a filled screen: `exp(H)` over the node counts.
 
