@@ -87,7 +87,30 @@ std::string LiveRecordFormat::ComposeChrLatchJson(const LiveSnapshot& s)
 	return j;
 }
 
-std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive)
+std::string LiveRecordFormat::ComposeJsonString(const std::string& text)
+{
+	//Only what JSON requires: the two escapes, plus the control range as \uXXXX.
+	//Anything else (UTF-8 bytes of an accented ROM name included) goes through
+	//untouched - the file is written as UTF-8 and read as UTF-8.
+	std::string out = "\"";
+	for(char c : text) {
+		unsigned char u = (unsigned char)c;
+		if(c == '"' || c == '\\') {
+			out += '\\';
+			out += c;
+		} else if(u < 0x20) {
+			char esc[8];
+			snprintf(esc, sizeof(esc), "\\u%04X", u);
+			out += esc;
+		} else {
+			out += c;
+		}
+	}
+	out += "\"";
+	return out;
+}
+
+std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive, const std::string& romName)
 {
 	char wall[32];
 	snprintf(wall, sizeof(wall), "%.1f", wallSec);
@@ -96,6 +119,7 @@ std::string LiveRecordFormat::ComposeStatusJson(bool done, uint32_t frame, uint3
 	s += "  \"targetFrames\": " + std::to_string(targetFrames) + ",\n";
 	s += std::string("  \"elapsedWallSec\": ") + wall + ",\n";
 	s += std::string("  \"hdPackActive\": ") + (hdPackActive ? "true" : "false") + ",\n";
+	s += "  \"rom\": " + ComposeJsonString(romName) + ",\n";
 	s += std::string("  \"done\": ") + (done ? "true" : "false") + "\n";
 	s += "}\n";
 	return s;

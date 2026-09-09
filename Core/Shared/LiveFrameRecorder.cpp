@@ -94,8 +94,9 @@ void LiveFrameRecorder::StopRecording()
 			//scripted run reaching its target frame. There is no target here,
 			//so targetFrames stays 0 (the viewer reads that as "no target").
 			if(!_liveDir.empty()) {
+				auto romLock = _romLock.AcquireSafe();
 				LiveRecordFormat::AtomicWrite(_liveDir + "/status.json",
-					LiveRecordFormat::ComposeStatusJson(true, _emu->GetFrameCount(), 0, _wallClock.GetElapsedMS() / 1000.0, _hdPackActive.load()));
+					LiveRecordFormat::ComposeStatusJson(true, _emu->GetFrameCount(), 0, _wallClock.GetElapsedMS() / 1000.0, _hdPackActive.load(), _romName));
 			}
 		}
 	}
@@ -104,6 +105,12 @@ void LiveFrameRecorder::StopRecording()
 bool LiveFrameRecorder::IsRecording()
 {
 	return _thread != nullptr;
+}
+
+void LiveFrameRecorder::SetRomName(string romName)
+{
+	auto lock = _romLock.AcquireSafe();
+	_announcedRomName = romName;
 }
 
 bool LiveFrameRecorder::CaptureSnapshot(LiveSnapshot& snapshot)
@@ -253,7 +260,32 @@ void LiveFrameRecorder::ThreadLoop()
 	//mode that looks exactly like "the recorder never started" from outside.
 	bool loggedFirstPublish = false;
 	bool loggedFirstSkip = false;
+	string romName;
 	while(!_stopFlag.load()) {
+		//A live session outlives one game: the human stops, opens something
+		//else and keeps playing, and the slot has to describe THAT game from
+		//then on. Same reason StartRecording clears the slot (see ClearSlot) -
+		//a file the new ROM never rewrites would otherwise be read as its own -
+		//so a ROM change is treated exactly like a fresh start: empty the slot,
+		//forget the palette and the first-tick logging, restart the wall clock.
+		//The name itself comes from the UI (SetRomName).
+		{
+			auto romLock = _romLock.AcquireSafe();
+			romName = _announcedRomName;
+		}
+		if(romName != _romName) {
+			if(!_romName.empty()) {
+				MessageManager::Log("[LiveRecording] rom changed to \"" + romName + "\" - slot re-targeted");
+			}
+			ClearSlot(_liveDir);
+			paletteWritten = false;
+			loggedFirstPublish = false;
+			loggedFirstSkip = false;
+			_wallClock.Reset();
+			auto romLock = _romLock.AcquireSafe();
+			_romName = romName;
+		}
+
 		double elapsed = _wallClock.GetElapsedMS();
 		LiveSnapshot snapshot;
 		bool captured = CaptureSnapshot(snapshot);
@@ -298,7 +330,7 @@ void LiveFrameRecorder::ThreadLoop()
 			}
 			_hdPackActive.store(snapshot.HdPackActive);
 			LiveRecordFormat::AtomicWrite(_liveDir + "/status.json",
-				LiveRecordFormat::ComposeStatusJson(false, _emu->GetFrameCount(), 0, elapsed / 1000.0, snapshot.HdPackActive));
+				LiveRecordFormat::ComposeStatusJson(false, _emu->GetFrameCount(), 0, elapsed / 1000.0, snapshot.HdPackActive, romName));
 		}
 
 		//Sleep the remainder of the interval, not the whole interval - the

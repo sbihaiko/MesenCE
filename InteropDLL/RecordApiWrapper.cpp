@@ -120,4 +120,12 @@ extern "C"
 	{
 		return _emu->GetLiveFrameRecorder()->IsRecording();
 	}
+
+	//The ROM the live session is now showing, announced by the UI on every
+	//game load (and on start). The recorder re-targets its slot on a change -
+	//see LiveFrameRecorder::SetRomName. romName is UTF-8, empty for "no game".
+	DllExport void __stdcall LiveRecordingSetRom(char* romName)
+	{
+		_emu->GetLiveFrameRecorder()->SetRomName(romName ? string(romName) : string());
+	}
 }

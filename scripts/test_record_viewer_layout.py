@@ -26,6 +26,35 @@ def background(pattern=0x1000, enabled=True, clip=False):
     return {"patternAddr": pattern, "enabled": enabled, "leftColumnClip": clip}
 
 
+class RomIdentityTests(unittest.TestCase):
+    """status.json's "rom" (ADR-0169: the slot is reused by every session, so
+    the ROM is what tells one session from the next)."""
+
+    def test_title_names_the_rom(self):
+        self.assertEqual(vl.window_title("Castlevania.nes"),
+                         vl.TITLE + " — Castlevania.nes")
+
+    def test_title_without_a_rom_stays_plain(self):
+        self.assertEqual(vl.window_title(""), vl.TITLE)
+        self.assertEqual(vl.window_title(None), vl.TITLE)
+        self.assertEqual(vl.window_title("   "), vl.TITLE)
+
+    def test_rom_name_tolerates_a_missing_field(self):
+        self.assertEqual(vl.rom_name({}), "")
+        self.assertEqual(vl.rom_name(None), "")
+        self.assertEqual(vl.rom_name({"rom": None}), "")
+        self.assertEqual(vl.rom_name({"rom": " Zelda.nes "}), "Zelda.nes")
+
+    def test_run_state_names_the_rom_when_the_run_publishes_one(self):
+        self.assertEqual(
+            vl.format_run_state({"frame": 120, "elapsedWallSec": 30.0, "rom": "Metroid.nes"}),
+            "Metroid.nes · frame 120 live · wall 30.0s")
+
+    def test_run_state_without_a_rom_is_unchanged(self):
+        self.assertEqual(vl.format_run_state({"frame": 120, "elapsedWallSec": 30.0}),
+                         "frame 120 live · wall 30.0s")
+
+
 class OrientationTests(unittest.TestCase):
     def test_explicit_modes_ignore_the_window(self):
         self.assertEqual(vl.pick_orientation(vl.LAYOUT_SIDE, 400, 900), vl.ORIENT_HORIZONTAL)

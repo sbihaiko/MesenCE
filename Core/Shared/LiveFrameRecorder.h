@@ -44,6 +44,18 @@ private:
 	//StopRecording() writes (which has no snapshot in hand) keeps saying it.
 	std::atomic<bool> _hdPackActive{false};
 
+	//The ROM the published frames belong to, and the one the UI last announced
+	//(SetRomName, from its GameLoaded handler). The two differ for exactly one
+	//tick after the human opens a different game, which is what ThreadLoop
+	//re-targets the slot on. Both go through _romLock rather than being
+	//compared raw across the two threads; and the UI hands the name over
+	//instead of the recorder reading Emulator::GetRomInfo() itself, because
+	//that returns a reference to a string InternalLoadRom reassigns while this
+	//thread is running.
+	SimpleLock _romLock;
+	string _romName;
+	string _announcedRomName;
+
 	void ThreadLoop();
 
 	//Empties the convention slot of the whole publish set before a run starts -
@@ -68,4 +80,12 @@ public:
 	bool StartRecording(string liveDir, int intervalMs);
 	void StopRecording();
 	bool IsRecording();
+
+	//The ROM currently open, as the UI knows it (RecordApiWrapper's
+	//LiveRecordingSetRom, called when a game loads and when a session starts).
+	//A live session outlives the game that started it - the human keeps
+	//playing and opens something else - so the recorder is told, rather than
+	//publishing the previous ROM's identity over the new game's frames. Empty
+	//means "no game open"; safe to call whether or not a recording is running.
+	void SetRomName(string romName);
 };

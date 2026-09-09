@@ -26,7 +26,7 @@ The files in either directory are:
     nametables.bin   the background's $2000-$2FFF tile+attribute bytes, mapper-
                      resolved (written alongside sprites.json like chr.bin is)
     palette.json     the 64 RGB colors this run renders with (written once)
-    status.json      progress / done
+    status.json      progress / done, and which ROM the frames are of
 
 By convention this tool attaches to the emulator's own slot, so there is
 nothing to type to watch a live session:
@@ -729,7 +729,8 @@ class RecordViewerApp:
     def __init__(self, root: tk.Tk, live_dir: Path):
         self.root = root
         self.live_dir = live_dir
-        root.title("MesenCE — live recording viewer (ADR-0169)")
+        self._rom = ""
+        root.title(vl.window_title(""))
         root.minsize(760, 560)
 
         self._composite_img = None   # PhotoImage on screen (Tk drops it on GC)
@@ -1127,9 +1128,26 @@ class RecordViewerApp:
         if not text:
             return
         self.live_dir = Path(text)
+        self._forget_frame_state()
+        self._poll_now()
+
+    def _forget_frame_state(self):
+        """Drop everything cached about the frame on screen. Called when what we
+        are watching changes — a different live directory, or the same slot
+        after the human opened a different game (status.json's "rom"): every
+        cache below is keyed to nothing but "the last poll", so a redraw that
+        reuses one would resolve the new game's OAM/nametable bytes against the
+        previous game's CHR and palette. The recorder empties the slot on the
+        same event (LiveFrameRecorder::ClearSlot), for the same reason."""
         self._seen = {}
         self._status_text = None
-        self._poll_now()
+        self._notice_text = ""
+        self._last_mark_data = None
+        self._last_sprite_state = None
+        self._last_bg_state = None
+        self._last_chrlatch_state = None
+        self._composite_raw = None
+        self._composite_native_wh = None
 
     def _poll_now(self):
         """The Poll now button / `r`: read once even while paused."""
@@ -1247,6 +1265,16 @@ class RecordViewerApp:
                 status = json.loads((self.live_dir / "status.json").read_text())
             except (ValueError, OSError):
                 status = {}
+
+        # The ROM the slot now describes. The emulator's slot is one directory
+        # reused by every session (ADR-0169 section 4), so this is the only
+        # signal that the frames stopped being the same game's.
+        rom = vl.rom_name(status)
+        if rom != self._rom:
+            self._rom = rom
+            self.root.title(vl.window_title(rom))
+            self._forget_frame_state()
+            changed = True
 
         if st_ns is None or status.get("frame") is None:
             self._set_badge("IDLE")

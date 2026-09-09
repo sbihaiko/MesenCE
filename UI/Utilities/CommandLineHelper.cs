@@ -158,10 +158,11 @@ public class CommandLineHelper
 		}
 
 		if(LiveRecordingRequested) {
-			//Same code path as the Tools > Live Recording toggle: publish to the
-			//LiveRecordingFolder convention slot while a game is open. One-shot,
-			//so a later ROM load does not silently restart it.
-			RecordApi.LiveRecordingStart(ConfigManager.LiveRecordingFolder, 250);
+			//Literally the Tools > Live Recorder > Record path: same slot, same
+			//interval, same viewer (ADR-0169). One-shot, so a later ROM load
+			//does not silently restart it - the running session follows the new
+			//ROM on its own (LiveRecordingSession.OnGameLoaded).
+			LiveRecordingSession.Start();
 			LiveRecordingRequested = false;
 		}
 

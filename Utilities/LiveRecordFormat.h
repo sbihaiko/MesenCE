@@ -120,5 +120,15 @@ namespace LiveRecordFormat
 
 	//hdPackActive publishes LiveSnapshot::HdPackActive - see its comment: a
 	//consumer that compares panes must warn rather than score when it is set.
-	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive);
+	//romName is the ROM the frames belong to (empty when the producer has none
+	//in hand): the slot is one directory reused by every session (ADR-0169
+	//section 4), so a consumer that never sees a name cannot tell "the same run
+	//continues" from "the human opened a different game" - and each of the two
+	//reads the published CHR/nametable bytes differently.
+	std::string ComposeStatusJson(bool done, uint32_t frame, uint32_t targetFrames, double wallSec, bool hdPackActive, const std::string& romName);
+
+	//A JSON string literal (quotes included) for arbitrary text - a ROM file
+	//name is whatever the filesystem holds, so it can carry a quote or a
+	//backslash that would otherwise tear the document the viewer parses.
+	std::string ComposeJsonString(const std::string& text);
 }

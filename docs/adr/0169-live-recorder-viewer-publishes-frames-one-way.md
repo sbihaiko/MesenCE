@@ -173,6 +173,45 @@
   format than this ADR's single end-of-frame read, and out of scope for this
   pass. Left as a documented, disclosed limitation alongside the
   8-sprites-per-scanline cap and the NTSC-blend residual.
+- Updated: 2026-09-08 ("Record opens the viewer, and the slot re-targets per
+  ROM") — three changes to the interactive producer of section 4, all pulling
+  in the same direction: whoever starts a live recording should get the picture
+  without a second, manual step. (a) **The menu is a submenu, not a toggle.**
+  The Tools entry now reads "Live Recorder (viewer)" with Record / Stop /
+  Open Viewer children, the same shape as the Sound, Video and Music recorders
+  next to it, instead of the one-off dynamic-text item that flipped its own
+  caption. (b) **Record starts the recorder and opens the viewer.** This
+  narrows section 4's last bullet and section 3's "it never launches a
+  process": the *viewer* still launches nothing and still auto-attaches by
+  convention with zero fields — it is now the *emulator* that spawns
+  `scripts/record_viewer.py` as a detached process, once, when a human asks to
+  record. The script is not bundled with the app, so it is located by walking
+  up from the executable and the working directory (`UI/Logic/
+  RecordViewerLocator.cs`, host-free per ADR-0123, with unit tests), overridable
+  by `MESENCE_RECORD_VIEWER`, and tried against each plausible python command
+  for the platform. Every failure to find python or the script is logged and
+  shown as a message, and explicitly does not touch the recording: the
+  protocol stays one-way (section 1), so a viewer that never starts costs the
+  run nothing. `Open Viewer` exists for the case where the human closed it.
+  (c) **The record carries its ROM, and the slot re-targets when the ROM
+  changes.** A single convention slot (section 4) is reused by every session,
+  so nothing in it told one game from the next; `status.json` gained a
+  `"rom"` field (`ComposeStatusJson`'s last argument, escaped through
+  `ComposeJsonString` — a ROM file name can hold a quote or a backslash), and
+  both producers publish it. The interactive recorder cannot read
+  `Emulator::GetRomInfo()` from its own thread — it returns a reference to a
+  string `InternalLoadRom` reassigns — so the UI *announces* the name across
+  interop (`LiveRecordingSetRom`, called on `GameLoaded` and cleared on
+  `EmulationStopped`) and the recorder compares/copies it under a lock. A
+  changed name is then treated exactly like a fresh start: the slot is cleared,
+  the palette latch and log-once flags reset, the wall clock restarts. That
+  matters because the viewer keys its reconstruction paths on *file presence*
+  (`chrfull.bin`/`chrlatch.json` exist only for a latch mapper, section 4's
+  MMC2 note), so a leftover file from the previous ROM would silently select
+  the wrong decode path; the viewer independently drops all frame caches and
+  retitles itself on a `"rom"` change. Alternative rejected: a per-ROM
+  subdirectory, which would give the viewer a field to fill again and undo the
+  zero-field attach.
 - Related: ADR-0050 (bootstrap screen backgrounds), ADR-0157 (headless input in
   emulated frames), ADR-0164 (adjacency sidecar), ADR-0165 (the composition
   editor is an external stdlib Python tool), ADR-0167 (HUD-only capture seam),

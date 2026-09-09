@@ -473,6 +473,13 @@ namespace Mesen.Windows
 
 					GameConfig.LoadGameConfig(romInfo).ApplyConfig();
 
+					//ADR-0169 section 4: a live session outlives the game that
+					//started it, so the recorder is told which ROM its frames
+					//now belong to - it re-targets its slot and republishes the
+					//new game's palette/CHR instead of leaving the previous
+					//game's files for the viewer to read as this one's.
+					LiveRecordingSession.OnGameLoaded(romInfo);
+
 					GameLoadedEventParams evtParams = Marshal.PtrToStructure<GameLoadedEventParams>(e.Parameter);
 					CommunityPackInstallService.OnGameLoaded(evtParams.IsPowerCycle);
 
@@ -540,6 +547,7 @@ namespace Mesen.Windows
 					break;
 
 				case ConsoleNotificationType.EmulationStopped:
+					LiveRecordingSession.OnEmulationStopped();
 					Dispatcher.UIThread.Post(() => {
 						_model.RomInfo = new RomInfo();
 						_model.RecentGames.Init(GameScreenMode.RecentGames);

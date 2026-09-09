@@ -39,6 +39,7 @@ namespace Mesen.Interop
 		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool LiveRecordingStart([MarshalAs(UnmanagedType.LPUTF8Str)] string liveDir, int intervalMs);
 		[DllImport(DllPath)] public static extern void LiveRecordingStop();
 		[DllImport(DllPath)][return: MarshalAs(UnmanagedType.I1)] public static extern bool LiveRecordingIsRecording();
+		[DllImport(DllPath)] public static extern void LiveRecordingSetRom([MarshalAs(UnmanagedType.LPUTF8Str)] string romName);
 	}
 
 	public enum RecordMovieFrom

@@ -139,6 +139,26 @@ def shared_available(sizes):
     return (min(w for w, _ in real), min(h for _, h in real))
 
 
+# The window title, so a taskbar/dock entry says which game is on screen.
+TITLE = "MesenCE — live recording viewer"
+
+
+def window_title(rom):
+    """The title bar: the tool, plus the ROM the run is publishing (status.json's
+    "rom", written by both producers). A run from before that field, or a
+    session with no game open, keeps the plain title rather than showing an
+    empty dash."""
+    rom = (rom or "").strip()
+    return f"{TITLE} — {rom}" if rom else TITLE
+
+
+def rom_name(status):
+    """status.json's "rom" (both producers write it): the game the published
+    frames belong to. Empty for a recording made before the field existed, or
+    for a session with no game open."""
+    return ((status or {}).get("rom") or "").strip()
+
+
 def run_badge(status):
     """Short state chip for the status strip: what the run is doing right now."""
     if not status or status.get("frame") is None:
@@ -149,9 +169,10 @@ def run_badge(status):
 
 
 def format_run_state(status):
-    """'frame 26509 live · wall 441.0s · capture 26508' — the run's progress in
-    one line. A scripted run has a target frame count; an interactive one runs
-    until the human stops it, so it reads 'live'."""
+    """'Castlevania.nes · frame 26509 live · wall 441.0s' — the run's progress in
+    one line, named by the ROM it is recording. A scripted run has a target
+    frame count; an interactive one runs until the human stops it, so it reads
+    'live'."""
     frame = status.get("frame", "?")
     target = status.get("targetFrames", 0) or 0
     wall = status.get("elapsedWallSec", 0)
@@ -161,7 +182,9 @@ def format_run_state(status):
         tail = f"of {target}"
     else:
         tail = "live"
-    return f"frame {frame} {tail} · wall {wall}s"
+    line = f"frame {frame} {tail} · wall {wall}s"
+    rom = rom_name(status)
+    return f"{rom} · {line}" if rom else line
 
 
 def format_notices(status, sprites):

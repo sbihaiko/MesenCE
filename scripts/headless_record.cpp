@@ -324,6 +324,10 @@ int main(int argc, char** argv)
 	std::string liveDir;
 	bool liveReadSprites = false;
 	double liveNextWall = 0.0;
+	//status.json's "rom": the file name this run is recording, so a viewer
+	//attached to the run names the game the same way it does for the
+	//emulator's own session (the "rom" field of ComposeStatusJson).
+	std::string liveRomName;
 	//ADR-0167: queued right before a "capture" run's settle sleep, so a test
 	//can assert the HUD capture's blank flag flips. title|message, split on
 	//the first '|' (neither Localize()'d key needs one).
@@ -717,13 +721,14 @@ int main(int argc, char** argv)
 				ok = LiveRecordFormat::AtomicWrite(liveDir + "/chrlatch.json", LiveRecordFormat::ComposeChrLatchJson(snapshot)) && ok;
 			}
 		}
-		ok = LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(false, cpuFrame, totalFrames, elapsed(), snapshot.HdPackActive)) && ok;
+		ok = LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(false, cpuFrame, totalFrames, elapsed(), snapshot.HdPackActive, liveRomName)) && ok;
 		if(!ok) {
 			fprintf(stderr, "live: cannot write %s - live view disabled, recording continues\n", liveDir.c_str());
 			liveDir.clear();
 		}
 	};
 	if(liveMs > 0) {
+		liveRomName = rom.substr(rom.find_last_of("/\\") + 1);
 		//NES runs read the sprite layer too; GB/SMS/GG runs publish frames only.
 		liveReadSprites = CpuTypeFromExtension(rom) == kCpuTypeNes;
 		if(liveReadSprites) {
@@ -755,7 +760,7 @@ int main(int argc, char** argv)
 	//ADR-0169: one final status so the viewer can show "done" rather than stale
 	//- the run stops being published the moment it parks on its target frame.
 	if(liveMs > 0 && !liveDir.empty()) {
-		LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed(), HeadlessIsNesHdPackVideoActive()));
+		LiveRecordFormat::AtomicWrite(liveDir + "/status.json", LiveRecordFormat::ComposeStatusJson(true, HeadlessGetFrameCount(), totalFrames, elapsed(), HeadlessIsNesHdPackVideoActive(), liveRomName));
 	}
 
 	//The hud-message toast is emitted inside the capture block below, not here:

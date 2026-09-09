@@ -711,7 +711,7 @@ namespace Mesen.ViewModels
 
 				new ContextMenuSeparator(),
 
-				GetLiveRecorderMenu(wnd),
+				GetLiveRecorderMenu(),
 
 				new ContextMenuSeparator() {
 					IsVisible = () => IsHdPackMenuVisible()
@@ -844,34 +844,36 @@ namespace Mesen.ViewModels
 			};
 		}
 
-		private MainMenuAction GetLiveRecorderMenu(MainWindow wnd)
+		private MainMenuAction GetLiveRecorderMenu()
 		{
-			//Single start/stop toggle with no dialog and no user-typed fields: the
-			//recorder publishes to the LiveRecordingFolder convention slot
-			//(ADR-0169), which the live viewer (scripts/record_viewer.py)
-			//auto-attaches to, keeping the recorder synchronized with whatever ROM
-			//is open and whichever controller the human is playing with.
-			const int LiveIntervalMs = 250;
+			//Shaped like the Sound/Video/Music recorders above it (Record/Stop),
+			//with no dialog and no user-typed fields: the recorder publishes to
+			//the LiveRecordingFolder convention slot (ADR-0169) and Record opens
+			//the viewer (scripts/record_viewer.py) on that slot, so what starts
+			//recording is also what shows the game running. The ROM, the
+			//interval and the path are never typed - LiveRecordingSession keeps
+			//the recorder pointed at whatever ROM is open (its OnGameLoaded /
+			//OnEmulationStopped are wired in MainWindow's notification handler).
 			return new MainMenuAction() {
-				ActionType = ActionType.Custom,
-				DynamicText = () => RecordApi.LiveRecordingIsRecording() ? "Stop Live Recording" : "Start Live Recording",
-				DynamicIcon = () => RecordApi.LiveRecordingIsRecording() ? "MediaStop" : "Record",
-				IsEnabled = () => IsGameRunning || RecordApi.LiveRecordingIsRecording(),
-				OnClick = () => {
-					//Logged on both sides of the interop boundary: the toggle is the
-					//only way a human starts a run, and when the slot stays empty
-					//there is otherwise no way to tell "the click never arrived"
-					//from "the core refused" or "the core ran and published
-					//nothing". The Core half is LiveFrameRecorder's own logging.
-					if(RecordApi.LiveRecordingIsRecording()) {
-						RecordApi.LiveRecordingStop();
-						EmuApi.WriteLogEntry("[LiveRecording] UI: stop requested");
-					} else {
-						//Convention root only - the current-session slot. The
-						//viewer finds it the same way, so no path is ever typed.
-						string dir = ConfigManager.LiveRecordingFolder;
-						bool started = RecordApi.LiveRecordingStart(dir, LiveIntervalMs);
-						EmuApi.WriteLogEntry("[LiveRecording] UI: start requested (" + dir + ", " + LiveIntervalMs + "ms) -> " + (started ? "started" : "REFUSED"));
+				ActionType = ActionType.LiveRecorder,
+				SubActions = new List<object> {
+					new MainMenuAction() {
+						ActionType = ActionType.Record,
+						IsEnabled = () => IsGameRunning && !LiveRecordingSession.IsRecording,
+						OnClick = () => LiveRecordingSession.Start()
+					},
+					new MainMenuAction() {
+						ActionType = ActionType.Stop,
+						IsEnabled = () => IsGameRunning && LiveRecordingSession.IsRecording,
+						OnClick = () => LiveRecordingSession.Stop()
+					},
+					new ContextMenuSeparator(),
+					new MainMenuAction() {
+						//Always available: the viewer is read-only, and reopening
+						//it after it was closed must not need a second recording.
+						ActionType = ActionType.OpenLiveViewer,
+						IsEnabled = () => !LiveRecordingSession.IsViewerRunning,
+						OnClick = () => LiveRecordingSession.OpenViewer()
 					}
 				}
 			};

@@ -7,10 +7,16 @@
 # and must report it as SKIPPED, not fail.
 #
 # Requires scripts/headless_record (built by `make capture-tool`). When it is
-# missing the verifier builds it incrementally: under CI a build failure (or a
-# missing toolchain) FAILs so the F6.6 gate can never silently no-op; locally
-# it keeps verify_synthetic_nrom.sh's SKIP fallback so a docs-only edit does
-# not demand a full core build.
+# missing - or older than a source it links against - the verifier builds it
+# incrementally: under CI a build failure (or a missing toolchain) FAILs so the
+# F6.6 gate can never silently no-op; locally it keeps verify_synthetic_nrom.sh's
+# SKIP fallback so a docs-only edit does not demand a full core build.
+#
+# The staleness check is not a nicety: `make` does not build capture-tool (it is
+# a separate target), so a change to the shared wire format
+# (Utilities/LiveRecordFormat.h) leaves a harness linked against the previous
+# signature, and it aborts at dyld time with `Symbol not found` - which this
+# gate would otherwise report as a mysterious exit 134 on every fixture.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,7 +28,28 @@ FIXTURE="$REPO_ROOT/docs/specs/golden/mep-recipe/fixture"
 PY="${PYTHON:-python3}"
 
 [ -x "$SMOKE" ] || { echo "FAIL: $SMOKE not executable" >&2; exit 1; }
-if [ ! -x "$HARNESS" ]; then
+# Sources the harness links against: its own translation units plus the core
+# library it resolves symbols from at load time.
+HARNESS_DEPS=(
+  "$REPO_ROOT/scripts/headless_record.cpp"
+  "$REPO_ROOT/Core/Shared/Video/FrameCapture.cpp"
+  "$REPO_ROOT/Utilities/LiveRecordFormat.h"
+  "$REPO_ROOT/Utilities/LiveRecordFormat.cpp"
+)
+for dylib in "$REPO_ROOT"/InteropDLL/obj.*/MesenCore.*; do
+  [ -f "$dylib" ] && HARNESS_DEPS+=("$dylib")
+done
+
+harness_is_stale() {
+  [ ! -x "$HARNESS" ] && return 0
+  local dep
+  for dep in "${HARNESS_DEPS[@]}"; do
+    [ -e "$dep" ] && [ "$dep" -nt "$HARNESS" ] && return 0
+  done
+  return 1
+}
+
+if harness_is_stale; then
   echo "building $HARNESS (make capture-tool)..." >&2
   BUILD_LOG="$(mktemp)"
   if ! (cd "$REPO_ROOT" && make -s capture-tool >"$BUILD_LOG" 2>&1); then
