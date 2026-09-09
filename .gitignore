@@ -230,3 +230,10 @@ mep_lint_output.txt
 .claude/*
 !.claude/settings.json
 !.claude/skills/
+
+# Run scratch: headless_record/live-recorder output and the emulator home used by
+# local runs. Reproducible by re-running the tools; never a build input.
+/mesen-home/
+/*-live/
+/*.vgm
+/*.mid
