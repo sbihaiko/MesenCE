@@ -25,6 +25,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import compose_editor_layout as L  # noqa: E402
 import compose_engine as E  # noqa: E402
 from compose_viewmodel import ComposeViewModel  # noqa: E402
 
@@ -71,14 +72,47 @@ class EditorApp:
         ttk.Button(top, text="Open…", command=self.open_pack).pack(side="left")
         ttk.Label(top, text="Output:").pack(side="left", padx=(12, 2))
         self.out_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.out_var, width=24).pack(side="left", padx=4)
+        # Expands: the value is an absolute sheets path, and a fixed-width box
+        # clipped it to "…Mega Man 3 (", hiding where Export writes.
+        ttk.Entry(top, textvariable=self.out_var, width=24).pack(
+            side="left", padx=4, fill="x", expand=True)
         ttk.Button(top, text="Export", command=self.export).pack(side="left")
 
         self.status = tk.StringVar(value="no pack open")
         ttk.Label(root, textvariable=self.status, foreground="#555").pack(fill="x", padx=6)
 
+        # The export preview: the pixels `Export` writes, drawn from the very
+        # image the engine composes (ADR-0165 - the artist approves the file,
+        # not a second drawing of it), with the name and size it will take.
+        # Packed before the body, from the bottom: the packer serves earlier
+        # widgets their requested size first, and when it served the tab body
+        # first this preview was the strip that got clipped away - the one
+        # thing the artist is meant to approve before pressing Export.
+        pane = ttk.LabelFrame(root, text="Export preview — the sheet Export writes", padding=4)
+        pane.pack(side="bottom", fill="x", padx=6, pady=(0, 6))
+        self.export_lbl = tk.StringVar(value="nothing composed yet — seed a cell")
+        ttk.Label(pane, textvariable=self.export_lbl, foreground="#555").pack(anchor="w")
+        self.canvas = tk.Canvas(pane, height=120, background="#2b2b33", highlightthickness=0)
+        self.canvas.pack(fill="x")
+
         body = ttk.Frame(root)
         body.pack(fill="both", expand=True, padx=6, pady=(2, 2))
+        # Selection preview — the actual pixels of the highlighted cell, so a
+        # composer sees the art instead of decoding "#47". Packed before the
+        # notebook for the same reason the export preview is packed before the
+        # body: the packer serves earlier widgets first, and the tabs (which
+        # expand) squeezed this panel off the right edge on a narrow window.
+        side = ttk.Frame(body)
+        side.pack(side="right", fill="y", padx=(8, 0))
+        ttk.Label(side, text="Selection", foreground="#444").pack(anchor="w")
+        self.preview = tk.Canvas(side, width=L.PREVIEW_BOX, height=L.PREVIEW_BOX,
+                                 background="#1e1e24", highlightthickness=0)
+        self.preview.pack()
+        self.preview_tk = None   # keep the PhotoImage alive
+        self.preview_lbl = tk.StringVar(value="—")
+        ttk.Label(side, textvariable=self.preview_lbl, foreground="#444",
+                  wraplength=L.PREVIEW_ART).pack(anchor="w", pady=(4, 0))
+
         nb = ttk.Notebook(body)
         nb.pack(side="left", fill="both", expand=True)
         self.sprite_tab = ttk.Frame(nb)
@@ -89,28 +123,6 @@ class EditorApp:
         self._build_sprite_tab()
         self._bind_selection_preview()
 
-        # Selection preview — the actual pixels of the highlighted cell, so a
-        # composer sees the art instead of decoding "#47".
-        side = ttk.Frame(body)
-        side.pack(side="right", fill="y", padx=(8, 0))
-        ttk.Label(side, text="Selection", foreground="#aaa").pack(anchor="w")
-        self.preview = tk.Canvas(side, width=132, height=132, background="#1e1e24",
-                                 highlightthickness=0)
-        self.preview.pack()
-        self.preview_tk = None   # keep the PhotoImage alive
-        self.preview_lbl = tk.StringVar(value="—")
-        ttk.Label(side, textvariable=self.preview_lbl, foreground="#aaa",
-                  wraplength=124).pack(anchor="w", pady=(4, 0))
-
-        # The export preview: the pixels `Export` writes, drawn from the very
-        # image the engine composes (ADR-0165 - the artist approves the file,
-        # not a second drawing of it), with the name and size it will take.
-        pane = ttk.LabelFrame(root, text="Export preview — the sheet Export writes", padding=4)
-        pane.pack(fill="x", padx=6, pady=(0, 6))
-        self.export_lbl = tk.StringVar(value="nothing composed yet — seed a cell")
-        ttk.Label(pane, textvariable=self.export_lbl, foreground="#888").pack(anchor="w")
-        self.canvas = tk.Canvas(pane, height=120, background="#2b2b33", highlightthickness=0)
-        self.canvas.pack(fill="x")
         if folder.is_dir():
             self.load_pack(folder)
 
@@ -140,12 +152,15 @@ class EditorApp:
         f = self.bg_tab
         left = ttk.LabelFrame(f, text="Background cells (most seen first)", padding=4)
         left.pack(side="left", fill="y", padx=4, pady=4)
-        self.bg_seed = tk.Listbox(left, width=46, height=22)
-        self.bg_seed.pack()
+        # The lists fill the window (`expand`), so the requested height is a
+        # floor, not the size: a tall request squeezed the tab's own buttons
+        # off the bottom edge on a shorter window.
+        self.bg_seed = tk.Listbox(left, width=46, height=12)
+        self.bg_seed.pack(fill="both", expand=True)
         ttk.Button(left, text="Seed selected", command=self._seed_bg).pack(pady=2)
         mid = ttk.LabelFrame(f, text="Ranked neighbours — lock to compose", padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
-        self.bg_sugg = tk.Listbox(mid, width=46, height=22)
+        self.bg_sugg = tk.Listbox(mid, width=46, height=12)
         self.bg_sugg.pack(fill="both", expand=True)
         ttk.Button(mid, text="Lock suggestion", command=self._lock_bg).pack(pady=2)
         ttk.Button(mid, text="Recompute (seed + locks)", command=self.refresh_all).pack(pady=2)
@@ -183,8 +198,8 @@ class EditorApp:
         self.band_var = tk.StringVar()
         self.band_box = ttk.Combobox(sel, textvariable=self.band_var, state="readonly", width=12)
         self.band_box.pack()
-        self.sp_seed = tk.Listbox(sel, width=24, height=18)
-        self.sp_seed.pack(pady=4)
+        self.sp_seed = tk.Listbox(sel, width=24, height=10)
+        self.sp_seed.pack(fill="both", expand=True, pady=4)
         ttk.Button(sel, text="Seed selected", command=self._seed_sprite).pack(pady=2)
 
         # The composed band row (ADR-0165 GUI): one cell per sprite of the composed band,
@@ -196,16 +211,14 @@ class EditorApp:
             f, text="Composed band — click + to lock · click a locked cell to swap · right-click to remove",
             padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
-        self._ROW_N = 8
-        self._CELL_W = 66
-        self._CELL_H = 84
-        self.row_canvas = tk.Canvas(mid, height=30, background="#1e1e24", highlightthickness=0)
+        self.row_canvas = tk.Canvas(mid, height=L.EMPTY_ROW_H, background="#1e1e24",
+                                    highlightthickness=0)
         self.row_canvas.pack(fill="x")
         self.row_canvas.bind("<Button-1>", self._row_left)
         self.row_canvas.bind("<Button-3>", self._row_right)
         sugg = ttk.LabelFrame(mid, text="Ranked band members (coFrames) — or lock a pick here", padding=2)
         sugg.pack(fill="both", expand=True, pady=(4, 0))
-        self.sp_sugg = tk.Listbox(sugg, width=42, height=12)
+        self.sp_sugg = tk.Listbox(sugg, width=42, height=8)
         self.sp_sugg.pack(fill="both", expand=True)
         btns = ttk.Frame(sugg)
         btns.pack(fill="x", pady=(2, 0))
@@ -268,58 +281,54 @@ class EditorApp:
         self._cell_imgs.clear()
         c = self.row_canvas
         if not self.vm.pack or self.vm.mode != "sprite":
-            c.config(height=30)
-            c.create_text(8, 15, anchor="w", fill="#556",
-                          text="the row composes the sprite floor band — seed one on this tab")
+            c.config(height=L.EMPTY_ROW_H)
+            c.create_text(8, 15, anchor="w", fill="#556", text=L.ROW_WRONG_LAYER)
             return
         spec = self.vm.row_spec()
         if not spec:
-            c.config(height=30)
-            c.create_text(8, 15, anchor="w", fill="#556",
-                          text="seed a band member (left) — it becomes the first locked cell")
+            c.config(height=L.EMPTY_ROW_H)
+            c.create_text(8, 15, anchor="w", fill="#556", text=L.ROW_NEEDS_SEED)
             return
-        rows = (len(spec) + self._ROW_N - 1) // self._ROW_N
-        c.config(width=self._ROW_N * self._CELL_W, height=rows * self._CELL_H)
+        width, height = L.grid_size(len(spec))
+        c.config(width=width, height=height)
         for i, cell in enumerate(spec):
-            col, row = divmod(i, self._ROW_N)
-            self._draw_row_cell(cell, col * self._CELL_W, row * self._CELL_H,
-                                is_seed=(i == 0 and cell["node"] is not None))
+            # Every coordinate comes from `compose_editor_layout`, whose
+            # `cell_origin` is the inverse of the `index_at` a click goes
+            # through - so what is drawn here is what a click there hits.
+            self._draw_row_cell(cell, i, is_seed=(i == 0 and cell["node"] is not None))
 
-    def _draw_row_cell(self, cell, x0, y0, is_seed):
-        box = self._CELL_W - 8
-        bx, by = x0 + (self._CELL_W - box) // 2, y0 + 2
+    def _draw_row_cell(self, cell, index, is_seed):
+        bx, by, bx1, by1 = L.art_box(index)
+        cap_x, cap_y = L.caption_point(index)
         c = self.row_canvas
         if cell["node"] is None:
             cand = cell.get("add")
-            c.create_rectangle(bx, by, bx + box, by + box, outline="#5a6b85", dash=(3, 2))
-            c.create_text(bx + box // 2, by + box // 2, text="+", fill="#93a7c4",
+            c.create_rectangle(bx, by, bx1, by1, outline="#5a6b85", dash=(3, 2))
+            c.create_text((bx + bx1) // 2, (by + by1) // 2, text="+", fill="#93a7c4",
                           font=("", 16, "bold"))
             if cand is not None:
-                c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12,
-                              text=f"#{cand}", fill="#5f6f8a", font=("", 8))
+                c.create_text(cap_x, cap_y, text=f"#{cand}", fill="#5f6f8a", font=("", 8))
             return
         node = cell["node"]
         try:
             art = self.vm.node_art(node, sprite=True)
         except E.ComposeError:
-            c.create_rectangle(bx, by, bx + box, by + box, outline="#c06058", width=2)
-            c.create_text(bx + box // 2, by + box // 2, text="?", fill="#c06058", font=("", 14, "bold"))
-            c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12, text=f"#{node}",
-                          fill="#d7a3a3", font=("", 8))
+            c.create_rectangle(bx, by, bx1, by1, outline="#c06058", width=2)
+            c.create_text((bx + bx1) // 2, (by + by1) // 2, text="?", fill="#c06058",
+                          font=("", 14, "bold"))
+            c.create_text(cap_x, cap_y, text=f"#{node}", fill="#d7a3a3", font=("", 8))
             return
-        unit = art.width
-        scale = max(1, (box - 8) // unit)
-        img, w, h = image_photo(art, scale)
+        img, w, h = image_photo(art, L.row_cell_scale(art.width))
         self._cell_imgs.append(img)
-        c.create_image(bx + (box - w) // 2, by + (box - h) // 2, image=img, anchor="nw")
+        c.create_image(bx + (bx1 - bx - w) // 2, by + (by1 - by - h) // 2, image=img,
+                       anchor="nw")
         outline = "#ffd27d" if is_seed else "#7fa7e0"
         fill = "#ffe2a8" if is_seed else "#cfd8e6"
-        c.create_rectangle(bx, by, bx + box, by + box, outline=outline, width=2)
-        c.create_text(x0 + self._CELL_W // 2, y0 + self._CELL_H - 12, text=f"#{node}",
-                      fill=fill, font=("", 8))
+        c.create_rectangle(bx, by, bx1, by1, outline=outline, width=2)
+        c.create_text(cap_x, cap_y, text=f"#{node}", fill=fill, font=("", 8))
 
     def _row_index_at(self, event):
-        return (event.y // self._CELL_H) * self._ROW_N + (event.x // self._CELL_W)
+        return L.index_at(event.x, event.y)
 
     def _row_left(self, event):
         if not self.vm.pack:
@@ -383,11 +392,9 @@ class EditorApp:
             self.status.set(str(e))
             self.preview_lbl.set(f"#{node} ({kind}) — {e}")
             return
-        unit = art.width
-        scale = max(1, min(16, 124 // unit))
-        img, _w, _h = image_photo(art, scale)
+        img, _w, _h = image_photo(art, L.preview_scale(art.width))
         self.preview_tk = img
-        self.preview.create_image(66, 66, image=img)
+        self.preview.create_image(L.PREVIEW_BOX // 2, L.PREVIEW_BOX // 2, image=img)
         self.preview_lbl.set(f"#{node} ({kind})")
 
     def refresh_all(self):
@@ -419,14 +426,13 @@ class EditorApp:
             return
         sheet, columns, unit, name = composed
         cells = len(self.vm.locked_list())
-        scale = max(1, min(8, 480 // max(1, sheet.width)))
-        img, w, h = image_photo(sheet, scale)
+        scale = L.export_scale(sheet.width)
+        img, _w, h = image_photo(sheet, scale)
         self._imgs.append(img)
         self.canvas.config(height=h + 4)
         self.canvas.create_image(2, 2, image=img, anchor="nw")
-        self.export_lbl.set(
-            f"{name}.png — {cells} cell(s), {columns} column(s) of {unit}px, "
-            f"{sheet.width}×{sheet.height} px (shown at {scale}×)")
+        self.export_lbl.set(L.export_caption(name, cells, columns, unit,
+                                             sheet.width, sheet.height, scale))
 
     def export(self):
         if not self.vm.pack:
