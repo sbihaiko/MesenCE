@@ -171,6 +171,7 @@
     <ClInclude Include="VirtualFile.h" />
     <ClInclude Include="CRC32.h" />
     <ClInclude Include="sha1.h" />
+    <ClInclude Include="LiveRecordFormat.h" />
     <ClInclude Include="magic_enum.hpp" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="CompressionHelper.h" />
@@ -325,6 +326,7 @@
     <ClCompile Include="FolderUtilities.cpp" />
     <ClCompile Include="HexUtilities.cpp" />
     <ClCompile Include="PlatformUtilities.cpp" />
+    <ClCompile Include="LiveRecordFormat.cpp" />
     <ClCompile Include="Serializer.cpp" />
     <ClCompile Include="SimpleLock.cpp" />
     <ClCompile Include="Socket.cpp" />
