@@ -9,6 +9,7 @@ editable source material, then packages it into a MEP zip:
         --system S --sha1 H] [--name N] [--version V] [--author A]
         [--license L] [--quiet]
     scripts/mep_build.py rename-audio-id <folder> <old-id> <new-id>
+    scripts/mep_build.py check-coverage <folder> [--baseline HIRES]
     scripts/mep_build.py <folder>            # same as `build`
 
 build  reads `textures/sheets/*.png` (16-column grids of `8*scale`-px
@@ -54,6 +55,14 @@ pack   writes `pack.json` at the folder root from the folder tree and the
        order) so a rebuilt zip is byte-identical — the F6.4c fixture
        pattern. `targets` come from `--rom` (No-Intro sha1), explicit
        `--system/--sha1`, or an existing `pack.json`. The zip is linted too.
+
+check-coverage  compares a rebuilt `textures/hires.txt` against the manifest
+       its keys came from (the recorder's, by default `auto/textures/
+       hires.txt`): every baseline tile key must still resolve to a crop
+       inside a sheet that exists, and the F5.4d tiles-with-art count over
+       those keys must be unchanged. Pixels are never compared, so a
+       repainted ("skinned") pack passes and a pack that lost a key fails
+       (PRD Phase 10 S10.d).
 
 rename-audio-id  renames an enumerated `trackNN`/`sfxNN` audio id across
        `audio/fingerprints.json` (the `id` and `midi` fields), the physical
@@ -1065,8 +1074,11 @@ def cmd_pack(args) -> int:
     if args.author or existing.get("author"):
         body["author"] = args.author or existing["author"]
     # Carry over optional MEP-v1 §3.1 fields a re-run must not silently drop
-    # (patches[] gates ROM patches at the MEP layer; ADR-0044).
-    for optional in ("patches", "crc32", "md5"):
+    # (patches[] gates ROM patches at the MEP layer; ADR-0044). `generated`
+    # (MEP-v1 §3.1 v1.6, ADR-0154 §3) is the machine-made disclosure label:
+    # dropping it on export would silently un-label a generated pack, so it
+    # rides along like any other declared field (PRD Phase 10 S10.c).
+    for optional in ("patches", "crc32", "md5", "generated"):
         if existing.get(optional):
             body[optional] = existing[optional]
     sections = _derive_sections(folder)
@@ -1166,6 +1178,125 @@ def cmd_rename_audio_id(args) -> int:
     return 0
 
 
+def _manifest_keys(hires: Path):
+    """Reads a textures manifest back as (keys, unresolved).
+
+    `keys` maps (tileData, palette) -> (img path, has_art) for every <tile>
+    whose crop actually lands inside the sheet it points at; `has_art` is the
+    `defaultTile` flag being off, i.e. HdPackCoverageReport::TilesWithArt's
+    "a real (non-defaultTile) art entry" (F5.4d). `unresolved` lists
+    (key, reason) for the <tile> entries whose sheet is missing or whose crop
+    falls outside it — a key the host would render nothing for.
+
+    Pixels are never read: a repaint changes them by definition, so the
+    coverage rule is about keys resolving, not about crops matching
+    (PRD Phase 10 S10.d)."""
+    base = hires.parent
+    scale = 1  # a manifest with no <scale> is read at 1 by the host and lint
+    imgs = []
+    keys = {}
+    unresolved = []
+    sizes = {}
+    for line in hires.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.startswith("<scale>"):
+            try:
+                scale = int(s[7:].strip())
+            except ValueError:
+                pass
+            continue
+        if s.startswith("<img>"):
+            imgs.append(s[5:].strip())
+            continue
+        m = _TILE_RE.match(s)
+        if not m:
+            continue
+        f = [x.strip() for x in m.group(2).split(",")]
+        if len(f) < 5:
+            continue
+        key = (f[1].upper(), f[2].upper())
+        try:
+            index, x, y = int(f[0]), int(f[3]), int(f[4])
+        except ValueError:
+            unresolved.append((key, f"non-numeric <tile> fields: {m.group(2)}"))
+            continue
+        if index >= len(imgs):
+            unresolved.append((key, f"<tile> points at img {index}, only {len(imgs)} declared"))
+            continue
+        rel = imgs[index]
+        if rel not in sizes:
+            sizes[rel] = _png_size(base / rel)
+        size = sizes[rel]
+        if size is None:
+            unresolved.append((key, f"{rel} is missing or not a valid PNG"))
+            continue
+        span = 8 * scale
+        if x < 0 or y < 0 or x + span > size[0] or y + span > size[1]:
+            unresolved.append((key, f"crop ({x},{y},{span}px) falls outside {rel} ({size[0]}x{size[1]})"))
+            continue
+        keys[key] = (rel, len(f) < 7 or f[6].upper() != "Y")
+    return keys, unresolved
+
+
+def cmd_check_coverage(args) -> int:
+    """PRD Phase 10 S10.d: the "nothing broken" gate for a repainted pack.
+    Every tile key the recorder keyed must still resolve in the rebuilt pack
+    and the F5.4d tiles-with-art count over those keys must be unchanged.
+    Differing pixels are allowed and never inspected — that is the whole
+    point: a skin changes them, so the pixel-exact identity round-trip
+    (`test_mep_build.py`) cannot be the check."""
+    folder = Path(args.folder).resolve()
+    if not folder.is_dir():
+        print(f"error: {folder} is not a directory", file=sys.stderr)
+        return 2
+    candidate = folder / "textures" / "hires.txt"
+    if not candidate.is_file():
+        print(f"error: no built manifest to check: {candidate} (run `mep_build.py build` first)", file=sys.stderr)
+        return 2
+    baseline = Path(args.baseline).resolve() if args.baseline else folder / "auto" / "textures" / "hires.txt"
+    if not baseline.is_file():
+        print(f"error: no baseline manifest: {baseline} (pass --baseline <recorder hires.txt>)", file=sys.stderr)
+        return 2
+
+    base_keys, base_unresolved = _manifest_keys(baseline)
+    cand_keys, cand_unresolved = _manifest_keys(candidate)
+    for key, reason in base_unresolved:
+        print(f"info: baseline key {key[0]}/{key[1]} does not resolve either — {reason}")
+
+    dropped = sorted(k for k in base_keys if k not in cand_keys)
+    lost = [(k, r) for k, r in cand_unresolved if k in base_keys]
+    base_art = sum(1 for k, (_rel, art) in base_keys.items() if art)
+    cand_art = sum(1 for k, (_rel, art) in cand_keys.items() if art and k in base_keys)
+    added = len(set(cand_keys) - set(base_keys))
+    print(f"coverage: baseline {len(base_keys)} resolved key(s), {base_art} with art; "
+          f"candidate {len(cand_keys)} resolved key(s), {cand_art} with art over the baseline's keys"
+          + (f" (+{added} new key(s))" if added else ""))
+
+    rc = 0
+    if dropped:
+        rc = 1
+        print(f"error: {len(dropped)} baseline tile key(s) no longer resolve in {candidate}:", file=sys.stderr)
+        for data, pal in dropped[:20]:
+            print(f"  - {data}/{pal} (was {base_keys[(data, pal)][0]})", file=sys.stderr)
+        if len(dropped) > 20:
+            print(f"  ... and {len(dropped) - 20} more", file=sys.stderr)
+    for key, reason in lost:
+        rc = 1
+        print(f"error: baseline tile key {key[0]}/{key[1]} is declared but unresolved — {reason}", file=sys.stderr)
+    if cand_art != base_art:
+        rc = 1
+        print(f"error: F5.4d tiles-with-art count changed over the baseline's keys: "
+              f"{base_art} -> {cand_art}", file=sys.stderr)
+    if rc != 0:
+        print("error: coverage not preserved — the repaint dropped art the recorder had keyed", file=sys.stderr)
+        return rc
+    print(f"OK: every baseline tile key still resolves and the tiles-with-art count is unchanged ({base_art}); "
+          "pixels were not compared")
+    return 0
+
+
 def _run_lint(target, quiet: bool) -> int:
     argv = ["mep_build.py", str(target)]
     if quiet:
@@ -1179,7 +1310,7 @@ def _run_lint(target, quiet: bool) -> int:
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # `mep_build.py <folder>` == `build <folder>` (PRD primary form).
-    if argv and argv[0] not in ("build", "pack", "rename-audio-id", "-h", "--help"):
+    if argv and argv[0] not in ("build", "pack", "rename-audio-id", "check-coverage", "-h", "--help"):
         argv.insert(0, "build")
 
     p = argparse.ArgumentParser(
@@ -1210,6 +1341,10 @@ def main(argv=None) -> int:
     ra.add_argument("old_id")
     ra.add_argument("new_id")
     ra.set_defaults(func=cmd_rename_audio_id)
+    cc = sub.add_parser("check-coverage", help="a repainted pack keeps every baseline tile key and its tiles-with-art count")
+    cc.add_argument("folder")
+    cc.add_argument("--baseline", help="the manifest the keys came from (default: auto/textures/hires.txt)")
+    cc.set_defaults(func=cmd_check_coverage)
 
     args = p.parse_args(argv)
     if not hasattr(args, "func"):

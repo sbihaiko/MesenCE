@@ -298,8 +298,18 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
   track/sfx id); the `mep_lint` gate failing is a build failure. `pack`
   writes `pack.json` (sections derived from the tree, targets from `--rom`
   No-Intro sha1 or `--system/--sha1`) and a byte-deterministic zip
-  (fixed timestamps, STORED, 0o644, pack.json first). `scripts/checks/
-  verify_mep_build.py` is the CI verifier wired into `make doc-checks`.
+  (fixed timestamps, STORED, 0o644, pack.json first) carrying over the
+  optional root fields of an existing manifest, `generated` (MEP-v1 §3.1
+  v1.6, ADR-0154 §3) included — dropping the label on export would
+  un-label a machine-made pack. The zip still holds **every** file under
+  the folder, a non-pack subfolder included (PRD Phase 10 S10.c: excluding
+  anything needs an ADR). `check-coverage <folder> [--baseline HIRES]` is
+  the "nothing broken" gate for a repainted pack (PRD Phase 10 S10.d):
+  every tile key of the baseline manifest must still resolve to a crop
+  inside a sheet that exists and the F5.4d tiles-with-art count over those
+  keys must be unchanged — pixels are never compared, so a skin passes and
+  a pack that lost a key fails. `scripts/test_mep_build.py` is the
+  acceptance test wired into `make doc-checks`.
   `gen_mep_recipe_fixture.py` (F6.4a) writes the real-bytes MEP-recipe-v1
   golden under `docs/specs/golden/mep-recipe/fixture/` (`primary.zip`,
   `audio-dep.zip`, `recipe.json`, `recipe-missing-dep.json`) that a

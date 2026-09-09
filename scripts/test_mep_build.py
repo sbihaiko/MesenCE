@@ -23,13 +23,21 @@ hires.txt + two OGGs) and asserts the whole build/pack/rename cycle:
     painted, measured against its `*.orig.png` twin — so a painted
     `metatiles.png` cell beats an untouched map (PRD test 3) and a painted
     map beats the untouched vocabulary (PRD test 4), with the static kind
-    rank as the tie-break when both, or neither, were painted.
+    rank as the tie-break when both, or neither, were painted;
+  * PRD Phase 10 S10.c: `pack` carries the root `generated` label (MEP-v1
+    §3.1 v1.6, ADR-0154 §3) across a rebuild, and the zip's membership is
+    documented as it stands — every file under the folder, a non-pack
+    `studio/` subfolder included;
+  * PRD Phase 10 S10.d: coverage preservation for a repainted pack —
+    `check-coverage` passes a fully skinned pack (pixels all differ) and
+    fails a pack that lost a cell's tile keys or its sheet.
 
 Framework-free, mirroring test_mep_recipe.py's ok()/fail()/main() style.
 Wired into `make doc-checks`. Usage: python3 scripts/test_mep_build.py
 """
 
 import hashlib
+import shutil
 import struct
 import subprocess
 import sys
@@ -698,6 +706,154 @@ def chr_relegation_test(root: Path):
         ok("F9.10: a key source naming textures/chr/ builds the same manifest, pointing only at sheets/")
 
 
+def pack_extra_data_tests(root: Path, rom: Path):
+    """PRD Phase 10 S10.c: `pack` must carry the root `generated` object of an
+    existing pack.json across the rebuild (MEP-v1 §3.1 v1.6, ADR-0154 §3 — the
+    label is the disclosure, and losing it on export un-labels the pack), and
+    the zip's membership is documented here as it stands: `folder.rglob("*")`
+    ships every file under the folder, including a non-pack subfolder. Whether
+    `pack` should exclude anything is a decision (an ADR), not a behaviour this
+    test invents; what it pins is that the behaviour cannot change silently."""
+    folder = make_author_folder(root, name="studio")
+    if run("build", str(folder)) is None:
+        return
+    # A non-pack subfolder, the shape the skin studio would leave behind: a
+    # transcript of the session plus a candidate image that never shipped.
+    studio = folder / "studio"
+    (studio / "candidates").mkdir(parents=True)
+    (studio / "transcript.jsonl").write_text('{"turn": 1, "prompt": "chrome knight"}\n', encoding="utf-8")
+    (studio / "candidates" / "skin.png").write_bytes(png(16, 16))
+    generated = {"by": "sheet_repaint", "backend": "passthrough", "date": "2026-09-09",
+                 "scale": 4, "source": "auto/textures/sheets"}
+    (folder / "pack.json").write_text(json_dumps({
+        "mep": "1.6.0", "name": "S10.c Test", "version": "0.1.0", "license": "CC0-1.0",
+        "generated": generated,
+        "targets": [{"system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"}],
+        "sections": {"textures": {"path": "textures/"}},
+    }), encoding="utf-8")
+
+    z = root / "studio.zip"
+    if run("pack", str(folder), "--rom", str(rom), "--out", str(z)) is None:
+        return
+    pj = json_loads((folder / "pack.json").read_text(encoding="utf-8"))
+    with zipfile.ZipFile(z) as zf:
+        names = zf.namelist()
+        zipped = json_loads(zf.read("pack.json").decode("utf-8"))
+    if pj.get("generated") != generated:
+        fail(f"pack rewrote pack.json without the root `generated` object: {pj.get('generated')}")
+    elif zipped.get("generated") != generated:
+        fail(f"the zipped pack.json lost the root `generated` object: {zipped.get('generated')}")
+    else:
+        ok("S10.c: pack carries the root `generated` object across a rebuild, on disk and in the zip")
+
+    want = ["pack.json", "audio/bgm/01.ogg", "audio/hires.txt", "audio/sfx/03.ogg",
+            "studio/candidates/skin.png", "studio/transcript.jsonl",
+            "textures/hires.txt", "textures/sheets/objects.png"]
+    if names != want:
+        fail(f"pack zip membership changed:\n  got  {names}\n  want {want}")
+    else:
+        ok("S10.c: pack zips every file under the folder — a non-pack studio/ subfolder ships with it")
+
+
+def skin(folder: Path) -> int:
+    """Repaint every sheet in place, leaving the `*.orig.png` twins alone: each
+    pixel keeps its alpha and rotates its RGB channels, so all the art changes
+    and no geometry does. That is what a skin tool returns, and why the
+    pixel-exact identity round-trip cannot be its check (PRD Phase 10 S10.d)."""
+    painted = 0
+    for p in sorted((folder / "textures" / "sheets").glob("*.png")):
+        if p.name.endswith(".orig.png"):
+            continue
+        px = png_read(p)
+        for row in px:
+            for i, v in enumerate(row):
+                row[i] = (v & 0xFF000000) | ((v & 0x00FFFF) << 8) | ((v >> 16) & 0xFF)
+        p.write_bytes(png_rgba(px))
+        painted += 1
+    return painted
+
+
+def drop_cell(folder: Path, cells, index: int):
+    """Rewrite metatiles.json without one cell — the way a repaint loses a
+    subject: the sheet still builds, that cell's tile keys simply stop being
+    claimed by anything (the ADR-0156 rewrite, used here as a defect)."""
+    kept = [c for c in cells if c["index"] != index]
+    (folder / "textures" / "sheets" / "metatiles.json").write_text(
+        serialize_sheet("metatiles", 16, 1, 3, "metatiles.png", "metatiles.orig.png", kept),
+        encoding="utf-8")
+
+
+def coverage_preservation_tests(root: Path):
+    """PRD Phase 10 S10.d: the "nothing broken" check for a repainted pack is
+    key/coverage preservation, not pixel identity. Three arms: a skinned pack
+    passes, a pack that lost a cell's keys fails naming them, and a pack whose
+    sheet is gone fails as unresolved."""
+    def baseline_of(folder: Path, name: str) -> Path:
+        """The recorder's pack, kept aside before the repaint: its own manifest
+        and its own PNGs, exactly what `--baseline` points at in practice."""
+        copy = root / name
+        shutil.copytree(folder, copy)
+        return copy / "textures" / "hires.txt"
+
+    # --- pass arm: every pixel repainted, every key kept ---
+    good, _v, _c = make_sheet_folder(root, "skin-pass")
+    if run("build", str(good)) is None:
+        return
+    base = baseline_of(good, "skin-pass-baseline")
+    before = (good / "textures" / "sheets" / "metatiles.png").read_bytes()
+    if skin(good) != 3 or (good / "textures" / "sheets" / "metatiles.png").read_bytes() == before:
+        fail("the skin fixture did not actually change the sheet pixels")
+        return
+    if run("build", str(good)) is None:
+        return
+    out = run("check-coverage", str(good), "--baseline", str(base))
+    if out is None:
+        return
+    if "every baseline tile key still resolves" not in out or "unchanged (19)" not in out:
+        fail(f"S10.d: a fully repainted pack did not pass the coverage check:\n{out}")
+    else:
+        ok("S10.d: a skinned pack passes — every key resolves, tiles-with-art unchanged, pixels ignored")
+
+    # --- fail arm: one cell dropped from the sidecar, its keys go with it ---
+    bad, _v, bad_cells = make_sheet_folder(root, "skin-drop")
+    if run("build", str(bad)) is None:
+        return
+    bad_base = baseline_of(bad, "skin-drop-baseline")
+    skin(bad)
+    drop_cell(bad, bad_cells, 5)  # metatile 5 is metatiles-only: shapes 18 and 19
+    if run("build", str(bad)) is None:
+        return
+    out = run("check-coverage", str(bad), "--baseline", str(bad_base), expect=1)
+    if out is None:
+        return
+    named = [tile_hex(s) for s in (18, 19) if f"{tile_hex(s)}/{PAL_HEX}" in out]
+    if "2 baseline tile key(s) no longer resolve" not in out:
+        fail(f"S10.d: a dropped cell did not fail as a dropped key:\n{out}")
+    elif len(named) != 2:
+        fail(f"S10.d: the failure did not name both dropped keys ({named}):\n{out}")
+    elif "tiles-with-art count changed over the baseline's keys: 19 -> 17" not in out:
+        fail(f"S10.d: the failure did not report the F5.4d count loss:\n{out}")
+    else:
+        ok("S10.d: a pack with a dropped key fails, naming the keys and the tiles-with-art loss")
+
+    # --- fail arm: the keys are still declared, but their sheet is gone ---
+    gone, _v, _c = make_sheet_folder(root, "skin-gone")
+    if run("build", str(gone)) is None:
+        return
+    gone_base = baseline_of(gone, "skin-gone-baseline")
+    skin(gone)
+    if run("build", str(gone)) is None:
+        return
+    (gone / "textures" / "sheets" / "metatiles.png").unlink()
+    out = run("check-coverage", str(gone), "--baseline", str(gone_base), expect=1)
+    if out is None:
+        return
+    if "is missing or not a valid PNG" not in out:
+        fail(f"S10.d: a missing sheet was not reported as an unresolved key:\n{out}")
+    else:
+        ok("S10.d: a key whose sheet is missing fails as unresolved, not as a pass")
+
+
 def make_author_folder(root: Path, keys: int = 16, name: str = "author"):
     """A buildable author folder: a 16-column sheet at scale 2 (16px cells),
     a key-source hires.txt, and one bgm + one sfx OGG."""
@@ -889,6 +1045,11 @@ def main() -> int:
         # fragments went, and the round trip cannot notice the difference ---
         chr_relegation_test(root)
 
+        # --- PRD Phase 10 S10.c/S10.d: the export label + local data, and
+        # the coverage rule that replaces pixel identity for a skinned pack ---
+        pack_extra_data_tests(root, rom)
+        coverage_preservation_tests(root)
+
         # --- F5.4g item 12: audio_cleanup_suggest reads the probe's log ---
         sug = root / "sug-pack"
         (sug / "auto" / "audio").mkdir(parents=True)
@@ -912,6 +1073,11 @@ def main() -> int:
 def json_loads(s):
     import json
     return json.loads(s)
+
+
+def json_dumps(obj) -> str:
+    import json
+    return json.dumps(obj, indent=2) + "\n"
 
 
 if __name__ == "__main__":
