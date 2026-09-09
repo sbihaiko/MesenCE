@@ -27,7 +27,7 @@
   background from the captured scroll and nametable bytes, and multiplexes it
   with the sprite layer using the 2C02's own priority rule (front sprites
   always win; a behind-background sprite only shows through a transparent
-  background pixel), so its bottom pane is a real composite reconstruction,
+  background pixel), so its reconstruction pane is a real composite reconstruction,
   not sprites drawn over a plain backdrop. Verified against two live NES
   captures (Mega Man 3's title screen, Zelda's file-select screen): 98.7-99.3%
   of native pixels are byte-identical to the emulator's own composed frame,

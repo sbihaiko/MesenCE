@@ -42,7 +42,8 @@ Either way this tool only polls the directory and draws what it finds; it never
 writes a byte into it, and it never launches a recording — start and stop live
 recording from the emulator, start headless runs from a terminal.
 
-The bottom pane is a *reconstruction* of the frame, not a second capture: OAM
+The right (or lower, when the panes stack) pane is a *reconstruction* of the
+frame, not a second capture: OAM
 entries are expanded through the NES 8x8/8x16 rules of NesPpu::LoadSprite and
 the background tiles are re-laid out through the captured loopy scroll, then
 both are multiplexed the way the 2C02's priority logic does (front sprites over
@@ -52,8 +53,13 @@ tables, nametables, scroll, the mask bits — and ignores what it cannot see:
 the 8-sprites-per-scanline limit and any mid-frame scroll split. Recordings from
 before the background capture land on the wire format show only sprites over the
 backdrop color, the way this tool always did. The pane may still disagree with
-the composed frame above it in those spots; the layer checkboxes exist to hide a
+the composite in those spots; the layer checkboxes under it exist to hide a
 layer and see what the others would look like on their own.
+
+The window itself is laid out by record_viewer_layout.py — pane orientation,
+the shared zoom and every caption string live there, host-free and unit tested
+(scripts/test_record_viewer_layout.py), so the tkinter class below is only
+widgets plus the draw calls.
 
 stdlib plus tkinter, an external tool in `scripts/` never linked into the
 emulator (ADR-0165). The pure reconstruction helpers live above the GUI class
@@ -66,7 +72,9 @@ import sys
 import tempfile
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
+from tkinter import filedialog, font as tkfont, ttk
+
+import record_viewer_layout as vl
 
 # The NES sprite plane, in its own native pixels (the recorder's frame.ppm may
 # be scaled, e.g. 2x -> 512x480; geometry_scale() recovers the factor).
@@ -77,35 +85,6 @@ NATIVE_H = 240
 # scanline (it wrapped off the bottom), so the PPU never shows it — skip it
 # the same way the hardware does.
 HIDDEN_SPRITE_Y = 0xF0
-
-# Caption prefix for the reconstruction pane once the background layer is on the
-# wire (2026-09-08 ADR-0169 "capture every layer"). Everything an end-of-frame
-# capture can prove is applied - priority, the mask bits, palette - so the pane
-# is a real multiplex of both layers; only the per-scanline limits a single
-# capture cannot see are left out and named.
-RECONSTRUCTION_CAVEAT = (
-    "rebuilt from OAM + nametables — same priority as the PPU (front sprites, "
-    "behind sprites only through a backdrop pixel, mask bits honoured), but it "
-    "cannot see a frame's 8-sprites-per-scanline overflow or a mid-frame scroll "
-    "split, so a sprite here may still differ from the frame above")
-
-# Older recordings (and non-background captures) show sprites over the backdrop
-# color alone; name that so it reads as "no background data", not as an error.
-SPRITES_ONLY_CAVEAT = (
-    "rebuilt from OAM only (this recording predates the background capture) — "
-    "sprites drawn over the backdrop color, no priority to multiplex")
-
-# status.json's hdPackActive (LiveRecordFormat.h's LiveSnapshot::HdPackActive):
-# with HD pack texture substitution live, the frame above is the pack's redrawn
-# art while the CHR/nametable/OAM bytes this pane rebuilds from still hold the
-# original NES tiles. There is no data channel that carries a substituted tile
-# back to a reconstruction, so the two panes are simply describing different
-# graphics - say so instead of letting the pane read as a fidelity failure.
-HD_PACK_CAVEAT = (
-    "HD pack substitution is ON for this run — the frame above shows the pack's "
-    "redrawn art, this pane shows the original NES tiles it replaced, so the two "
-    "are not comparable. Turn off Settings > NES > Enable HD Packs (or run "
-    "headless_record with hdpack-off) to compare the reconstruction itself")
 
 
 def emulator_live_dir():
@@ -724,17 +703,40 @@ def sprite_boxes(sprites, touched):
         if touched[i]:
             yield (x, y0, size, size)
 
-
 class RecordViewerApp:
+    """The window: a source toolbar, a view toolbar, the two panes, a notes
+    strip and a status strip.
+
+    The panes are the point, so they own every pixel the toolbars do not: each
+    is a header line (title, and the PPU/geometry meta for that frame), a
+    canvas that fills whatever is left with the frame centred in it, and its
+    own layer toggles right under it. Both panes always draw at the same zoom
+    — they exist to be compared pixel for pixel — and the zoom either fits the
+    window or is the one the user picked. Every number and every string in
+    here comes from record_viewer_layout, which is testable without a display.
+    """
+
     POLL_MS = 100
+    RESIZE_DEBOUNCE_MS = 80
+    CANVAS_BG = "#101010"
+    CANVAS_BORDER = "#2b2b2b"
+    META_FG = "#8a8a8a"
+    BADGE_COLORS = {"REC": ("#b5342b", "#ffffff"),
+                    "STOPPED": ("#4a4a4a", "#e8e8e8"),
+                    "PAUSED": ("#7a5c00", "#ffffff"),
+                    "IDLE": ("#3a3a3a", "#b0b0b0")}
 
     def __init__(self, root: tk.Tk, live_dir: Path):
         self.root = root
         self.live_dir = live_dir
         root.title("MesenCE — live recording viewer (ADR-0169)")
-        self._imgs = []          # keep PhotoImages alive (Tk drops them on GC)
+        root.minsize(760, 560)
+
+        self._composite_img = None   # PhotoImage on screen (Tk drops it on GC)
+        self._pane_img = None        # ditto, reconstruction pane
         self._seen = {}          # {path: (mtime_ns, size)} of the last draw
         self._status_text = None
+        self._notice_text = ""
         self._last_mark_data = None  # (sprites, touched) of the last draw
         self._last_sprite_state = None  # (sprites, chr, colors, w, h, scale) of the last draw
         self._last_bg_state = None   # (bg dict, nametables bytes, scanlineScroll list-or-None,
@@ -742,98 +744,381 @@ class RecordViewerApp:
         self._last_chrlatch_state = None  # (chrlatch dict, chrfull bytes) of the last draw, or None
         self._composite_raw = None      # unzoomed PhotoImage decoded from frame.ppm
         self._composite_native_wh = None  # (w, h) of frame.ppm, before display zoom
-        self._display_zoom = 1          # shared zoom applied on top of the recorder's own scale, to fill the window
+        self._display_zoom = 1          # shared zoom applied on top of the recorder's own scale
         self._resize_job = None
+        self._orientation = None
+        self._headers = []   # (header frame, title, subtitle, meta) per pane
 
-        # ---- top bar: the live directory ------------------------------------
-        # Pre-filled with the emulator's convention slot; type another path to
-        # watch a headless run and click Attach.
-        top = ttk.Frame(root, padding=6)
-        top.pack(fill="x")
-        ttk.Label(top, text="Live dir:").pack(side="left")
-        self.live_dir_var = tk.StringVar(value=str(live_dir))
-        self.live_dir_entry = ttk.Entry(top, textvariable=self.live_dir_var, width=56)
-        self.live_dir_entry.pack(side="left", padx=(4, 4))
-        self.attach_btn = ttk.Button(top, text="Attach", command=self._attach)
-        self.attach_btn.pack(side="left")
-        ttk.Button(top, text="Poll now", command=self._poll).pack(side="right")
-        self.status = tk.StringVar(value="starting…")
-        ttk.Label(root, textvariable=self.status, foreground="#555",
-                  wraplength=1400).pack(fill="x", padx=6)
+        self._build_fonts()
+        self._build_source_bar()
+        self._build_view_bar()
+        self._build_body()
+        self._build_notes()
+        self._build_status_bar()
+        self._bind_keys()
 
-        # ---- the two panes: composite | reconstruction ---------------------
-        body = ttk.Frame(root)
-        body.pack(fill="both", expand=True, padx=6, pady=6)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(2, weight=1)   # the panes take the slack
+        root.bind("<Configure>", self._schedule_resize)
+        self.root.after(self.POLL_MS, self._poll)
 
-        self.left = left = ttk.Frame(body)
-        left.pack(side="left", fill="both", expand=True)
+    # ---- chrome ------------------------------------------------------------
+
+    def _build_fonts(self):
+        base = tkfont.nametofont("TkDefaultFont")
+        family, size = base.cget("family"), int(base.cget("size"))
+        self.font_title = tkfont.Font(family=family, size=size, weight="bold")
+        self.font_meta = tkfont.Font(family=family, size=max(9, size - 1))
+        self.font_badge = tkfont.Font(family=family, size=max(9, size - 1), weight="bold")
+        style = ttk.Style(self.root)
+        style.configure("Meta.TLabel", foreground=self.META_FG)
+
+    def _build_source_bar(self):
+        """Row 0 — what we are watching. The entry takes the slack so a long
+        path stays readable when the window grows."""
+        bar = ttk.Frame(self.root, padding=(8, 8, 8, 2))
+        bar.grid(row=0, column=0, sticky="ew")
+        bar.columnconfigure(1, weight=1)
+
+        ttk.Label(bar, text="Live dir").grid(row=0, column=0, padx=(0, 6))
+        self.live_dir_var = tk.StringVar(value=str(self.live_dir))
+        self.live_dir_entry = ttk.Entry(bar, textvariable=self.live_dir_var)
+        self.live_dir_entry.grid(row=0, column=1, sticky="ew")
+        self.live_dir_entry.bind("<Return>", lambda _e: self._attach())
+        ttk.Button(bar, text="Browse…", width=9, command=self._browse).grid(row=0, column=2, padx=(6, 0))
+        self.attach_btn = ttk.Button(bar, text="Attach", width=8, command=self._attach)
+        self.attach_btn.grid(row=0, column=3, padx=(4, 0))
+
+        ttk.Separator(bar, orient="vertical").grid(row=0, column=4, sticky="ns", padx=10)
+        self.pause_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text="Pause", variable=self.pause_var,
+                        command=self._on_pause_toggled).grid(row=0, column=5)
+        ttk.Button(bar, text="Poll now", width=9, command=self._poll_now).grid(row=0, column=6, padx=(6, 0))
+
+    def _build_view_bar(self):
+        """Row 1 — how it is shown: the split, the zoom, the notes strip. The
+        two frames are always drawn at one zoom, so this is one control, not
+        one per pane."""
+        bar = ttk.Frame(self.root, padding=(8, 2, 8, 2))
+        bar.grid(row=1, column=0, sticky="ew")
+        bar.columnconfigure(7, weight=1)
+
+        ttk.Label(bar, text="Layout").grid(row=0, column=0, padx=(0, 6))
+        self.layout_var = tk.StringVar(value=dict(vl.LAYOUT_LABELS)[vl.LAYOUT_AUTO])
+        self.layout_box = ttk.Combobox(bar, textvariable=self.layout_var, width=12,
+                                       state="readonly",
+                                       values=[label for _mode, label in vl.LAYOUT_LABELS])
+        self.layout_box.grid(row=0, column=1)
+        self.layout_box.bind("<<ComboboxSelected>>", lambda _e: self._relayout())
+
+        ttk.Separator(bar, orient="vertical").grid(row=0, column=2, sticky="ns", padx=10)
+        ttk.Label(bar, text="Zoom").grid(row=0, column=3, padx=(0, 6))
+        self.fit_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar, text="Fit", variable=self.fit_var,
+                        command=self._on_fit_toggled).grid(row=0, column=4)
+        self.zoom_var = tk.IntVar(value=2)
+        self.zoom_spin = ttk.Spinbox(bar, from_=vl.MIN_ZOOM, to=vl.MAX_ZOOM, width=4,
+                                     textvariable=self.zoom_var, state="disabled",
+                                     command=self._on_zoom_changed)
+        self.zoom_spin.grid(row=0, column=5, padx=(6, 0))
+        self.zoom_readout = tk.StringVar(value="")
+        ttk.Label(bar, textvariable=self.zoom_readout, style="Meta.TLabel",
+                  font=self.font_meta).grid(row=0, column=6, padx=(6, 0))
+
+        self.notes_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar, text="Notes", variable=self.notes_var,
+                        command=self._on_notes_toggled).grid(row=0, column=8, sticky="e")
+
+    def _build_body(self):
+        self.body = ttk.Frame(self.root, padding=(8, 4, 8, 4))
+        self.body.grid(row=2, column=0, sticky="nsew")
+
+        self.composite_frame, self.composite_canvas, self.composite_meta, comp_tools = \
+            self._make_pane(vl.COMPOSITE_TITLE, vl.COMPOSITE_SUBTITLE)
         self.mark_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(left, text="mark sprite bounds on the composite",
-                        variable=self.mark_var, command=self._redraw_marks).pack(anchor="w")
-        self.composite_canvas = tk.Canvas(left, background="#000",
-                                          highlightthickness=0)
-        self.composite_canvas.pack(expand=True)
-        self.composite_caption = tk.StringVar()
-        ttk.Label(left, textvariable=self.composite_caption, foreground="#888",
-                  wraplength=520).pack(anchor="w", pady=(2, 0))
+        ttk.Checkbutton(comp_tools, text="sprite boxes", variable=self.mark_var,
+                        command=self._draw_marks_current).pack(side="left")
 
-        self.right = right = ttk.Frame(body)
-        right.pack(side="left", fill="both", expand=True, padx=(12, 0))
-        filters = ttk.Frame(right)
-        filters.pack(anchor="w")
+        self.sprite_frame, self.sprite_canvas, self.sprite_meta, rec_tools = \
+            self._make_pane(vl.RECONSTRUCTION_TITLE, vl.RECONSTRUCTION_SUBTITLE)
+        ttk.Label(rec_tools, text="layers:", style="Meta.TLabel",
+                  font=self.font_meta).pack(side="left", padx=(0, 6))
         self.show_bg_var = tk.BooleanVar(value=True)
-        self.bg_filter_check = ttk.Checkbutton(filters, text="background",
+        self.bg_filter_check = ttk.Checkbutton(rec_tools, text="background",
                                                variable=self.show_bg_var,
                                                command=self._redraw_sprite_pane)
         self.bg_filter_check.pack(side="left")
         self.show_front_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(rec_tools, text="front sprites", variable=self.show_front_var,
+                        command=self._redraw_sprite_pane).pack(side="left", padx=(8, 0))
         self.show_behind_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(filters, text="front sprites", variable=self.show_front_var,
+        ttk.Checkbutton(rec_tools, text="behind sprites", variable=self.show_behind_var,
                         command=self._redraw_sprite_pane).pack(side="left", padx=(8, 0))
-        ttk.Checkbutton(filters, text="behind-background sprites",
-                        variable=self.show_behind_var,
-                        command=self._redraw_sprite_pane).pack(side="left", padx=(8, 0))
-        self.sprite_canvas = tk.Canvas(right, background="#000",
-                                       highlightthickness=0)
-        self.sprite_canvas.pack(expand=True)
-        self.sprite_caption = tk.StringVar(value="")
-        ttk.Label(right, textvariable=self.sprite_caption, foreground="#888",
-                  wraplength=520).pack(anchor="w", pady=(2, 0))
 
-        # Both panes share one display zoom (recomputed from the available
-        # frame size), so a bigger window shows bigger pixels instead of
-        # dead space around a NES-native-sized image.
-        left.bind("<Configure>", self._schedule_resize)
-        right.bind("<Configure>", self._schedule_resize)
+        self._apply_orientation(vl.ORIENT_HORIZONTAL)
 
-        self.root.after(self.POLL_MS, self._poll)
+    def _make_pane(self, title, subtitle):
+        """One pane: header (title + live meta), the canvas that eats the
+        slack, and a tool row underneath for that pane's own toggles."""
+        frame = ttk.Frame(self.body)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(1, weight=1)
+
+        header = ttk.Frame(frame)
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(2, weight=1)
+        title_label = ttk.Label(header, text=title, font=self.font_title)
+        title_label.grid(row=0, column=0, sticky="w")
+        subtitle_label = ttk.Label(header, text=subtitle, style="Meta.TLabel",
+                                   font=self.font_meta)
+        subtitle_label.grid(row=0, column=1, sticky="w", padx=(6, 0))
+        meta = tk.StringVar()
+        meta_label = ttk.Label(header, textvariable=meta, style="Meta.TLabel",
+                               font=self.font_meta, anchor="e")
+        meta_label.grid(row=0, column=2, sticky="e", padx=(12, 0))
+        # The subtitle is the first thing to go when a pane gets narrow: the
+        # meta is live data, the subtitle is a reminder (_fit_headers).
+        self._headers.append((header, title_label, subtitle_label, meta_label))
+
+        canvas = tk.Canvas(frame, background=self.CANVAS_BG, highlightthickness=1,
+                           highlightbackground=self.CANVAS_BORDER,
+                           width=NATIVE_W, height=NATIVE_H)
+        canvas.grid(row=1, column=0, sticky="nsew", pady=(3, 0))
+        canvas.bind("<Double-Button-1>", lambda _e: self._toggle_fit())
+        canvas.bind("<Control-MouseWheel>", self._on_wheel_zoom)
+
+        tools = ttk.Frame(frame)
+        tools.grid(row=2, column=0, sticky="ew", pady=(3, 0))
+        return frame, canvas, meta, tools
+
+    def _build_notes(self):
+        """Row 3 — the paragraph that says how to read the reconstruction. It
+        spans the full window (so it wraps in two lines, not eight beside a
+        pane) and folds away when the user does not need it."""
+        self.notes_frame = ttk.Frame(self.root, padding=(8, 2, 8, 2))
+        self.notes_frame.grid(row=3, column=0, sticky="ew")
+        self.notes_frame.columnconfigure(0, weight=1)
+        self.note_var = tk.StringVar(value="")
+        self.note_label = ttk.Label(self.notes_frame, textvariable=self.note_var,
+                                    style="Meta.TLabel", font=self.font_meta,
+                                    justify="left", wraplength=900)
+        self.note_label.grid(row=0, column=0, sticky="ew")
+
+    def _build_status_bar(self):
+        bar = ttk.Frame(self.root, padding=(8, 2, 8, 8))
+        bar.grid(row=4, column=0, sticky="ew")
+        bar.columnconfigure(2, weight=1)
+        self.badge = tk.Label(bar, text="IDLE", font=self.font_badge, padx=6, pady=1)
+        self.badge.grid(row=0, column=0)
+        self._set_badge("IDLE")
+        self.status = tk.StringVar(value="starting…")
+        ttk.Label(bar, textvariable=self.status, style="Meta.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(8, 0))
+        self.notice_var = tk.StringVar(value="")
+        ttk.Label(bar, textvariable=self.notice_var, style="Meta.TLabel",
+                  font=self.font_meta, anchor="e").grid(row=0, column=2, sticky="e")
+
+    def _set_badge(self, name):
+        bg, fg = self.BADGE_COLORS.get(name, self.BADGE_COLORS["IDLE"])
+        self.badge.config(text=name, background=bg, foreground=fg)
+
+    # ---- keyboard ----------------------------------------------------------
+
+    def _bind_keys(self):
+        """Shortcuts for everything on the toolbars, so watching a run does not
+        mean travelling to a checkbox. Skipped while the path entry has focus —
+        a path may contain any of these letters."""
+        keys = {
+            "<space>": self._toggle_pause,
+            "p": self._toggle_pause,
+            "r": self._poll_now,
+            "m": lambda: self._flip(self.mark_var, self._draw_marks_current),
+            "b": lambda: self._flip(self.show_bg_var, self._redraw_sprite_pane),
+            "f": lambda: self._flip(self.show_front_var, self._redraw_sprite_pane),
+            "h": lambda: self._flip(self.show_behind_var, self._redraw_sprite_pane),
+            "n": lambda: self._flip(self.notes_var, self._on_notes_toggled),
+            "l": self._cycle_layout,
+            "0": self._zoom_fit,
+            "plus": lambda: self._nudge_zoom(+1),
+            "equal": lambda: self._nudge_zoom(+1),
+            "minus": lambda: self._nudge_zoom(-1),
+        }
+        for key, fn in keys.items():
+            seq = key if key.startswith("<") else f"<KeyPress-{key}>"
+            self.root.bind(seq, self._typing_guard(fn))
+        self.root.bind("<Control-o>", lambda _e: self._browse())
+        self.root.bind("<Command-o>", lambda _e: self._browse())
+
+    def _typing_guard(self, fn):
+        def handler(_event=None):
+            if self.root.focus_get() is self.live_dir_entry:
+                return None
+            fn()
+            return "break"
+        return handler
+
+    @staticmethod
+    def _flip(var, after):
+        var.set(not var.get())
+        after()
+
+    # ---- view controls -----------------------------------------------------
+
+    def _layout_mode(self):
+        label = self.layout_var.get()
+        for mode, text in vl.LAYOUT_LABELS:
+            if text == label:
+                return mode
+        return vl.LAYOUT_AUTO
+
+    def _cycle_layout(self):
+        modes = [mode for mode, _label in vl.LAYOUT_LABELS]
+        nxt = modes[(modes.index(self._layout_mode()) + 1) % len(modes)]
+        self.layout_var.set(dict(vl.LAYOUT_LABELS)[nxt])
+        self._relayout()
+
+    def _relayout(self):
+        self._apply_orientation(vl.pick_orientation(
+            self._layout_mode(), self.root.winfo_width(), self.root.winfo_height()))
+        self._schedule_resize()
+
+    def _apply_orientation(self, orient):
+        if orient == self._orientation:
+            return
+        self._orientation = orient
+        for pane in (self.composite_frame, self.sprite_frame):
+            pane.grid_forget()
+        for i in (0, 1):
+            self.body.columnconfigure(i, weight=0, uniform="")
+            self.body.rowconfigure(i, weight=0, uniform="")
+        if orient == vl.ORIENT_HORIZONTAL:
+            self.composite_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+            self.sprite_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+            for i in (0, 1):
+                self.body.columnconfigure(i, weight=1, uniform="pane")
+            self.body.rowconfigure(0, weight=1)
+        else:
+            self.composite_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 6))
+            self.sprite_frame.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+            for i in (0, 1):
+                self.body.rowconfigure(i, weight=1, uniform="pane")
+            self.body.columnconfigure(0, weight=1)
+
+    def _on_fit_toggled(self):
+        self.zoom_spin.config(state="disabled" if self.fit_var.get() else "normal")
+        if not self.fit_var.get():
+            self.zoom_var.set(max(vl.MIN_ZOOM, self._display_zoom))
+        self._redraw_both()
+
+    def _toggle_fit(self):
+        self._flip(self.fit_var, self._on_fit_toggled)
+
+    def _zoom_fit(self):
+        if not self.fit_var.get():
+            self.fit_var.set(True)
+            self._on_fit_toggled()
+
+    def _on_zoom_changed(self):
+        self.fit_var.set(False)
+        self.zoom_spin.config(state="normal")
+        self._redraw_both()
+
+    def _nudge_zoom(self, delta):
+        self.fit_var.set(False)
+        self.zoom_spin.config(state="normal")
+        self.zoom_var.set(vl.clamp_zoom(self._display_zoom + delta))
+        self._redraw_both()
+
+    def _on_wheel_zoom(self, event):
+        self._nudge_zoom(+1 if event.delta > 0 else -1)
+        return "break"
+
+    def _on_notes_toggled(self):
+        if self.notes_var.get():
+            self.notes_frame.grid()
+        else:
+            self.notes_frame.grid_remove()
+
+    def _on_pause_toggled(self):
+        """Pause freezes the panes on the frame they hold — the run keeps
+        going, this tool just stops reading it (it never writes, ADR-0169)."""
+        self._refresh_status_strip()
+
+    def _toggle_pause(self):
+        self._flip(self.pause_var, self._on_pause_toggled)
 
     # ---- fill-the-window display zoom --------------------------------------
-
-    MAX_DISPLAY_ZOOM = 4
 
     def _schedule_resize(self, event=None):
         if self._resize_job is not None:
             self.root.after_cancel(self._resize_job)
-        self._resize_job = self.root.after(80, self._on_resize)
+        self._resize_job = self.root.after(self.RESIZE_DEBOUNCE_MS, self._on_resize)
 
     def _on_resize(self):
         self._resize_job = None
+        self.note_label.config(wraplength=max(320, self.root.winfo_width() - 32))
+        self._fit_headers()
+        if self._layout_mode() == vl.LAYOUT_AUTO:
+            self._apply_orientation(vl.pick_orientation(
+                vl.LAYOUT_AUTO, self.root.winfo_width(), self.root.winfo_height()))
+        self._redraw_both()
+
+    def _redraw_both(self):
         self._redraw_composite_pane()
-        self._redraw_sprite_pane()
+        self._draw_sprite_pane()
+        self._fit_headers()
+
+    def _fit_headers(self):
+        """Keep a pane header legible at any width — grid does not shrink
+        labels, it lets them overlap. Three states, widest first: title +
+        subtitle + meta on one line; title + meta (the subtitle is a reminder,
+        the meta is live data); title alone with the meta on a second line."""
+        for header, title, subtitle, meta in self._headers:
+            width = header.winfo_width()
+            if width <= 1:
+                continue
+            title_w, meta_w = title.winfo_reqwidth(), meta.winfo_reqwidth()
+            if title_w + subtitle.winfo_reqwidth() + meta_w + 24 <= width:
+                subtitle.grid()
+                meta.grid(row=0, column=2, columnspan=1, sticky="e", padx=(12, 0))
+            elif title_w + meta_w + 24 <= width:
+                subtitle.grid_remove()
+                meta.grid(row=0, column=2, columnspan=1, sticky="e", padx=(12, 0))
+            else:
+                subtitle.grid_remove()
+                meta.grid(row=1, column=0, columnspan=3, sticky="e", padx=0)
+
+    def _canvas_room(self):
+        """What both canvases can honour right now, minus their 1px border."""
+        self.root.update_idletasks()
+        return vl.shared_available([(c.winfo_width() - 4, c.winfo_height() - 4)
+                                    for c in (self.composite_canvas, self.sprite_canvas)])
 
     def _compute_display_zoom(self, w, h):
-        """Integer zoom (capped) that fits w x h into the left pane's current
-        size, so the two viewports grow with the window instead of sitting at
-        a fixed, often tiny, native/recorder size."""
-        self.root.update_idletasks()
-        avail_w = self.left.winfo_width() or w
-        avail_h = max(self.left.winfo_height() - 60, h)  # minus the checkbox/caption rows
-        if w <= 0 or h <= 0:
-            return 1
-        return max(1, min(avail_w // w, avail_h // h, self.MAX_DISPLAY_ZOOM))
+        avail_w, avail_h = self._canvas_room()
+        return vl.resolve_zoom(self.fit_var.get(), self.zoom_var.get(),
+                               w, h, avail_w, avail_h)
+
+    @staticmethod
+    def _centre_image(canvas, image, tag):
+        """Draw a frame centred in its canvas, and return the image's top-left
+        in canvas coordinates (the sprite-box overlay needs that origin)."""
+        cw, ch = canvas.winfo_width(), canvas.winfo_height()
+        canvas.delete(tag)
+        canvas.create_image(cw / 2, ch / 2, image=image, anchor="center", tags=tag)
+        return ((cw - image.width()) / 2, (ch - image.height()) / 2)
 
     # ---- manual attach ----------------------------------------------------
+
+    def _browse(self):
+        """Pick a live directory with the platform's own chooser — typing a
+        path is fine, but a headless run's <prefix>-live/ folder is buried."""
+        start = self.live_dir if self.live_dir and Path(self.live_dir).is_dir() else Path.home()
+        chosen = filedialog.askdirectory(title="Attach to a live recording folder",
+                                         initialdir=str(start))
+        if chosen:
+            self.live_dir_var.set(chosen)
+            self._attach()
 
     def _attach(self):
         """Point the viewer at a live directory the emulator (convention slot)
@@ -844,7 +1129,14 @@ class RecordViewerApp:
         self.live_dir = Path(text)
         self._seen = {}
         self._status_text = None
-        self._poll()
+        self._poll_now()
+
+    def _poll_now(self):
+        """The Poll now button / `r`: read once even while paused."""
+        try:
+            self._poll_once()
+        except Exception as e:
+            self.status.set(f"cannot read live data: {e}")
 
     # ---- polling -----------------------------------------------------------
 
@@ -921,15 +1213,23 @@ class RecordViewerApp:
         return out
 
     def _poll(self):
-        try:
-            self._poll_once()
-        except Exception as e:  # keep the poll loop alive on a bad file
-            self.status.set(f"cannot read live data: {e}")
+        if not self.pause_var.get():
+            self._poll_now()
         self.root.after(self.POLL_MS, self._poll)
+
+    def _refresh_status_strip(self):
+        """Re-publish the strip's three fields (badge, run state, notices) from
+        what the last poll left behind — also how Pause gets its own chip."""
+        if self.pause_var.get():
+            self._set_badge("PAUSED")
+        if self._status_text is not None:
+            self.status.set(self._status_text)
+        self.notice_var.set(self._notice_text)
 
     def _poll_once(self):
         if self.live_dir is None:
-            self.status.set("no live dir — type one above and click Attach")
+            self._set_badge("IDLE")
+            self.status.set("no live dir — type one above, or click Browse…")
             return
 
         # status.json counts as a publish file here: the recorder rewrites it on
@@ -949,72 +1249,33 @@ class RecordViewerApp:
                 status = {}
 
         if st_ns is None or status.get("frame") is None:
-            self.status.set("no run published yet — start Live Recording in the "
-                             "emulator (Tools menu), or Attach a headless "
-                             f"<prefix>-live/ dir instead of {self.live_dir}")
+            self._set_badge("IDLE")
+            self.status.set(vl.waiting_text(self.live_dir))
+            self.notice_var.set("")
             return
         if not changed and self._status_text is not None:
-            self.status.set(self._status_text)
+            self._refresh_status_strip()
             return
 
         state = self._read_once()
         self._status_text = None
         if state is None:
-            self.status.set(f"no frames published yet — waiting for {self.live_dir}")
+            self._set_badge("IDLE")
+            self.status.set(vl.waiting_text(self.live_dir))
             return
 
-        frame = status.get("frame", "?")
-        target = status.get("targetFrames", 0)
-        done = bool(status.get("done"))
-        wall = status.get("elapsedWallSec", 0)
-        if done:
-            tail = "stopped"
-        elif target:
-            tail = f"of {target}"  # a scripted run a human launched at a terminal
-        else:
-            tail = "live"  # interactive: no target - frames run until stopped
-        state_text = f"frame {frame} {tail} · wall {wall}s"
-        # Absent in a recording made before the flag existed - treat that as
-        # "unknown, assume off" rather than warning about every old run.
         hd_pack_active = bool(status.get("hdPackActive"))
-        if hd_pack_active:
-            state_text += " · HD pack ON (panes not comparable)"
-        if state["sprites"] is not None:
-            sp = state["sprites"]
-            state_text += f" · capture {sp['captureFrame']}"
-            if not sp["spritesEnabled"]:
-                state_text += " · sprites disabled on this frame (OAM may be stale)"
-            has_bg = state.get("background") is not None and state.get("nametables") is not None
-            # The HD-pack caveat replaces the usual one rather than appending to
-            # it: with substitution on, the per-scanline limits the normal text
-            # names are not what makes the panes differ.
-            if hd_pack_active:
-                caveat = HD_PACK_CAVEAT
-            else:
-                caveat = RECONSTRUCTION_CAVEAT if has_bg else SPRITES_ONLY_CAVEAT
-            if has_bg:
-                self.bg_filter_check.config(state="normal")
-                bg = state["background"]
-            else:
-                self.bg_filter_check.config(state="disabled")
-                bg = None
-            det = " · " + ("8×16" if sp["largeSprites"] else "8×8")
-            det += f" · sprite ${sp['patternAddr']:04X}"
-            if bg is not None:
-                det += f" · bg ${bg['patternAddr']:04X}"
-                if not bg["enabled"]:
-                    det += " · bg off this frame"
-                if bg["leftColumnClip"]:
-                    det += " · bg left clip"
-            if sp["leftColumnClip"]:
-                det += " · sprite left clip"
-            self.sprite_caption.set(caveat + det)
-        else:
-            self.bg_filter_check.config(state="disabled")
-            self.sprite_caption.set("no sprite layer published (this is not a NES run, or sprites were off)")
+        sprites = state["sprites"]
+        has_bg = state.get("background") is not None and state.get("nametables") is not None
+        self.bg_filter_check.config(state="normal" if (sprites is not None and has_bg) else "disabled")
+        self.sprite_meta.set(vl.format_reconstruction_meta(
+            sprites, state.get("background") if has_bg else None))
+        self.note_var.set(vl.reconstruction_note(sprites is not None, has_bg, hd_pack_active))
 
-        self.status.set(state_text)
-        self._status_text = state_text
+        self._status_text = vl.format_run_state(status)
+        self._notice_text = " · ".join(vl.format_notices(status, sprites))
+        self._set_badge(vl.run_badge(status))
+        self._refresh_status_strip()
         self._draw(state)
 
     def _draw(self, state):
@@ -1029,8 +1290,6 @@ class RecordViewerApp:
             self.status.set(f"cannot decode frame.ppm: {e}")
             return
         self._composite_native_wh = (w, h)
-        self.composite_caption.set(
-            f"composite — as the emulator rendered it ({w}×{h}, {scale}× native)")
         self._redraw_composite_pane()
 
         # The reconstruction pane is rebuilt from data; a temporary native PPM
@@ -1052,17 +1311,18 @@ class RecordViewerApp:
 
     def _redraw_composite_pane(self):
         # Repaint the composite pane at the current display zoom - called on
-        # every poll's fresh frame, and again on a window resize.
+        # every poll's fresh frame, and again on a window resize or a zoom
+        # change.
         if self._composite_raw is None or self._composite_native_wh is None:
             return
         w, h = self._composite_native_wh
         self._display_zoom = self._compute_display_zoom(w, h)
         dz = self._display_zoom
-        composite = self._composite_raw.zoom(dz, dz) if dz > 1 else self._composite_raw
-        self._imgs.append(composite)
-        self.composite_canvas.config(width=w * dz, height=h * dz)
-        self.composite_canvas.delete("frame")
-        self.composite_canvas.create_image(0, 0, image=composite, anchor="nw", tags="frame")
+        self.composite_meta.set(vl.format_composite_meta(w, h, geometry_scale(w, h), dz))
+        self.zoom_readout.set(f"{dz}× (fit)" if self.fit_var.get() else f"{dz}×")
+        self._composite_img = self._composite_raw.zoom(dz, dz) if dz > 1 else self._composite_raw
+        self._composite_origin = self._centre_image(self.composite_canvas,
+                                                    self._composite_img, "frame")
         self._draw_marks_current()
 
     def _draw_sprite_pane(self):
@@ -1070,7 +1330,6 @@ class RecordViewerApp:
             return
         sprites, chr_bytes, colors, w, h, scale = self._last_sprite_state
         if sprites is None or chr_bytes is None or colors is None:
-            self.sprite_canvas.config(width=256, height=240)
             self.sprite_canvas.delete("all")
             return
         # CHR-latch mappers (MMC2/MMC4 — 2026-09-08 ADR-0169 update) need the
@@ -1127,42 +1386,34 @@ class RecordViewerApp:
                 pane = pane.zoom(total_zoom, total_zoom)
         finally:
             Path(path).unlink(missing_ok=True)
-        self._imgs.append(pane)
-        self.sprite_canvas.config(width=w * self._display_zoom, height=h * self._display_zoom)
-        self.sprite_canvas.delete("all")
-        self.sprite_canvas.create_image(0, 0, image=pane, anchor="nw")
+        self._pane_img = pane
+        self._centre_image(self.sprite_canvas, pane, "frame")
 
         self._last_mark_data = (sprites, touched)
         self._draw_marks_current()
 
     def _redraw_sprite_pane(self):
         # Repaint just the reconstruction pane after a layer filter flip, from
-        # the last poll's data — same idea as _redraw_marks.
+        # the last poll's data — same idea as _draw_marks_current.
         self._draw_sprite_pane()
 
-    def _draw_marks(self, sprites, touched, fx, fy):
-        self.composite_canvas.delete("spritemark")
-        for x, y, bw, bh in sprite_boxes(sprites, touched):
-            self.composite_canvas.create_rectangle(
-                x * fx, y * fy, (x + bw) * fx, (y + bh) * fy,
-                outline="#40c0ff", width=1, tags="spritemark")
-
     def _draw_marks_current(self):
-        # (Re)draw the overlay from the last sprite data, at the current
-        # display zoom — shared by a poll's fresh frame, a resize, and the
-        # "mark sprite bounds" checkbox.
+        # (Re)draw the sprite-bounds overlay from the last sprite data, at the
+        # current zoom and the image's centred origin — shared by a poll's
+        # fresh frame, a resize, a zoom change and the "sprite boxes" toggle.
+        self.composite_canvas.delete("spritemark")
         if self._last_mark_data is None or not self.mark_var.get() \
-                or self._composite_native_wh is None:
-            self.composite_canvas.delete("spritemark")
+                or self._composite_native_wh is None or self._composite_img is None:
             return
         sprites, touched = self._last_mark_data
         w, h = self._composite_native_wh
-        fx, fy = (w * self._display_zoom) / NATIVE_W, (h * self._display_zoom) / NATIVE_H
-        self._draw_marks(sprites, touched, fx, fy)
-
-    def _redraw_marks(self):
-        # Repaint just the overlay after a checkbox flip, from the last draw.
-        self._draw_marks_current()
+        ox, oy = getattr(self, "_composite_origin", (0, 0))
+        fx = (w * self._display_zoom) / NATIVE_W
+        fy = (h * self._display_zoom) / NATIVE_H
+        for x, y, bw, bh in sprite_boxes(sprites, touched):
+            self.composite_canvas.create_rectangle(
+                ox + x * fx, oy + y * fy, ox + (x + bw) * fx, oy + (y + bh) * fy,
+                outline="#40c0ff", width=1, tags="spritemark")
 
 
 def main(argv=None):
@@ -1176,6 +1427,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     live_dir = Path(args.live_dir) if args.live_dir else emulator_live_dir()
     root = tk.Tk()
+    root.geometry("1100x780")
     RecordViewerApp(root, live_dir)
     root.mainloop()
     return 0
