@@ -10,8 +10,8 @@ work lives in Part A, player-shell/chrome work lives in Part B — it is now
 expressed as parts of one file instead of two files.
 
 Part A is the pack/core roadmap: vision and legal principles, standards,
-the shipped record, and the pending slices (Phase 5/6, repo hygiene, input
-tester, Phase 8 border layer, Phase 9 artist-legible sheets). Part B is the
+the shipped record, and the pending slices (Phase 9 F9.18, the Phase 10
+feasibility spikes, plus the hardware-gated residue of the shipped phases). Part B is the
 default-GUI roadmap: player
 chrome, Advanced GUI, pack identity (`pack_id`/`content_id`/version),
 duplicates, the pack picker, and the quick-enhancements panel. The two
@@ -22,7 +22,7 @@ header block, slice table, and ADR map.
 
 ## Part A — Enhancement ecosystem (pack/core)
 
-**Status:** active (2026-09-01) — pack/core roadmap of this fork. Player
+**Status:** active (2026-09-09) — pack/core roadmap of this fork. Player
 chrome, pack identity (`pack_id`/`content_id`/version) and the in-GUI
 picker live in Part B of this document (Phase 7).
 Earlier plans (`PRD-ecossistema-enhancement-comunitario.md`,
@@ -53,7 +53,7 @@ Principles that every phase below obeys:
    ours; extracted MIDIs, tiles and third-party redrawn textures stay on the
    user's machine or in the hubs that already host them.
 2. **The official channel carries only clean data:** specs, hash mappings,
-   presets, catalogs (URLs + hashes + licences), tools. Derivative content
+   presets, catalogs (URLs + hashes + licenses), tools. Derivative content
    is *referenced*, never hosted or committed.
 3. **The emulator is content-dumb:** no bundled derivative material, no P2P,
    no monetisation (*MGM v. Grokster*, Yuzu 2024).
@@ -61,7 +61,10 @@ Principles that every phase below obeys:
    recipes are declarative data interpreted by a fixed vocabulary.
 5. **No LLM in the client.** LLMs run only in CI (the community-pack classify
    step); whatever they emit is validated by deterministic scripts before a
-   human or the client sees it.
+   human or the client sees it. `Core/`, `UI/` and the installer never call
+   a model, hold a key or carry a prompt. An external tool under `scripts/`
+   is not the client, but what it may send off the machine is governed by
+   ADR-0154, not by this principle (see Phase 10).
 
 Product consoles on `main`: **NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA**. SNES
 (incl. Super Game Boy), PC Engine, WonderSwan and ColecoVision were removed
@@ -77,7 +80,7 @@ does not exist.
 
 | Area | Standard | Status |
 |---|---|---|
-| ROM identification | No-Intro sha1 (iNES header-size normalisation, ADR-0039/0044) | shipped |
+| ROM identification | No-Intro sha1 (iNES header-size normalization, ADR-0039/0044) | shipped |
 | Textures | HDNes `hires.txt` (Mesen is the reference implementation) | shipped, NES/GB/SMS |
 | NES replacement audio | OGG via HD pack `<bgm>/<sfx>` + APU fingerprint trigger (ADR-0047) | shipped |
 | Patches | IPS/BPS in `patches[]` by sha1 (ADR-0044) | shipped |
@@ -226,8 +229,9 @@ does not exist.
   guardrails in `make doc-checks`; `AutoInstallCommunityPacks` checkbox +
   first-run consent dialog in `EnhancementPacksWindow`; firewall script now
   enforces the §53 three-layer rule both ways. Both runs ended `ac_failed`
-  with T1 stagnated; recovered per §40. GUI flow not yet exercised against
-  the live catalog (needs F6.5's re-validated entries).
+  with T1 stagnated; recovered per §40. GUI flow exercised against the
+  live catalog by F6.5 on 2026-09-04; the first-run consent dialog was later
+  removed by F6.7 (ADR-0146).
 - **F6.4c — parity fixture set** (ADR-0138 §39; run `cdcf29816ecd` stalled at
   Spec on spec-proxy context thrashing — the dev-squad's own spec document,
   `validation.pass: true`, was implemented by hand following the same slice):
@@ -247,252 +251,250 @@ does not exist.
   `docs/specs/golden/mep-nes/`; `validate-specs.py` runs `mep_lint` over both
   goldens (`lint_golden_packs`); `test_mep_compare_auto_palettes.py` uses the
   golden; `test_mep_compare_render_dispatch.py` added.
+- **F5.4c — `mep_build.py`** (2026-08-29): sheets → tiles → `textures/hires.txt`,
+  new OGGs into `audio/`, the linter as the gate, `pack` → deterministic zip
+  with a generated `pack.json`, `rename-audio-id`; `scripts/test_mep_build.py`.
+- **F5.4d — coverage report + Before/After preview** (2026-08-29):
+  `HdPackBuilder::GetCoverageReport()` surfaced in the builder window;
+  `HdPackPreviewWindow` shows each sheet beside its `*.orig.png` twin.
+- **F5.4e — objects from spatial co-occurrence** (2026-08-29): union-find over
+  8 px neighbours → `textures/sheets/object<NNN>.png` + inert `# inferred`
+  `tileNearby` candidates. Never emitted a sheet on a real game; the criterion
+  was retired by Phase 9 F9.3, the inert-condition contract kept.
+- **F5.4g Block B — arpeggio→chord, expression, `FixedRole.<ch>` override,
+  channel-steal hand-back** (ADR-0052, 2026-08-29); regression pinned by
+  `core_unit_tests` Bloco L against a PCM golden (2026-09-03).
+- **F5.4g Block C — loop point (ADR-0134), SFX mute mask (ADR-0133), 40 ms
+  BGM crossfade (ADR-0142)** (2026-08-29); the listening checks replaced by
+  Blocos I/J/K (2026-09-03; bug #151, a block-stepped fade, fixed on the way).
+- **F5.4g Block D — Extract Audio tool + GUI wiring** (ADR-0135/0051,
+  2026-08-29): `spike_sound_driver` productised (frame and wall-clock budgets,
+  guaranteed no-op), detached spawn from the HD Pack Builder button (no-op
+  path confirmed on a real display 2026-09-01); `audio_cleanup_suggest.py`;
+  "Seeding audio" tutorial in `docs/hd-pack-authoring.md`.
+- **F5.5 — wrap-up** (2026-08-29): last pack-UI strings localized, goldens
+  refreshed and wired into `make doc-checks`, README Player-mode section,
+  F1–F3 regressions green, `dotnet build UI` 0 warnings.
+- **SoundFont** (decided 2026-08-29): bundle GeneralUser GS (31 MB,
+  permissive) in the installer — waits on the installer's first release.
+- **F6.5 — rollout** (2026-08-29 → 2026-09-04): accepted set re-validated
+  (current issues #128–#148; catalog at 11 rows), classify prompt
+  single-sourced from `.github/ai/validate-classify.md`, the six
+  `liquidzgit/hdnes` submissions resolved by ADR-0143, audio-only NEA siblings
+  de-listed (ADR-0148); guided GUI install acceptance run 2026-09-04
+  (`docs/validation/f65-install-acceptance-checklist.md`), finding and fixing
+  #155 (→ ADR-0151) and #156. Only the native OS file-picker step stays
+  manual; CI live validation re-enable (`LIVE_VALIDATION_ENABLED`) deferred
+  by user decision 2026-08-29.
+- **F6.6 — headless load smoke** (2026-08-29): `scripts/smoke_pack_headless.sh
+  <pack> <rom>` asserts zero missing-target warnings; CI variant over the
+  F6.4c fixtures in `make doc-checks`; `MepPack::Parse` accepts an empty
+  section `path` (MEP-v1 §3.2).
+- **F6.7 — auto-load every accepted pack** (ADR-0146, 2026-09-01): first-run
+  consent gate removed, `AutoInstallCommunityPacks` the single switch;
+  confirmed on Donkey Kong #144 (catalog art wins over the bootstrap auto
+  pack); macOS open-documents routing fixed (#149).
+- **F6.8 — known-missing errata** (ADR-0152, 2026-09-04):
+  `docs/community-packs/errata/<sha256>.json` read by one parser
+  (`scripts/mep_errata.py`) for both gates; provenance in MEI v1.4 `errata`,
+  the `†` footnote and the Player picker; `pack:known-missing` applied by
+  `apply-verdict`. Returned `issue-139`, `issue-137` and `issue-148` to the
+  catalog; found and fixed #160 (log ring) and #161 (`Customization/` roots,
+  ADR-0121 amended).
+- **H5–H7** (ADR-0123/0125/0128, 2026-08-29): UI-logic firewall parity scan
+  in CI; public test-facing helpers; `CheatTypeDetector` ThrowsAny (the GB/SMS
+  product decision still deferred).
+- **H8 — `NES_ONLY`/`LessUI` build modes** (ADR-0158, 2026-09-05): measured
+  and **declined** — the prior art is C#-only and none of its exclusions
+  applies to this tree; the one win kept is `core-unit-tests` compiled per
+  translation unit with `-MMD -MP` (39.3 s → 9.7 s cold).
+- **H9 — `HeadlessInputEngine`** (ADR-0127 pattern, 2026-09-05): the stateful
+  headless input surface tested against a fake core, `core_unit_tests` Bloco R.
+- **H10 — accuracy suite as a regression gate** (ADR-0162 `proposed`,
+  2026-09-05): `scripts/accuracy_compare.py` runs AccuracyCoin against one
+  binary in four arms (`vanilla`/`builder`/`hdpack`/`mep`) and requires
+  identical frame checksums; an identity pack makes the texture arm real;
+  proved red two ways; ROM not vendored; not in CI yet, by decision.
+- **D1–D13 — documentation integrity** (audit 2026-09-01; all shipped
+  2026-09-01/03 except D8 §3): ADR files restored + `verify_adr_refs.py`
+  (D1); MEP-v1 v1.4 `id` (D2); MEI v1.2 `rom.sha1s` (D3); ADR-0148 (D4);
+  ADR-0138/0143/0049 amended in place (D5, §4 note 2026-09-07); consent
+  plumbing removed (D6); ADR-0139–0145 Consequences/Alternatives filled (D7);
+  ADR-0120 §4 covered by `core_unit_tests` Bloco M through `MepZipExtract.h`,
+  §3 deferred with a dated note (D8); stale docs, the `CLAUDE.md` Author rule,
+  line citations → target names, `build_app_macos.sh` versioned, empty
+  `Core/SNES|PCE|WS` deleted (D9–D12); MEI v1.3 `pack_id`/`content_id`/`votes`
+  + the ADR-0148 rule-1 classify refusal confirmed offline (D13).
+- **I.0–I.3 — host input tester** (2026-08-29): gamepad info/state/rumble on
+  `IKeyManager` for all three backends; Settings → Input → Test tab with live
+  buttons/axes, deadzone ring, drift warning, circularity score and a
+  per-device (VID:PID) deadzone; the mapping window highlights the pressed
+  button. XAML halves asserted by `UI.HeadlessTests` (ADR-0150, 2026-09-03);
+  the physical-pad pass stays hardware-gated.
+- **Phase 7 — player shell, P.0–P.7** (ADR-0139/0140/0141, 2026-08-28 →
+  2026-09-01): `content_id`/`pack_id` identity, one catalog slot per pack,
+  per-ROM preference resolver + Advanced picker, `UiMode` default rule with
+  Player chrome/overlay/Esc precedence, pack picker + current-pack chip +
+  apply toast, §3.6 catalog update trigger wired into F6.4b, Enhancements
+  quick-toggle panel + welcome/Continue cards; GUI wiring asserted by
+  `UI.HeadlessTests` (ADR-0150). Normative text in Part B. The on-window
+  letterbox fit was closed 2026-09-05 (`0f8535c4`: `UI/Logic/RendererViewportFit`,
+  14 `UI.Tests` + 3 `UI.HeadlessTests/RendererLetterboxTests.cs`).
+- **Phase 8 — border layer, F8.1–F8.3** (ADR-0149, 2026-09-02): MEP v1.5
+  `border` section (`border.png` + `border.json`), VideoRenderer compositing,
+  `EnableBorder` toggle, `mep_lint`/`validate-specs` gates, host-free
+  `BorderLayout` + Bloco H. Divergences recorded in the spec for an optional
+  F8.4: `scale_mode` unapplied, `width`/`height` ignored, 4:3 default, no
+  letterbox inside the viewport, bare root `border.png` not linted.
 - **Phase 9 F9.0–F9.4 — artist-legible texture sheets** (ADR-0153, accepted
   and amended 2026-09-05): five host-free modules under `Core/NES/HdPacks/`
   (`TileSheetTypes.h`, `MetatileVocabulary`, `ScreenStitcher`, `SheetGrouping`,
-  `SheetRender`) fed by a de-duplicated per-frame background grid recorded in
-  `HdPackBuilder`; `BuildObjectSheets`' union-find retired, its inert
-  `# inferred … tileNearby` contract kept; `mep_build.py` slices painted sheets
-  back into `hires.txt` with the painted-cell precedence rule; `core_unit_tests`
-  Bloco P (11 cases). Three of the ADR's rules were replaced by measurement
-  before it shipped — grid criterion, `misc`, HUD rows — see its amendment.
-  Also fixed the trap that had made every scripted headless recording useless:
-  `headless_record` never plugged a controller into port 1, so `input=<script>`
-  was silently dropped and every recording sat in the attract loop.
-  **Applied to the 30-ROM NES library 2026-09-05**, twice: the second run
-  followed a third amendment to §3 (a status-bar row needs a *quorum* of the
-  screens, not unanimity — a recording holds title cards and menus that share
-  no row with the playfield, and one of them was enough to erase every HUD
-  band). 30/30 written, 0 failures. HUD detection went from 1 game to **10**
-  with a non-empty `hud` sheet and from 2 to **9** with a non-empty `font`
-  sheet; Punch-Out!! alone resolves 46 HUD and 110 font cells that used to
-  pollute `metatiles.png`. The noise budget did **not** improve: 23/30 inside
-  it against 25/30 before (over: Double Dragon 36.6 %, Lemmings 28.3 %,
-  Gauntlet 27.4 %, Bubble Bobble 23.0 %, Dr. Mario 22.0 %, SMB3 20.5 %,
-  Zelda II 16.0 %). Recordings are not deterministic between runs, so this is
-  not attributable to the amendment either way — F9.7 below is the change that
-  actually addresses it. The non-determinism was then measured rather than
-  assumed: Excitebike recorded twice from the same binary and the same input
-  script yields 1233 vs 1153 `hires.txt` entries, 10 vs 6 captured background
-  screens, 27 vs 31 sprite groups and a map sheet 230 KB vs 198 KB. What is
-  *stable* across the two runs is the vocabulary-level output — `metatiles`,
-  `font`, `hud` and `obj000` come out byte-identical, and every background
-  screen present in both is byte-identical too. So a diff of two packs measures
-  coverage (how far the run got, which frames it happened to sample), never a
-  code change; only the vocabulary artefacts can be compared before/after. Any
-  regression claim about capture must be made on those, or on a fixture through
-  `core_unit_tests`, not on a pack diff.
-  A **third** run of the library, with F9.5/F9.7/F9.8 all in, first failed
-  30/30 with a segfault in `MesenSheets::RenderGroup` at the end of every
-  300-second recording. The cause was not any of those slices: the makefile
-  does not track header dependencies, `SheetCell` had gained two `std::vector`
-  members, and `SheetGrouping.o` was still the object compiled against the old
-  layout — so one translation unit handed the other a `SheetGroup` reporting
-  `Cells.size() == 14757395258967641294`. A clean rebuild fixed it and
-  ADR-0155 proposes `-MMD -MP` so the trap cannot fire again. Worth stating
-  plainly because the failure mode is the expensive kind: silent at build
-  time, delayed to the last second of a five-minute recording, and pointing at
-  the render code rather than at the stale object.
-  The third run then completed **30/30, 0 failures**, and is the library the
-  shipped code produces. Alias pass across all 30 packs: **10165 vocabulary
-  cells collapse to 8684 subjects (1481 aliases, 15 %)** — well under the
-  spike's 46 %, because the spike was measuring the area-based budget that
-  turned out to be over-collapsing. The heaviest are Tetris 2 (485 -> 134),
-  Ninja Gaiden (477 -> 263) and Gauntlet (420 -> 305). Noise budget 24/30
-  (over: Gauntlet 68.9 %, Dr. Mario 28.9 %, Double Dragon 28.6 %, Bubble
-  Bobble 26.2 %, SMB3 22.4 %, Zelda II 16.4 %); `hud` non-empty on 8 games and
-  `font` on 7, against 10 and 9 on the previous run — inside the run-to-run
-  coverage spread measured above, not a regression signal either way.
-  **Maps fell to 7 games**, and that is F9.8 working as designed rather than a
-  loss: a map now needs adjacency evidence, so Punch-Out!! gets no map instead
-  of five collages, and what does get written is a real sequence. The cost is
-  that a game whose scrolling the recording never caught now ships no map
-  surface at all; F9.9 is what should cover those, by routing their static
-  screens to `<background>`.
-  Validation panel spot checks: map recognisability passes on Metroid
-  (Brinstar corridor), Super Mario Bros. (1-1) and Excitebike, whose tuned
-  input script produces a genuinely continuous 8224 px track — a repeat census
-  of the placement list found only 20 of 482 twelve-column windows occurring
-  twice and none three times, so the stitch is a real sequence and not a
-  duplicated loop. Cold-read passes at the top of each sheet and degrades
-  further down into title text. Known false positive: a frozen scenery band
-  (Excitebike's crowd stand) passes the status-bar test and lands a cell on
-  `hud.png`; the cost is bounded and no cheap test separates it from a real
-  HUD without tracking scroll per row. Not done: the two Zelda
-  titles, whose name-registration screen no generic input script gets past —
-  the way out there is a GUI save state, not a script. F9.6 (AI repaint) has
-  since shipped; only its blind A/B (validation test 8) is outstanding, and
-  that one needs a human.
-
-- **Phase 9 scrutiny against a target mockup (2026-09-05).** The pipeline was
-  audited against an artist's HD reimagining of Punch-Out!! (redrawn crowd,
-  ring and canvas, both fighters as single figures, a re-laid-out HUD with
-  portraits and bars) to answer one question: *is the captured material
-  organised enough to reach that?* Partly. What already works is the part
-  that looked hardest — mutual-predictability grouping isolates **Glass Joe,
-  Little Mac's front and Little Mac's back as three coherent objects**, and
-  both fighters are reachable at all because Punch-Out!! draws them in the
-  background layer (verified in the captured screens), not in OAM. Five
-  problems block the rest; each became a slice below.
-
-  1. **One subject arrives under many keys.** Measured by
-     `scripts/spike_sheet_dedup.py` over all 30 packs: **6906 vocabulary
-     cells collapse to 3733 subjects (46 %)**, and much of that is *exact*
-     pixel duplication, not near-duplication — Ninja Gaiden 226 cells to 67
-     exactly-distinct, Gauntlet 361 to 105, Tetris 2 414 to 105. A repaint
-     budget is counted in subjects; today the artist repaints the same drawing
-     three or four times. → **F9.7**
-  2. **Maps are collages on games that do not scroll.** Punch-Out!!'s
-     `map-000.png` glues a fighter profile card, a "DON'T CRY, MAC" text
-     screen, a round-number card and the ring into one 1024 px strip, and the
-     game emits five such maps despite never scrolling. The screen-mode
-     stitcher anchors on the last placed screen and appends without requiring
-     evidence that the two are neighbours. → **F9.8**
-  3. **No positional repaint.** The mockup paints one large logo across the
-     ring canvas; in the ROM that canvas is a single metatile repeated (top-3
-     cells are 39-71 % of every map's placements, the dominant one seen 2908
-     times). A `hires.txt` tile entry is position-independent, so painting the
-     canvas cell paints it everywhere. ADR-0050 already captures static
-     screens as `<background>` layers, which *is* the positional surface —
-     the pipeline just never routes to it. → **F9.9**
-  4. **Sprites are absent from the sheets.** Punch-Out!! is lucky; most games
-     put their protagonist in OAM, and nothing in `sheets/` covers it. →
-     **F9.5**, already in flight.
-  5. **The pack still ships the unreadable layer first.** 12993 CHR-order
-     `Chr_XX_N.png` fragments sit next to the sheets (7.1 MB for Punch-Out!!),
-     and F9.0 deferred their fate. They cannot simply be deleted — `hires.txt`
-     renders from them — but they should not be what an artist meets when the
-     folder opens. → **F9.10**
+  `SheetRender`); F5.4e's union-find retired; `mep_build.py` slices painted
+  sheets back with painted-cell precedence; Bloco P. Also fixed the headless
+  `input=` no-op (no controller in port 1). Library runs 2026-09-05: 30/30
+  packs written; recordings are not deterministic between runs, so only the
+  vocabulary artifacts (`metatiles`, `font`, `hud`, `obj000`) compare
+  before/after — never a pack diff. Panel spot checks: map recognizability
+  passes on Metroid, SMB 1-1 and Excitebike (8224 px track, no duplicated
+  loop); cold-read passes at the top of each sheet; the two Zeldas need a GUI
+  save state to get past name registration. ADR-0155 (`-MMD -MP`) came out
+  of a stale-object segfault met on the way.
+- **Phase 9 scrutiny against a Punch-Out!! HD mockup** (2026-09-05): grouping
+  already isolates Glass Joe and both Little Mac views; five blockers became
+  F9.5/F9.7/F9.8/F9.9/F9.10.
+- **F9.5 — sprite (OAM) grouping** (2026-09-05): `SpriteGrouping.{h,cpp}`,
+  `sheets/sprNNN.png`; one dominant offset per ordered OAM pair, denominator
+  = appearances of A; Excitebike's bike + rider one figure across 25 pose
+  groups.
+- **F9.6 — optional AI repaint, external** (ADR-0154 accepted, ADR-0161
+  `proposed`, 2026-09-05): `scripts/sheet_repaint.py` behind a `RepaintBackend`
+  seam (`passthrough`, `classical`, `esrgan`, `diffusion`; availability probed
+  before any write; non-loopback endpoints refused), output in
+  `auto/repaint/`, MEP-v1 v1.6 `generated` object as disclosure, not a gate;
+  `--target screens` run on the real Mega Man 3 recording. Not done:
+  validation test 8 (blind A/B) — blocked on a local diffusion stack, not on
+  reviewers.
+- **F9.7 + F9.11 — alias pass, ink budget** (2026-09-05):
+  `MesenSheets::CollapseAliases`, sidecar `aliases[]`, `mep_build.py` fan-out;
+  budget = share of the ink of the richer cell (the area rule let one blank
+  cell absorb 335 of Ninja Gaiden's 465 entries). Library 10165 → 8684 cells.
+- **F9.8 — adjacency evidence before stitching** (2026-09-05):
+  `kStitchBandMatch` 0.60 / `kStitchBandLead` 0.25 over cells the anchor
+  already carried; single-screen components dropped; Punch-Out!!'s collages
+  gone.
+- **F9.9 — static screens routed to `<background>`** (ADR-0156, 2026-09-05):
+  a screen-resident cell leaves `metatiles.png`; three floors withhold routing
+  (not gameplay per F9.13, > `kMaxRoutedSceneShare` 0.93, < `kMinSceneSheetCells`
+  30). Punch-Out!! routes 41 % of its scene cells, SMB 8 %.
+- **F9.10 — CHR-order layer relegated to `textures/chr/`** (ADR-0160,
+  2026-09-05): the `<img>` line carries the path, older packs still load,
+  `PruneLegacyChrFiles` sweeps orphaned top-level fragments after a re-record.
+- **F9.12 — a continuous region ends when the world is replaced** (2026-09-05,
+  amends ADR-0153 §6): still-score cut at `kStitchWorldAgree` 0.85; SMB's
+  title no longer baked into 1-1; Excitebike's track 8224 → 15424 px.
+- **F9.13 — `scripts/gameplay_probe.py`** (2026-09-05): did the recording
+  reach gameplay, answered from the pack on disk; calibrated over 91 packs
+  (TP 17 / FN 3 / FP 0 / TN 66); `MENU` is trustworthy, `OK` means nothing
+  caught it; wired into `sheet_report.py` and `bootstrap_auto_packs.sh`.
+- **F9.14 — headless input in emulated frames** (ADR-0157 amended,
+  2026-09-05): `HeadlessInputProvider` resolves an absolute-frame script in
+  `SetInput` and pauses on the target frame; power-on RAM zeroed; two runs of
+  the same ROM/script yield a byte-identical `auto/` tree under a 20× speed
+  spread.
+- **F9.15 — in-memory frame capture** (2026-09-05): `BaseVideoFilter::
+  CopyOutputBuffer` + `CaptureScreenshot`, host-free `FrameCapture.{h,cpp}`
+  (size validation, border bands, FNV-1a checksum), `headless_record capture`
+  flag, Bloco S; extended by ADR-0167 (2026-09-07) with a HUD-only capture
+  whose `blank` bit is the toast oracle.
+- **F9.16 — `sprites.png` sprite vocabulary sheet** (2026-09-07): the full OAM
+  vocabulary through the alias pass, `kind: "sprites"` at precedence 1;
+  amends ADR-0153 §2–§4.
+- **F9.17 — `sheets/adjacency.json`** (ADR-0164, 2026-09-07): complete
+  background E/S edge map with degrees and `tiles[]`, sprite `floors[]` bands
+  and per-pair `coFrames` next to the pruned offset histogram; the data the
+  composition editor (F9.18) builds against. ADR-0166 (2026-09-07) adds per
+  screen-resident node the owning `screenNNN` and its offset.
+- **Live recorder + viewer** (ADR-0169, 2026-09-08): `LiveFrameRecorder`
+  publishes `frame.ppm` / `sprites.json` / `chr.bin` / `nametables.bin` /
+  `status.json` by file swap; `scripts/record_viewer.py` is spawned by the
+  emulator (Tools → Live Recorder) and never blocks the run; slot re-targets
+  per ROM.
+- **S10.c/S10.d — pack-side spikes of Phase 10** (2026-09-09): `mep_build.py
+  pack` carries the root `generated` disclosure across a rebuild instead of
+  dropping it, and an exact-namelist test pins that the zip still ships every
+  file under the folder — excluding a `studio/` subfolder is policy no spec
+  states, so studio data lives outside the pack folder rather than being
+  filtered by the builder. `mep_build.py check-coverage` is the "nothing
+  broken" gate for a repainted pack: every baseline tile key still resolves
+  and the F5.4d tiles-with-art count over those keys is unchanged, pixels
+  never compared. Five `test_mep_build.py` cases, one per behavior, negative
+  arm defect-probed. Adjacent bug left unfixed and filed: `pack` drops the
+  root `id`, moving catalog identity (#168).
+- **S10.a — pose separability measured, and it fails** (2026-09-09): the
+  ADR-0168 `evidence[]` walk recovers 6.7 % (Mega Man 3) and 10.5 % (Contra)
+  of a main character's poses as distinct figures against a >= 80 %
+  criterion, with 0/15 resp. 3/57 poses fitting inside one `sprNNN` group;
+  measured on fresh 300 s recordings against poses read off ADR-0169's live
+  OAM channel, decode validated at 98.7 % / 94.4 % against the pack's own
+  vocabulary. The binding cause is under-grouping, not ADR-0168 §3's
+  cross-pose stacking. ADR-0168 amended in place with the numbers and the
+  corrected mechanism (still `proposed`); ADR-0170 written `proposed` for the
+  prerequisite — a pose sidecar written from `HdPackBuilder::_oamFrames`,
+  which the recorder already holds at save time.
 
 ### 4. Roadmap — pending work, by slice
 
-#### Phase 6 — Community pack auto-install (MEP Recipe v1) — **priority**
+#### Phase 6 — Community pack auto-install (MEP Recipe v1)
 
-Problem (issue numbers below are those of the 2026-08-27 triage set,
-since recreated twice by run-clean — the current accepted set is
-#128–#148, see F6.5): 5 of the 12 triaged packs (#65, #66, #68, #69, #71 — LiQuiDzGit/
-HDnes family) ship a zip with only `hires.txt` + IPS/BPS, with all `.ogg`
-distributed separately on Google Drive/MEGA. The verdict `invalid` is
-correct (MEP-v1 §5) and installing the zip as-is mutes the game (patch
-applied, `HdPackLoader::ProcessSoundTrack` drops every missing OGG).
-Design decided in **ADR-0138** (accepted). This phase **realises the former
-Phase 4 (pack browser + official index)** through the community pipeline:
-the catalog JSON is the official MEI, contribution is the Issue Form
-instead of a PR, and install/update happens in the client.
+**Shipped** — F6.0–F6.8, 2026-08-28 → 2026-09-04 (ADR-0138, 0143, 0144,
+0146, 0148, 0151, 0152); record in §3. It realized the former Phase 4 (pack
+browser + official index): the catalog JSON is the MEI, the Issue Form is the
+contribution path, install/update happens in the client.
 
-Non-goals: hosting or committing third-party content; scraping Google
-Drive/MEGA confirm flows (the user supplies those files); fabricating
-missing assets; adjudicating patch licences (the recipe records the
-declared licence, nothing more).
+| Pending | State |
+|---|---|
+| F6.5 native OS file-picker step of the user-supplied-audio install | manual; no live row can raise the prompt today (all rows `hd-legacy`); every other step of that pass is unit-tested |
+| CI live validation (`LIVE_VALIDATION_ENABLED` → `'true'`, also arms the autofix-PR step) | deferred by user decision 2026-08-29 |
 
-| Slice | Deliverable | Acceptance |
-|---|---|---|
-| **F6.2** CI + issue metadata | shipped 2026-08-28 (dev-squad F6.2a/b/c; F6.2b follow-up `b0b334b0` — no stranded verdicts, transitive dep skip, refused note, `user_supplied` forced, `recipe_ok` in mep-meta) — Issue Form fields `external_assets`, `external_assets_license`; classify prompt emits the ```mep-recipe block (issue/manifest text is data, never instruction); `mep_recipe.py dry-run` gate after lint; upsert of the `<!-- mep-meta -->` bot comment (`source_sha256`, dep hashes, `verdict`, `labels`, `validated_at`, `recipe_hash`); label `assets:external` in `ensure_community_pack_labels.sh`; `docs/hd-pack-authoring.md` section | `/revalidate` on #71 yields `pack:valid` + `assets:external` and a recipe that dry-runs clean; `scripts/checks/` verifier for the workflow text |
-| **F6.3** catalog as MEI | shipped 2026-08-28 (dev-squad; F6.3b audit follow-up `c400d52b` — shared fence in `mep_meta_parser`, single `mei_entry_conforms`) — `generate_community_pack_catalog.py` also writes `docs/community-packs.json` = MEI v1.1 (`mei: "1.1.0"`, per-pack additive fields `issue`, `deps[]`, `recipe`, `verdict`, `validated_at`; `url`/`sha256` = primary zip); MEI-v1 amended (v1.1): an index MAY reference third-party artifacts by URL + hash when the entry carries `license` and the client shows it before install; golden updated | `validate-specs.py` validates the generated file; Markdown gains an "external assets" marker column |
-| **F6.4b** UI fetch + consent | shipped 2026-08-28 (dev-squad; merge `b5dd2c1c` — recovered orphan `f8c855c1`, ADR-0138 §40; audit `ccb845fd` §50–§55 — download trust contract, consent-before-network, host-free container name, two-way UI firewall) — ADR-0138 §37/§38: catalog fetch (ETag cache in MEP `.cache`), No-Intro sha1 match, download within the CI host allow-list (shared constant, parity-checked), sha256 verify, downloads-cache lookup, prompt for `user_supplied` deps with hints + licence, settings toggle + first-run consent for `AutoInstallCommunityPacks`, interop call into `MepRecipeInstaller`, reinstall on `source.sha256` change, UI notice when the patch is withheld | UI.Tests for allow-list/ETag/consent logic under `UI/Logic/`; manual GUI pass. **Coordinator decisions extracted 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`, wave 2): the pure halves of `UI/Services/CommunityPackInstallCoordinator.cs` now live in `UI/Logic/CommunityPackDepPlan.cs` (`Build(deps, alreadyResolvedIds, packFolderFiles, downloadsCacheFiles)` → Resolved/Pending, the hash verdict still delegated to the existing `CommunityPackDepResolver`) and `UI/Logic/PlayerDebugAccess.cs`, both consumed by the coordinator; `UI.Tests/CommunityPacks/CommunityPackDepPlanTests.cs` covers dep present/absent/partial, hash match/mismatch and a wrong-bytes-right-name negative control. What is left of the GUI pass is the OS file-picker step and the OSD toast |
-| **F6.4c** parity fixture set | shipped 2026-08-28 — ADR-0138 §39: grow `gen_mep_recipe_fixture.py` to wrapped-subfolder, nested top-level zip and ADR-0120/0121 fallback cases; Bloco E iterates the set | all cases byte-for-byte |
-| **F6.4** (original row, superseded by F6.4a/b/c — all shipped 2026-08-28) | `MepRecipeInstaller` (Core, F6.4a): fetch catalog (ETag cache in the MEP `.cache`), match ROM by No-Intro sha1, download primary within the CI host allow-list, verify sha256, prompt for `user_supplied` deps with hints + licence, run ops, write `pack.json` + `.mep-install.json`; reinstall when `source.sha256` changes; setting `AutoInstallCommunityPacks` (default on for packs without user-supplied deps; prompt otherwise); UI notice when the patch is withheld | headless: synthetic catalog + split pack → installed folder equals `mep_recipe.py apply` output byte-for-byte; hash mismatch aborts; missing dep → no patch, textures still applied |
-| **F6.5** rollout | shipped 2026-08-29 — re-validated all 11 approved packs (run-clean: old issues deleted; a second run-clean recreated the set as **85–95**; a third run-clean recreated it as **#128–#148**, the current accepted set — 2026-08-30/31, validated locally in parallel via `scripts/validate_pack_local.sh` + the `.github/ai/validate-classify.md` prompt family); classify headless fixed (model, stdin prompt, `--output-format text`, empty `--mcp-config`), ops schema tightened (oneOf), console label added; CI single source (ADR-0138): `community-pack-validate.yml`'s `prepare-classify-prompt` step renders `.github/ai/validate-classify.md` (rsplit extraction + `{{ISSUE_NUMBER}}`/`{{EXTERNAL_ASSETS_SUFFIX}}` placeholders) into `classify_prompt`/`classify_schema` step outputs, and the "Classify pack" step consumes those — no inline schema copy left to drift (schema-contract checks now read the .md SCHEMA block) | all eleven `pack:valid` + `console:nes` + `assets:*`/`patch:*` labels; board "Aceito parcial (HD Mesen)"; 88/89/91/92 = LiQuiDz split-distribution audio (`assets:external` + MEP recipe dry-runs clean); catalog regenerated 2026-08-29 (MEI now populated — the board-accessor key-casing bug fixed; one live slot per `pack_id` per ADR-0141 collapsed the six `liquidzgit/hdnes` submissions to a single slot — Duck Hunt at the time; resolved by **ADR-0143** (`pack_id` = origin × game, multi-game zips expand into `pack:split` sibling issues). On 2026-08-31 the eight audio-only NEA siblings sharing the whole-repo zip (#128–#131, #133–#136; still `pack:valid`) were removed from the catalog and closed — the pinned sha256 of the shared zip went stale, so the download never verified and the packs never applied (commits `fd244f2a`, `7bc8f13a`; rationale only in the issue comments — ADR-0148, slice D4, 2026-09-01). Only Ice Climber #132 of that family is listed today); `verify_community_pack_validate_workflow.py` + `make doc-checks` green; GUI end-to-end install with user-supplied audio **run 2026-09-04** (sign-off table in `docs/validation/f65-install-acceptance-checklist.md`): A2–A7 and B5–B7 PASS on the Zelda #139 row against a real No-Intro dump, exercising both matching paths (`via=game` in Part A, `via=sha1` in Part B). Two defects found and fixed in the same session — **#156** (a pending `user_supplied` dep was unrecoverable within a session: `_attemptedRomSha1` latched the ROM because `ClearAttempt` ran only on `Failed`, while the OSD prompt named the power-cycle path that `OnGameLoaded` skips; now the latch clears on `Installed` *with* pending deps and the prompt says "reload the ROM") and **#155** (`mep_lint` passed a `<background>` whose PNG the artifact does not ship, while `smoke_pack_headless.sh` rejected the same pack; the lint now errors — **ADR-0151**, extending ADR-0148 to intra-artifact reference resolution). Consequence carried out the same day: `/revalidate` rejected the row (lint failed, classify never ran), the board item moved to "Inválido" and the regenerated catalog (`5d0fe999`) dropped `issue-139` (11 → 10 rows), so the client no longer auto-installs it. The issue stays open — the defect is fixable from the pack side: `hires.txt:6124` is a dead line (the same screen is fully painted by the priority-1 `selectscreen1..6.png` frame cycle plus the priority-39 `selectscreentop.png`), but no MEP-recipe op edits manifest content and re-publishing an edited third-party pack is out of scope, so the fix belongs to the author (analysis on #139). The guided acceptance itself: `docs/validation/f65-install-acceptance-checklist.md` (2026-09-03, Part A = real-catalog install of Mega Man (USA) #138, whose five bundled `.ips` are verified *wired*; Part B = pending-dependency prompt + `.cache/downloads/` sha256 validation via a seeded catalog, because all 11 published rows are `kind: "hd-legacy"` with no `deps`/`recipe`, so no live row can raise the prompt today), gated afterwards by `scripts/smoke_pack_headless.sh` as the objective load post-condition (F6.6 smoke — it never runs the installer, so it is a gate, not a substitute). **Shrunk 2026-09-03** (wave 2 of `docs/validation/manual-validation-automation-plan.md`): the coordinator's pure decisions were extracted into `UI/Logic/CommunityPackDepPlan.cs` + `UI/Logic/PlayerDebugAccess.cs` and covered by `UI.Tests/CommunityPacks/CommunityPackDepPlanTests.cs` (see the F6.4b row), so the manual surface of the run is now only the OS file-picker step — a human choosing the user-supplied file — plus the OSD toast appearing; CI live validation re-enable (`LIVE_VALIDATION_ENABLED` → `'true'`, which also arms the autofix-PR step) deferred by user decision 2026-08-29 |
-| **F6.6** headless load smoke | shipped 2026-08-29 — `scripts/smoke_pack_headless.sh <installed-pack-dir> <rom>`: boot the headless core (the F1 `scripts/headless_record` binary, no GUI) with the ROM and the installed pack loaded (bootstrap convention — pack folder as sibling of the ROM), capture the HdPackLoader / audio-loader log; assert zero missing-target warnings for any `<img>`/`<tile>`/`<background>`/`<bgm>`/`<sfx>` target the manifest references. Texture packs must tick frames; audio packs must register every declared track. The ROM is a user-supplied No-Intro image (never redistributed) or a homebrew test ROM for CI; `user_supplied` external audio (e.g. the LiQuiDz OGGs) is smoked only when the audio is supplied locally, otherwise reported as skipped — this is the runtime half of "installed end-to-end", making it automatable where the GUI pass stays manual for audio *content* | `scripts/checks/verify_smoke_pack_headless.sh` wired into `make doc-checks` (CI variant boots a synthetic NROM over the F6.4c fixture packs, missing-dep case SKIPs): 5/5 cases green; the gate loop rejects missing img PNG, `<background>`, bad bitmap index, corrupt PNG, `no loadable hires.txt` and (absent `--allow-missing-audio`) missing OGG; round-trip fix shipped with it — `MepPack::Parse` now accepts an empty section `path` (= the pack root, MEP-v1 §3.2) via `RequireSectionPath`, so recipe-installed packs with root-level sections load (`core_unit_tests`: +6 empty-path cases, 50 PASS/0 FAIL) |
-| **F6.7** auto-load every accepted pack (ADR-0146) | decided 2026-09-01, core shipped 2026-09-01 — the first-run consent gate no longer blocks auto-install: `CommunityPackConsentState.Evaluate` ignores `CommunityPackAutoInstallConsentGiven` (`AutoInstallCommunityPacks` is the single master switch), consent tests + UI/Logic firewall updated. Consent plumbing removed 2026-09-01 (slice D6: `CommunityPackConsentState`, `CommunityPackAutoInstallConsentGiven`, the `EnsureCommunityPackAutoInstallConsent` dialog, the `NeedsConsent` outcome; UI build clean, 349 UI.Tests pass). **Confirmed 2026-09-01**: on a fresh app build, launching Donkey Kong (#144) auto-installed the catalog pack with no consent prompt and its textures won over the local bootstrap auto pack (log: "auto layer merged: 527 tiles added, 353 overridden by the human layer", tile-match health 98–100%). Found and filed **issue #149** in the process (macOS `open -a Mesen.app <rom>` delivers files as Apple "open documents" events) — **fixed**: `App.axaml.cs` hooks `TryGetFeature<IActivatableLifetime>().Activated` handling `FileActivatedEventArgs` on macOS and routes files to `LoadRomHelper.LoadFile` | an accepted `docs/community-packs.json` row matching the loaded ROM auto-downloads on ROM load with no consent prompt, and applies over a bootstrap auto pack |
-| **F6.8** known-missing errata (ADR-0152) | shipped 2026-09-04 — `docs/community-packs/errata/<artifact-sha256>.json` declaring exact `(manifest, tag, target)` triples with a mandatory `reason` and `reviewed_in`; honoured by **both** gates from the same file (`mep_lint.py` and `smoke_pack_headless.sh` — honouring it in one only would recreate bug #155); errata land by reviewed PR, never from issue/classify text (ADR-0138 §4); always applied, no opt-out setting (a `miss` changes nothing in the installed tree, so opting out would yield byte-identical content); any pack is eligible, the friction is the human review; provenance surfaced in `docs/community-packs.json`, the `docs/community-packs.md` table and the Player pack picker as "declared by MesenCE validation, not by the author"; `content_id` unaffected, so ADR-0147 local-edit detection is untouched. Non-goals recorded in the ADR: an `overwrite` directive and pinning the downloaded artifact | `issue-139` returns to the catalog with one errata entry and no change to the author's artifact; a re-`/revalidate` sweep of the live rows shows which others ADR-0151 now rejects; parity check in `make doc-checks` that both gates read the same errata format. **Built 2026-09-04**: `scripts/mep_errata.py` is the single reader — `mep_lint.py` imports it, `smoke_pack_headless.sh` shells out to its `covers` subcommand, and `scripts/test_mep_errata.py` (19 checks, wired into `make`) asserts structurally that neither gate grew its own parser (the ADR's original "two implementations agree" plan was dropped: that is the #155 shape). Provenance shipped on all three surfaces — MEI v1.4 §2.6 `errata` in `docs/community-packs.json` (`mep_errata.mei_errata_field`, shape-validated by `mei_rules.mei_errata_field_errors`), a `†` marker + footnote in the `docs/community-packs.md` table, and a line in the Player pack picker (`PlayerPackChoice.KnownMissingNote`, covered by `UI.HeadlessTests/PlayerPackPickerTests.cs`). **Closed 2026-09-04**: `/revalidate` returned `issue-139`, and the sweep of the 10 live rows found three more that ADR-0151 now rejects. Two were errata cases and are back in the catalog: `issue-137` (Contra 80s v1.1 — `Stage1.png`, the stage-1 `screen0F` slot; the author already commented out the identical stage-5 lines by hand and neither PNG ships) and `issue-148` (Metroid HD — `LavaAirGlow0.png`, the bottom step of a five-frame additive ramp whose next frame up is already alpha-0 in every pixel, so 12 `Add` entries drop with no pixel change). `issue-138` (Mega Man Super) turned out to be neither an errata case nor a de-listing: its `no section found` failure was ours. The pack ships four alternate manifests under `Customization/` (a `hires.txt` and an `.ips` each, zero PNGs), `find_fallback_subfolder_candidates` counted all five folders as pack roots, and discovery failed closed on a single-game pack with 1222 PNGs — **bug #161**, fixed in `33cf4f46` (a bare `hires.txt` is a pack root only with a sibling image; ADR-0121 amended, mirrored in `MepZipValidator.cs`). The intermediate reading that the row stayed de-listed under ADR-0148 for its moving branch-archive sha256 (`666bdeae…` -> `20c890e6…`) was wrong and is corrected on the issue: ADR-0148 rule 2 covers a *shared* artifact's stale pinned hash, and the ADR itself records that the client installs optimistically from mutable branch archives since `3bc4482d` — `issue-132` is listed on exactly such a URL. `/revalidate` accepted it and the catalog is at **11 rows**, three of them carrying the `errata` field. A new `pack:known-missing` label marks them on the board, applied by the `apply-verdict` step from the computed Pack Hash — never by classify, whose inputs are submitter-controlled — and removed by the same step when nothing resolves, so it expires with the errata. Reinstall + `smoke_pack_headless.sh` passed on `issue-139` (real Zelda ROM, 100% bg tile match) and `issue-137`; `issue-148` loads clean but trips **bug #160**, a false FAIL in the smoke gate itself — the 1000-entry `MessageManager::_log` ring drops the `[MEP] pack ... matches ROM sha1` line under that pack's 8234 loader messages. Verified against the uncapped `mesen.log`: the pack matches, textures load, and the only missing-target errors are the 12 declared ones (bug #160 fixed in `6a9c3475`). `issue-138` smokes PASS too, with its 17 `<bgm>` OGGs SKIPPED — they are supplied by the bundled `.ips`, not shipped as files |
+Non-goals (unchanged): hosting or committing third-party content; scraping
+Google Drive/MEGA confirm flows (the user supplies those files); fabricating
+missing assets; adjudicating patch licenses. Edge cases the pipeline must
+keep handling, all covered by `mep_lint.py`: nested zip-in-zip, whole-repo
+archive wrapper, bare root, named subfolder ≠ ROM, several `hires.txt` after
+acceptance (fail closed, list candidates), Google Drive large-file
+interstitial (out of automatic scope).
 
-Edge cases the pipeline must keep handling (evidence from the 2026-08-27
-spike, all already covered by `mep_lint.py`): nested zip-in-zip (#64
-Zelda), whole-repo archive wrapper (#63, #72, #73), bare root (#62, #67,
-#70), named subfolder ≠ ROM (#69), upstream drift creating several
-`hires.txt` after acceptance (#63 — fail closed, list candidates), Google
-Drive large-file interstitial (out of automatic scope, user supplies).
+#### Phase 5 — bootstrap
 
-#### Phase 5 — remaining bootstrap items
+**Shipped** — F5.1–F5.5, 2026-08-25 → 2026-08-29; record in §3. Success
+criterion unchanged: *playing for 5 minutes generates, next to the ROM, an
+enhanced game (image level 2, sound level 2/3) with no configuration; from
+it an artist reaches a publishable pack in < 1 h editing only PNG/OGG*.
+Phase 9's validation protocol is where that criterion is now measured.
 
-Success criterion unchanged: *playing for 5 minutes generates, next to the
-ROM, an enhanced game (image level 2, sound level 2/3) with no
-configuration; from it an artist reaches a publishable pack in < 1 h
-editing only PNG/OGG*. Validation targets: Mega Man 3 (CHR ROM), Contra
-(CHR RAM), Link's Awakening (GB), Sonic (SMS).
-
-| Slice | Deliverable | Decision |
-|---|---|---|
-| F5.4c | shipped 2026-08-29 — `scripts/mep_build.py <folder>`: sheets → tiles → `textures/hires.txt`, new OGGs into `audio/` (`audio/hires.txt`, NES-only — GB/SMS frozen), runs the linter as the gate; `pack` → deterministic zip with generated `pack.json` (MEP-v1 §2.1 rule 6, ADR-0049); `rename-audio-id` id lifecycle (F5.4g item 12). Tile keys come from a key source (`--source`/`textures/hires.txt`/bootstrap `auto/textures/hires.txt`) — not derivable from art. `scripts/test_mep_build.py` in `make doc-checks` | ready |
-| F5.4d | shipped 2026-08-29 — "what you played" coverage in the HD Pack Builder window: `HdPackBuilder::GetCoverageReport()` (tiles seen vs with art, screens captured, CHR RAM flag — static export seeds excluded by usage 0, on-disk tiles by their loaded usage) surfaced live via the `GetHdPackCoverageReport` interop into a `Coverage` line + ADR-0043's CHR RAM warning (static export heuristic, "the UI says so"); Before/After preview (`HdPackPreviewWindow`) shows each sheet/screen PNG beside its `*.orig.png` reference twin. `make core` + `dotnet build UI -r osx-arm64` (0/0) green; live recording counts need a GUI run | ready |
-| F5.4e | shipped 2026-08-29 — objects from spatial co-occurrence: during screen capture the builder accumulates how often two tile shapes sit 8px apart (E/S neighbors; per-frame bg tile grid filled in `ProcessBgPixel`, accumulated in `OnFrameEnd`), then `BuildObjectSheets` (on save, once) union-finds those edges (≥2 sightings) into objects of 2..32 shapes, writes one editable `textures/sheets/object&lt;NNN&gt;.png` per object (the tiles upscaled and arranged as they appear in-game — BFS from the most-connected shape at its dominant 8px offset), documents the cell order as a `# inferred` comment in `hires.txt`, and emits `# inferred` `tileNearby` condition candidates (inert `<condition>` definitions, deduped by name across sessions) the artist can wire to a `<tile>` after verifying — never auto-attached, so a wrong inference cannot make a tile fail to render. Sprites that co-occur with bg tiles join the same objects; raw OAM-slot grouping is future (the builder sees sprite tiles via `ProcessTile(isSprite)`, not the OAM slots). `make core` + core-unit-tests + doc-checks green; sheet content needs a GUI bootstrap run | ready |
-| F5.4g **Block B** | shipped 2026-08-29 — item 3 arpeggio→chord: `DetectArpeggio` (2-4 note cycle at 20-60 Hz from the onset ring) + `FoldArpeggioToChord` folds a fast broken chord into a sustained chord (`MaxChordNotes=4`); item 4 expression: `EvaluateExpression` maps decay/vibrato/portamento onto a pluck×sustained×strings GM patch family (`kFamilyPrograms`), smoothed attacks/releases per slot; item 6 human override: `FixedRole.<ch>` in the ESP (auto/lead/harm/bass) pins the channel via `SetFixedRoles` + per-channel lock in `Decide`/`Update`; ADR-0052 item 2 "channel stolen and returned": `HandleChannelSteal` hands a channel's native role back on resume, bypassing the swap hysteresis. `make core` (full clean rebuild — the header-size change makes incremental builds SIGSEGV), core-unit-tests 109/109, `roles-probe` regression on Zelda + Mega Man 3 (stable roles, SFX segments detected), `make doc-checks` green. GUI/listening validation of the rendered audio is recorded as pending. **Automated 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`, wave 2): `scripts/core_unit_tests.cpp` Bloco L renders the `EnhancedSynthEngine` against a committed PCM golden, `docs/specs/golden/synth/enhanced-synth-pcm.txt` (128 frames from a synthetic preset declared in the test itself, ±2 LSB tolerance plus a >1000 peak gate so a silent render cannot pass; cwd-relative golden per ADR-0129). Defect-probed: moving the harmony mix from 0.80 to 0.79 shifts 8 samples and fails it. The subjective half — is the timbre *good* — stays a listening judgement; the regression half no longer is | ADR-0052 |
-| F5.4g **Block C** | 8 loop point in the fingerprint (`LoopPosition` is 0 today), 9 SFX audible during OGG (mute mask), 10 music→music transition/fade | **done 2026-08-29.** item 8 (ADR-0134 Option A: `tracks[i].loop`, MEP-v1 §5.2, renderer emits from a MIDI loop marker, lint accepts presence/absence, Bloco H round-trip — 121/121, commit 4a9c096c); item 9 (ADR-0133: `SetReplacementMuteMask`, classifier-driven SFX pass-through, bool shim removed, fallback 0x0F, reset clears — commit c9b7353c); item 10 (**ADR-0142 accepted 2026-08-29**: 40 ms crossfade on BGM switch/stop, run-ahead-gated — commit c36043f5). Pending (listening, manual): loop-intro não repete, SMB1/Zelda SFX audível, switch sem clique. **All three replaced by unit tests 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`): "switch sem clique" by wave 1's Bloco I (bug #151, per-sample ramp — see the ADR-0142 row in §6); item 8 by **Bloco J**, which covers ADR-0134's loop-point rule through the new decoder-agnostic `Core/NES/HdPacks/OggLoopStream.h` (an `IOggDecoder` seam the production `OggReader` now delegates to) — consuming past the track end returns to `loopPosition`, not to 0, and a track without a loop point keeps its old behaviour; defect-probed (seeking to 0 instead fails 3 cases); item 9 by **Bloco K** over the new shared header `Core/Shared/Audio/ReplacementMuteMask.h` (`FullTonalMute`/`IsMuted`/`Compute(roles)`, a template so the mixer never includes `ChannelRoleClassifier`, per ADR-0133), consumed by `NesAudioFingerprint::UpdateReplacementMuteMask` and `NesSoundMixer::GetChannelOutput`: exactly the fingerprinted channel is muted, SFX/expansion/DMC channels are not; defect-probed. The audible end-to-end (real game, real ears) is the one manual part left |
-| F5.4g **Block D** | 11 *Extract audio* opt-in tool driving the sound driver — **tool shipped 2026-08-29**: `scripts/spike_sound_driver` productised with the full ADR-0135 contract (per-id **frame** budget + whole-run wall-clock budget, SIGINT abort at frame boundaries, guaranteed no-op → `enumeration.log` only, F5.3 fingerprints + midi relocated into `<sibling>/auto/audio/`). Runs as its own process (ADR-0135 decision-5 alternative; recorder flushes only at teardown → ABI `Release()` before relocation). Validated headless: no-op (budget 20s → exit 4, log-only, no fingerprints) and success (Zelda mailbox $0600 validates → fingerprints.json + 2 bgm midi + enumeration.log). **GUI wiring shipped 2026-08-29 (ADR-0135 point 7)**: new `Utilities/ProcessUtilities.{h,cpp}` (detached `fork`/`execvp` + `GetExecutableFolder` — the checklist's process-spawn utility, standalone-tested PASS), `EmulatorShortcut::ExtractAudioHdPack` (SettingTypes.h + C# mirror), `NesConsole` case + `ExtractAudioHdPack()` handler (NES-only, GB/SMS ignore explicitly), tool resolver (`MESEN_EXTRACT_AUDIO_TOOL` env → app-exe dir → `<Mesen home>/Tools`, the app data folder), `HdPackBuilderViewModel.ExtractAudio()` gated on NES + button + localisation. `make core` (full clean rebuild — shared header) green, `dotnet build UI` 0/0, end-to-end headless spike PASS (synthetic ROM → shortcut → resolver → detached child with the pack folder forwarded). GUI button-click on a real display pending (manual)** — **run 2026-09-01**: HD Pack Builder's Extract Audio button on a real display started the detached probe (`spike_sound_driver` placed under `<Mesen home>/Tools`, the resolver's actual second path, not `$HOME` — fixed a stale comment/log-message that said `~/Tools`), which ran to its 300s wall-clock cap and exited via the documented no-op path (no validated mailbox trigger found, only `enumeration.log` written, no fingerprints/midi) — the success path was already covered by the headless spike, this pass confirms the no-op path end-to-end through the GUI**; 12 id naming/cleanup — `rename-audio-id` (F5.4c) + `scripts/audio_cleanup_suggest.py` **shipped 2026-08-29** (report-only pruner reading `enumeration.log`: flags short/title/repeat/silent ids, notes the id↔trackNN not-1:1 mapping, tested in `test_mep_build.py`); 13 `mep_build.py` `audio/` + audio lint (F5.4c) and seed-MIDI→OGG tutorial **shipped 2026-08-29** (`docs/hd-pack-authoring.md` §"Seeding audio", record→render→promote→build) | **ADR-0135** (accepted 2026-08-29, implemented-variant note) and **ADR-0051** (accepted 2026-08-29) |
-| F5.4b follow-ups | (a) saturation log when a shape hits `MaxPaletteVariantsPerTile`; (b) seed `_paletteVariantsByShape` from `_hdData` or document per-session scope | ADR-0132 — shipped 2026-08-29: (a) logs once per shape (`_variantCapLogged`); (b) seeds from non-defaultTile on-disk entries in the ctor, making the cap a per-shape total across sessions |
-| SoundFont | decided 2026-08-29 — **bundle GeneralUser GS (31 MB, permissive) in the installer**; level-2 GM works out-of-the-box, `.sf2`-hunting no longer required | done — bundle on the release path (blocked by the installer itself, which has no release yet) |
-| F5.5 | wrap-up — shipped 2026-08-29: (a) **bootstrap setting UI polish** — localized the last hardcoded pack-UI strings (EnhancementPacksWindow auto-install + P.3 preferred-pack labels, MainWindow Player overlay + pack picker, the P.5 "Applied" toast; on-screen messages moved to the Core `MessageManager::_enResources` map where the HUD actually localizes — the UI `resources.en.xml` is the window-label system); (b) **MEP-v1/MEI golden refresh** — goldens verified current and the 5 golden/recipe/validate-specs gates wired into `make doc-checks` (33 checks); (c) **README** — Player mode (P.4–P.6), Extract Audio tooling, community flow; (d) **F1–F3 regressions** green (MIDI/VGM on Mega Man 3, HD-pack skeleton on Zelda, MEP host path clean, core-unit-tests exit 0); (e) **dotnet 0 warnings** (build UI 0/0) | — |
+Pending: the audible end-to-end of Blocks B–D (real game, real ears —
+subjective, stays manual); the bundled SoundFont waits on the installer's
+first release.
 
 #### Repo hygiene and tests
 
-| Slice | Deliverable | ADR |
-|---|---|---|
-| H1 | `make doc-checks` running `verify-fase0-1-dox.sh`, `verify-ui-logic-firewall.sh` and `check-file-loc.sh` per guarded file; CI runs it before builds; `scripts/AGENTS.md` names the target | **0137** (accepted; file deleted — see D1) |
-| H2 | `.github/AGENTS.md` records the `unit-tests.yml` contract invariants (clang only, …) | **0131** (accepted; file deleted — see D1) |
-| H3 | `path-cases.txt` fixture header format / control characters | **0124** (accepted) |
-| H4 | `mep_compare.py`: per-system dispatch of `render_original` + NES golden texture pack | **0136** (accepted; file deleted — see D1) |
-| H5 | UI-logic host-free firewall parity scan in CI | **0123** (accepted) |
-| H6 | UI-logic public helpers for direct testing | **0125** (accepted, Option A) |
-| H7 | `CheatTypeDetector` ThrowsAny (GB/SMS product decision still deferred) | **0128** (accepted) |
-| H8 | **`NES_ONLY` / `LessUI` build modes** — compile-time exclusion of the non-NES cores and of the heavy debugger UI, for a smaller and faster headless/CI build. Source: `ky12138/MesenCE` `adc1a6a2`, `42e0ee27` | **measured and declined 2026-09-05** — the prior art is C#-only (neither commit touches `Core/`, `InteropDLL/` or the `makefile`; it is `<Compile Remove>` groups in `UI.csproj` plus a 162-line `NesOnlyStubs.cs` and `#if` fences in 22 UI files), so it never excluded a core at all. Resolved against this tree, **0 of `NES_ONLY`'s 130 exclusions** are removable (80 are files the console reduction already deleted, 46 are GB/GBA/SMS product UI, 4 are the SNES gamepads `docs/roadmap/AGENTS.md` keeps) and **4 of `LessUI`'s 13** (the other 9 are the HD Pack builder and the recorder — the product). Measured, macOS/arm64 clang `-j8`: clean `make core` **149.5 s** (61 GB/GBA/SMS objects = ~38 s / 26%, all product), link 1.3 s, no-op 0.8 s (ADR-0155), `make core-unit-tests` **39.3 s**, `make doc-checks` **51.7 s**, `dotnet publish UI` 38.8 s cold. No CI job would run in either mode: `unit-tests.yml` builds no core (ADR-0131), `build.yml`'s 14 jobs ship artifacts that need every product console, and both already use ccache + `-j$(nproc)`. Nothing implemented, and the slice is **closed**. The one follow-up it surfaced did ship (`7748c013`): `core-unit-tests` was a single **serial** `clang++` call and is now one object per translation unit with `-MMD -MP` header deps, so `make -j` applies — **39.3 s → 9.7 s cold, 6.0 s after a one-file edit**, same 491 cases, same binary, at no cost in source fences. That is the whole of what H8 bought | **0158** (accepted 2026-09-05 — recommends against; ADR-0157 §3 and ADR-0007's manifest guard are the reasons) |
-| H9 | **The stateful headless input surface, tested against a fake core.** `Core/Shared/HeadlessInputEngine.{h,cpp}` extracted from `HeadlessInputProvider` (ADR-0127 pattern): the same decisions, taken against two narrow interfaces — `IHeadlessInputHost` (frame counter, `IsDebugging`, `Pause`, re-register, log) and `IHeadlessInputTarget` (port, named buttons, press). The provider is now the binding to `Emulator`/`BaseControlDevice` and nothing else. `core_unit_tests` Bloco R drives the engine through a fake host and a fake pad — frame boundaries (a step owns its start frame, gone at its end), overlay (`ApplyFrame` always `false`, physical presses survive), port-1-only, name resolution and numeric skip, the `GameLoaded` re-registration, and the stop frame landing on exactly its frame, once, re-armable, skipped-frame-safe, muted under the debugger. 410 → 443 cases; four mutations (step lookup `frame + 1`, `>=` → `>` on the stop frame, `return true`, re-registration removed) fail 11 of them. Source: `lusid/MesenCE` `UI.Tests/Mcp/` (test model only — the C# is a different surface) | **0127**, **0157** (shipped; no new ADR — the seam is ADR-0127's extracted-helper pattern applied again, and the GUI pays nothing for it since the provider only exists in headless runs) |
-| H10 | **Does one of our layers change emulation?** The builder hooks the PPU, MEP replaces textures at render time and the synth taps the APU — three hooks into the hot paths of an emulator whose reason to exist is accuracy, and nothing asked whether a game still behaves the same with one of them on. `mep_compare.py` compares pictures, `smoke_pack_headless.sh` checks a pack loads; neither asks whether the machine underneath computed the same thing. Source: `100thCoin/AccuracyCoin` (MIT), 144 NES accuracy tests on one NROM cart that run unattended from Start and print a results table | **shipped** 2026-09-05 — `scripts/accuracy_compare.py` runs the suite against **one** binary in four arms (`vanilla`, `builder`, loose `hdpack`, `mep`) at two absolute frames and requires the ADR-0159 frame checksums to be identical; it is deliberately *not* a test of upstream's accuracy (the suite's own 141/144 is never asserted on — a regression equally wrong in every arm passes). What makes a texture arm possible at all is an **identity pack**: the harness records an HD pack with the builder at scale 1, installs *that*, and the core replaces 659 tiles at a 100 % match rate while the frame stays bit-identical — the alternative, a texture arm with textures off, would test pack discovery and nothing else. Determinism is inherited from ADR-0157 (frame-counted input, zeroed power-on RAM, absolute stop frame), not reinvented. Measured: all four arms `0x263A786A` / `0xE5C1E0D8`, nine emulator runs in ~46 s. Proved it can go **red** two ways — rotating the art of all 659 `<tile>` rules diverges both checkpoints, and a fault injected into the `builder` arm alone (`DisablePaletteRead`) diverges only the results table, where the suite score itself falls to 140/144. The first perturbation attempt is the lesson: swapping *two* tile rules left the harness green on a tampered pack, because those tiles are never drawn at a checkpoint. One negative result kept — an injected `RamState::AllOnes` on the builder arm changes nothing, since AccuracyCoin initialises its own RAM. ROM not vendored (path + clean `SKIP`, exit 0); not in CI yet, by decision, with the skip contract making it cheap to wire later. 38 stdlib-only checks in `scripts/test_accuracy_compare.py` | **0162** (proposed 2026-09-05) |
+**Shipped or closed** — H1–H10; record in §3. Open: ADR-0162 (accuracy
+suite) is `proposed` and not in CI by decision; the `CheatTypeDetector`
+GB/SMS product decision (H7) stays deferred.
 
-#### Documentation and normative integrity (audit 2026-09-01)
+#### Documentation and normative integrity
 
-Source: a documentation audit run on 2026-09-01 and re-verified against
-the tree, `git log` and the GitHub issues the same day. Verdict: the
-shipped record above matches the code (every "shipped" ADR resolves to
-code, every cited script/workflow/golden exists, `make doc-checks` exits
-0). The defects are normative gaps — specs that never received a
-promised field, ADR files deleted by an unrelated commit, product
-decisions recorded only in issue comments — plus stale prose. Slices
-are ordered by priority; D1–D4 gate any further ADR-driven work because
-each later slice would otherwise inherit the same broken references.
+**Shipped** — D1–D13, audit of 2026-09-01; record in §3. Open: ADR-0120 §3
+(optional ROM-name parameter in `MepZipValidator`), deferred with a dated
+note in the ADR — pick it up with a per-ROM install caller.
 
-Not defects (checked and dismissed): the run ids quoted in ADRs
-(`45092f2ebec4` etc.) are `.dev-squad/runs/` directories, unversioned by
-design, not squashed commits; the `unit-tests.yml` contract itself is
-not lost — it lives in `.github/AGENTS.md` lines 260–283 with a
-self-check, only its ADR record (0131) is gone; ADR-0141's header already
-declares "amends ADR-0138 §37" and ADR-0147 already declares
-"Supersedes / amends" ADR-0049/0050 — the missing half is the back-pointer
-in the amended file.
-
-| Slice | Deliverable | Priority | Evidence |
-|---|---|---|---|
-| D1 | Restore `docs/adr/0130`, `0131`, `0136`, `0137` from `b0b334b0^` (an F6.2b fix commit deleted them on 2026-08-28; 0132–0135 were restored the same week, these four were not). Keep them `accepted` (H1/H2/H4 shipped) or mark `superseded` with a "Superseded by" line; never re-mint the ids (ADR-0035) | **P0** — **shipped 2026-09-01** (restored with Status notes; `scripts/checks/verify_adr_refs.py` wired into `make doc-checks`) | still cited by ADR-0122/0126/0129, by H1/H2/H4 above, by `.github/AGENTS.md` (4×) and `docs/specs/golden/mep/audio/README.md` |
-| D2 | MEP-v1 **v1.4**: `id` as SHOULD in §3.1 (ADR-0140 source 1, Part B §3.3 rule 1); golden `pack.json` in `golden/mep/` and `golden/mep-nes/` gain `id`; `mep_lint` validates the slug shape | **P0** — **shipped 2026-09-01** (`mep_lint` reports a malformed/missing `id` as a warning, never an error — the spec says hosts never fail a load on it) | MEP-v1 is still v1.3 with no `id`; the catalog already emits `pack_id`, so the field's only normative home is an ADR |
-| D3 | MEI-v1 **v1.2**: define `rom.sha1s` (alternate No-Intro hashes of the same game) — or drop it from the generator | **P0** — **shipped 2026-09-01** (`rom.sha1s` §2.4 + `validate-specs.py` checks; `mei_catalog_entry.MEI_VERSION` = 1.2.0 and `docs/community-packs.json` declares it) | emitted by `generate_community_pack_catalog.py:118`, present in 6 of 11 rows of `docs/community-packs.json`, absent from MEI-v1 (which knows `sha1` MAY + `crc32`) |
-| D4 | ADR recording the 2026-08-31 catalog removal of audio-only NEA packs: the rule (a listed pack must be self-contained and texture-bearing; a stale shared-zip sha256 is grounds for removal, not silent failure), how it squares with the auto-load-every-accepted-pack policy (CLAUDE.md, ADR-0146) and with ADR-0143's N-slot expansion, and what re-listing requires | **P0** — **shipped 2026-09-01** (ADR-0148, amends ADR-0144: the bundled patch must also be wired; `mep_lint` labels each bundled patch wired/NOT wired and `.github/ai/validate-classify.md` applies the audio exception only to a wired one and refuses non-listable packs under rule 1) | #128–#131, #133–#136 are `pack:valid` + `pack:split` yet closed; rationale exists only in the closing comments and commits `fd244f2a`/`7bc8f13a` |
-| D5 | In-place amendments: ADR-0138 header ("F6.2–F6.5 remaining" → F6.0–F6.7 shipped), §37 note pointing to ADR-0141's `content_id` trigger, §38/§51/§54 consent clauses marked superseded by ADR-0146, F6.4c marked shipped (fixtures in `docs/specs/golden/mep-recipe/fixture/`); ADR-0143 header gains "Amends ADR-0140 source 2"; ADR-0049 gains a pointer to ADR-0147 | P1 — **shipped 2026-09-01** (ADR-0138 header/§37/§38/§51/§54/F6.4c annotated in place; ADR-0049 points to ADR-0147); **§4 output-location note added 2026-09-07** — the slice's last in-place amendment, closing the Status line's ADR-0147 promise | current text of ADR-0138 line 581 still says reinstall on `source.sha256` |
-| D6 | F6.7 cleanup — remove the inert consent plumbing (`CommunityPackAutoInstallConsentGiven`, `CommunityPackConsentState`, the `NeedsConsent` outcome and its dialog), as ADR-0146 Consequences require | P1 — **shipped 2026-09-01** (`CommunityPackConsentState.cs` + its test deleted, flag/dialog/`NeedsConsent` removed, `EvaluateGates` reads `AutoInstallCommunityPacks` directly; UI build 0 errors, 349 tests pass) | same item as the F6.7 "Remaining" cell above |
-| D7 | Fill `## Consequences` / `## Alternatives` of ADR-0139–0145 (all seven are empty) with the verified implementation state and the options rejected | P1 — **shipped 2026-09-01** (Consequences/Alternatives filled for 0139–0145 with file:line state; ADR-0143 header now "Amends ADR-0140 source (2)") | code × doc cross-check is impossible for them today |
-| D8 | ADR-0120 §3 (optional ROM-name parameter in the C# `MepZipValidator`) and §4 (standalone C++ E2E zip-pipeline harness): implement, or record an explicit deferral with a date | P1 — **deferred 2026-09-01** (both recorded in place in ADR-0120: §3 has no caller with a ROM in scope and the Python mirror normalizes names; §4 is covered by `verify_community_install_from_zero.py` except the zip path — pick up with a per-ROM install caller). **§4 shipped 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`, wave 2): `scripts/core_unit_tests.cpp` **Bloco M** exercises the whole `PrepareZip` pipeline through the new `Core/Shared/EnhancementPacks/MepZipExtract.h`, which `MepPackManager::PrepareZip` now delegates to — an `IArchive` seam keeps the real archive readers out of the test link. Covered: path traversal, absolute paths (including a Windows drive letter), the ADR-0120 nested-wrapper fallback, `.mep-source` cache-stamp reuse, stale-cache wipe, a symlink left in the cache being wiped, and the empty-archive guard; defect-probed (mutating each check fails it). Caveat: miniz's writer cannot author a true `S_IFLNK` entry, so symlink handling is covered by its two reachable halves — a path-payload entry (written as a plain file) and a pre-existing cache symlink — not by a real symlink inside an archive. §3 stays deferred | both are "named follow-up, not this task" since 2026-08-27 |
-| D9 | Stale docs: `docs/hd-pack-authoring.md` (binary verdict, real labels — `pack:mep-full`/`pack:partial-hd` never existed); `docs/community-pack-intake-handoff.md` ("already cataloged" rows SMB #135, SMB2 #134, 1942 #128, Duck Hunt #131 are closed, not listed); `docs/enhancement-ecosystem.md` (cites `Core/SNES/Coprocessors/MSU1` — `Core/SNES`, `Core/PCE`, `Core/WS` are empty skeletons — replace with a pointer to this PRD); `MIGRATION.md` (issue #4 → #137, "exporter not built" superseded by ADR-0147, binary verdict); `docs/specs/README.md` (index `golden/mep-content-id.json` and `golden/mep-nes/`) | P2 — **shipped 2026-09-01** (7 closed NEA issues moved to a "De-listed" table citing ADR-0148; golden index added) | each asserts a fact that is false today |
-| D10 | `CLAUDE.md`: resolve the Author contradiction (one paragraph says the form field was removed and the classify step discovers authorship, another says "Author" is the declared form field; in practice the classify step never writes `author`, so every catalog row lacks one — decide: classify writes `author` or the sentence goes); list the current labels (`pack:split`, `pack:needs-review`, `assets:external` are missing); the `deps` sentence vs 0 of 11 rows using it | P2 — **shipped 2026-09-01** (Author = classify → mep-meta → catalog, 1/11 rows named; 14 real labels listed; `deps` "when present", 0/11 rows; follow-up: stale docstring `scripts/community_pack_markdown.py:73-76`) | `generate_community_pack_catalog.py:69` reads `author` from mep-meta only |
-| D11 | Replace line citations with target names: `makefile:233` in ADR-0126/0129 (target `core-unit-tests` is at `:302`), `makefile:254` in ADR-0135 (`spike-sound-driver` is at `:335`) | P2 — **shipped 2026-09-01** (target names in ADR-0126/0129/0135; ADR-0131/0137 converted 2026-09-01 as well; `grep makefile:[0-9] docs/adr` is empty) | lines drift on every makefile edit |
-| D12 | Hygiene: version `scripts/build_app_macos.sh` (local `.app` build — dylib injection + ad-hoc codesign — that CI does not do; untracked today); annotate ADR-0035 that ids 0139–0147 were reissued twice (ADR-0138 lines 238/348) and are now bound to the live ADRs; decide whether the empty `Core/SNES`, `Core/PCE`, `Core/WS` directories stay | P3 — **partly shipped 2026-09-01** (`build_app_macos.sh` header + `scripts/AGENTS.md` bullet; ADR-0035 records the three id re-mints). `Core/SNES`, `Core/PCE`, `Core/WS` (empty, untracked, unreferenced) deleted 2026-09-01 | — |
-| D13 | MEI-v1 **v1.3**: document the additive per-pack fields the generator already emits — `pack_id` (ADR-0140/0143), `content_id` (ADR-0139), `votes` (ADR-0140, non-normative; PRD Part B §5 sort key) — with golden `mei/manifest.json` and `validate-specs.py` checks; also make the classify step refuse non-listable packs (ADR-0148 rule 1 — prompt text landed 2026-09-01, needs one CI run to confirm) | **P1** — **shipped 2026-09-01** (`pack_id`/`content_id`/`votes` §2.5 + golden `mei/manifest.json` + `validate-specs.py` per-entry shape checks via `mei_rules.mei_identity_field_errors`; `mei_catalog_entry.MEI_VERSION` = 1.3.0 and `docs/community-packs.json` declares it; the ADR-0148 rule-1 classify refusal is NOT yet confirmed — still needs one CI run). **Confirmed 2026-09-03 without a CI run** (`docs/validation/manual-validation-automation-plan.md`, wave 2; recorded in ADR-0148 too): the real `.github/ai/validate-classify.md` prompt, driven offline by `scripts/validate_pack_local.sh --pack-file`/`--issue-body` over the purpose-built fixture `tests/fixtures/community-pack/adr0148-rule1-unlistable/`, returns `verdict=invalid` for a lint-valid (0 errors) pack whose `<bgm>`/`<sfx>` targets are absent and whose bundled `.ips` is unwired, with a comment naming the three ways to make it listable; a prompt-injection variant (bundled README + patch file name + the issue's game field) reached the rendered prompt and did not change the verdict. The run also added an offline mode to `validate_pack_local.sh` and fixed a pre-existing `ROOT`-shadowing bug in its `run_game()` | found by D7: `docs/specs/MEI-v1.md` has 0 hits for `pack_id`/`content_id`/`votes` while all 11 rows of `docs/community-packs.json` carry them |
 #### Host input tester (host UX, not a pack feature)
 
-Goal: Settings → Input → **Test** tab that shows, with no ROM loaded, every
-connected pad (name, backend, `PadN` slot), live buttons/axes with the same
-keycode names used in mapping, the deadzone ring and drift warning, and a
-rumble test; the mapping window highlights the console button being
-pressed. Layer 1 (host) + layer 2 (binarised keycode), side by side; the
-in-game `InputHud` stays the layer-3 source of truth.
-
-| Slice | Deliverable |
-|---|---|
-| I.0 | shipped 2026-08-29 — `GamepadInfo`/`GamepadState`/`GamepadBackend` on `IKeyManager` (`GetConnectedGamepadCount`/`GetGamepadInfo`/`GetGamepadState`/`TestForceFeedback`, defaulted no-ops) + Windows (`XInputManager::IsConnected`/per-port FFB, `DirectInputManager::GetName/VendorId/ProductId`), Linux (`LinuxGameController` name/VID/PID/rumble via libevdev) and macOS (`MacOSGameController::GetName`/`HasRumble`) impls; `InputApiWrapper.cpp` C-ABI exports + `InputApi.cs`. `GetPressedKeys` untouched (Lua/`GetKeyWindow`/shortcuts keep working; new exports only). `make core` + `gamepad_probe` smoke (clean, count=0 without a pad) + UI build green; Windows/Linux are source-only on this macOS build |
-| I.1 | shipped 2026-08-29 — `GamepadTesterViewModel` (+`GamepadTestItem`, `GamepadButtonState`): the Test tab (Settings → Input) lists every connected pad (name, backend, `PadN` slot, VID:PID, rumble) with live 24-button indicators and raw int16 axes, fed by `Refresh()` from a ~16ms `DispatcherTimer` that only runs while the tab is selected (`IsTestTabVisible`); the constructor never calls `InputApi`; kept in `UI/ViewModels/` (not `UI/Logic/`). Rumble test button (300ms pulse). **Deadzone ring + drift warning shipped 2026-08-29**: the left stick shows a ring (outer = full travel, inner red = the config deadzone at the DirectInput-canonical extent), a live green dot, magnitude %, and a drift warning when the stick rests past the deadzone for ~500ms — via host-free `UI/Logic/GamepadStickDiagnostics` (`DeadzoneRatio` mirrors Core's `EmuSettings` mapping) + `GamepadDriftDetector` (sample-count based, deterministic). UI build 0/0, doc-checks green. GUI run pending (no pad on this machine) |
-| I.2 | shipped 2026-08-29 — `KeyBindingButton.Highlighted` (class `highlighted` → theme style) + a ~16ms timer in `ControllerConfigWindow` that highlights every `KeyBindingButton` whose binding matches a currently-pressed key (via `InputApi.GetPressedKeys`), re-collecting buttons on tab switch; stopped on close. UI build green; live highlight needs a GUI run to verify. **XAML half automated 2026-09-03** (ADR-0150, wave 2 of `docs/validation/manual-validation-automation-plan.md`): `UI.HeadlessTests/ControllerHighlightTests.cs` asserts that a `KeyBindingButton` with `Highlighted = true` really gains the `highlighted` style class and the #3388CC/#55AAEE restyle on screen, and that releasing restores the normal look. The polling half — `InputApi.GetPressedKeys` with a physically pressed key — still needs a real pad/keypress and stays manual/hardware |
-| I.3 | **circularity test shipped 2026-08-29** — `UI/Logic/GamepadCircularity` (host-free): buckets samples by angle into 16 sectors, score = coverage² × radial consistency (1.0 = full, uniform reach); "Excellent/Good/Fair/Poor" ≥ 0.85/0.7/0.5, hint until ≥ 48 samples (~0.8s rotation); VM accumulates the left stick (Reset button), `GamepadDiagnosticsTests` 14 cases (circle/line/square-gate/dead-quadrant/insufficient/deadzone/drift/ratio). **Per-device deadzone shipped 2026-08-29** — `UI/Logic/PerDeviceDeadzone` (host-free): a pad keyed by VID:PID uses its own override when one exists, else the global setting, sizes clamped 0-4; `InputConfig.PerDeviceDeadzones` (host-only — not mirrored to the core, whose input path stays global-only); the Test tab shows a 0-4 toggle per pad with a "per-device"/"using global setting" label + reset, persisted via the existing config apply lifecycle. `PerDeviceDeadzoneTests` 11 cases; 258/258 + UI build 0/0 + doc-checks green; visual ring check still needs a pad. **binding by VID/PID** — resolved at the tester's scope: a setting bound to a pad's physical identity is exactly the per-device deadzone above (keyed by VID:PID); a full per-device *keymap* binding is a separate product decision and is out of this tester's scope (adjacent to the OUT'd automatic remapping). **Ring markup automated 2026-09-03** (ADR-0150, wave 2 of `docs/validation/manual-validation-automation-plan.md`): `UI.HeadlessTests/GamepadTestTabTests.cs` selects the Test tab and asserts one section is realized per pad, that the deadzone ring and the live dot take their size/offset from the view-model, and that the circularity readout replaces its hint once a measurement exists. The physical pad end-to-end stays manual/hardware. Remaining (hardware-gated): MBC7/GBA tilt UI, Linux `UpdateDevices()`, macOS pads without `extendedGamepad` |
-
-Out: preset redesign, HUD overlay, special devices (Zapper, Power Pad,
-Phaser), automatic remapping, browser Gamepad API, stats collection.
+**Shipped** — I.0–I.3, 2026-08-29; record in §3. Pending, hardware-gated:
+the physical-pad pass (live highlight, ring, rumble), MBC7/GBA tilt UI,
+Linux `UpdateDevices()`, macOS pads without `extendedGamepad`. Out: preset
+redesign, HUD overlay, special devices (Zapper, Power Pad, Phaser),
+automatic remapping, browser Gamepad API, stats collection.
 
 #### Deferred / optional
 
@@ -502,6 +504,8 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 - Automatic IPS relocation across ROM revisions — no.
 - Offline AI tools (ESRGAN batch upscale, LLM-assisted preset tuning) —
   optional external tools on top of the bootstrap, never in the emulator.
+  The LLM-assisted *skin* tool is under feasibility spikes in Phase 10 and
+  returns here if they fail.
 - Pack browser UI beyond auto-install (search, ranking by GitHub signals,
   user-configurable extra MEI URLs with explicit confirmation, MEI §3.4) —
   after Phase 6, if the catalog grows past what a list can show. The
@@ -510,55 +514,25 @@ Phaser), automatic remapping, browser Gamepad API, stats collection.
 
 #### Phase 7 — Player shell (minimal GUI)
 
-Default chrome is a player shell (recent games, drop a ROM, packs apply
-themselves, thin overlay) with **Advanced GUI** restoring classic Mesen.
-Pack identity is the pair `pack_id` (product, stable across versions) +
-`content_id` (revision, hash of the resolved tree after unzip) — the
-source-zip sha256 is the download, not the pack. The catalog keeps **one
-live slot per `pack_id`**; the player never picks among versions.
-
-Normative text, slices P.0–P.7, and open ADR topics: see Part B
-below. Do not duplicate that prose here.
-
-Depends on: F6.4b for catalog auto-install in the overlay (P.6). P.3–P.5
-can run on local packs before F6.4b. P.0 ADRs must be accepted before
-P.1/P.2.
-
-Status: **Phase 7 fully shipped — P.0–P.6 done (2026-08-29).** P.4 shipped
-the `UiMode` default rule, the Player overlay + its Esc-owned shortcut,
-hidden menu, recent-games home and the Advanced switch; P.5 shipped the
-Player pack picker decision and panel (2+ competing pack_ids, sibling
-suppresses, pick power-cycles, dismiss asks again), the current-pack chip
-and the apply toast; P.6 wired the overlay to the F6.4b catalog
-install/update through the §3.6 `content_id` trigger (wrapper-only no
-reinstall, no auto-downgrade, removed slot keeps the install) and made
-community 👍 sort the picker — see the Part B header.
+**Shipped** — P.0–P.7, 2026-08-28 → 2026-09-01; record in §3, normative
+text and slice list in Part B (do not duplicate that prose here). Pack
+identity is the pair `pack_id` (product) + `content_id` (revision); the
+catalog keeps one live slot per `pack_id`. The letterbox fit, once the last
+manual item, was closed 2026-09-05 (`0f8535c4`); the only manual residue is
+the native file picker (F6.5).
 
 #### Phase 8 — Enhancement pack border layer
 
-A pack-declared decorative frame/border rendered around the game area
-(the one enhancement-toggle idea from the Player overlay's quick-toggle
-panel — see Part B §6.1 — that isn't UI over an existing
-setting). Needs: (1) a new optional field in the MEP-v1 manifest for a
-pack to declare a border asset; (2) a new Core compositing path that
-draws it around the emulated frame; (3)
-`EnhancementPackConfig.EnableBorder` gating it, consumed by the P.7
-toggle. This is Core/pack-format work, not chrome, so it stays in Part A
-(pack/core), not Part B (chrome) — see `docs/roadmap/AGENTS.md`'s
-ownership split.
-
-Non-goals: retrofitting existing HD packs with borders automatically;
-per-console border art (a border is a pack asset, not an engine feature).
-
-| Slice | Deliverable | ADR |
-|---|---|---|
-| F8.1 | ADR: MEP-v1 border field shape + Core render/compositing approach | **done 2026-09-02** — ADR-0149 accepted (MEP v1.5 border section, border.png + border.json layout, VideoRenderer compositing pipeline, EnableBorder config toggle) |
-| F8.2 | `EnhancementPackConfig.EnableBorder` + Core render path + `mep_lint` validation, once F8.1 is accepted | **done 2026-09-02** — shipped in `6dc13f9e`: MEP v1.5 `border` section (`Border = 3`, `kMepSectionCount = 4`), `border/` convention + root `border.png` fallback, `EnableBorder` ABI/config, VideoRenderer overlay/underlay compositing pipeline, PlayerEnhancementsPanel quick-toggle CheckBox, and `mep_lint`/`validate-specs` gates |
-| F8.3 | Normative closure + tests for the border layer (ADR-0149 shipped code before its spec/test record existed) | **done 2026-09-02** — **F8.3a spec:** `docs/specs/MEP-v1.md` bumped to v1.5 (§2.1 fixed layout, §3.1 `sections.border`, new §5.4 `border` — files, `border.json` field table, defaults, decode-failure, `EnableBorder` gate); golden `docs/specs/golden/mep/border/` (32×18 RGBA PNG + `border.json`) declared in its `pack.json`; `validate-specs.py` `validate_mep_border` (PNG decodable, integer canvas matching the PNG, viewport inside canvas, `scale_mode`/`underlay` types); `docs/hd-pack-authoring.md` "Border (bezel) layer"; `docs/specs/README.md` indexed. **F8.3b tests:** `Core/Shared/Video/BorderLayout.{h,cpp}` (host-free layout math — default 4:3 viewport, clamp, fit/stretch rects, source-over blend, `BorderCompositeFrame`) extracted from `VideoRenderer.cpp` behaviour-preservingly (header untouched) and linked into `core-unit-tests` (Bloco H, 47 checks; 183 total) + `Core.vcxproj`; `mep_lint.py` `lint_border_json` per ADR-0149 §1 (errors: `width`/`height` not int > 0, `viewport` keys missing/negative, bad `scale_mode`/`underlay`; warnings: viewport exceeds canvas, `version` ≠ 1) with `scripts/test_mep_lint_border.py` (32 checks) wired into `make doc-checks`. **ADR-vs-code divergences recorded in the spec, not fixed (follow-up F8.4 if wanted):** (1) `scale_mode` parsed but never applied — `stretch` behaves like `fit`; (2) `border.json` `width`/`height` ignored by the Core — canvas = decoded PNG size, viewport in PNG pixels, lint does not cross-check declared vs actual; (3) default heuristic hardcodes 4:3 regardless of `EmuSettings::GetAspectRatio` (GB 10:9); (4) game frame is stretched to the viewport rect, no letterboxing, so authors must size the viewport to the game's aspect; (5) bare root `border.png` is accepted by `MepPack::DetectConventionLayout` but not probed by `mep_lint` | ADR-0149 |
-
-Status: **fully shipped (2026-09-02)** — F8.1 (ADR-0149), F8.2 and F8.3 done; F8.4 (apply `scale_mode`, honour the console aspect in the default viewport, letterbox inside the viewport) is optional and unscheduled.
+**Shipped** — F8.1–F8.3, ADR-0149, 2026-09-02; record in §3. Optional and
+unscheduled **F8.4**: apply `scale_mode`, honor the console aspect in the
+default viewport, letterbox inside the viewport, lint the bare root
+`border.png`. Core/pack-format work, so it stays in Part A.
 
 #### Phase 9 — Artist-legible texture sheets (bootstrap output redesign)
+
+**Status.** F9.0–F9.17 shipped 2026-09-05 → 2026-09-07 (record in §3);
+F9.18 in delivery. The problem statement below is kept as the baseline the
+validation protocol measures against.
 
 **Problem.** The bootstrap `auto/` pack emits `Chr_N.png` sheets in CHR
 order: thousands of 8×8 fragments with no neighbourhood — half a logo,
@@ -607,29 +581,11 @@ validation protocol below.
 
 **Non-goals.** A tile-map editor; a game-specific level format; changing
 `hires.txt` semantics (MEP textures stay an envelope over HD Pack per
-ADR-0005); AI generation inside the emulator (stays an external script,
-see "Deferred / optional").
+ADR-0005); AI generation inside the emulator (stays an external script —
+F9.6 and Phase 10).
 
 | Slice | Deliverable | Decision |
 |---|---|---|
-| F9.0 | **ADR** amending ADR-0050 / retiring F5.4e's union-find: metatile vocabulary as the artist unit, mutual-predictability grouping, stitched maps as an artist surface (not a runtime layer), sidecar JSON schema, sheet naming under `textures/sheets/` (`metatiles.png`, `map-NNN.png`, `objNNN.png`, `*.json`). Also decides where the spike's env-gated dump goes (removed vs kept as a debug flag) | **shipped** 2026-09-05 — ADR-0153, amended the same day (§1 grid criterion, §3 `misc`/`hud` rules, §4 schema) after the first real recordings contradicted it |
-| F9.1 | **Metatile vocabulary** in `HdPackBuilder`: per-frame bg grid (exists) → stable-screen filter (hash ignoring HUD rows; ≥N identical frames) → grid detection (phase advantage over the other three parities, ADR-0153 §1 as amended) → vocabulary with counts and palette variants → `sheets/metatiles.png` (+ `.orig.png` twin, F5.4d convention) + `metatiles.json` (cell → tile keys, count, contexts, grid unit). HUD/font/scene split by screen region and by co-occurrence with static rows | **shipped** 2026-09-05 — `Core/NES/HdPacks/MetatileVocabulary.{h,cpp}` |
-| F9.2 | **Screen stitching**: screen-based (scroll direction inferred from the early-transition frame, anchor on the last placed screen, re-anchor on revisiting a known screen) and continuous (accumulated per-frame shift) → `sheets/map-NNN.png` per connected region, one new map after each unmatched cut. Maps are paint surfaces: `mep_build.py` slices them back into metatiles by the sidecar's placement list; the runtime still uses `<background>`/`<tile>` (no new HD Pack construct) | **shipped** 2026-09-05 — `Core/NES/HdPacks/ScreenStitcher.{h,cpp}`, one map per connected component |
-| F9.3 | **Object sheets** replacing `BuildObjectSheets`'s criterion: DSU over metatile pairs passing the mutual-predictability test (both directions, `--min-prob`/`--min-count` defaults from the spike: 0.8 / 3), layout at dominant offsets with gutters, ≤32 cells → `sheets/objNNN.png` + JSON. F5.4e's `# inferred` `tileNearby` candidates keep their inert contract | **shipped** 2026-09-05 — `Core/NES/HdPacks/SheetGrouping.{h,cpp}` |
-| F9.4 | **Round-trip** in `scripts/mep_build.py`: sheets + JSON → per-tile crops → `textures/hires.txt`; identity round-trip (untouched sheets) reproduces the captured screens pixel-exactly under `scripts/headless_record`; `HdPackPreviewWindow` shows each new sheet beside its `.orig.png`. `scripts/test_mep_build.py` gains a fixture with metatiles/map/object sheets | **shipped** 2026-09-05 — `scripts/mep_build.py` sheet slicing + painted-cell precedence (ADR-0153 §4); 38 tests in `scripts/test_mep_build.py` |
-| F9.5 | **Sprite (OAM) grouping**: the same predictability test over OAM entries that move together frame to frame → `sheets/sprNNN.png` (Link's 2×2, Excitebike's bike + rider) | **shipped** 2026-09-05 — `Core/NES/HdPacks/SpriteGrouping.{h,cpp}`, OAM snapshot in `HdBuilderPpu::OnBeforeSendFrame`, `sheets/sprNNN.png`. Criterion: one dominant relative offset per ordered OAM pair, denominator = *appearances of A* (the literal `out(A)` reading fails a 2x2 figure outright, since each tile has three partners per frame). Verified on a real Excitebike recording: bike + rider come out as one figure across 25 pose groups |
-| F9.6 | **Optional AI repaint, external** (`scripts/`, never in the emulator — consistent with "Deferred / optional"): structure-guided upscale of `map-NNN.png` / `metatiles.png` with the original as control image, palette variants by recolour of one generation (same silhouette), alpha preserved, seam pass along cell borders; output written to `auto/` and labelled as generated in `pack.json`, never eligible for the community catalog as an artist pack. Own ADR (model/tooling choice, licensing, labelling) | **shipped** 2026-09-05 — ADR-0154 (accepted 2026-09-05, Option A). `scripts/sheet_repaint.py`, stdlib only, 41 checks in `scripts/test_sheet_repaint.py`. Five backends behind one `RepaintBackend` seam: `passthrough` (alias `null`, the deterministic control arm of validation test 8), `classical` (in-repo Scale2x/Scale3x, the non-generative B arm, invents no colour), `esrgan` and `diffusion`. The availability probe runs **before** the first sheet is read, so an unavailable backend leaves no half-written tree, and it never downloads — verified on this machine with the tooling absent: `esrgan` exits 1 naming `realesrgan-ncnn-vulkan` and pointing at `classical`, `diffusion` exits 1 on a missing workflow / a dead local port, and refuses a non-loopback endpoint outright ("sending ROM-derived art to a remote host is ADR-0154 §2's rejected Option B"), each writing nothing. Output lands in `<Game>/auto/repaint/` (a *sub*folder — `bootstrap_auto_packs.sh` wipes `auto/textures`), with the sidecar and the `*.orig.png` twin copied across and `pack.json` carrying the §3 `generated` object; MEP-v1 is at **v1.6** for that field and `docs/community-packs.md` renders it as a "Generated" column. **The catalog line in this row is superseded by ADR-0154 §3 as accepted:** `generated` is *disclosure, not a gate* — no `mep_lint` rule, no verdict, no de-listing follows from it, because this project publishes nothing and rejecting the pack would take the author's decision away from them. `--target screens` (the primary target, re-scoped by F9.9) repaints the recorder's condition-prefixed `<background>` entries and re-emits a self-contained `hires.txt` with `<scale>` multiplied — run end to end on the real Mega Man 3 recording: 2 screens, 1024x960 → 2048x1920, `<scale>` 4 → 8, only the referenced `<condition>` lines kept, `passthrough` and `classical` producing different pixels. Two §5/§6 fidelity gaps were found by this audit and fixed: the palette-variant correspondence was ranked by frequency and swapped two colours whenever their pixel counts tied (now positional — same offset is same colour index; ADR-0161, `proposed`), and the seam pass blended pair by pair in place, so a cell with two neighbours on one side got neither §6's mean nor an order-independent result (now gather-then-write). **Not done: validation test 8**, the blind A/B — it is human, and nobody has run it. The `diffusion` backend has still never been executed: only its unavailable and driver paths are covered, and a green suite is not evidence that it produces an image |
-| F9.7 | **Alias pass — one cell per subject.** Vocabulary entries that render to the same pixels are the same drawing arriving under different keys (CHR bank swaps, CHR-RAM re-uploads). The contact sheet collapses them to one cell carrying `aliases[]` (index + tile keys) in the sidecar; `mep_build.py` fans the painted crop back out over every alias, so duplicates cannot drift apart the way hand-painting them separately made them drift. The *vocabulary* is not renumbered — maps and object groups keep addressing entries by their original index | **shipped** 2026-09-05 — `MesenSheets::CollapseAliases`, `kSheetAliasTolerance` 0.10, sidecar `aliases[]`, `mep_build.py` fan-out, `core_unit_tests` Bloco P (6 cases, mutation-checked). Measured on fresh recordings with the shipped binary: Ninja Gaiden 465 -> 154 metatile cells, Excitebike 96 -> 91. The first budget rule was wrong and the recording caught it: a share of the *cell area* makes every mostly-background metatile an alias of every other one, so one near-empty cell absorbed 335 of Ninja Gaiden's 465 entries. The budget is now a share of the **ink** of the richer of the two cells (pixels that are not its most common colour), which leaves a blank cell able to absorb only an exact duplicate of itself — Ninja Gaiden's largest surviving group is 255 entries that all render solid black under palette `0F0F0F0F`, which is the duplication the slice exists to remove |
-| F9.8 | **Adjacency evidence before stitching.** A screen joins an existing map only on positive evidence (a matched scroll shift, or a shared border band above a ratio); otherwise it starts a new map. Without it a non-scrolling game produces a collage — Punch-Out!! glued a profile card, a text screen, a round card and the ring into one 1024 px strip, five times over | **shipped** 2026-09-05 — a screen joins a map only when a probed transition frame carries a shared border band read through the scroll: `kStitchBandMatch` 0.60 and, the load-bearing half, `kStitchBandLead` 0.25 over the share of the *same cells the anchor already carried* (a bare band ratio rubber-stamps a collage, because a screen made mostly of one backdrop matches every other screen's edge). Three spread probes replace the single `gap/4` guess; `BestShiftX` now breaks ties toward the smallest displacement and needs `kStitchStillMargin` 0.02 to move at all. A component of one screen is dropped rather than written, since it would only duplicate `backgrounds/screenNNN.png`. 356 -> 362 cases; the collage test fails with `kStitchBandLead` zeroed, so the guard is not vacuous. The thresholds are read off the recorded Zelda link scores (0.73-0.77 whole-frame at 5-8 cell shifts), not tuned on a sweep |
-| F9.9 | **Route static screens to the whole-screen surface.** The `<background>` layer already exists and is already emitted, condition-gated on three `tileAtPosition` anchors — it is the only positional surface in the format, and the only place an element spanning many repeats of one tile (a logo across a ring canvas) can exist. The pipeline should route a static screen there and leave only the moving subjects to tiles. This is also the right target for F9.6's generative backend: a 256x240 scene, not a 16x16 metatile | **shipped** 2026-09-05 — ADR-0156 (accepted 2026-09-05, with its thresholds stated as provisional): a scene cell is *screen-resident*, and leaves `metatiles.png`, when a captured screen shows it and **every** sighting of it in the whole retained grid stream sits at a position that screen covers, under the same fine scroll. The rendering fact that makes it more than sheet economy: the priority-20 `<background>` is drawn *after* the background tile (`HdNesPack::GetPixels`), so a routed cell's tile art is never the pixel that reaches the display — a cell spent on it is paint the artist cannot see. The fine-scroll clause is what separates a scroller from a still game, and the positional clause is what routes Punch-Out!!'s ring while keeping its background-drawn fighters on the sheet. `hud`/`font`/`misc` are untouched, the vocabulary is not renumbered, and ADR-0153 §4 needs no new precedence clause (this removes a claimant, it does not add one). Measured offline by `scripts/spike_screen_residency.py` over the 30-pack library — an **upper bound**, since a pack on disk cannot show the motion frames: Punch-Out!! 71 of 334 cells on exactly one screen, Super Mario Bros. 50 of 92, Metroid 7 of 62, 1258 of 4542 library-wide. Then measured on fresh 300 s recordings with the shipped rule: Mike Tyson's Punch-Out!! routes **239 of 588** cells (41 %) — the checkered crowd, the title fragments and the stats screen leave `metatiles.png`, the fighters' faces, torsos and the ring ropes stay — while Super Mario Bros. routes **12 of 144** (8 %) and keeps its bricks, `?` blocks, pipes, hills, bushes and coins. That 41 % / 8 % split between a still game and a scroller is the fine-scroll clause working, on real output rather than on the offline bound. Two full re-records of the library then found what two games could not: routing takes the *whole* scene sheet on static games (Mario Bros. 106 of 106, shipping no `metatiles.png` at all; Tetris 648/651; Tennis 206/207), because residency is proved against the retained frames, which are a sample. Three floors now withhold routing entirely — the recording does not look like gameplay (F9.13's two builder-side clauses), it would take more than `kMaxRoutedSceneShare` (0.93) of the scene vocabulary, or it would leave fewer than `kMinSceneSheetCells` (30) cells to paint. The share alone was not enough and the library said so: the gap 0.93 was cut from did not reproduce on the next run, which put Bomberman at 0.899, Zelda 1 at 0.900 and Pac-Man at 0.901 through the middle of it, keeping sheets of 13, 21 and 23 cells. 362 -> 376 core cases, 40 -> 43 `mep_build` checks |
-| F9.11 | **The alias budget is a share of the ink, not of the cell area.** F9.7 collapses vocabulary entries that render to the same pixels into one sheet cell. With a budget proportional to the cell *area*, every sparse metatile is an alias of every other sparse one and they all fall into whichever near-empty cell came first | **shipped** 2026-09-05 — the budget is now a share of the ink (pixels differing from the cell's modal colour) of the **richer** of the two cells, so a blank cell still absorbs an exact copy of itself and never a cell that draws something. Caught only by printing per-cell alias counts: Ninja Gaiden had collapsed 465 entries into 37 cells with **one of them swallowing 335**, and the rendered sheet looked clean and diverse — the qualitative panel alone would have missed it. Library-wide the third run fell from 10165 to 8684 cells |
-| F9.12 | **A continuous region ends when the world is replaced.** Continuous mode's only cut was a whole-frame match below `kMinMatch` (0.5), which a screen swap that keeps the terrain never reaches | **shipped** 2026-09-05 — two-tier cut: a step claiming a shift is judged as before, a step claiming the *same place* (`dx == 0`, or an argmax the lead test disbelieved) is judged on the still score against `kStitchWorldAgree` (0.85). SMB's title screen is drawn over the start of world 1-1, so it reported `dx == 0` at a high score and `PaintFrame`'s first-writer-wins baked the logo and "ONE PLUMBER / TWO PLUMBERS" into the level map's sky. 0.85 is the midpoint of a measured gap, not a swept number: title vs level 0.700 against all 19 level screens, level vs level 0.996–0.999. Verified on fresh recordings — SMB's `map-000.png` is clean 1-1, Excitebike's track went 8224 → 15424 px and reads as a continuous sequence. Amends ADR-0153 §6 |
-| F9.13 | **Did this recording reach gameplay?** Nothing measured it, so every library-scale claim rested on nothing: the batch printed `OK Mike Tyson's Punch-Out!! (sheets 11, screens 12)` for a pack recorded entirely on a password screen. A single-number pixel-variety proxy does **not** work — static capture only fires while the screen holds still, so it flags Ninja Gaiden (0.039) as hard as that password screen (0.037) | **shipped** 2026-09-05 — `scripts/gameplay_probe.py` answers from a pack already on disk (no emulator, no ROM) with four OR'd clauses, each carrying its reason: tile structure (`alt8x8` < 0.86), `misc` share (≥ 0.32), screen-area churn as a *union* of changed area (< 0.32, needs ≥ 5 screens), and in-screen tile reuse (max over screens < 1.9). Calibrated over 91 packs from three runs of the same 30-ROM library: **TP 17 / FN 3 / FP 0 / TN 66**. The three misses share one shape — a password screen that is itself tiled wallpaper — so **`MENU` is trustworthy and `OK` means "nothing caught it"**, which the bootstrap header now says. Wired into `sheet_report.py` (`--fail-menu-only`) and `bootstrap_auto_packs.sh`, which prints `MENU` instead of `OK`. Two of the clauses also became the F9.9 routing floor in the builder |
-| F9.14 | **Headless input counted in emulated frames.** `scripts/headless_record` advanced its input script against `steady_clock`, so how many frames a step covered depended on host load — and the per-game scripts are menu navigation, where a step is a position in a sequence, not a duration. One step landing late derails every step after it, silently, for the rest of a 300 s recording (the two Zeldas' 69 captures of REGISTER YOUR NAME; Punch-Out!!'s password screen). F9.13 detects the result after the fact; this removes the cause | **shipped** 2026-09-05 — ADR-0157, **amended the same day** before implementation: the fork survey's prior art (`zerkz/MesenCE` `Core/Shared/InputOverrideProvider`) showed the property is reachable from inside the core, so the ADR's frame-stepping §2 (single-frame InteropDLL entry point, null-`_frameLimiter` guard, harness owning pacing) was rejected in favour of a `Core/Shared/HeadlessInputProvider` that holds the **whole script in absolute frame numbers** and resolves it in `IInputProvider::SetInput`, called once per frame on the emulation thread. It resolves buttons by name (`GetKeyNameAssociations()`), overlays rather than replaces, and re-registers on `GameLoaded` — the structural root of our `input=` no-op trap. The same hook ends the run: the provider calls `Pause()` from inside the frame it was told to stop on, at both ends (frame 1, so recorders start on a fixed frame; then the target). Script lines are `<count>f` / `<count>s` with a bare number a parse error, `s` resolved at parse time (`Core/Shared/HeadlessInputScript`, 31 cases in `core_unit_tests` Bloco Q, 376 → 407). Speed is then free: the frame limiter is off, and 40 s of Zelda records in 12 s. Verified per §4 on real recordings — two runs of the same ROM/script/binary produce a **byte-identical** `auto/` tree, and so does a third run with the limiter *on* under eight spinning CPU hogs (a ~20x speed spread). Getting there found a second source of drift the ADR had not named: `RamState::Random` power-on RAM makes a game read uninitialised memory differently between runs, so identical frames still produced different palettes — the harness now zeroes it, as `RecordedRomTest` already did |
-| F9.15 | **In-memory frame capture for the harness.** Every headless validation today goes through disk: `headless_record` calls `TakeScreenshot()` and something else reads `Screenshots/` back. A capture the harness holds in memory is what turns the remaining manual checks (16:9 letterboxing, the Welcome/Continue cards) into assertions instead of a human looking at a PNG. Source: `lusid/MesenCE` `Core/Shared/Video/BaseVideoFilter.cpp` — `CaptureScreenshot(VideoFilterType)` returning `ScreenshotCapture {Width,Height,FrameNumber}`, and `SendFrameForDisplay(...)` copying filtered output into a caller-owned `vector<uint32_t>` under `_frameLock`, with dimension validation before allocating. It also carries a real fix worth taking with it: `UpdateBufferSize()` allocating the new buffer *before* taking `_frameLock` and releasing it in, so a throwing `new` cannot leave `_outputBuffer` dangling | **shipped** 2026-09-05 — the seam is `BaseVideoFilter::CopyOutputBuffer` (the filtered buffer copied into a caller-owned `vector<uint32_t>` under `_frameLock`, dimensions validated *before* the vector is resized) and `CaptureScreenshot(VideoFilterType, vector<uint32_t>&)` on top of it, which runs the same rotate/scale/scanline pipeline the PNG path ran. `TakeScreenshot` is now *defined* as that capture plus an encoder, so an in-memory assertion and a saved screenshot cannot disagree. The pure half is `Core/Shared/Video/FrameCapture.{h,cpp}` — host-free like `BorderLayout` (ADR-0149), linked into `make core-unit-tests`: `IsCaptureSizeValid` (both dimensions non-zero, the product free of 32-bit overflow, under a 64 Mpx ceiling, and *equal to the buffer it describes*), `MeasureBorders` (the uniform top/bottom/left/right bands — letterboxing as a number instead of a human looking at a PNG) and an FNV-1a `Checksum`. The harness reaches it through two exports in `EmuApiWrapperHeadless.cpp` (`HeadlessCaptureFrame` takes it into a DLL-side buffer, `HeadlessReadCapturedPixels` reads *that* capture — a second call would answer about a different frame), driven by a new `capture` flag on `scripts/headless_record`, which prints dimensions, frame number, checksum and bands and fails the run when the capture does not come back. `UpdateBufferSize` now allocates, then locks and swaps, then deletes the old buffer outside the lock. Bloco S in `core_unit_tests` (30 cases, 461 → 491) covers the pure half. Then verified against the emulator rather than by inspection: two 300-frame Super Mario Bros. runs print the same `checksum=0xB24E2BD0` at `256x240 frame=300`, and the same run under `filter=hq4x` reports `1024x960` — matching the PNG the same run saved, which is the whole point of defining `TakeScreenshot` as capture + encode — with the measured top band scaling 16 → 64 px with it. `scripts/check_hq4x_screenshot.sh` still passes unchanged. **Extended 2026-09-07 by ADR-0167** (accepted by the user) — a HUD-only capture closes the last wave-3 residue `docs/validation/manual-validation-automation-plan.md` named as a structural gap rather than a wall: "the OSD toast appearing". `VideoRenderer::CaptureSystemHud` draws `SystemHud` alone into a caller-owned buffer (the `ProcessAviRecording` overlay pattern: no `_renderer`, no render thread), reached through `HeadlessCaptureHud`/`HeadlessReadCapturedHudPixels`, and `capture` now prints a third additive line `capture hud: <W>x<H> checksum=0x… blank=<0|1>` — `blank` (from F9.15's own `MeasureBorders(...).IsBlank`) is the toast oracle, so a test asserts "a toast appeared" by passing `hud-message=<title>|<message>` and reading `blank=0`. Verified against a real `Emulator`: `blank=1` with no message (5/5), `blank=0` with one (20/20), the two pre-existing capture lines byte-stable |
-| F9.10 | **Relegate the CHR-order layer.** 12993 `Chr_XX_N.png` fragments ship next to the sheets (7.1 MB on Punch-Out!!) and are what an artist meets when the folder opens. They cannot be deleted — `hires.txt` renders from them — so move them into a subfolder and let `sheets/` be the front door | **shipped** 2026-09-05 — the builder writes them to `chr/` and the `<img>` line carries the path, exactly as `backgrounds/screenNNN.png` already did; the loader resolves an `<img>` relative to the pack root, so nothing in the format changed and packs written before this still load from the root (the GUI's pack preview scans both). A Super Mario Bros. `auto/textures` now opens on three folders and one file instead of 31 files: `sheets/`, `backgrounds/`, `chr/`, `hires.txt`. Verified end to end rather than by inspection — `mep_lint` reports 0 errors on the regenerated pack, and a plain run with it installed logs a **100 % background tile match rate**, i.e. every tile still renders, from the new path. Completed 2026-09-05 by **ADR-0160** (the decision behind it) plus the migration half the move left open: re-recording over a pre-F9.10 pack rewrote `hires.txt` to name `chr/` and orphaned the old top-level fragments, so `PruneLegacyChrFiles` sweeps them *after* the manifest is on disk, bounded by name and to the top level — verified on a real 126-fragment pack (`swept 126 unreferenced top-level CHR file(s)`, `backgrounds/` untouched, all 65 `<img>` targets resolve) |
-| F9.16 | **The sprite vocabulary sheet — `sprites.png`.** OAM shapes that hold no constant offset to another shape — a lone projectile, a pickup, a shape-changing explosion — never joined a `sprNNN` group and, before this slice, had no sheet at all: only their CHR-order fragment under `textures/chr/` (ADR-0160). The whole OAM vocabulary, most-seen first, singletons included, gives OAM the front door `metatiles.png` gives the background | **shipped** 2026-09-07 — `HdPackBuilder::WriteSpriteSheets` emits the full vocabulary through the same alias pass (F9.7) and the same OAM colour-0 punch-out as a group sheet, with `kind: "sprites"` (plural) ranked with `metatiles` at precedence 1 (`mep_build.py` `_SHEET_RANK`; `sheet_repaint.py` contact kinds). Amends ADR-0153 §2/§3/§4 and its Consequences — the 32 px offset cap means the grouping criterion finds *figures*, never co-actors, and ADR-0164 is where the co-actor statistics are recorded. Bloco P case in `core_unit_tests` |
-| F9.17 | **Persist the adjacency statistics a composition tool needs without re-recording.** The builder already measures which tiles sit next to which (background E/S over the distinct stable screens; sprite relative-offset counts over the retained OAM stream) but writes only the *surviving* edges, as `evidence[]` inside the `objNNN`/`sprNNN` they produced — the pairs that scored 0.3, and the denominators the test divided by, were thrown away at save time. Re-ranking suggestions under a lock is conditional probability and needs exactly that discarded mass | **shipped** 2026-09-07 — ADR-0164 (accepted 2026-09-07, by the user). `textures/sheets/adjacency.json` persists the complete background E/S edge map with per-node degrees and `tiles[]` (self-contained for keys, so a node no sheet shows still resolves to `hires.txt` keys), and the sprite far-field statistics the offset histogram cannot answer — bottom-edge `floors[]` bands accumulated with no distance cap and per-pair `coFrames` — next to the pruned within-32 px offset histogram (top-8, the rest folded into `other`). Serializer beside `SerializeSheet` in `SheetRender`; sprite statistics accumulated host-free in `SpriteGrouping`; `mep_build.py` and `sheet_repaint.py` skip the sidecar silently. Ships the data, not the editor: the seed-lock-recompute layered canvas and the `usrNNN` composed-sheet output contract are §3–§5 of the ADR, accepted as the contract a separate slice builds against |
 | F9.18 | **The composition editor** — an external, stdlib-only Python tool in `scripts/` (`scripts/compose_editor.py <pack folder>`, a tkinter layered canvas over a host-free `compose_engine.py`) that opens a pack recorded since F9.17 and builds the ADR-0164 §5 scene as a stack of layers: HUD/font edited in place, background from maps/metatiles/screens, objects from `objNNN`, and sprites as one sub-layer per **Y band** — `adjacency.json` `sprites.nodes[].floors[]` joined with `pairs[].coFrames`, ranked by `coFrames × band overlap`. Seed → rank → lock → recompute runs inside a layer, placing a candidate's `sprNNN` figure by the near-field `offsets[]` when one exists; export is in-place sheets for HUD/background/objects and a `usrNNN` sidecar (`composed: true`, `seed`/`locked`, `band {bottom, tolerance: 8}`) per kept sprite band. Node pixels come from the sheet that shows them (`*.orig.png`, nearest-neighbour); a screen-owned node (ADR-0156) from `backgrounds/screenNNN.orig.png` or a `textures/chr/` render, never a silent blank. No new format: the output is ordinary `mep_build.py` input (`_SHEET_RANK` ranks by `kind`; `usrNNN` sorts after `objNNN`/`sprNNN`); unpainted scenes live under `auto/`, a painted sheet is written to `mep/` (ADR-0147). The two ADR-0164 acceptance tests (seed on a Ninja Gaiden `obj000` metatile → rest of the group ranks first; the Y band of Ryu's bottom edge ranks ground enemies above projectiles) are suites against the engine, headless | **accepted 2026-09-07** — ADR-0165 (accepted 2026-09-07, by the user); delivery in progress. ADR-0166 (accepted 2026-09-07) closes the F9.18 pixel-source gap: `adjacency.json` records, per screen-resident node, the `screenNNN` that owns it and its 8 px on-screen offset, so a sheetless background cell resolves to a crop from `backgrounds/<screen>.orig.png`. **Engine acceptance run against real data, 2026-09-07** (`runs/f918-accept/report.txt`): a fresh 300 s Mega Man 3 recording since F9.17 (62 sheets, `vocabularySize` 379, 15 distinct screens, 77 background nodes carrying `screens[]`) exercised `background_rank`/`sprite_rank`/`node_art`/`export` end to end — a screen-owned node's crop is real, legible pixels (spot-checked visually, not just "did not raise"), and both a `usrNNN` object and sprite-band export round-trip through `mep_build._load_sheet_docs` unchanged. Found and fixed a real bug no synthetic fixture caught: `Pack.next_free_name()` scanned the pack's own `sheets_dir` instead of the caller's `to_dir`, so two exports into the same `mep/` folder — an ordinary editing session — both landed on `usr000` and the second silently overwrote the first on disk; fixed, with a defect-probed regression test (`test_export_twice_to_same_dir_gets_distinct_names`, 9/10 → 10/10). Engine code acceptance is done; the tkinter GUI on a real display and the Phase 9 human panel (cold-read/find-and-edit/seam) remain the open items before "shipped" |
 
 **Validation — qualitative and intuitive.** The deliverable is legibility,
@@ -663,7 +619,7 @@ summary line in this PRD's shipped record.
    every screen transition; no doubled or missing column at the seams
    (headless screenshots along the route, eyeballed, plus a diff against
    the untouched-sheet run to prove only the paint changed).
-5. **Map recognisability** (F9.2). Show `map-NNN.png` alone. Pass: the
+5. **Map recognizability** (F9.2). Show `map-NNN.png` alone. Pass: the
    person points to where the game starts and traces the route they
    would take; for Excitebike, identifies the ramps and the finish line.
 6. **Nothing-lost test** (all). Identity round-trip renders every
@@ -691,6 +647,132 @@ summary line in this PRD's shipped record.
 Tests 3, 4 and 6 have automatable halves (rebuild, headless run, diff)
 that go into `make doc-checks`/`scripts/test_mep_build.py`; the judgement
 calls (1, 2, 5, 7, 8) stay human and are repeated per golden game.
+
+#### Phase 10 — LLM-assisted skin studio (feasibility spikes first)
+
+**Status:** drafted 2026-09-09 as a nine-slice product plan; **rewritten
+the same day after review** into the feasibility spikes below. **No work
+started.** Nothing in this section is a decision: no module layout, sidecar
+format, tool contract, storage location, provider or emulator entry point
+is fixed here. **S10.c/S10.d shipped 2026-09-09; S10.a ran the same day and
+failed** — its premise ("every pose the recorder saw") is not reachable from
+today's sidecars, so the phase is blocked on a decision the user owns:
+accept `proposed` ADR-0170 (the recorder writes pose membership) and only
+then re-measure S10.a, or close the phase per the rule below and return the
+skin tool to "Deferred / optional". S10.b is untouched by that choice and
+still needs the user's key and hand. Each of those is an ADR, written by hand after the spike that
+tests its premise (`docs/roadmap/AGENTS.md`: decisions are not made in a
+PRD). The first draft had it backwards — it specified the architecture and
+reserved "ADR-A/B/C" to ratify it; that draft is in git history, not here.
+
+**Problem.** A hand-made restyle is an artist's year. The reference pack,
+Contra80s (`tastichacks/contra80s`, `docs/community-packs.json`), is 233
+files and a 21 179-line `hires.txt`: 11 854 `<tile>` entries, 864
+`<condition>` lines, one PNG per subject — `BillRizer.png` is a 512×432
+sheet at `<scale>2` holding every pose of one character. Phase 9 made the
+machine's output legible (metatile vocabulary, `sprites.png`, `sprNNN`
+figures, stitched maps); F9.18 lets a human *compose* a scene; F9.6
+repaints a sheet at a higher resolution but keeps the drawing. None of them
+lets a player who cannot draw say "make Bill look like a chrome knight,
+keep the gun" and play the result.
+
+**Idea under test.** From the live viewer (ADR-0169) the player points at
+a subject, describes a restyle, and an external tool driven by a hosted
+image model under the player's own key produces a candidate skin for the
+**whole subject** (every pose the recorder saw) that the unchanged
+`mep_build.py` slices into a pack. Whether any link of that chain holds is
+what the spikes measure.
+
+**Constraints that hold regardless of outcome.**
+- Part A §1 principle 5 as written: no model call, key or prompt in
+  `Core/`, `UI/` or the installer. If a studio exists it is an external
+  script in `scripts/`, like the viewer and the composition editor
+  (ADR-0165, ADR-0169).
+- ADR-0154 §2 and §4 stand until an ADR amends them: today no tool in this
+  repo sends ROM-derived art off the machine (`sheet_repaint.py` refuses a
+  non-loopback endpoint), and generated output lands in `auto/`, never
+  `mep/`. Sending crops to a hosted model is a decision to take *against*
+  that ADR with spike results in hand — not a premise of this phase.
+- The model never writes the format. Deterministic code validates every
+  byte that reaches a pack; Phase 9's rule — nothing generated can break
+  rendering — is kept verbatim.
+- Provenance is disclosure, not a gate (ADR-0154 §3, MEP v1.6 `generated`).
+- GB/SMS only after NES passes.
+
+**Gaps found in review (2026-09-09) that the spikes must answer.**
+1. **Pose membership does not exist in the data.** ADR-0168 (`proposed`)
+   says a `sprNNN` group spans several poses, the pack records only
+   pairwise tile totals, never which tiles co-occurred in one OAM frame,
+   and its layout walk *drops* members rather than separating poses. A
+   subject sheet "with every pose" cannot be built from today's sidecars;
+   accepting ADR-0168 does not change that. Either the recorder records
+   pose membership (a bootstrap change, its own ADR) or the unit is
+   smaller than "the character".
+2. **Layout fidelity of a hosted image model is unmeasured.** Whether a
+   generated image keeps a contact sheet's cells in place, leaves gutters
+   clean and returns alpha (assume not — ADR-0154 §7) is unknown.
+   Chroma-key plus silhouette intersection is a hypothesis to measure, not
+   a rule to specify.
+3. **Export leaks local data and drops the label.** `mep_build.py pack`
+   zips every file under the folder (`folder.rglob("*")`) and rewrites
+   `pack.json` carrying over only `patches`/`crc32`/`md5` — so anything
+   stored under `mep/` (transcripts, candidates, egress logs) ships with
+   the pack, and a root `generated` object is lost on export. Studio data
+   must not live under `mep/`, and `mep_build.py pack` must carry
+   `generated` — a fix worth making now, independent of the phase.
+4. **There is no reverse channel to the emulator.** ADR-0169 is one-way:
+   producers publish, the viewer never sends. "Save state → power-cycle →
+   restore" from an external tool is a new interop surface plus an
+   ADR-0169 amendment, not "the existing interop".
+5. **The identity test does not apply to a painted pack.**
+   `scripts/test_mep_build.py`'s identity round-trip is pixel-exact for
+   untouched sheets; a skin changes pixels by definition. The "nothing
+   broken" check for a generated pack is *key/coverage preservation* —
+   every tile the recorder keyed still resolves, F5.4d count unchanged —
+   and that test does not exist yet.
+
+**Provider facts (ai.google.dev, read 2026-09-09 — configuration, not
+decisions; they churn).** Image models: `gemini-3.1-flash-lite-image` (1K
+only), `gemini-3.1-flash-image` (0.5K–4K; $0.067 per 1K image, $0.101 per
+2K), `gemini-3-pro-image` (1K/2K $0.134; adds style references),
+`gemini-2.5-flash-image` (legacy). Interactions API: key in the
+`x-goog-api-key` header, `response_format {type: "image", mime_type,
+aspect_ratio, image_size}`, `previous_interaction_id` for multi-turn
+(tools, system instruction and generation config are re-sent each turn);
+Gemini 3 text models combine function calling (`tool_choice
+auto|any|none|validated`) with structured output. Image models have **no
+free tier**; paid-tier prompts are not used for product improvement. Every
+image carries a SynthID watermark. Keys: new AI Studio keys are
+service-account-bound "auth keys"; unrestricted standard keys are already
+rejected and **all** standard keys stop working in September 2026. Not
+documented anywhere, hence spikes: alpha output, pixel-exact layout
+preservation, per-model rate limits.
+
+| Spike | Question | Pass / fail | Feeds |
+|---|---|---|---|
+| S10.a | **Can poses be separated from a recorded pack?** Run the ADR-0168 walk on fresh Mega Man 3 and Contra recordings; count poses recovered as distinct figures against poses visible in `sprites.png`. If the walk fails, prototype recording OAM co-occurrence per frame in the bootstrap and re-measure | ≥ 80 % of a main character's poses as distinct figures, HUD excluded — else the recorder change is the prerequisite and goes first | ADR-0168 (accept / supersede); a recorder ADR if pose membership is needed — **measured 2026-09-09: FAIL.** Fresh 300 s recordings of both games, poses counted off ADR-0169's live OAM channel: 1/15 Mega Man poses and 6/57 Contra poses recovered as distinct figures (6.7 % / 10.5 %), and 0/15 resp. 3/57 poses fit entirely inside one `sprNNN`. The cause is not the cross-pose stacking ADR-0168 §3 blames (its guard fires on 1 of 45 groups) but **under-grouping**: ADR-0153 §2's 0.80 test drops every edge from a tile that moves between poses. ADR-0168 amended in place with the evidence (still `proposed`); the recorder change is the prerequisite and is written up as `proposed` ADR-0170 — the OAM stream is already in memory at save time (`_oamFrames`), so it costs one sidecar, no new capture. Evidence: `runs/s10a-shared/S10a-summary.json` |
+| S10.b | **Does a hosted image model preserve a contact sheet?** One subject sheet on a chroma backdrop, 1K and 2K, three prompts; measure per-cell displacement, gutter ink, whether alpha comes back, silhouette growth, cost, latency. **Run by hand, by the user, from their own account**, with the files to be sent listed before sending; nothing in the repo automates it | cells within ±1 px at 1x and gutters clean on ≥ 2 of 3 runs — else per-cell or per-row generation is the only path and the cost model changes | the BYOK/egress ADR (amends ADR-0154 §2/§4, or declines to) |
+| S10.c | **Keep `generated`, keep local data out.** `mep_build.py pack` carries the root `generated` object across a rebuild; a fixture with a non-pack subfolder shows what the zip contains | `test_mep_build.py` cases, one per behavior | `mep_build.py` fix — do now, needed by F9.6 too — **done 2026-09-09** (§3); the exclusion half is documented, not implemented: it would be new policy, and the PRD's own rule (studio data outside the pack folder) is the fix |
+| S10.d | **Coverage-preservation check for a painted pack.** Every tile key of the recorder's `hires.txt` still resolves after a repaint; F5.4d count unchanged | a `test_mep_build.py` / `headless_record` case a skinned pack passes and a pack with a dropped key fails | the validation rule for any generated pack (F9.6 test 8 too) — **done 2026-09-09** (§3) as `mep_build.py check-coverage`; strictness open (equality vs. "must not shrink") for the ADR this feeds |
+
+**After the spikes.** If S10.a and S10.b pass, write the ADRs — one
+decision each, by hand, via `/adr`: (i) whether and how a player's own key
+may send ROM-derived crops to a hosted model (amending ADR-0154 §2/§4, or
+not); (ii) the subject model and where studio data lives (outside `mep/`);
+(iii) the tool contract and the validator as the gate; (iv) a reverse
+channel amending ADR-0169, only if a live preview is worth more than
+headless screenshots. Then slice the product work, one slice per task. If
+either spike fails, the phase closes with the measured reason in §3 and the
+LLM-assisted skin tool returns to "Deferred / optional".
+
+**Risks (this phase).**
+
+| Risk | Mitigation |
+|---|---|
+| ROM-derived art leaves the machine in S10.b | run by hand by the user from their own account; the sent files are listed first; nothing in the repo automates a hosted call until an ADR allows it; `sheet_repaint.py` stays loopback-only |
+| Spike results read as a plan | this section names no modules, formats or slices beyond the four spikes; the ADRs come after the numbers |
+| Model ids and pricing churn | recorded above as configuration with a read date; re-read before S10.b |
+| Safety filter refuses franchise art | prompts describe shape and style, never franchise names; a refusal is a measured outcome, not retried automatically |
 
 #### Prior art from the fork network (survey 2026-09-05)
 
@@ -723,57 +805,57 @@ harness problem, solved several ways, in readable code.
 
 ### 5. Order of execution
 
-1. ~~F6.2 → F6.3 → F6.3b → F6.4a → F6.4b → F6.4c → F6.5 → F6.6~~ shipped 2026-08-28/29; F6.7 core shipped 2026-09-01, cleanup pending (= D6).
-   - **D1 → D2 → D3 → D4** (documentation integrity, P0) before the next
-     ADR-driven slice; D5–D12 opportunistically, one run or one manual
-     pass each.
-2. ~~H1–H4~~ shipped (2026-08-27/28).
-3. ~~Phase 5 Blocks B–D, F5.4c/d~~ shipped 2026-08-29 (ADR-0133/0134/0135
-   accepted; SoundFont decided: bundle GeneralUser GS). Remaining Phase 5
-   items are the manual checks named in each row.
-4. **Input tester I.0–I.2** independent of everything above.
-5. **Phase 7 (player shell)** — P.0 ADRs, then P.1–P.5 independently of
-   F6.4b; P.6 after F6.4b. See Part B.
-   P.7 (quick-toggle panel + welcome/Continue cards) is independent of
-   Phase 8 below — it ships without a Border toggle and adds one later.
-6. ~~**Phase 8 (border layer)** — F8.1 (ADR) first, F8.2 after acceptance~~ shipped 2026-09-02, F8.3 normative closure + tests the same day.
-7. **Phase 9 (artist-legible sheets)** — F9.0 (ADR) first; F9.1 → F9.2 ‖ F9.3 → F9.4; F9.5 after F9.3; F9.6 shipped 2026-09-05 on the user's go (ADR-0154, ADR-0161). Independent of Part B.
+1. ~~Phase 6 · H1–H10 · Phase 5 · D1–D13 · input tester · Phase 7 · Phase 8
+   · Phase 9 F9.0–F9.17~~ — shipped (§3).
+2. **Phase 9 F9.18** (composition editor GUI + human panel) — independent of
+   Part B.
+3. **Phase 10 feasibility spikes** — S10.c, S10.d and S10.a all ran
+   2026-09-09 (§3): the two pack-side ones shipped, S10.a failed and put the
+   phase behind a user decision (ADR-0170 `proposed`, or close the phase).
+   S10.b still needs the user's key and hand. No product slice is scheduled.
+4. Manual and hardware residue, opportunistically: F6.5 file-picker step,
+   Phase 5 listening pass, input tester with a pad, Phase 9 validation
+   test 8 (needs a local diffusion stack).
 
 ### 6. ADR map
 
+One line per decision. Chronology, amendments and evidence live in the ADR
+files and in §3.
+
 | ADR | Status | Meaning for this roadmap |
 |---|---|---|
-| 0138 | accepted | Phase 6 design; F6.0–F6.7 shipped (headless; F6.6 includes the empty-section-path round-trip fix — §3.2; F6.7 core 2026-09-01); remaining: F6.5 GUI end-to-end install acceptance (user-supplied audio, manual — reduced 2026-09-03 to the OS file-picker step plus the OSD toast; the OSD-toast half closed 2026-09-07 by ADR-0167's HUD-only capture seam, so only the native OS file-picker step stays manual; the coordinator's decisions are host-free and unit-tested), F6.7 consent cleanup (D6). Its own stale text was amended in place (slice D5, 2026-09-01 + 2026-09-07): the header reads F6.0–F6.7 shipped, §37 carries the ADR-0141 `content_id` note, §38/§51/§54 are marked superseded by ADR-0146, and §4 carries the ADR-0147 output-location note |
-| 0137, 0131, 0124, 0136 | accepted 2026-08-27; all shipped 2026-08-28 | H1–H4. ⚠ The files of 0130/0131/0136/0137 were deleted by commit `b0b334b0` (2026-08-28, an unrelated F6.2b fix) and never restored — only 0124 exists on disk; restore from `b0b334b0^` (slice D1). Their substance survives: the CI contract in `.github/AGENTS.md`, the hygiene checks in `make doc-checks` |
-| 0143 | accepted 2026-08-29 | one catalog slot per **game**: `pack_id` = origin × game (`owner/repo:<game-slug>`), multi-game zips expand into `pack:split` sibling issues; amends ADR-0140 source 2 — Part B §3.3 |
-| 0144 | accepted 2026-08-29 | audio packs may ship their `.ogg` tracks via a bundled ROM patch + install-time extraction |
-| 0145 | accepted 2026-08-31 | optimistic matching on SHA1 mismatch: textures + BPS auto-apply, IPS/audio/synth stay gated; tile match-rate health monitor auto-disables a wrong optimistic pack |
-| 0146 | accepted 2026-09-01 | auto-load every accepted pack: no first-run consent gate; `AutoInstallCommunityPacks` is the single switch; supersedes the consent clauses of ADR-0138 §38/§51/§54 (F6.7) |
-| ADR-0148 — de-list audio-only NEA packs; a catalog row must be a self-contained, verifiable artifact | accepted (2026-09-01) | records the 2026-08-31 removal; amends ADR-0144 (bundled patch must be wired, not merely present) — slice D4 |
-| ADR-0149 — enhancement pack border layer format and rendering architecture | accepted (2026-09-02) | Phase 8 slice F8.1: MEP v1.5 `border` section, `border.png` + `border.json`, VideoRenderer compositing pipeline, `EnableBorder` toggle |
-| 0121 | accepted 2026-08-27 (option A, shipped `805cb10d`; §2.1 rule 9 wording shipped with F6.1) | legacy bare `hires.txt` fallback is the norm |
-| 0132 | accepted | F5.4b follow-ups (a)/(b) |
-| 0133, 0134, 0135, 0051 | accepted 2026-08-29 (0134 = Option A: `loop` field in `fingerprints.json`) | unblocked Blocks C/D; Block C shipped 2026-08-29 (items 8/9/10). **Listening-pending items closed 2026-09-03**: ADR-0134's loop rule by `core_unit_tests` Bloco J (`Core/NES/HdPacks/OggLoopStream.h`), ADR-0133's mute mask by Bloco K (`Core/Shared/Audio/ReplacementMuteMask.h`) — see the F5.4g Block C row |
-| ADR-0150 — Avalonia headless XAML wiring tests | accepted (2026-09-03) | implemented the same day: the new `UI.HeadlessTests/` project (references `UI/UI.csproj` + `Avalonia.Headless(.XUnit)`; `UI.Tests` stays host-free per ADR-0123, and `NativeCore.cs` loads the real MesenCore when it is built and self-skips otherwise, per ADR-0131/0137), a `make headless-ui-tests` target and a separate `headless-ui-tests` job in `.github/workflows/unit-tests.yml` (ubuntu-latest, `-p:RuntimeIdentifier=linux-x64`; 4 run + 7 explicit skips when no core is present). `UI.HeadlessTests/AGENTS.md` records the scope rule — wiring only, never a rule `UI.Tests` could assert host-free. Closes the wave-2 group that was blocked on this decision: P.7 cards, P.4 §6 tabs, P.5 arrows, I.2 highlight, I.3 ring |
-| 0142 | accepted 2026-08-29 | Block C item 10 crossfade contract — implemented in c36043f5. **Listening verification replaced by a unit test 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`): the shipped fade was block-stepped, not a ramp — `MixAudio` computed one `uint8_t` volume per ~735-sample call against `kBgmFadeSamples = 1764`, i.e. 2-3 steps of ~40% (bug #151). Fixed with per-sample linear interpolation inside the block (`Core/NES/HdPacks/OggFadeRamp.h`, 16.16 fixed point, exact constant-volume fast path; `kBgmFadeSamples` unchanged), and `OggMixer`/`OggReader` were decoupled from the concrete `Emulator` (injected run-ahead probe + `IOggSource`) so they link into the `core-unit-tests` target. `scripts/core_unit_tests.cpp` Bloco I mixes A -> B -> `StopBgm` in real 735-sample blocks and asserts the slope bound, the linear envelopes, silence after the stop window and that a run-ahead block advances nothing — 192/192 cases pass, and reverting the ramp makes it fail (worst jump 1906 vs 6.27 allowed) |
-| 0123, 0125, 0128 | accepted 2026-08-29 | H5 UI-logic firewall parity scan (all five checklist items); H6 public test-facing helpers (Option A); H7 CheatTypeDetector ThrowsAny (GB/SMS product decision still deferred) |
-| 0040/0044/0047/0049/0050/0052/0120 | accepted | shipped foundations; do not diverge without amending |
-| 0147 | accepted (2026-09-01) | sibling pack folders `auto/` (recorder) + `mep/` (edited MEP pack); catalog install materializes to `<sibling>/mep` with a central fallback (amends ADR-0138 §4); hd-legacy packs are MEP-ized on install; Restore action (baseline registry); update never silently clobbers a local edit (baseline `content_id`) |
-| ADR-0153 — artist-legible sheets | accepted (2026-09-05), amended the same day | Phase 9 slice F9.0: metatile vocabulary as the artist unit, mutual-predictability grouping, stitched maps as an artist surface, sidecar JSON schema, five host-free modules. F9.1–F9.4 shipped 2026-09-05; `core_unit_tests` Bloco P covers the four modules. The amendment replaced §1's saturating self-consistency metric with phase advantage, made `misc` about isolation rather than rarity, and made a HUD row "mostly frozen" rather than byte-identical — all three from measurement, not review |
-| Phase 9 AI repaint (F9.6) | ADR-0154 accepted (2026-09-05, after the user settled §2 on Option A); ADR-0161 `proposed` | external, backend-pluggable `scripts/sheet_repaint.py`; output in `auto/repaint/`; the root `generated` object (MEP-v1 v1.6) as **disclosure, not a gate** — no `mep_lint` rule and no verdict follows from it; local diffusion + ControlNet, loopback-enforced, weights are the user's. ADR-0161 states where §5's palette-variant correspondence is read from (positional, not from the palette bytes) |
-| player-shell identity + chrome | ADR-0139/0140/0141 accepted (2026-08-28) | `content_id` algorithm, `pack_id` sources (incl. `local:` fallback), amendment to ADR-0138 §37 (update trigger = `content_id`), `UiMode`; listed in Part B §9; `UiMode` still without an ADR |
+| 0040/0044/0047/0049/0050/0052/0120/0121 | accepted | shipped foundations — storage, permissive targets, fingerprints, sibling convention, `<background>` capture, level-2 audio, zip discovery fallbacks; do not diverge without amending |
+| 0122/0126/0127/0129/0130 | accepted | unit-test and CI wiring (`UI.Tests`, `core_unit_tests`, extracted-helper pattern) |
+| 0123/0124/0125/0128/0131/0136/0137 | accepted | H-series hygiene: firewall parity, fixture format, test helpers, ThrowsAny, CI contract, `mep_compare` dispatch, `make doc-checks` |
+| 0051/0132/0133/0134/0135/0142 | accepted (0134 = Option A) | Phase 5 audio: sound-driver discovery, variant cap, mute mask, loop point, Extract Audio contract, crossfade |
+| 0138 | accepted, amended in place (D5) | Phase 6 design; F6.0–F6.8 shipped |
+| 0139/0140/0141 | accepted | Part B identity: `content_id`, `pack_id`, one slot per `pack_id` with the `content_id` update trigger (amends 0138 §37) |
+| 0143/0144/0145/0146/0147/0148 | accepted | one slot per game; audio via bundled patch; optimistic matching; auto-load every accepted pack (supersedes 0138's consent clauses); `auto/` + `mep/` siblings; self-contained catalog rows |
+| 0149 | accepted | Phase 8 border layer (MEP v1.5) |
+| 0150 | accepted | Avalonia.Headless XAML-wiring tests (`UI.HeadlessTests/`) |
+| 0151/0152 | accepted | unresolvable `<background>` is a lint error; known-missing errata (F6.8) |
+| 0153/0156/0159/0160/0164/0166 | accepted (0153 amended by F9.12/F9.16) | Phase 9 sheets: vocabulary + grouping + maps; screen residency; save-time anchors; `textures/chr/`; adjacency sidecar; screen ownership of nodes |
+| 0154 | accepted (Option A) | F9.6 external repaint, loopback-only, `generated` as disclosure not gate; Phase 10 S10.b measures whether an amendment of §2/§4 is worth proposing — until then it stands as written |
+| 0155/0157/0158/0163/0167 | accepted | `-MMD -MP`; frame-counted headless input; no `NES_ONLY`/`LessUI`; fork–upstream coexistence; HUD-only capture |
+| 0161 | proposed | positional palette-variant correspondence (F9.6 §5) |
+| 0162 | proposed | accuracy suite as a regression gate (H10); not in CI by decision |
+| 0165 | accepted | F9.18 composition editor: external stdlib tkinter tool over a host-free engine |
+| 0168 | proposed | figure (`sprNNN` group) as the unit — Phase 10 S10.a measures the pose-membership gap its own Context names before anyone accepts it |
+| 0169 | accepted | recorder publishes frames one way; the live viewer never blocks the run |
 
 ### 7. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Project framed as a distributor of derivative content | catalog holds URLs + hashes + licences only; client never scrapes third-party hosts; user supplies unlicensed audio |
+| Project framed as a distributor of derivative content | catalog holds URLs + hashes + licenses only; client never scrapes third-party hosts; user supplies unlicensed audio |
 | Recipe vocabulary grows into a scripting language | new op = new `recipe` major + new ADR; clients skip unknown versions |
 | Two agents implementing the same ADR in parallel | one task per slice; accepting an ADR is a request for work, so say which agent owns it before implementing — no background runner claims `accepted` ADRs any more (the dev-squad plugin was removed on 2026-09-03) |
 | Upstream pack drift after acceptance | sha256 in the catalog + drift check; client reinstalls when the slot's `content_id` changes (ADR-0141) — a wrapper-only sha256 change does not reinstall |
-| Catalog-shaping decisions recorded only in issue comments or commit messages (the 2026-08-31 audio-only NEA removal) | every such decision gets an ADR or a PRD line the same day; D4 backfills the one already made |
-| ADR files deleted by an unrelated commit go unnoticed (0130/0131/0136/0137, 2026-08-28) | D1 restores them; `make doc-checks` should fail on a dangling `ADR-NNNN` reference (add to D1's acceptance) |
+| Catalog-shaping decisions recorded only in issue comments or commit messages (the 2026-08-31 audio-only NEA removal) | every such decision gets an ADR or a PRD line the same day (ADR-0148 backfilled the one already made) |
+| ADR files deleted by an unrelated commit go unnoticed (0130/0131/0136/0137, 2026-08-28) | restored (D1); `scripts/checks/verify_adr_refs.py` in `make doc-checks` fails on a dangling `ADR-NNNN` reference |
 | Scope explosion | phases independent; GitHub is the only backend; no telemetry |
+| Phase 10 sends ROM-derived art to a hosted model | only S10.b does, by hand, by the user, from their own account, with the files listed first; no tool in the repo automates a hosted call until an ADR amends ADR-0154 §2 |
+| Phase 10 spikes read as a product plan | the section names no modules, formats or product slices; ADRs are written after S10.a/S10.b report numbers |
 | Phase 9 judged by pixel metrics instead of legibility (F5.4e "shipped" green while emitting no sheet on any real game) | the human validation panel in Phase 9 is the acceptance gate; a slice is not "shipped" until its cold-read / find-and-edit rows are logged for at least two golden games |
 
 ### 8. References
@@ -786,43 +868,28 @@ harness problem, solved several ways, in readable code.
 
 ## Part B — Player shell (default GUI)
 
-**Status:** active (2026-08-28) — product text of §3–§6 accepted by the
-user on 2026-08-28; P.0 done (ADR-0139/0140/0141 accepted 2026-08-28);
-P.1 done (content_id in scripts/ + Core, mep-meta + `.mep-install.json`,
-golden parity — 2026-08-29); P.2 done (catalog/mep-meta/MEI identity +
-one slot per pack_id — 2026-08-29); P.3 done (per-ROM preference resolver
-+ Advanced picker — 2026-08-29); P.4 done (`UiMode` default rule + Player
-chrome + overlay + Esc precedence in the shortcut config — 2026-08-29;
-GUI acceptance pending a manual pass on a real display); P.5 done (Player
-pack UX: picker decision + panel, current-pack chip, apply toast —
-2026-08-29; picker/dismiss/sibling manual pass pending); P.6 done (§3.6
-catalog update trigger wired into F6.4b, wrapper-only no-reinstall,
-no-auto-downgrade, removed slot keeps install, votes sort the picker —
-2026-08-29). **Phase 7 fully shipped (P.0–P.7)** — P.7 done 2026-09-01
-(Enhancements quick-toggle panel + welcome/Continue cards, §6.1–§6.2; GUI
-pass pending — automated 2026-09-03 by wave 2 of
-`docs/validation/manual-validation-automation-plan.md`: the cards, the
-Player Settings tab set and the picker's arrow navigation are asserted by
-the new `UI.HeadlessTests/` project (ADR-0150), the aspect-ratio math by
-`core_unit_tests` Bloco N; only the on-window letterbox fit stays a
-pixel-level judgement) ·
+**Status:** **Phase 7 shipped — P.0–P.7** (2026-08-28 → 2026-09-01; record
+in Part A §3). Product text of §3–§6 accepted by the user 2026-08-28. Manual
+residue: the native file picker (F6.5) only — the letterbox fit was closed
+2026-09-05 (`RendererViewportFit`, `UI.HeadlessTests/RendererLetterboxTests.cs`);
+the cards, the Player Settings tabs and the picker's arrow navigation are
+asserted by `UI.HeadlessTests/` (ADR-0150) and the aspect-ratio math by
+`core_unit_tests` Bloco N ·
 **Author:** sbihaiko ·
 **Scope:** MesenCE fork (`main`); nothing goes upstream ·
-**Parent roadmap:** Part A of this document (Phase 7 entry). Pack/core
-work stays there (Phase 6 F6.4b/c/F6.5, Phase 5,
-input tester). This Part (Part B) owns chrome, pack identity,
-duplicates, and
-the player-facing choice between packs ·
+**Parent roadmap:** Part A of this document (Phase 7 entry). Pack/core work
+stays there; this Part owns chrome, pack identity, duplicates, and the
+player-facing choice between packs ·
 **Specs:** [MEP-v1](../specs/MEP-v1.md) · [MEI-v1](../specs/MEI-v1.md) ·
 [MEP-recipe-v1](../specs/MEP-recipe-v1.md) ·
 **Decisions:** identity model (§3) and one-slot rule (§3.6) are accepted
 product requirements, specified by ADR-0139 (`content_id`), ADR-0140
 (`pack_id`, catalog uniqueness) and ADR-0141 (one slot, client update
-trigger — amends ADR-0138 §37). Chrome (§6) is a product requirement; it
-needs an ADR only if P.4 finds trade-offs beyond what §6 states ·
-**Process:** one task per **slice** (P.1, P.2, …). Settle the
-slice's ADRs first. A slice is done when its acceptance checks pass and
-this header plus Part A's Phase 7 entry are updated.
+trigger — amends ADR-0138 §37). Chrome (§6) is a product requirement;
+`UiMode` has no ADR and needs one only if a trade-off beyond §6 appears ·
+**Process:** one task per **slice** (P.1, P.2, …). Settle the slice's ADRs
+first. A slice is done when its acceptance checks pass and this header plus
+Part A's Phase 7 entry are updated.
 
 ---
 
@@ -844,8 +911,10 @@ This is one Avalonia process and one window, not a second binary. Player
 and Advanced are chrome modes over the same ViewModels.
 
 The legal principles of Part A §1 still apply: the official
-channel carries URLs + hashes + licences, never third-party assets; hosts
-never execute pack content as code; no LLM in the client.
+channel carries URLs + hashes + licenses, never third-party assets; hosts
+never execute pack content as code; no LLM in the client (a Phase 10 skin
+tool, if its spikes pass, would be an external tool like the live viewer;
+the shell contributes nothing until an ADR says otherwise).
 
 Product consoles stay NES, GB/GBC/GBS, SMS/GG/SG-1000, GBA
 (`docs/roadmap/AGENTS.md`). SNES gamepads stay as input.
@@ -930,7 +999,7 @@ recipe when one exists.
   bytes, and stores the result in `.mep-install.json` (§4); it does not
   re-derive it from the installed output tree.
 
-Exact canonicalisation (path order, which files, newline folding, zip
+Exact canonicalization (path order, which files, newline folding, zip
 entry metadata ignored, whether `pack.json` `version` is part of the
 payload) is the P.0 ADR. The product constraint is: **same loaded files
 ⇒ same `content_id`; wrapper-only change ⇒ same `content_id`; any
@@ -1113,9 +1182,10 @@ Already shipped, and this GUI must not bypass it:
 
 F6.4b (Part A, Phase 6) adds: fetch official MEI, match ROM
 sha1, download within the host allow-list, sha256-verify the *source*, run
-`MepRecipeInstaller`, write into `EnhancementPacks/`, then the scan above
-applies it. The `AutoInstallCommunityPacks` toggle and first-run consent
-stay in F6.4b (ADR-0138 §38).
+`MepRecipeInstaller`, write into the `<sibling>/mep` folder with a central
+fallback (ADR-0147), then the scan above applies it. The
+`AutoInstallCommunityPacks` toggle stays in F6.4b; the first-run consent it
+once carried was removed by F6.7 (ADR-0146).
 
 This PRD adds, on top of that scan:
 
@@ -1148,7 +1218,7 @@ pack).
   The picker shows name, `author` (from `pack.json`; `hd-legacy` shows
   the submission title), `version` (or validation date + short
   `content_id` for `hd-legacy`), layers (textures / audio / synth /
-  patch), licence (or "not declared"), and catalog 👍 as **sort key**, not
+  patch), license (or "not declared"), and catalog 👍 as **sort key**, not
   as auto-pick. The choice is remembered **per ROM sha1** — the No-Intro
   sha1 of the ROM as loaded, **before** any `patches[]` apply (§4 step 1
   precedes step 5) — a pack with three `targets[]` is chosen up to three
@@ -1272,30 +1342,35 @@ Two distinct, independent affordances — not one dialog wearing two hats:
 
 ### 8. Slices
 
-Architecture slices need their ADR accepted first. P.3–P.5 run on local
-packs and do not wait for F6.4b; catalog install/update in the overlay
-(P.6) does.
+Architecture slices need their ADR accepted first. All eight shipped;
+the one-line record is Part A §3 and the decisions are §9 below.
 
-| Slice | Deliverable | Depends | Acceptance |
-|---|---|---|---|
-| **P.0** | ADR-0139/0140/0141 (accepted 2026-08-28): (1) `content_id` canonicalisation, the recipe composite, and the two-implementation/parity rule; (2) `pack_id` sources incl. the MEP `id` field and the `local:` fallback; (3) catalog uniqueness (§3.3) + one-slot occupancy (§3.6) as CI/client policy, **amending ADR-0138 §37** (update trigger = `content_id`, no auto-downgrade) | — | **done 2026-08-28** — ADR-0139/0140/0141 accepted; ADR-0141 carries the ADR-0138 §37 amendment |
-| **P.1** | `content_id` in `scripts/` (normative) **and** in the Core (`MepPackManager`/`MepRecipeInstaller`), both on the discovered pack root and the recipe composite; `mep_lint` / validate workflow writes it to mep-meta; `.mep-install.json` gains `pack_id`/`content_id`. Goldens: same tree in two wrappers → same id; two recipes on one primary → two ids | P.0 | **done 2026-08-29** — `scripts/mep_content_id.py` (normative) + `scripts/test_mep_content_id.py` (8 checks) + `Core/Shared/EnhancementPacks/MepContentId.{h,cpp}`; `mep_lint --content-id` + the validate workflow's `content-id` step write the tree hash (and the recipe composite for split packs) into mep-meta; `MepRecipeInstaller::WriteOutputs` computes the composite at install time and `WriteInstallStamp` records `pack_id`/`content_id` in `.mep-install.json`; parity fixture `docs/specs/golden/mep-content-id.json` run by `scripts/test_mep_content_id_golden.py` (Python) and core-unit-tests BlocoG (C++), both green |
-| **P.2** | Catalog / mep-meta / MEI grow `pack_id`, `content_id`, `version`, `votes` (all additive; unknown-field ignore already required). One live row per `pack_id` (§3.6). Duplicate comment on same `content_id`. `/revalidate` rewrites provenance and occupies the slot only by §3.6 order. Origin binding (§3.3): mep-meta `pack_origin`; different origin → not listed, `pack:needs-review` (label added to `ensure_community_pack_labels.sh`) | P.1 | **done 2026-08-29** — `scripts/pack_id_rules.py` (leaf, stdlib-only): `resolve_pack_id` (MEP `id` → `owner/repo` → `issue-n`), `pack_origin` (§3.3), `slot_winner`/`select_catalog_rows` (§3.6: content-dedup global, per-pack_id origin filter then slot winner — semver → validated_at → issue, deterministic) + `scripts/test_pack_id_rules.py` (8 checks); `mei_catalog_entry.build_pack_entry` gains additive `pack_id`/`content_id`/`votes` (MAY, via `apply_mei_identity`); the validate workflow's mep-meta upsert writes `pack_id`/`pack_origin`/`content_id` and a new `identity-check` step (`scripts/mep_identity_check.py`, `--post`, `continue-on-error`) comments on duplicate `content_id` / foreign-origin claims; `pack:needs-review` label (13th at the time; `pack:split` followed with ADR-0143) added to `ensure_community_pack_labels.sh`; the generator was split per ADR-0138 §35 into `mei_catalog_fetch` (all `gh` reads) + a 123-line orchestrator feeding `select_catalog_rows` (rows still 👍-sorted by `render_table`); AC-2/AC-4/AC-6 verifiers updated for the split and green; `make doc-checks` green |
-| **P.3** | Per-ROM-sha1 preference (`pack_id` chosen, `local:` fallback for local drops) persisted in `EnhancementPackConfig`; the **resolution logic** (sha1 → `pack_id`, `local:` fallback, `content_id` merge, lexicographic default) lives in a host-free class under `UI/Logic/` (ADR-0123: `UI.Tests` dual-compiles only `UI/Logic/**`, never `UI/Config`). Picker window usable from **Advanced** (ships before Player chrome). The preference overrides lexicographic order; lexicographic stays the default when no preference exists | P.0 (for the `pack_id` rules) | **done 2026-08-29** — `UI/Logic/PackPreferenceResolver.cs` (host-free): `DerivePackId` (stamped pack_id, else `local:<container>`, ADR-0140 rule 4) + `Resolve` (content_id merge — a container duplicating another's content_id is not a new entry — and preference → winning container, lexicographic default when none/stale); `scripts/`-side `.mep-install.json` identity exposed as pack_id/content_id columns 9–10 of `GetMepPackList` (parser extended, 8-column rows still accepted); `EnhancementPackConfig.RomPackPreference` (romSha1 → pack_id, reset-then-push via the new `ClearPreferredMepPacks`/`SetPreferredMepPack` interop) drives the core's per-ROM preferred pack (`MepPackManager::FindPreferredPack`, consulted before the ADR-0040 order in `GetPackForSection`); Advanced's Enhancement Packs window gained a "Preferred pack for this ROM" combo (content-merged choices + "(default)" clear). UI.Tests: `PackPreferenceResolverTests` (11 checks incl. `local:`, merge, stale, disabled) + 194 total green; `make core`/`ui`/`doc-checks` green |
-| **P.4** | `UiMode` + Player chrome: hide menu, overlay + its shortcut, recent games as home, Settings subset, Advanced switch. Existing settings file → Advanced; none → Player | — (chrome only) | done 2026-08-29 — `UI/Logic/UiMode.cs` (`UiModeDefaultRule`: no settings.json → Player, existing keyless file → Advanced via the property initializer; `Configuration.CreateConfig` hooks the fresh path, key written on first save) + 3 tests; `UI/Logic/UiModeShortcutPrecedence.cs` (Player overlay owns its key: a Pause binding on the same combination is suppressed in `PreferencesConfig.ApplyConfig` — the Esc collision resolved in the shortcut config) + 5 tests; `EmulatorShortcut.ToggleOverlay` (default Esc, mirrored in the core enum; core `IsKeyPressed` exempts it from the keyboard-block so it stays reachable in keyboard games); overlay panel (Resume / Save / Load slot / Pack / Settings / Advanced GUI / Quit) on the renderer panel, D-pad nav via focus, opened paused; menu hidden in Player (MouseManager + VM, AutoHideMenu ignored); recent-games grid always shown as Player home; `PreferencesConfig.UiMode` combo in the Preferences tab for the Advanced→Player switch. Pending (manual): Player cannot reach Debug without switching, Esc-while-playing passes. **Both automated 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`, wave 2): (a) the Debug gate moved into the host-free `UI/Logic/PlayerDebugAccess.cs` (`IsDebugReachable(UiMode)` + `IsDebugEntryEnabled`), consumed by the new `ApplyPlayerDebugGate` in `UI/ViewModels/MainMenuViewModel.cs`, which sets every Debug action's `IsEnabled` *before* `DebugShortcutManager.RegisterActions`; covered by `UI.Tests/Config/PlayerDebugAccessTests.cs`. This is a deliberate behaviour change, not just a test: the old "Player cannot reach Debug" claim was false — hiding the menu only blocked the mouse, and the debugger hotkeys still fired in Player through `DebugShortcutManager`. Gating `IsEnabled` closes the menu path *and* the hotkey path in Player, which is what §6 specifies; in Advanced it is a strict no-op. (b) the Esc-while-playing keyboard-block exemption for `ToggleOverlay` is now a rule in `Core/Shared/ShortcutKeyRules.h`, asserted by `scripts/core_unit_tests.cpp` Bloco O. §6 "reduced settings page" **shipped 2026-08-29**: the overlay's Settings opens `ConfigWindow(playerMode: true)` showing only the essentials tabs — `UI/Logic/ConfigWindowTab.cs` (enum moved host-free) + `UI/Logic/PlayerSettingsEssentials.cs` (clamp, +9 UI.Tests), `ConfigViewModel.PlayerMode` hides the Emulation/console/Preferences tabs and the Reset/Open-Folder bar, initial tab clamps to Audio. Player Settings GUI run still pending — **covered headlessly 2026-09-03** by `UI.HeadlessTests/PlayerSettingsTabsTests.cs` (ADR-0150): the reduced tab set is asserted as rendered in Player and Advanced still shows every tab (the defect probe `Advanced_settings_still_shows_every_tab` fails when the reduction is made unconditional). **Manual GUI pass done 2026-09-01**: fresh-launch UiMode=Player confirmed (no prior settings.json), Esc opened the overlay over a running game |
-| **P.5** | Player pack UX: toast, overlay chip, picker from §5 wired to P.3; un-enhanced start while the picker is open | P.3, P.4 | done 2026-08-29 — `UI/Logic/PlayerPackPicker.cs` (host-free `ShouldOpen`: sibling pack always suppresses §4, <2 distinct pack_ids → slot applies/never ask, effective stored preference → silent apply; `DistinctPackIdCount` over the §5 content-merged candidates) + 8 tests; picker panel over the un-enhanced game (name/author/version/layers/licence from `GetPackListText` columns, sorted by name; pick stores the per-ROM preference P.3 and power-cycles, dismiss stores nothing → asks again next launch; Esc dismisses); overlay Pack button became the current-pack chip (opens the picker even with a stored choice — §5 "changing the choice later" — else the pack window); "Applied …" OSD toast via `EmuApi.DisplayMessage` on apply in Player, suppressed while the picker is open. UI.Tests 210 (8 new), UI osx-arm64 0 errors, firewall OK. Pending (manual): keyboard-arrows-as-gamepad-proxy pass, toast noise judgement. **Arrow navigation automated 2026-09-03** (ADR-0150, wave 2 of `docs/validation/manual-validation-automation-plan.md`): `UI.HeadlessTests/PlayerPackPickerTests.cs` asserts keyboard focus actually moves between picker choices on ArrowDown/ArrowUp. Writing it found and fixed **issue #154** — `XYFocus.NavigationModes` was never set on the `PackPickerList` `ItemsControl`, so the arrows moved no focus at all; set now, issue closed. The toast-noise judgement is subjective and stays manual. **Picker/dismiss/chip-reopen flow manually verified 2026-09-01** (two centrally-installed test packs, distinct `pack_id`/`content_id`, no sibling folder): picker opened with both candidates on first launch, picking either persisted `RomPackPreference` and power-cycled with that pack's textures loaded, and the overlay chip reopened the picker to switch the choice (verified switching A→B actually changed which container's textures loaded, not just the stored id). Also found and filed **issue #150** in the process (a bootstrap sibling folder holding only the F5 recorder's `auto/` layer suppressing the picker) — **fixed**: core column 11 `isAutoOnly` in `GetPackListText` + `MepPackListParser.IsAutoOnly` + `hasSibling = parsed.Packs.Any(e => e.Source == "sibling" && !e.IsAutoOnly)` in `MainWindowViewModel`, with 4 parser tests + 2 picker tests verifying `auto/`-only siblings do not suppress the picker |
-| **P.6** | Player overlay talks to F6.4b install/update using §3.6 (`content_id` trigger, no auto-downgrade, removed-from-catalog keeps install); `votes` sorts the picker | P.5, F6.4b | done 2026-08-29 — `UI/Logic/CommunityCatalogUpdateDecision.cs` (host-free §3.6 verdict: `Updated` on content_id diff, `WrapperOnly` no-reinstall on source-only change, `NoDowngrade` when the installed semver is newer (hd-legacy has none), `RemovedFromCatalog` keeps the install, `UpToDate`/`NotInstalled`; `ReadStampFields` + numeric `CompareSemver`) + 15 tests; `CommunityPackCatalogEntry` now deserializes the P.2 additive `pack_id`/`content_id`/`votes`; the F6.4b coordinator's reinstall gate switched from the ADR-0138 §37 source.sha256 trigger to the §3.6 content_id decision (container name unchanged, so `DisabledPacks`/per-section flags survive an update; "removed slot" is the fetch-returns-null path, already silent); the picker sorts by community 👍 (`votes` desc, then name — local-only packs fall back to name). UI.Tests 225 (15 new), UI osx-arm64 0 errors, firewall + doc-checks OK. **Toast pending item closed as stale 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`): no separate "Updated …" toast was ever implemented, and none is needed — `CommunityPackInstallCoordinator` handles the `Updated` verdict by clearing the folder and letting the reinstall proceed, so the run ends in the ordinary `Community pack '<name>' installed` toast from `CommunityPackInstallService`; the locally-edited branch (ADR-0147) returns the `UpdateAvailable` outcome text instead. Remaining: catalog update end-to-end on a real fetch — the **on-demand** `scripts/catalog_update_live_check.sh` (2026-09-03; external hosts, rate limits and outages make it unfit for CI — the deterministic cover stays the `CommunityCatalogUpdateDecision` unit tests). Its phase 1 passes live (catalog HTTP 200, ROM resolved by No-Intro sha1 to a catalog row); phase 2 greps `[CommunityPackInstall] update verdict=` and must be run from a logged-in desktop session — the script detects and reports the headless-shell case instead of silently passing |
-| **P.7** | Enhancements quick-toggle panel (§6.1: Texture/Audio/WideScrn/HiRes/Overclock, restore-not-clobber semantics on the two enum-backed toggles) + welcome card and persistent Continue card on the Player home (§6.2) | P.4 (overlay), P.5 (home) | **done 2026-09-01** — `UI/Config/PlayerEnhancementsConfig.cs` (new, no Core counterpart: `WideScrnPriorAspectRatio`/`HiResPriorFilter` restore-not-clobber state, `WelcomeCardDismissed`); `UI/Logic/PlayerEnhancementsToggle.cs` (host-free): generic `ToggleEnumPreset<T>` (stash-then-restore for WideScrn/HiRes, never a hardcoded default), NES/GB/GBA overclock on/off + curated presets (NES 300 before-NMI scanlines per the app's own `lblOverclockHint`; GB/GBA 40 additional scanlines, no equivalent in-app guidance existed so this is a conservative, easily-retuned constant), `SupportsOverclock` (NES/GB/GBA only, SMS has no knob), `ShouldShowWelcomeCard`/`ShouldShowContinueCard` + 18 UI.Tests (`UI.Tests/Config/PlayerEnhancementsToggleTests.cs`). On/off state for all 5 toggles is derived from config that already exists (`EnhancementPackConfig.EnableTextures`/`EnableAudio`, `VideoConfig.AspectRatio`/`VideoFilter`, the per-console overclock field) - never a second source of truth. `MainWindowViewModel`: `IsEnhancementsPanelVisible` + the five `Toggle*`/`OpenEnhancementsPanel`/`CloseEnhancementsPanel` methods (same replace-the-overlay shape as the P.5 picker, Esc precedence chained the same way); Texture/Audio apply via `ReloadRom()`, Overclock via `PowerCycle()`, WideScrn/HiRes immediately via `VideoConfig.ApplyConfig()`. `MainWindow.axaml`: "Enhancements" overlay entry + a `PlayerEnhancementsPanel` checkbox-grid border (Overclock checkbox disabled, not hidden, on consoles with no knob); Welcome/Continue cards added around `RecentGamesViewModel`'s `StateGrid` DataTemplate, gated on `UiMode == Player` and `Mode == RecentGames` (never on Advanced's game-selection screen or the Save/Load state screens sharing the same DataTemplate) - Welcome's one CTA ("Load ROM", reusing the existing `EmulatorShortcut.OpenFile` dialog) is also its own permanent dismissal; Continue resumes `GameEntries[0]`. `UI.Tests` 373 (18 new) green, `dotnet build UI` osx-arm64 0 errors/warnings. Border (a 7th toggle) stays out of scope; tracked in Part A, Phase 8, gated on its own ADR. **Automated 2026-09-03** (`docs/validation/manual-validation-automation-plan.md`): the menu-visibility rule was extracted into the host-free `UI/Logic/PlayerChrome.cs` (`IsMenuVisible` + `IsCursorInMenuBand`) and is now consumed by **both** call sites — `MainWindowViewModel.UpdateMenuVisibility()` and `MouseManager.UpdateMainMenuVisibility()` — so the two cannot drift, with 8 `UI.Tests` cases (Player always hidden; Advanced follows fullscreen/auto-hide/menu-open/hover); HQ4x application is now measured headlessly by `scripts/check_hq4x_screenshot.sh` (new `filter=<name>` flag on `scripts/headless_record.cpp`, which never pushed a `VideoConfig` before, so the filter was unreachable): 256x240 -> 1024x960 with interpolated colours (11 -> 146 distinct), PASS. Restore-not-clobber stays covered by `PlayerEnhancementsToggleTests`. Pending (manual, genuinely pixel-level): 16:9 stretch (viewport geometry, absent from the screenshot pipeline) and the Welcome/Continue cards on screen — no XAML-wiring test host exists; ADR-0150 (`proposed`) puts `Avalonia.Headless` up for that decision. **Both largely closed 2026-09-03** (wave 2 of `docs/validation/manual-validation-automation-plan.md`; ADR-0150 accepted and implemented the same day): the aspect-ratio math was extracted into `Core/Shared/Video/AspectRatioMath.h` and is asserted per `VideoAspectRatio` setting by `scripts/core_unit_tests.cpp` **Bloco N** (NoStretching/Auto/4:3/16:9/NTSC/PAL/Custom → the destination size, e.g. 240 rows → 256/320/427 columns). The cards are now covered by `UI.HeadlessTests/PlayerHomeCardsTests.cs`, which asserts the Welcome card is genuinely `IsOnScreen()` on a first Player boot, the Continue card on a populated recents list, and that the Welcome CTA dismisses it for good — this found and fixed **issue #153** (an empty recents list collapsed the host, hiding the Welcome card), now closed. **The on-window letterbox-fit caveat above is stale — closed 2026-09-05** (`0f8535c4`): the F9.15 in-memory capture turned out to be the wrong instrument for it (checked against the code, not assumed — `CopyOutputBuffer` reads `_outputBuffer` at the emulated base size, before the aspect ratio is ever applied, so a capture's measured bands are the game's own letterboxing, not the viewport's; the same reasoning rules out an OSD-toast checksum test, since the HUD rasterises onto a surface downstream of that buffer — both rejected and recorded so they are not re-suggested). What is pure geometry moved to `UI/Logic/RendererViewportFit` (host-free, ADR-0123; `MainWindow` keeps only the window-shaped parts — panel bounds, DPI scale, the `FullscreenForceIntegerScale` conjunction — per ADR-0127), asserted at both levels: 14 `UI.Tests` cases and 3 `UI.HeadlessTests/RendererLetterboxTests.cs` wiring cases where a real `MainWindow` at an odd 900x400 sizes its real renderer to exactly the shared rule's answer; both mutation-checked. A deliberate behaviour change went with it: a degenerate input (aspect ratio 0.0, or a panel with no bounds yet) used to produce NaN/Infinity on a control's `Width` (Avalonia reads that as "auto"); it now fills the available space instead. What remains manual, with a reason recorded rather than just left open: the OS's native `IStorageProvider` file picker (F6.5 and the installer) — headless Avalonia has no picker to drive, and a faked provider would only assert the fake |
+- **P.0** — ADR-0139/0140/0141 accepted (2026-08-28).
+- **P.1** — `content_id` in `scripts/` and in the Core, mep-meta +
+  `.mep-install.json`, golden parity (2026-08-29).
+- **P.2** — catalog / mep-meta / MEI identity fields, one slot per `pack_id`
+  (2026-08-29).
+- **P.3** — per-ROM preference resolver + Advanced picker (2026-08-29).
+- **P.4** — `UiMode` default rule, Player chrome, overlay, Esc precedence in
+  the shortcut config (2026-08-29).
+- **P.5** — Player pack UX: picker decision + panel, current-pack chip, apply
+  toast (2026-08-29).
+- **P.6** — §3.6 catalog update trigger wired into F6.4b; wrapper-only change
+  does not reinstall, no auto-downgrade, a removed slot keeps its install,
+  votes sort the picker (2026-08-29).
+- **P.7** — Enhancements quick-toggle panel + welcome/Continue cards, §6.1–§6.2
+  (2026-09-01); XAML wiring asserted by `UI.HeadlessTests/` (ADR-0150);
+  the letterbox fit closed 2026-09-05 (`RendererViewportFit`).
 
 ### 9. ADR map
 
 | Topic | Status | Meaning |
 |---|---|---|
-| ADR-0139 — `content_id` algorithm (tree canonicalisation, recipe composite, excluded files, `version` string excluded, two implementations + parity) | **accepted** (2026-08-28) | P.1 cannot start without it |
-| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness + origin binding (amended 2026-08-28) | **accepted** (2026-08-28) | P.2/P.3 cannot start without it. §3.6 is accepted product text — the ADR specifies enforcement |
-| ADR-0141 — one live slot per `pack_id`; amends ADR-0138 §37 (client update trigger `source.sha256` → `content_id`); no auto-downgrade; removed slot keeps install | **accepted** (2026-08-28) | P.6 shipped 2026-08-29 on this trigger; ADR-0138 §37 now carries the in-place note pointing here (Part A slice D5) |
-| ADR-0143 — one slot per **game**: `pack_id` = origin × game; multi-game zip → N packs + N `pack:split` sibling issues | **accepted** (2026-08-29) | amends §3.3 rule 2 above and ADR-0140 source 2; eight of the nine LiQuiDz siblings were later removed from the catalog as audio-only NEA (Part A slice D4) |
-| Player chrome (`UiMode`, overlay contents, overlay shortcut, upgrade default Advanced) | **needed only if** P.4 finds trade-offs beyond §6 | P.4 |
+| ADR-0139 — `content_id` algorithm (tree canonicalization, recipe composite, excluded files, `version` string excluded, two implementations + parity) | **accepted** (2026-08-28) | P.1 was built on it |
+| ADR-0140 — `pack_id` (MEP `id` field; `owner/repo`; `issue-n`; `local:<container>`) + catalog uniqueness + origin binding (amended 2026-08-28) | **accepted** (2026-08-28) | P.2/P.3 were built on it. §3.6 is accepted product text — the ADR specifies enforcement |
+| ADR-0141 — one live slot per `pack_id`; amends ADR-0138 §37 (client update trigger `source.sha256` → `content_id`); no auto-downgrade; removed slot keeps install | **accepted** (2026-08-28) | P.6 shipped 2026-08-29 on this trigger; ADR-0138 §37 now carries the in-place note pointing here (Part A §3, D5) |
+| ADR-0143 — one slot per **game**: `pack_id` = origin × game; multi-game zip → N packs + N `pack:split` sibling issues | **accepted** (2026-08-29) | amends §3.3 rule 2 above and ADR-0140 source 2; eight of the nine LiQuiDz siblings were later removed from the catalog as audio-only NEA (Part A §3, D4 / ADR-0148) |
+| Player chrome (`UiMode`, overlay contents, overlay shortcut, upgrade default Advanced) | not needed — P.4 shipped within what §6 states | P.4 |
 | Enhancements quick-toggle panel + welcome/Continue cards (§6.1, §6.2) | not needed — UI over config that already exists | P.7 |
 | ADR-0039/0040/0044/0049/0120/0121 | accepted | precedence and ROM hash-matching do not change |
 | ADR-0138 (except §37 as above) | accepted | F6.4b is the network installer this shell consumes |
@@ -1322,7 +1397,7 @@ packs and do not wait for F6.4b; catalog install/update in the overlay
 ### 11. Open questions
 
 None for P.0 — the four questions this section held (tree-hash
-canonicalisation; MEP `id` field now; duplicate-submit policy; silent
+canonicalization; MEP `id` field now; duplicate-submit policy; silent
 `local:` → catalog `pack_id` migration) were closed by ADR-0139/0140/0141
 on 2026-08-28 (hash: ADR-0139; `id` as MEP v1.4 SHOULD, comment + close
 the newer duplicate issue, silent migration: ADR-0140). New questions go

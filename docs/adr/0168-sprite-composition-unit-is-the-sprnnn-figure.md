@@ -1,6 +1,6 @@
 # ADR-0168: The sprite layer composes `sprNNN` figures, not OAM nodes — the group sheet's `evidence[]` offsets reassemble the character
 
-- Status: proposed
+- Status: proposed (evidence amended 2026-09-09 — see "Measured" below)
 - Date: 2026-09-07
 - Related: ADR-0164 (§1 `sprNNN.json` `evidence[]`, §5 the sprite layer and
   its Y-band criterion), ADR-0165 (the editor is an external stdlib Python
@@ -56,6 +56,45 @@ edges most-observed first and refuse a slot already taken — which produces
 one clean pose on the six groups tried, but is not derived from anything the
 pack records. The pack does not record which tiles co-occurred in the same
 OAM frame, only pairwise totals over the retained stream.
+
+### Measured, 2026-09-09 (PRD Phase 10 spike S10.a)
+
+The spike above was a demonstration on six hand-picked groups. S10.a counted
+the same walk against a denominator, on two fresh 300 s recordings (Mega Man
+3, MMC3/CHR-ROM; Contra, CHR-RAM), with the poses actually drawn read off
+ADR-0169's live OAM channel — a pose being one spatially connected OAM
+cluster normalised to its own top-left, using `SpriteGrouping::ToCells`'
+round-to-nearest-cell rule, kept when seen in >= 3 captures with >= 4 tiles.
+Decode validity: 98.7 % (MM3) / 94.4 % (Contra) of the decoded OAM tiles are
+present in the pack's own `sprites.json` vocabulary.
+
+| | Mega Man 3 | Contra |
+|---|---|---|
+| poses drawn (denominator) | 15 | 57 |
+| recovered as a distinct figure (Jaccard >= 0.8) | 1 (6.7 %) | 6 (10.5 %) |
+| poses whose tiles all fit in one `sprNNN` | 0 / 15 | 3 / 57 |
+| mean group size vs. mean pose size (tiles) | 5.1 vs 10.8 | 4.7 vs 10.4 |
+
+Against the S10.a criterion (>= 80 % of a main character's poses, HUD
+excluded) this is a **fail**, and no reading of the numbers gets within 4x:
+at a generous Jaccard >= 0.6 it is 13 % / 23 %, and restricting Contra to
+poses of >= 8 tiles makes it worse (4 %).
+
+**The mechanism is not the one §3 names.** §3 blames cross-pose stacking and
+defends the occupied-slot guard, but that guard almost never fires: 11/12
+(MM3) and 33/33 (Contra) of the character's groups place every member. The
+binding failure is **under-grouping** — a `sprNNN` group is a *sub-part* of a
+pose. The ADR-0153 §2 mutual-predictability test at `pAB, pBA >= 0.80` on the
+dominant offset drops every edge from a tile that changes offset between
+poses, i.e. exactly the arms, legs and gun-arm that distinguish one pose from
+another, so a character's tiles fall into several disjoint always-together
+fragments. The partition the walk walks was never pose-shaped, so no
+refinement of the walk reaches a pose. §1 (the figure, not the node, is the
+unit) is unaffected and still holds: a node row is unreadable, and the
+fragments are at least recognisable art.
+
+Evidence: `runs/s10a-shared/S10a-summary.json` and
+`runs/s10a-{mm3,contra}/analysis/` (gitignored, not versioned).
 
 Non-goals:
 
@@ -117,10 +156,17 @@ unplaced must surface the count to the artist rather than look complete.
 
 Making this exact needs the recorder to record pose membership — which OAM
 entries appeared in the same frame — which is a bootstrap change and a
-different ADR. This ADR deliberately ships the heuristic instead, because
-the heuristic already turns striped noise into recognisable characters on
-both packs tried, and the exact version cannot be had without re-recording
-every pack.
+different ADR (ADR-0170, `proposed`). This ADR shipped the heuristic instead,
+on the grounds that it "already turns striped noise into recognisable
+characters" and that the exact version "cannot be had without re-recording
+every pack". S10.a falsified the second half of that reasoning twice over:
+the walk recovers 6.7 % / 10.5 % of a character's poses, not one clean pose
+per group, and the data needed is already in memory at save time
+(`HdPackBuilder::_oamFrames`), so the exact version costs one new sidecar
+written from a stream the recorder already holds — no new capture, no PPU
+change. Only newly recorded packs get it, which is the ADR-0153/0160
+no-migration position anyway. What survives of the first half is weaker and
+still true: a fragment is more legible than a node.
 
 ### 4. Export is unchanged
 
