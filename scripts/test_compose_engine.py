@@ -12,6 +12,7 @@ Run:  python3 scripts/test_compose_engine.py
 """
 
 import json
+import math
 import sys
 import tempfile
 from pathlib import Path
@@ -254,6 +255,13 @@ _WALK_EXPECTED = {0: (0, 0), 1: (1, 0), 2: (1, 1), 3: (2, 1)}
 # silhouette, node 4 included (the walk could never reach it) and laid out
 # differently from anything the pairwise offsets imply.
 _POSE_TILES = {0: (0, 0), 1: (1, 0), 2: (0, 1), 3: (1, 1), 4: (0, 2)}
+
+# The same silhouette *without* the hub node 0, for the ranking cases: a pose
+# the composed set does not already contain. Seeding node 0 must be able to
+# rank it, which it cannot when node 0 is one of its own members — composing
+# the hub composes the whole pose, and ADR-0171 §4's "not a candidate" rule
+# then applies to it.
+_POSE_NO_SEED = {1: (0, 0), 2: (1, 0), 3: (0, 1), 4: (1, 1)}
 
 
 def _write_spr_group(sheets, stem="spr000", nodes=None, evidence=None):
@@ -618,6 +626,181 @@ def mep_build_load(sheets_dir):
     return mep_build._load_sheet_docs(Path(sheets_dir))
 
 
+
+# -- ADR-0171: the pose is the unit of the sprite layer ----------------------
+
+
+def test_pose_anchor_is_the_rarest_member():
+    """ADR-0171 §5 keeps `seed`/`locked` naming nodes, so the anchor has to be
+    the member that tells this silhouette apart from the character's others —
+    the least-seen one, not the torso every pose shares."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())
+        pack = E.Pack(root)
+        pose = pack.poses.entries[0]
+        anchor = pack.pose_anchor(pose)
+        # appearances: 0:3000, 1:500, 2:400, 3:900, 4:100
+        check(anchor == 4, "the anchor is the pose's rarest member", f"anchor={anchor}")
+        check(pack.pose_of(anchor) is pose,
+              "the anchor resolves back to the pose it identifies",
+              str(pack.pose_of(anchor) and pack.pose_of(anchor).id))
+
+
+def test_pose_band_membership_is_the_bottom_row():
+    """ADR-0171 §3: a pose stands on the band its *bottom row* stands on. Node
+    3 is mostly on band 128 but sits mid-silhouette here, so the pose belongs
+    to 176 (where its bottom node 4 stands) and not to 128."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())
+        pack = E.Pack(root)
+        pose = pack.poses.entries[0]
+        bottom = pack.pose_bottom_nodes(pose)
+        check(bottom == [4], "the bottom row is the members at max(dy)", str(bottom))
+        on176 = [p.id for p in pack.pose_band_members(176)]
+        on128 = [p.id for p in pack.pose_band_members(128)]
+        check(on176 == ["pose000"], "the pose stands on its bottom row's band", str(on176))
+        check(on128 == [],
+              "a member standing on another band does not drag the pose there",
+              str(on128))
+
+
+def test_pose_rank_scores_by_co_presence_damped_by_size():
+    """ADR-0171 §4, the formula as written: sum(coFrames) / sqrt(members)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc(tiles=_POSE_NO_SEED))
+        pack = E.Pack(root)
+        ranked = pack.pose_rank(176, locked=[0])
+        check(len(ranked) == 1, "the band's one pose is the one candidate", str(len(ranked)))
+        if len(ranked) != 1:
+            return
+        anchor, score, pose = ranked[0]
+        # coFrames against node 0: 1:480, 2:420, 3:40, 4:0 -> 940 over 4 members
+        want = 940 / math.sqrt(4)
+        check(anchor == 4 and abs(score - want) < 1e-9,
+              "the score is the summed co-presence damped by sqrt(member count)",
+              f"anchor={anchor} score={score:.3f} want={want:.3f}")
+        check(pack.pose_of(anchor).id == pose.id,
+              "the ranked pose is the one a reopened session resolves",
+              f"{pose.id} vs {pack.pose_of(anchor).id}")
+
+
+def test_pose_rank_drops_the_uncorrelated_and_collapses_one_anchor():
+    """A pose that never shared a frame with the locked set is not a
+    candidate, and two poses resolving to one anchor are offered once — the
+    artist must not be able to pick a silhouette that reopening would not
+    restore."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        # A second silhouette over the same rarest member (node 4), seen less
+        # often, plus one built only from node 4 and the zero-coFrames decoy.
+        twin = {"id": "pose001", "frames": 12, "size": [2, 2],
+                "tiles": [{"node": n, "dx": d[0], "dy": d[1]}
+                          for n, d in ((1, (0, 0)), (2, (1, 0)), (4, (0, 1)))]}
+        _write_poses(sheets, _poses_doc(tiles=_POSE_NO_SEED, extra_poses=[twin]))
+        pack = E.Pack(root)
+        ranked = pack.pose_rank(176, locked=[0])
+        anchors = [a for a, _s, _p in ranked]
+        check(anchors == [4], "two poses over one anchor are one candidate", str(anchors))
+        check(ranked and ranked[0][2].id == "pose000",
+              "the candidate shown is the most-seen silhouette, as `pose_of` picks it",
+              str(ranked and ranked[0][2].id))
+        check(pack.pose_rank(176, locked=[]) == [],
+              "an empty lock set ranks nothing, as for nodes", "")
+
+
+def test_a_silhouette_already_composed_is_not_offered_again():
+    """The counterpart of the anchor dedup, found on a real Mega Man 3 pack:
+    several anchors resolve to one pose, so filtering candidates by anchor
+    alone offers the artist the very picture already on the row, one cell to
+    its left. Seeding node 0 composes the pose that contains it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())  # node 0 is a member of pose000
+        pack = E.Pack(root)
+        check(pack.pose_of(0) is not None and pack.pose_of(0).id == "pose000",
+              "the seeded node resolves to the pose it belongs to")
+        check(pack.pose_rank(176, locked=[0]) == [],
+              "the band's only silhouette is already composed, so nothing is offered",
+              str(pack.pose_rank(176, locked=[0])))
+
+
+def test_pose_cells_keep_the_silhouette_and_never_repeat_a_node():
+    """ADR-0171 §5: composing poses changes which cells land where, not the
+    file. A node already placed is not emitted twice — `mep_build.py` fans a
+    painted cell back out by its tile key, so two cells on one key would be
+    two answers to the same question."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())
+        pack = E.Pack(root)
+        cells = pack.pose_cells([4])
+        placed = {n: (cx, cy) for n, cx, cy in cells}
+        # Node 4 is the fixture's vocabulary node that no sheet draws — the
+        # real mismatch S10.a hit (poses.json indexes 288 nodes, the sheet drew
+        # 241). It is skipped, and the rest keeps its offsets.
+        drawn = {n: d for n, d in _POSE_TILES.items() if n != 4}
+        check(placed == drawn, "the pose keeps its own shape on the sheet", str(placed))
+        check(4 not in placed, "a member no sheet draws is not exported", str(placed))
+        twice = pack.pose_cells([4, 4])
+        nodes = [n for n, _cx, _cy in twice]
+        check(len(nodes) == len(set(nodes)), "a node is never emitted twice", str(nodes))
+
+
+def test_pose_placements_reach_the_exported_sheet():
+    """The composed sprite sheet puts each cell where the pose put it, and is
+    still ordinary `mep_build.py` input with `seed`/`locked` naming nodes."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())
+        pack = E.Pack(root)
+        placements = pack.pose_cells([4])
+        nodes = [n for n, _cx, _cy in placements]
+        name = pack.export("sprite", nodes, seed=4, locked=[], band=176,
+                           to_dir=sheets, placements=placements)
+        doc = json.loads((sheets / f"{name}.json").read_text())
+        by_node = {c["metatile"]: (c["x"], c["y"]) for c in doc["cells"]}
+        stride = 8 + E.GUTTER
+        want = {n: (E.GUTTER + dx * stride, E.GUTTER + dy * stride)
+                for n, (dx, dy) in _POSE_TILES.items() if n != 4}
+        check(by_node == want, "every cell is at its pose offset", str(by_node))
+        check(doc["seed"] == 4 and doc["locked"] == [],
+              "seed and locked still name nodes (ADR-0171 §5)", str(doc.get("seed")))
+        docs, _ = mep_build_load(sheets)
+        check(any(d.kind == "sprite" for d in docs),
+              "the composed pose sheet is ordinary mep_build input", str(len(docs)))
+
+
+def test_pack_without_poses_ranks_nodes_as_before():
+    """The fallback rung: no sidecar, no pose candidates, and `sprite_rank`
+    still answers exactly as it does today."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        pack = E.Pack(root)
+        check(pack.pose_rank(176, locked=[0]) == [],
+              "a pack with no sidecar offers no pose candidates", "")
+        check(pack.pose_band_members(176) == [],
+              "and no band poses", "")
+        nodes = [n for n, _co in pack.sprite_rank(176, locked=[0])]
+        check(nodes[:2] == [1, 2], "the node ranking is untouched", str(nodes))
+
+
 def main():
     tests = [
         test_missing_adjacency_tells_artist_to_rebootstrap,
@@ -635,6 +818,14 @@ def main():
         test_malformed_pose_sidecar_degrades_to_the_walk,
         test_partial_pose_sidecar_keeps_what_it_can,
         test_figure_layout_edges_do_not_raise,
+        test_pose_anchor_is_the_rarest_member,
+        test_pose_band_membership_is_the_bottom_row,
+        test_pose_rank_scores_by_co_presence_damped_by_size,
+        test_pose_rank_drops_the_uncorrelated_and_collapses_one_anchor,
+        test_a_silhouette_already_composed_is_not_offered_again,
+        test_pose_cells_keep_the_silhouette_and_never_repeat_a_node,
+        test_pose_placements_reach_the_exported_sheet,
+        test_pack_without_poses_ranks_nodes_as_before,
     ]
     for t in tests:
         t()

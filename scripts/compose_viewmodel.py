@@ -153,15 +153,67 @@ class ComposeViewModel:
         return self.pack.background_rank(base) if base else []
 
     def sprite_rank(self) -> list:
+        """`[(anchor, score)]` for the band, most-promising first.
+
+        ADR-0171: with a pose sidecar the candidates are *poses*, addressed by
+        the anchor node `locked` stores, and only the pack recorded before
+        ADR-0170 falls back to ranking bare nodes. The tuple shape is the same
+        either way, so the row and the swap gesture do not care which rung of
+        the ladder answered."""
         if not self.pack or self.mode != "sprite" or self.band is None:
             return []
         base = self.locked_list()
-        return self.pack.sprite_rank(self.band, locked=base) if base else []
+        if not base:
+            return []
+        if self.uses_poses():
+            return [(anchor, score) for anchor, score, _pose in
+                    self.pack.pose_rank(self.band, locked=base)]
+        return self.pack.sprite_rank(self.band, locked=base)
+
+    def uses_poses(self) -> bool:
+        """Whether this pack composes poses or the pre-ADR-0170 fallback."""
+        return bool(self.pack and self.pack.poses)
+
+    def pose_for(self, anchor):
+        """The silhouette an anchor stands for, or None on the fallback path —
+        the View draws this instead of the anchor's lone 8x8 tile."""
+        return self.pack.pose_of(anchor) if self.uses_poses() else None
+
+    def placements(self) -> list:
+        """`[(node, cx, cy)]` the composed band exports as, or None when the
+        pack has no poses and the cells simply wrap in reading order."""
+        if not (self.uses_poses() and self.mode == "sprite"):
+            return None
+        return self.pack.pose_cells(self.locked_list())
 
     def band_members(self) -> list:
         if not self.pack or not self.pack.adjacency.sprites_present or self.band is None:
             return []
         return self.pack.adjacency.band_members(self.band)
+
+    def band_poses(self) -> list:
+        """`[(anchor, pose)]` the artist can seed this band with, most-seen
+        first — the pose-unit counterpart of `band_members`, and empty on a
+        pack recorded before ADR-0170 so the View falls back to that list.
+
+        One entry per anchor, and the pose shown for it is the one `pose_for`
+        resolves, for the same reason `pose_rank` collapses them: `locked`
+        names the anchor, so offering two silhouettes that lock the same node
+        would let the artist pick one and reopen the other."""
+        if not (self.uses_poses() and self.band is not None):
+            return []
+        out, seen, shown_ids = [], set(), set()
+        for pose in self.pack.pose_band_members(self.band):
+            anchor = self.pack.pose_anchor(pose)
+            if anchor in seen:
+                continue
+            seen.add(anchor)
+            shown = self.pack.pose_of(anchor) or pose
+            if shown.id in shown_ids:
+                continue  # two anchors, one silhouette: offer it once
+            shown_ids.add(shown.id)
+            out.append((anchor, shown))
+        return out
 
     def row_spec(self) -> list:
         """The clickable row's cells: the locked row (seed first), plus
@@ -169,7 +221,10 @@ class ComposeViewModel:
         fits the composed set."""
         cells = [{"node": n} for n in self.locked_list()]
         if self.mode == "sprite" and self.band is not None:
-            cand = self.pack.sprite_rank(self.band, locked=self.locked_list())
+            #`self.sprite_rank`, not the Model's: on a pack with poses the '+'
+            #must propose the anchor of a whole silhouette, the same candidate
+            #the suggestion list shows (ADR-0171 §1).
+            cand = self.sprite_rank()
             if cand:
                 cells.append({"node": None, "add": cand[0][0]})
         return cells
@@ -196,7 +251,10 @@ class ComposeViewModel:
         order = self.locked_list()
         if not self.pack or not order:
             return None
-        canvas, _cells, columns, unit = self.pack.compose_sheet(self.mode, order)
+        placements = self.placements()
+        if placements:
+            order = [n for n, _cx, _cy in placements]
+        canvas, _cells, columns, unit = self.pack.compose_sheet(self.mode, order, placements)
         where = Path(to_dir) if to_dir else self.pack.sheets_dir
         name = self.pack.next_free_name(where) if where.is_dir() else "usr???"
         return canvas, columns, unit, name
@@ -206,6 +264,9 @@ class ComposeViewModel:
         if not order:
             raise E.ComposeError("nothing to export")
         if self.mode == "sprite":
-            return self.pack.export("sprite", order, seed=self.seed, locked=self.kept,
-                                    band=self.band, to_dir=Path(to_dir))
+            placements = self.placements()
+            nodes = [n for n, _cx, _cy in placements] if placements else order
+            return self.pack.export("sprite", nodes, seed=self.seed, locked=self.kept,
+                                    band=self.band, to_dir=Path(to_dir),
+                                    placements=placements)
         return self.pack.export("object", order, seed=self.seed, locked=self.kept, to_dir=Path(to_dir))

@@ -17,6 +17,7 @@ tkinter, so `test_compose_engine.py` and CI run headless.
 """
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -28,6 +29,11 @@ import sheet_repaint  # noqa: E402 — Image/read_png/write_png, stdlib RGBA cod
 GUTTER = 1  # kSheetGutter (TileSheetTypes.h): the cell grid's transparent margin
 BAND_QUANTUM = 8  # ADR-0164 §1: sprite floors are quantised to 8 px (Y + 8)
 SHEET_VERSION = 1  # mep_build's ADR-0153 v1 schema
+#Below this alpha a source pixel does not cover what it is pasted over: a
+#sprite tile is mostly transparent, so pasting one opaquely would erase the
+#neighbour it overlaps in a composed pose. Same value the scene spike
+#(`spike_compose_scene.paste_alpha`) has always used.
+_ALPHA_CUTOFF = 128
 _COMPOSED_RE = re.compile(r"^usr(\d{3})\.json$")
 
 
@@ -498,6 +504,15 @@ class Pack:
     def sprite_home(self, node: int):
         return self._node_home(node, _SPRITE_ART_KINDS)
 
+    def has_node_art(self, node: int, sprite: bool) -> bool:
+        """Whether `node_art` would resolve pixels for this node. The sprite
+        vocabulary is bigger than the sheet that draws it, so a caller
+        assembling cells has to ask before it commits to a layout."""
+        try:
+            return self.node_art(node, sprite) is not None
+        except ComposeError:
+            return False
+
     def node_art(self, node: int, sprite: bool):
         """The 1x pixels of a node — the source the composition pastes.
 
@@ -665,6 +680,182 @@ class Pack:
             return (pose.layout(), "poses", pose)
         return (walk_layout(nodes, doc.get("evidence")), "walk", None)
 
+    # -- the pose as the unit of the sprite layer (ADR-0171) -----------------
+
+    def pose_anchor(self, pose) -> int:
+        """The node that identifies `pose` in `seed`/`locked`.
+
+        ADR-0171 §5 keeps those fields naming nodes, so a reopened session has
+        to find the pose again from one member. The pick is the pose's
+        *rarest* node — fewest `appearances` in the sprite vocabulary, ties
+        broken in reading order. A character's poses share the torso and the
+        head; what tells them apart is the arm or the leg that moved, which is
+        exactly the member seen least often. Anchoring on the common tile
+        would make every pose of a character resolve to the same silhouette on
+        reopen."""
+        sp = self.adjacency.sp
+
+        def rank(item):
+            node, (dx, dy) = item
+            entry = sp.get(node)
+            return (entry.appearances if entry else 0, dy, dx, node)
+
+        return min(pose.tiles.items(), key=rank)[0]
+
+    def pose_bottom_nodes(self, pose) -> list:
+        """The pose's bottom row — its members at `max(dy)`, which is the part
+        of it that stands on a floor (ADR-0171 §3)."""
+        if not pose.tiles:
+            return []
+        bottom = max(dy for _dx, dy in pose.tiles.values())
+        return sorted(n for n, (_dx, dy) in pose.tiles.items() if dy == bottom)
+
+    def pose_band_members(self, band: int) -> list:
+        """The poses whose bottom row stands on `band` (ADR-0171 §3).
+
+        A pose belongs to a band when the part of it on the floor does, not
+        when any member happens to pass through: a projectile crossing at head
+        height must not join a ground band merely because its owner's feet are
+        on one."""
+        if not self.poses:
+            return []
+        standing = set(self.adjacency.band_members(band))
+        if not standing:
+            return []
+        out = []
+        for pose in self.poses.entries:
+            if standing.intersection(self.pose_bottom_nodes(pose)):
+                out.append(pose)
+        return out
+
+    def pose_rank(self, band: int, locked: list, budget: int = 40):
+        """Rank the band's poses against the locked set — ADR-0171 §4.
+
+        `score = sum(coFrames(member, locked)) / sqrt(len(members))`. The sum
+        is the evidence ADR-0164 persists for exactly this question ("who
+        shared the floor at the same moment"); the square root damps the size
+        term without reversing it, because a bare sum would rank an 11-tile
+        pose above a 4-tile one on size alone and a mean would invert the bias
+        into a preference for the fragments ADR-0171 exists to stop promoting.
+        This is a ranking heuristic over recorded evidence, not a derived
+        quantity.
+
+        Returns `[(anchor, score, pose)]`, most-promising first, dropping a
+        pose with no co-presence at all against the locked set — the same rule
+        `sprite_rank` applies to a node."""
+        locked = list(dict.fromkeys(locked))
+        if not locked:
+            return []
+        taken = set(locked)
+        #One candidate per anchor, and the pose shown for it is the one
+        #`pose_of` resolves — otherwise the artist locks a silhouette and
+        #reopening the session draws a different one, since `locked` names the
+        #anchor and nothing else (ADR-0171 §5). Several poses of a character
+        #legitimately share their rarest member, so this collapses them to the
+        #most-seen one rather than offering the artist five rows that all say
+        #the same thing and all lock the same node.
+        seen_anchor, seen_pose = set(), set()
+        #A silhouette already on the row is not a candidate either. Several
+        #anchors resolve to one pose (a member's rarest tile is often shared),
+        #so filtering only by anchor offers the artist the picture already
+        #composed, one cell to its left.
+        for node in locked:
+            already = self.pose_of(node)
+            if already is not None:
+                seen_pose.add(already.id)
+        scored = []
+        for pose in self.pose_band_members(band):
+            members = [n for n in pose.tiles]
+            if not members:
+                continue
+            anchor = self.pose_anchor(pose)
+            if anchor in taken or anchor in seen_anchor:
+                continue  # already composed, or already offered under this anchor
+            seen_anchor.add(anchor)
+            shown = self.pose_of(anchor) or pose
+            if shown.id in seen_pose:
+                continue  # two anchors resolving to one silhouette is one candidate
+            seen_pose.add(shown.id)
+            members = [n for n in shown.tiles] or members
+            co = sum(self.adjacency.co_frames(a, n) for a in locked for n in members)
+            if co == 0:
+                continue  # never on screen with the locked set -> not a candidate
+            scored.append((co / math.sqrt(len(members)), shown.frames, shown.id, anchor, shown))
+        scored.sort(key=lambda s: (-s[0], -s[1], s[2]))
+        ranked = [(anchor, score, pose) for score, _frames, _pid, anchor, pose in scored]
+        return ranked if budget is None else ranked[:budget]
+
+    def pose_of(self, anchor: int):
+        """The pose a composed anchor stands for, or None when the pack has no
+        sidecar (the caller then composes the bare node, ADR-0171 §1 rung 3)."""
+        return self.pose_for_anchor(anchor)
+
+    def pose_art(self, pose):
+        """A pose drawn as the silhouette it is, 1x, tightly cropped.
+
+        A member whose art no sheet shows is skipped rather than blanked, the
+        same rule ADR-0164 §3 sets for a missing pixel — a hole is honest, a
+        black square is a lie about the recording."""
+        tiles = pose.tiles
+        if not tiles:
+            return None
+        x0 = min(dx for dx, _dy in tiles.values())
+        y0 = min(dy for _dx, dy in tiles.values())
+        cols, rows = pose.extent()
+        img = sheet_repaint.Image(cols * 8, rows * 8)
+        for node, (dx, dy) in sorted(tiles.items()):
+            try:
+                art = self.node_art(node, sprite=True)
+            except ComposeError:
+                continue
+            ox, oy = (dx - x0) * 8, (dy - y0) * 8
+            for row in range(art.height):
+                for col in range(art.width):
+                    px = art.get(col, row)
+                    if px[3] < _ALPHA_CUTOFF:
+                        continue
+                    tx, ty = ox + col, oy + row
+                    if 0 <= tx < img.width and 0 <= ty < img.height:
+                        img.set(tx, ty, px)
+        return img
+
+    def pose_cells(self, anchors: list):
+        """`[(node, dx, dy)]` for a composed run of poses — what `export`
+        writes as `cells[]` (ADR-0171 §5: composing poses changes which cells
+        land where, not the file).
+
+        Each pose keeps its own shape, so the character appears assembled on
+        the sheet instead of spread across a row of slivers, and the poses are
+        laid left to right with one empty cell between them. A node already
+        placed by an earlier pose is not emitted twice: `mep_build.py` fans a
+        painted cell back out by its tile key, so two cells carrying one key
+        would be two answers to the same question.
+
+        A member no sheet draws is skipped, not exported: `poses.json` indexes
+        the whole sprite vocabulary while the sheet only draws the cells it
+        routed, so a real pose can name a node that has no pixels. `pose_art`
+        already leaves that hole rather than blanking it; `export` would raise
+        on it, which would make such a pose uncomposable."""
+        out, placed, pen = [], set(), 0
+        for anchor in anchors:
+            pose = self.pose_of(anchor)
+            if pose is None or not pose.tiles:
+                if anchor not in placed:
+                    out.append((anchor, pen, 0))
+                    placed.add(anchor)
+                    pen += 1
+                continue
+            x0 = min(dx for dx, _dy in pose.tiles.values())
+            y0 = min(dy for _dx, dy in pose.tiles.values())
+            cols, _rows = pose.extent()
+            for node, (dx, dy) in sorted(pose.tiles.items(), key=lambda kv: (kv[1][1], kv[1][0])):
+                if node in placed or not self.has_node_art(node, sprite=True):
+                    continue
+                out.append((node, pen + dx - x0, dy - y0))
+                placed.add(node)
+            pen += cols + 1
+        return out
+
     # -- export --------------------------------------------------------------
 
     def next_free_name(self, in_dir: Path = None) -> str:
@@ -684,13 +875,19 @@ class Pack:
             n += 1
         return f"usr{n:03d}"
 
-    def compose_sheet(self, kind: str, nodes: list):
+    def compose_sheet(self, kind: str, nodes: list, placements: list = None):
         """Lay the kept cells out as the composed sheet, without touching disk.
 
         Returns `(canvas, cells, columns, unit)` - the pixels `export` writes
         and the sidecar cell records that describe them. `export` is this plus
         the file names, so the editor can show a preview that is the sheet and
-        not a second drawing of it: one layout, or the preview lies."""
+        not a second drawing of it: one layout, or the preview lies.
+
+        `placements` is `[(node, cx, cy)]` in cell coordinates, from
+        `pose_cells` - the sprite layer composes poses (ADR-0171 §5), and a
+        pose keeps its own shape on the sheet so the character appears
+        assembled instead of spread across a row of slivers. Without it the
+        cells wrap in reading order, which is what the object layer wants."""
         if kind not in ("object", "sprite"):
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
@@ -704,15 +901,22 @@ class Pack:
             if art.width != unit or art.height != unit:
                 raise ComposeError(f"node {node} art is {art.width}x{art.height}, not {unit}x{unit}")
             arts.append(art)
-        columns = max(1, min(len(nodes), 16))
         stride = unit + GUTTER
-        rows = (len(nodes) + columns - 1) // columns
+        if placements:
+            coords = [(cx, cy) for _n, cx, cy in placements]
+            columns = max(cx for cx, _cy in coords) + 1
+            rows = max(cy for _cx, cy in coords) + 1
+        else:
+            columns = max(1, min(len(nodes), 16))
+            coords = [(i % columns, i // columns) for i in range(len(nodes))]
+            rows = (len(nodes) + columns - 1) // columns
         canvas = sheet_repaint.Image(columns * stride + GUTTER, rows * stride + GUTTER)
         adj = self.adjacency
         cells = []
         for i, node in enumerate(nodes):
-            x = GUTTER + (i % columns) * stride
-            y = GUTTER + (i // columns) * stride
+            cx, cy = coords[i]
+            x = GUTTER + cx * stride
+            y = GUTTER + cy * stride
             canvas.paste(arts[i], x, y)
             src = adj.sp.get(node) if sprite else adj.bg.get(node)
             cells.append({
@@ -727,7 +931,7 @@ class Pack:
         return canvas, cells, columns, unit
 
     def export(self, kind: str, nodes: list, seed, locked: list, band=None,
-               to_dir: Path = None):
+               to_dir: Path = None, placements: list = None):
         """Write a composed sheet (`usrNNN`) to `to_dir` (default the pack's own
         sheets dir). `kind` is `object` or `sprite`; `nodes` are the kept node
         ids in sheet order; `band` is the quantised bottom for a sprite band.
@@ -738,7 +942,7 @@ class Pack:
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
             raise ComposeError("nothing to export")
-        canvas, cells, columns, unit = self.compose_sheet(kind, nodes)
+        canvas, cells, columns, unit = self.compose_sheet(kind, nodes, placements)
         to_dir = Path(to_dir) if to_dir is not None else self.sheets_dir
         if not to_dir.is_dir():
             raise ComposeError(f"{to_dir}: not a folder")

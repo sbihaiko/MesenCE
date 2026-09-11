@@ -56,6 +56,15 @@ def image_photo(img, scale, backdrop=(0x22, 0x22, 0x2A)):
     return photo, width, height
 
 
+def _pose_shape(pose):
+    """A pose in one glance: the cells its tiles actually span, how many tiles
+    carry it, and the frame count it was seen in (ADR-0171 §1). `extent` and
+    not `size`, because `size` is what the sidecar claims and the extent is
+    what the tiles the editor can draw support."""
+    cols, rows = pose.extent()
+    return f"{cols}x{rows}  {len(pose.tiles)}t  {pose.frames}f"
+
+
 class EditorApp:
     def __init__(self, root: tk.Tk, folder: Path):
         self.root = root
@@ -63,6 +72,13 @@ class EditorApp:
         self.vm = ComposeViewModel()
         self._imgs = []       # keep PhotoImage references alive
         self._cell_imgs = []
+        # The grid the band row was last painted with (ADR-0171: a row of
+        # poses has cells as big as its biggest silhouette, so the geometry is
+        # computed per repaint instead of being a constant). Drawing and
+        # hit-testing must read this same dict or they drift apart, which is
+        # exactly the bug that cost the first GUI pass; None means the fixed
+        # pre-ADR-0171 grid, which `compose_editor_layout` reproduces verbatim.
+        self._row_metrics = None
 
         top = ttk.Frame(root, padding=6)
         top.pack(fill="x")
@@ -248,7 +264,21 @@ class EditorApp:
         self.refresh_all()
 
     def _fill_sp_seed_list(self):
+        """The band's seed palette: poses on a pack recorded since ADR-0170,
+        bare nodes on one recorded before it (`band_poses` is empty there, and
+        that emptiness is the only gate — the View never asks which rung of
+        ADR-0171 §1's ladder answered).
+
+        Every line still starts with `#<anchor>`, because that prefix is the
+        contract `_selected_node` parses and ADR-0171 §5 keeps `seed`/`locked`
+        naming nodes. What follows is what an artist picks on: how big the
+        silhouette is, how many tiles carry it, and how many frames it was
+        seen in."""
         self.sp_seed.delete(0, "end")
+        for anchor, pose in self.vm.band_poses():
+            self.sp_seed.insert("end", f"#{anchor}  {_pose_shape(pose)}")
+        if self.sp_seed.size():
+            return
         for node in self.vm.band_members():
             self.sp_seed.insert("end", f"#{node}")
 
@@ -267,19 +297,63 @@ class EditorApp:
         self.refresh_all()
 
     def _refresh_sp_sugg(self):
+        """The ranked candidates. On a pose pack the score is ADR-0171 §4's
+        damped sum (a float, not a raw coFrames count), so it is labelled as a
+        score and the line carries the silhouette's shape instead of the
+        anchor tile's name — the artist is choosing a figure, not a fragment."""
         self.sp_sugg.delete(0, "end")
         if self.vm.mode != "sprite":
             return
-        for node, co in self.vm.sprite_rank():
+        for node, score in self.vm.sprite_rank():
+            pose = self.vm.pose_for(node)
+            if pose is not None:
+                self.sp_sugg.insert("end", f"#{node}  score {score:.2f}  {_pose_shape(pose)}")
+                continue
             name = self.vm.shape_name(node)
-            self.sp_sugg.insert("end", f"#{node}  coFrames {co}{'  ' + name if name else ''}")
+            self.sp_sugg.insert("end", f"#{node}  coFrames {score}{'  ' + name if name else ''}")
 
     # ---- sprite band row (the clickable composition row) --------------------
+
+    def _row_art(self, cell):
+        """What one row cell shows: `(art, caption)`.
+
+        ADR-0171 §1 — the unit of the sprite layer is the pose, so a locked
+        cell draws the whole silhouette its anchor stands for, not the anchor's
+        lone 8x8 fragment. `pose_for` answers None on a pack recorded before
+        ADR-0170 and on an anchor in no pose, which is the ladder's third rung:
+        the bare node, a degenerate pose of one.
+
+        The caption keeps the `#<anchor>` prefix `_selected_node` parses and
+        appends the shape, so "#12  3x4" says both who the cell locks and how
+        much of the screen it covers. `art` is None when the pixels cannot be
+        resolved; the caller draws the error box rather than a blank."""
+        node = cell["node"]
+        if node is None:
+            cand = cell.get("add")
+            return (None, "" if cand is None else f"#{cand}")
+        pose = self.vm.pose_for(node)
+        try:
+            if pose is not None:
+                cols, rows = pose.extent()
+                return (self.vm.pack.pose_art(pose), f"#{node}  {cols}x{rows}")
+            return (self.vm.node_art(node, sprite=True), f"#{node}")
+        except E.ComposeError:
+            return (None, f"#{node}")
+
+    def row_metrics(self):
+        """The grid the band row is currently painted with — the dict
+        `compose_editor_layout` builds from this repaint's art sizes, or None
+        for the fixed pre-ADR-0171 grid. Published for a driver that has to
+        aim a synthetic click at a cell (`render_compose_editor.py`), which
+        must use the very metrics the row was drawn with or it clicks a
+        different cell than the one it means to."""
+        return self._row_metrics
 
     def _refresh_row(self):
         self.row_canvas.delete("all")
         self._cell_imgs.clear()
         c = self.row_canvas
+        self._row_metrics = None
         if not self.vm.pack or self.vm.mode != "sprite":
             c.config(height=L.EMPTY_ROW_H)
             c.create_text(8, 15, anchor="w", fill="#556", text=L.ROW_WRONG_LAYER)
@@ -289,46 +363,65 @@ class EditorApp:
             c.config(height=L.EMPTY_ROW_H)
             c.create_text(8, 15, anchor="w", fill="#556", text=L.ROW_NEEDS_SEED)
             return
-        width, height = L.grid_size(len(spec))
+        drawn = [self._row_art(cell) for cell in spec]
+        # One grid for the whole repaint, sized to the biggest silhouette in
+        # it, and stored before anything is drawn: `_row_index_at` reads the
+        # same dict back, so drawing and hit-testing cannot answer from two
+        # different grids. A pack without poses passes None and keeps today's
+        # fixed cells to the pixel (`row_metrics(None)` is the old constants).
+        # The ghost `+` cell asks for nothing (8x8) - it holds no art, so it
+        # must not be what inflates the row.
+        if self.vm.uses_poses():
+            sizes = [(a.width, a.height) if a else (8, 8) for a, _cap in drawn]
+            self._row_metrics = L.row_metrics(sizes)
+        metrics = self._row_metrics
+        width, height = L.grid_size(len(spec), metrics)
         c.config(width=width, height=height)
-        for i, cell in enumerate(spec):
+        for i, (cell, (art, caption)) in enumerate(zip(spec, drawn)):
             # Every coordinate comes from `compose_editor_layout`, whose
             # `cell_origin` is the inverse of the `index_at` a click goes
             # through - so what is drawn here is what a click there hits.
-            self._draw_row_cell(cell, i, is_seed=(i == 0 and cell["node"] is not None))
+            self._draw_row_cell(cell, i, art, caption, metrics,
+                                is_seed=(i == 0 and cell["node"] is not None))
 
-    def _draw_row_cell(self, cell, index, is_seed):
-        bx, by, bx1, by1 = L.art_box(index)
-        cap_x, cap_y = L.caption_point(index)
+    def _draw_row_cell(self, cell, index, art, caption, metrics, is_seed):
+        bx, by, bx1, by1 = L.art_box(index, metrics)
+        cap_x, cap_y = L.caption_point(index, metrics)
         c = self.row_canvas
         if cell["node"] is None:
-            cand = cell.get("add")
             c.create_rectangle(bx, by, bx1, by1, outline="#5a6b85", dash=(3, 2))
             c.create_text((bx + bx1) // 2, (by + by1) // 2, text="+", fill="#93a7c4",
                           font=("", 16, "bold"))
-            if cand is not None:
-                c.create_text(cap_x, cap_y, text=f"#{cand}", fill="#5f6f8a", font=("", 8))
+            if caption:
+                c.create_text(cap_x, cap_y, text=caption, fill="#5f6f8a", font=("", 8))
             return
         node = cell["node"]
-        try:
-            art = self.vm.node_art(node, sprite=True)
-        except E.ComposeError:
+        if art is None:
             c.create_rectangle(bx, by, bx1, by1, outline="#c06058", width=2)
             c.create_text((bx + bx1) // 2, (by + by1) // 2, text="?", fill="#c06058",
                           font=("", 14, "bold"))
             c.create_text(cap_x, cap_y, text=f"#{node}", fill="#d7a3a3", font=("", 8))
             return
-        img, w, h = image_photo(art, L.row_cell_scale(art.width))
+        # One magnification for the whole row (`metrics["scale"]`), so two
+        # silhouettes drawn side by side really are to scale - the comparison
+        # ADR-0171 §1 asks the artist to make. Re-fitted against this cell's
+        # own box as a floor, so a cell can clip nothing even if the grid and
+        # the art ever disagree.
+        scale = L.row_cell_scale(art.width, art.height) if metrics is None else \
+            min(metrics["scale"], L.fit_scale_box(bx1 - bx, by1 - by, art.width, art.height))
+        img, w, h = image_photo(art, scale)
         self._cell_imgs.append(img)
         c.create_image(bx + (bx1 - bx - w) // 2, by + (by1 - by - h) // 2, image=img,
                        anchor="nw")
         outline = "#ffd27d" if is_seed else "#7fa7e0"
         fill = "#ffe2a8" if is_seed else "#cfd8e6"
         c.create_rectangle(bx, by, bx1, by1, outline=outline, width=2)
-        c.create_text(cap_x, cap_y, text=f"#{node}", fill=fill, font=("", 8))
+        c.create_text(cap_x, cap_y, text=caption, fill=fill, font=("", 8))
 
     def _row_index_at(self, event):
-        return L.index_at(event.x, event.y)
+        """The cell a click landed on, resolved through the very metrics the
+        last repaint drew with (see `_row_metrics`)."""
+        return L.index_at(event.x, event.y, self._row_metrics)
 
     def _row_left(self, event):
         if not self.vm.pack:
@@ -386,16 +479,25 @@ class EditorApp:
             return
         sprite = listbox in (self.sp_seed, self.sp_sugg)
         kind = "sprite" if sprite else "object"
+        # A sprite list names an anchor, and ADR-0171 makes the pose behind it
+        # the thing being judged - previewing the anchor's own 8x8 would show
+        # a shoulder where the artist asked to see the character.
+        pose = self.vm.pose_for(node) if sprite else None
         try:
-            art = self.vm.node_art(node, sprite=sprite)
+            art = self.vm.pack.pose_art(pose) if pose is not None else \
+                self.vm.node_art(node, sprite=sprite)
         except E.ComposeError as e:
             self.status.set(str(e))
             self.preview_lbl.set(f"#{node} ({kind}) — {e}")
             return
-        img, _w, _h = image_photo(art, L.preview_scale(art.width))
+        if art is None:
+            self.preview_lbl.set(f"#{node} ({kind}) — nothing to draw")
+            return
+        img, _w, _h = image_photo(art, L.preview_scale(art.width, art.height))
         self.preview_tk = img
         self.preview.create_image(L.PREVIEW_BOX // 2, L.PREVIEW_BOX // 2, image=img)
-        self.preview_lbl.set(f"#{node} ({kind})")
+        self.preview_lbl.set(f"#{node} ({kind})" if pose is None else
+                             f"#{node} (pose {_pose_shape(pose)})")
 
     def refresh_all(self):
         """Pull every view from the ViewModel's current state — the single
@@ -425,7 +527,11 @@ class EditorApp:
             self.canvas.config(height=24)
             return
         sheet, columns, unit, name = composed
-        cells = len(self.vm.locked_list())
+        #The caption describes the *file*, so it counts the cells the sheet
+        #really carries: on the pose path one locked anchor writes a whole
+        #silhouette (ADR-0171 §5), so the locked count would understate it by
+        #an order of magnitude.
+        cells = len(self.vm.placements() or self.vm.locked_list())
         scale = L.export_scale(sheet.width)
         img, _w, h = image_photo(sheet, scale)
         self._imgs.append(img)

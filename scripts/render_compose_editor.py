@@ -30,6 +30,10 @@ the ViewModel, so the wiring itself is exercised:
     lock-sprite               press "Lock selected suggestion"
     row-click:<i>             left-click the composed row's cell <i>
     row-remove:<i>            right-click the composed row's cell <i>
+    sprite-band-demo[:<n>]    the whole ADR-0171 gesture in one step: open the
+                              sprite tab, seed the band's first pose and lock
+                              the top <n> (default 1) suggestions, so one
+                              render shows a composed pose band
 
 Needs Pillow (only to write the PNG); the editor itself stays stdlib
 (ADR-0165).
@@ -300,9 +304,23 @@ def run_step(app, step):
     elif name == "lock-sprite":
         app._lock_sprite()
     elif name in ("row-click", "row-remove"):
-        x0, y0 = L.cell_origin(index)
-        click = Click(x0 + L.CELL_W // 2, y0 + L.CELL_H // 2)
+        # The row's grid is per-repaint since ADR-0171 (a band of poses has
+        # cells as big as its biggest silhouette), so the click is aimed
+        # through the metrics the app actually drew with. Computing it from
+        # the fixed CELL_W/CELL_H would hit a different cell than the one the
+        # step names - the same drawing/hit-testing drift the layout module
+        # exists to prevent.
+        click = Click(*L.cell_center(index, app.row_metrics()))
         (app._row_left if name == "row-click" else app._row_right)(click)
+    elif name == "sprite-band-demo":
+        app.sprite_tab.master.select(app.sprite_tab)
+        select(app.sp_seed, 0)
+        app._seed_sprite()
+        for _ in range(index or 1):
+            if not app.sp_sugg.size():
+                break
+            select(app.sp_sugg, 0)
+            app._lock_sprite()
     else:
         raise SystemExit(f"unknown step: {step}")
 

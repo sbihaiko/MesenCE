@@ -18,8 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compose_engine as E  # noqa: E402
+import sheet_repaint  # noqa: E402 — to read back the exported PNG
 from compose_viewmodel import ComposeViewModel  # noqa: E402
-from test_compose_engine import make_pack, _OBJ000, mep_build_load  # noqa: E402
+from test_compose_engine import (make_pack, _OBJ000, mep_build_load,  # noqa: E402
+                                 _write_spr_group, _write_poses, _poses_doc,
+                                 _POSE_NO_SEED)
 
 _FAILURES = []
 
@@ -198,6 +201,118 @@ def test_switching_layers_never_leaks_node_ids_into_the_other_suggestion_list():
               str(vm.sprite_rank()))
 
 
+
+# -- ADR-0171: the sprite layer's unit is the pose --------------------------
+
+
+def _pose_pack(td: Path) -> Path:
+    """The same fixture, recorded since ADR-0170: it carries `poses.json`."""
+    root = make_pack(td)
+    sheets = root / "textures" / "sheets"
+    _write_spr_group(sheets)
+    _write_poses(sheets, _poses_doc(tiles=_POSE_NO_SEED))
+    return root
+
+
+def test_the_row_proposes_a_pose_when_the_pack_has_one():
+    """The '+' ghost and the suggestion list are the same candidate, and on a
+    pack with a sidecar that candidate is a pose's anchor — not a bare 8x8
+    node the artist cannot judge (ADR-0171 §1)."""
+    with tempfile.TemporaryDirectory() as td:
+        vm = ComposeViewModel()
+        vm.load(_pose_pack(Path(td)))
+        check(vm.uses_poses(), "a pack with poses.json composes poses")
+        vm.set_band(176)
+        vm.seed_sprite(0)
+        ranked = vm.sprite_rank()
+        check([a for a, _s in ranked] == [4], "the band ranks its pose, by anchor", str(ranked))
+        ghost = vm.row_spec()[-1]["add"]
+        check(ghost == 4, "the '+' proposes the same candidate the list shows", str(ghost))
+        pose = vm.pose_for(ghost)
+        check(pose is not None and pose.id == "pose000",
+              "the View can draw the silhouette behind the anchor", str(pose and pose.id))
+        check([a for a, _p in vm.band_poses()] == [4],
+              "band_poses offers one entry per anchor", str(vm.band_poses()))
+
+
+def test_a_composed_pose_exports_at_its_own_offsets_and_the_preview_is_the_file():
+    """ADR-0171 §5: composing poses changes which cells land where, not the
+    file — and the preview the artist approves is those very pixels."""
+    with tempfile.TemporaryDirectory() as td:
+        root = _pose_pack(Path(td))
+        vm = ComposeViewModel()
+        vm.load(root)
+        vm.set_band(176)
+        vm.seed_sprite(0)
+        vm.lock(vm.row_spec()[-1]["add"], "sprite")
+        placements = vm.placements()
+        check(placements is not None and len(placements) > 1,
+              "the composed band places cells by pose", str(placements))
+        out = root / "mep" / "textures" / "sheets"
+        out.mkdir(parents=True)
+        canvas, columns, unit, name = vm.preview_sheet(out)
+        written = vm.export(out)
+        check(written == name, "the preview named the file it previewed", f"{name} vs {written}")
+        import json
+        doc = json.loads((out / f"{written}.json").read_text(encoding="utf-8"))
+        by_node = {c["metatile"]: (c["x"], c["y"]) for c in doc["cells"]}
+        want = {n: (E.GUTTER + cx * (unit + E.GUTTER), E.GUTTER + cy * (unit + E.GUTTER))
+                for n, cx, cy in placements}
+        check(by_node == want, "every exported cell sits where the pose put it", str(by_node))
+        check(doc["seed"] == 0 and doc["locked"] == vm.kept,
+              "seed and locked still name nodes", str((doc["seed"], doc["locked"])))
+        on_disk = sheet_repaint.read_png(out / f"{written}.png")
+        check((on_disk.width, on_disk.height) == (canvas.width, canvas.height)
+              and bytes(on_disk.px) == bytes(canvas.px),
+              "the written sheet is the previewed canvas, pixel for pixel",
+              f"{on_disk.width}x{on_disk.height} vs {canvas.width}x{canvas.height}")
+        docs, _ = mep_build_load(out)
+        check(len(docs) == 1 and docs[0].kind == "sprite",
+              "mep_build loads the pose composition as an ordinary sprite sheet",
+              str([d.kind for d in docs]))
+
+
+def test_a_pack_without_the_sidecar_keeps_the_node_gestures():
+    """Rung 2/3 of ADR-0171 §1: a pack recorded before ADR-0170 composes
+    exactly as it does today, with no placements and no pose to draw."""
+    with tempfile.TemporaryDirectory() as td:
+        vm = ComposeViewModel()
+        vm.load(make_pack(Path(td)))
+        vm.set_band(176)
+        vm.seed_sprite(0)
+        check(not vm.uses_poses(), "no sidecar, no poses")
+        check(vm.placements() is None, "the cells wrap in reading order", str(vm.placements()))
+        check(vm.pose_for(1) is None, "there is no silhouette to draw")
+        check(vm.band_poses() == [], "and no pose seed list", str(vm.band_poses()))
+        check([a for a, _s in vm.sprite_rank()][:2] == [1, 2],
+              "the node ranking is the one the fixture always gave",
+              str(vm.sprite_rank()))
+
+
+def test_the_seed_list_offers_a_silhouette_once():
+    """Found on a real Mega Man 3 pack: 223 poses resolve to 62 addressable
+    silhouettes, because `locked` names a node and several anchors land on one
+    pose (ADR-0171 §5). The seed list must not print the same picture twice
+    under two anchors — picking either one composes the same thing."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        # A second, rarer silhouette whose own anchor (node 2) belongs to the
+        # most-seen one, so `pose_for` sends both anchors to pose000.
+        rare = {"id": "pose001", "frames": 9, "size": [2, 2],
+                "tiles": [{"node": 2, "dx": 1, "dy": 0}, {"node": 3, "dx": 0, "dy": 1}]}
+        _write_poses(sheets, _poses_doc(tiles=_POSE_NO_SEED, extra_poses=[rare]))
+        vm = ComposeViewModel()
+        vm.load(root)
+        vm.set_band(176)
+        shown = vm.band_poses()
+        check([p.id for _a, p in shown] == ["pose000"],
+              "one entry per silhouette, not per anchor", str([(a, p.id) for a, p in shown]))
+        check(all(vm.pose_for(a).id == p.id for a, p in shown),
+              "and every listed anchor really resolves to the silhouette shown")
+
+
 def main():
     tests = [
         test_load_reports_pack_summary_and_resets_state,
@@ -207,6 +322,10 @@ def main():
         test_swap_cell_out_of_range_or_no_alternative_is_a_safe_no_op,
         test_export_sprite_band_composition_is_legal_mep_build_input,
         test_switching_layers_never_leaks_node_ids_into_the_other_suggestion_list,
+        test_the_row_proposes_a_pose_when_the_pack_has_one,
+        test_a_composed_pose_exports_at_its_own_offsets_and_the_preview_is_the_file,
+        test_a_pack_without_the_sidecar_keeps_the_node_gestures,
+        test_the_seed_list_offers_a_silhouette_once,
     ]
     for t in tests:
         t()
