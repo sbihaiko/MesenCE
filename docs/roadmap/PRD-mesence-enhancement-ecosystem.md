@@ -891,7 +891,8 @@ files and in §3.
 | 0161 | proposed | positional palette-variant correspondence (F9.6 §5) |
 | 0162 | proposed | accuracy suite as a regression gate (H10); not in CI by decision |
 | 0165 | accepted | F9.18 composition editor: external stdlib tkinter tool over a host-free engine |
-| 0168 | proposed | figure (`sprNNN` group) as the unit — Phase 10 S10.a measures the pose-membership gap its own Context names before anyone accepts it |
+| 0168 | **superseded** (2026-09-11) by ADR-0171 | figure (`sprNNN` group) as the unit — S10.a measured the walk at 6.7 % / 10.5 %, so the answer was retired and the principle kept; §2/§3 stay readable as the specification of the fallback path for a pack recorded before ADR-0170 |
+| 0171 | accepted (2026-09-11) | the sprite layer's unit is the **pose** (ADR-0170's `poses.json`), the `sprNNN` figure is the fallback and the bare node the degenerate case; fixes the ranking denominator ADR-0168 left open and accepts contact-merged poses. Implementing slice: F9.18's sprite layer |
 | 0169 | accepted | recorder publishes frames one way; the live viewer never blocks the run |
 | 0170 | accepted (2026-09-11) | the recorder writes `sheets/poses.json` from the OAM stream it already holds; shipped as F9.19, and the prerequisite S10.a named |
 

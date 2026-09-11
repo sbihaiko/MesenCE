@@ -1,6 +1,12 @@
 # ADR-0168: The sprite layer composes `sprNNN` figures, not OAM nodes — the group sheet's `evidence[]` offsets reassemble the character
 
-- Status: proposed (evidence amended 2026-09-09 — see "Measured" below)
+- Status: superseded (2026-09-11) — evidence amended 2026-09-09, see
+  "Measured" below; the numbers there are what retired it
+- Superseded by: ADR-0171 — which keeps §1's principle (a node is not a
+  unit an artist can judge) and replaces its answer with the pose of
+  ADR-0170's `sheets/poses.json`. §2/§3's walk survives as the fallback
+  for a pack recorded before that sidecar, so this ADR stays readable
+  rather than historical: it is the specification of that path.
 - Date: 2026-09-07
 - Related: ADR-0164 (§1 `sprNNN.json` `evidence[]`, §5 the sprite layer and
   its Y-band criterion), ADR-0165 (the editor is an external stdlib Python
