@@ -159,6 +159,23 @@ the file. `mep_build.py` needs no change, and `seed`/`locked` keep naming
   a pack recorded before ADR-0170 is a legitimate input forever. The walk is
   not dead code, and ADR-0168 stays readable in the register for that
   reason.
+- **Not every pose is addressable, and that is the price of §5.** `locked`
+  names a node, so a pose is reached through `pose_of(anchor)`, which
+  resolves to the most-seen pose containing that node. Measured on the
+  2026-09-11 Mega Man 3 pack (223 poses): **62 silhouettes are addressable**,
+  covering **11 270 of 14 351 pose frames (78.5 %)** — the artist reaches
+  what the game actually showed, and loses rare variants. The ceiling is
+  structural, not a heuristic to tune: a node can point at one pose, so
+  anchoring on the member that resolves back to its own pose only moves 62
+  to 66 (measured). Raising it needs a field naming the pose, which §5
+  declines; the user accepted the limit as measured on 2026-09-11.
+- **A composed sheet shows the later poses with holes**, because a node
+  already placed is not emitted twice. This is the tile-key substitution
+  model of the HD Pack format, not a `pose_cells` choice: a tile shared by
+  three poses can only be painted once, and splitting the poses across
+  separate `usrNNN` sheets moves the collision rather than removing it. The
+  editor marks the covered cells in its export preview so the artist reads a
+  hole as "already painted in the pose to its left"; the file is unchanged.
 - The Phase 9 human panel should run only against a pack recorded since
   ADR-0170. Judging the sprite layer on an older pack measures the fallback,
   which is the thing already known to score 6.7 %.
