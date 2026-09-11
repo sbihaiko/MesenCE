@@ -465,6 +465,24 @@ does not exist.
   ADR-0170 §2. Open, and deliberately not invented: which poses belong to
   the same subject — ADR-0170 declines it, so a figure is still identified
   by its anchor node.
+- **S10.a re-measured, and it passes** (2026-09-11): a fresh 300 s Mega Man 3
+  recording on the F9.19 binary, ground truth read the same way as the
+  failing run (ADR-0169's live OAM channel, 1 369 captures, canon keying),
+  puts **25 of 25** of the main character's poses in the pack's
+  `poses.json` — 100 % against the >= 80 % criterion, from 6.7 % on
+  2026-09-09 — and 68 of 72 (94.4 %) of every ground-truth pose. The
+  agreement is a cross-implementation check rather than a tautology: the
+  file is C++ over the retained, de-duplicated `_oamFrames` stream keyed by
+  vocabulary node, the ground truth is Python over the live channel keyed by
+  canonical CHR bytes. The reverse ratio is low by construction (68 of 223
+  file poses appear in the ground truth) because the live channel publishes
+  one capture every 50 frames and so never sees most of what the retained
+  stream holds. The first measuring pass read the node → shape mapping off
+  `sprites.json` and scored 76 %; that was the measurement, not the file —
+  the sheet draws only the 241 cells it routed while `poses.json` indexes
+  all 288 vocabulary nodes, so a third of the file was being discarded.
+  `adjacency.json` `sprites.nodes[]` is the authoritative mapping. Evidence:
+  `runs/s10a-rerun/S10a-rerun-summary.json` (untracked, like the first run's).
 
 ### 4. Roadmap — pending work, by slice
 
@@ -683,11 +701,14 @@ is fixed here. **S10.c/S10.d shipped 2026-09-09; S10.a ran the same day and
 failed** — its premise ("every pose the recorder saw") is not reachable from
 today's sidecars. The user took that decision on 2026-09-11: **ADR-0170 is
 accepted and shipped as F9.19** (§3) — the recorder now writes pose
-membership — so S10.a's prerequisite exists and the spike is re-measurable
-against a freshly recorded pack. It was accepted on its Phase 9 value, not
-as a commitment to this phase: two links remain unmeasured, S10.a itself
-(not yet re-run) and S10.b, which is untouched by that choice and still
-needs the user's key and hand. Each of those is an ADR, written by hand after the spike that
+membership — and **S10.a was re-measured the same day and passes at 100 %**
+(25 of 25 of a character's poses, against >= 80 %; §3). ADR-0170 was
+accepted on its Phase 9 value rather than as a commitment to this phase, and
+one link is still unmeasured: **S10.b**, the layout fidelity of a hosted
+image model, which needs the user's key and hand. It does not depend on
+poses — Contra80s' `BillRizer.png` is already a contact sheet of one
+character's poses, and it is public third-party art, so running the spike on
+it sends no ROM-derived art anywhere and leaves ADR-0154 §2 untouched. Each of those is an ADR, written by hand after the spike that
 tests its premise (`docs/roadmap/AGENTS.md`: decisions are not made in a
 PRD). The first draft had it backwards — it specified the architecture and
 reserved "ADR-A/B/C" to ratify it; that draft is in git history, not here.
@@ -777,7 +798,7 @@ preservation, per-model rate limits.
 
 | Spike | Question | Pass / fail | Feeds |
 |---|---|---|---|
-| S10.a | **Can poses be separated from a recorded pack?** Run the ADR-0168 walk on fresh Mega Man 3 and Contra recordings; count poses recovered as distinct figures against poses visible in `sprites.png`. If the walk fails, prototype recording OAM co-occurrence per frame in the bootstrap and re-measure | ≥ 80 % of a main character's poses as distinct figures, HUD excluded — else the recorder change is the prerequisite and goes first | ADR-0168 (accept / supersede); a recorder ADR if pose membership is needed — **measured 2026-09-09: FAIL.** Fresh 300 s recordings of both games, poses counted off ADR-0169's live OAM channel: 1/15 Mega Man poses and 6/57 Contra poses recovered as distinct figures (6.7 % / 10.5 %), and 0/15 resp. 3/57 poses fit entirely inside one `sprNNN`. The cause is not the cross-pose stacking ADR-0168 §3 blames (its guard fires on 1 of 45 groups) but **under-grouping**: ADR-0153 §2's 0.80 test drops every edge from a tile that moves between poses. ADR-0168 amended in place with the evidence (still `proposed`); the recorder change is the prerequisite and is written up as `proposed` ADR-0170 — the OAM stream is already in memory at save time (`_oamFrames`), so it costs one sidecar, no new capture. Evidence: `runs/s10a-shared/S10a-summary.json` |
+| S10.a | **Can poses be separated from a recorded pack?** Run the ADR-0168 walk on fresh Mega Man 3 and Contra recordings; count poses recovered as distinct figures against poses visible in `sprites.png`. If the walk fails, prototype recording OAM co-occurrence per frame in the bootstrap and re-measure | ≥ 80 % of a main character's poses as distinct figures, HUD excluded — else the recorder change is the prerequisite and goes first | ADR-0168 (accept / supersede); a recorder ADR if pose membership is needed — **measured 2026-09-09: FAIL.** Fresh 300 s recordings of both games, poses counted off ADR-0169's live OAM channel: 1/15 Mega Man poses and 6/57 Contra poses recovered as distinct figures (6.7 % / 10.5 %), and 0/15 resp. 3/57 poses fit entirely inside one `sprNNN`. The cause is not the cross-pose stacking ADR-0168 §3 blames (its guard fires on 1 of 45 groups) but **under-grouping**: ADR-0153 §2's 0.80 test drops every edge from a tile that moves between poses. ADR-0168 amended in place with the evidence (still `proposed`); the recorder change is the prerequisite and is written up as `proposed` ADR-0170 — the OAM stream is already in memory at save time (`_oamFrames`), so it costs one sidecar, no new capture. Evidence: `runs/s10a-shared/S10a-summary.json`. **Re-measured 2026-09-11 on the F9.19 binary: PASS at 100 %** (25 of 25 of the main character's poses present in `poses.json`, 68 of 72 of every ground-truth pose), so the prerequisite this row asked for exists and the spike's question is answered — evidence `runs/s10a-rerun/S10a-rerun-summary.json` |
 | S10.b | **Does a hosted image model preserve a contact sheet?** One subject sheet on a chroma backdrop, 1K and 2K, three prompts; measure per-cell displacement, gutter ink, whether alpha comes back, silhouette growth, cost, latency. **Run by hand, by the user, from their own account**, with the files to be sent listed before sending; nothing in the repo automates it | cells within ±1 px at 1x and gutters clean on ≥ 2 of 3 runs — else per-cell or per-row generation is the only path and the cost model changes | the BYOK/egress ADR (amends ADR-0154 §2/§4, or declines to) |
 | S10.c | **Keep `generated`, keep local data out.** `mep_build.py pack` carries the root `generated` object across a rebuild; a fixture with a non-pack subfolder shows what the zip contains | `test_mep_build.py` cases, one per behavior | `mep_build.py` fix — do now, needed by F9.6 too — **done 2026-09-09** (§3); the exclusion half is documented, not implemented: it would be new policy, and the PRD's own rule (studio data outside the pack folder) is the fix |
 | S10.d | **Coverage-preservation check for a painted pack.** Every tile key of the recorder's `hires.txt` still resolves after a repaint; F5.4d count unchanged | a `test_mep_build.py` / `headless_record` case a skinned pack passes and a pack with a dropped key fails | the validation rule for any generated pack (F9.6 test 8 too) — **done 2026-09-09** (§3) as `mep_build.py check-coverage`; strictness open (equality vs. "must not shrink") for the ADR this feeds |
@@ -840,10 +861,9 @@ harness problem, solved several ways, in readable code.
    re-reporting the fragment defect ADR-0170 already measured.
 3. **Phase 10 feasibility spikes** — S10.c, S10.d and S10.a all ran
    2026-09-09 (§3): the two pack-side ones shipped and S10.a failed. The
-   user resolved that on 2026-09-11 by accepting ADR-0170, shipped as F9.19
-   (§3), so S10.a is re-measurable against a pack recorded since. Still
-   open: re-running S10.a, and S10.b, which needs the user's key and hand.
-   No product slice is scheduled.
+   user resolved that on 2026-09-11 by accepting ADR-0170, shipped as F9.19,
+   and **S10.a re-measured the same day at 100 %** (§3). Still open: S10.b,
+   which needs the user's key and hand. No product slice is scheduled.
 4. Manual and hardware residue, opportunistically: F6.5 file-picker step,
    Phase 5 listening pass, input tester with a pad, Phase 9 validation
    test 8 (needs a local diffusion stack).
