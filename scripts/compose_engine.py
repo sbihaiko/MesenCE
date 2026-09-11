@@ -3,7 +3,9 @@
 Opens a pack recorded since F9.17 (one whose `textures/sheets/` carries
 `adjacency.json`), resolves node ids to art, and answers the two queries
 ADR-0164 §5 needs: the seed -> rank -> lock -> recompute loop inside a layer
-and the sprite Y-band membership a scene is materialised from. Exports a
+and the sprite Y-band membership a scene is materialised from. A figure's
+layout comes from `sheets/poses.json` when the pack carries one (ADR-0170 §4)
+and from the ADR-0168 §2 `evidence[]` walk when it does not. Exports a
 composition as an ordinary `object`/`sprite` sidecar (`usrNNN`) with
 `composed`/`seed`/`locked` and, for a sprite band, `band` — legal `mep_build`
 input, rank inherited from `_SHEET_RANK` by `kind`.
@@ -181,6 +183,207 @@ class Adjacency:
         )
 
 
+# ---- poses.json (ADR-0170) and the walk it supersedes ----------------------
+
+POSES_FILE = "poses.json"
+POSES_VERSION = 1
+
+# ADR-0168 §2 step 3's cross-pose guard, as `spike_compose_scene` shipped it:
+# the share of the strongest group edge below which an edge is treated as a
+# cross-pose accident rather than a neighbour relation. A judgement call, not a
+# measured threshold (ADR-0168 §3) — kept verbatim so a pack without a pose
+# sidecar composes exactly as it does today.
+WALK_EDGE_COUNT_FLOOR = 0.25
+
+
+def walk_layout(nodes, evidence):
+    """The ADR-0168 §2 `evidence[]` walk: positions, in 8 px tile units, of a
+    `sprNNN` group's nodes, recovered by walking the sheet's ordered tile-pair
+    offsets out from the first cell.
+
+    This is a **heuristic** and ADR-0168 §3 labels it as one: a group spans
+    several animation frames, the pack records no per-frame membership, so the
+    walk guesses a pose by taking edges most-observed first and refusing a slot
+    that is already taken. ADR-0170 §4 supersedes it wherever `poses.json`
+    exists — but only there. A pack recorded before that sidecar is a
+    legitimate input forever, so this is the live fallback, not dead code.
+
+    A node whose remaining edges all point at taken slots stays unplaced and is
+    simply absent from the returned map (ADR-0168 §2: never drawn at a guessed
+    position)."""
+    nodes = [n for n in nodes if isinstance(n, int)]
+    if not nodes:
+        return {}
+    edges = sorted((e for e in (evidence or []) if isinstance(e, dict)),
+                   key=lambda e: -(e.get("count") or 0))
+    if edges:
+        floor = (edges[0].get("count") or 0) * WALK_EDGE_COUNT_FLOOR
+        edges = [e for e in edges if (e.get("count") or 0) >= floor]
+    pos = {nodes[0]: (0, 0)}
+    taken = {(0, 0)}
+    progress = True
+    while progress:
+        progress = False
+        for e in edges:
+            try:
+                a, b, dx, dy = e["a"], e["b"], e["dx"], e["dy"]
+            except KeyError:
+                continue
+            if a in pos and b not in pos:
+                cand, who = (pos[a][0] + dx, pos[a][1] + dy), b
+            elif b in pos and a not in pos:
+                cand, who = (pos[b][0] - dx, pos[b][1] - dy), a
+            else:
+                continue
+            if cand in taken:
+                continue
+            pos[who] = cand
+            taken.add(cand)
+            progress = True
+    return pos
+
+
+class Pose:
+    """One entry of `poses.json`: a silhouette the recorder actually saw in a
+    single OAM frame, normalised to its own top-left (ADR-0170 §1)."""
+
+    __slots__ = ("id", "frames", "size", "tiles")
+
+    def __init__(self, pose_id, frames, size, tiles):
+        self.id = pose_id
+        self.frames = frames
+        self.size = size          # (cols, rows) in cells, as the file states it
+        self.tiles = tiles        # {node: (dx, dy)}, 8 px cell offsets
+
+    def layout(self) -> dict:
+        """The figure's layout — the same shape `walk_layout` returns."""
+        return dict(self.tiles)
+
+    def extent(self):
+        """(cols, rows) the placed tiles actually span. `size` is what the file
+        claims; this is what its `tiles[]` support, which is what a consumer
+        that draws them needs after unknown nodes were dropped."""
+        if not self.tiles:
+            return (0, 0)
+        xs = [p[0] for p in self.tiles.values()]
+        ys = [p[1] for p in self.tiles.values()]
+        return (max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
+
+
+class Poses:
+    """`textures/sheets/poses.json` (ADR-0170 §1), the recorder's record of
+    which OAM tiles were on screen together in one frame and where.
+
+    Absent, unreadable, of an unknown version or empty of usable entries, the
+    file is simply *not there* as far as a consumer is concerned: `load`
+    returns None and the caller runs the ADR-0168 walk instead (ADR-0170 §4).
+    A malformed sidecar must never cost an artist a composition they can get
+    today, so nothing in here raises."""
+
+    __slots__ = ("version", "unit", "frames", "entries", "dropped_tiles", "dropped_poses")
+
+    def __init__(self):
+        self.version = POSES_VERSION
+        self.unit = 8
+        self.frames = 0
+        self.entries = []        # [Pose], most-seen first
+        self.dropped_tiles = 0   # tiles naming a node outside the vocabulary
+        self.dropped_poses = 0   # entries left with nothing to draw
+
+    @staticmethod
+    def load(path, vocabulary=None):
+        """Read the sidecar, or return None when there is nothing usable in it.
+
+        `vocabulary` is the sprite node index space (`adjacency.json`
+        `sprites.nodes[]`, the same space `node` indexes). A tile naming a node
+        outside it is dropped rather than trusted — the two files are different
+        projections of one stream and ADR-0170's Consequences say nothing
+        cross-checks them."""
+        path = Path(path)
+        if not path.is_file():
+            return None
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(doc, dict):
+            return None
+        version = doc.get("version", POSES_VERSION)
+        if not isinstance(version, int) or version != POSES_VERSION:
+            return None  # an unknown format: fall back, never guess at it
+        raw = doc.get("poses")
+        if not isinstance(raw, list) or not raw:
+            return None
+        p = Poses()
+        p.version = version
+        try:
+            p.unit = int(doc.get("unit") or 8)
+        except (TypeError, ValueError):
+            p.unit = 8
+        try:
+            p.frames = int(doc.get("frames") or 0)
+        except (TypeError, ValueError):
+            p.frames = 0
+        for i, entry in enumerate(raw):
+            pose = Poses._parse_pose(entry, i, vocabulary, p)
+            if pose is None:
+                p.dropped_poses += 1
+                continue
+            p.entries.append(pose)
+        if not p.entries:
+            return None
+        # ADR-0170 §1 states the order (frames desc, then id); re-establish it
+        # here so a hand-edited or partially dropped file is still deterministic.
+        p.entries.sort(key=lambda e: (-e.frames, e.id))
+        return p
+
+    @staticmethod
+    def _parse_pose(entry, index, vocabulary, owner):
+        if not isinstance(entry, dict):
+            return None
+        pose_id = entry.get("id")
+        if not isinstance(pose_id, str) or not pose_id:
+            pose_id = f"pose{index:03d}"
+        try:
+            frames = int(entry.get("frames") or 0)
+        except (TypeError, ValueError):
+            frames = 0
+        size = entry.get("size")
+        if (isinstance(size, (list, tuple)) and len(size) == 2
+                and all(isinstance(v, int) for v in size)):
+            size = (size[0], size[1])
+        else:
+            size = None
+        tiles = {}
+        for t in (entry.get("tiles") or []):
+            if not isinstance(t, dict):
+                continue
+            try:
+                node, dx, dy = int(t["node"]), int(t["dx"]), int(t["dy"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if vocabulary is not None and node not in vocabulary:
+                owner.dropped_tiles += 1
+                continue
+            tiles.setdefault(node, (dx, dy))
+        if not tiles:
+            return None
+        pose = Pose(pose_id, frames, size, tiles)
+        if size is None:
+            pose.size = pose.extent()
+        return pose
+
+    def by_id(self, pose_id):
+        for e in self.entries:
+            if e.id == pose_id:
+                return e
+        return None
+
+    def containing(self, node: int) -> list:
+        """Poses whose `tiles[]` hold `node`, most-seen first."""
+        return [e for e in self.entries if node in e.tiles]
+
+
 # ---- the pack --------------------------------------------------------------
 
 class Sheet:
@@ -244,6 +447,11 @@ class Pack:
         self.docs, self.claimed = mep_build._load_sheet_docs(sheets_dir)
         self.sheets = [Sheet(sheets_dir, sd) for sd in self.docs]
         self.adjacency = Adjacency.load(sheets_dir / "adjacency.json")
+        # ADR-0170: the pose sidecar, when the recorder that made this pack
+        # wrote one. None for every pack recorded before it — that is the
+        # normal case, not an error, and `figure_layout` walks instead.
+        self.poses = Poses.load(sheets_dir / POSES_FILE,
+                                vocabulary=set(self.adjacency.sp))
         self._bg_home = None   # (canonical node -> (Sheet, cell)) cache
         self._sp_home = None
 
@@ -377,6 +585,85 @@ class Pack:
         ranked = sorted(scores.items(), key=lambda kv: (-kv[1],
                                                          -self.adjacency.sp[kv[0]].appearances, kv[0]))
         return ranked if budget is None else ranked[:budget]
+
+    # -- the figure's layout: pose sidecar first, walk as the fallback -------
+
+    def group_nodes(self, stem: str) -> list:
+        """The node ids of a `sprNNN`/`objNNN` group sheet, in `cells[]` order.
+        The first one is the figure's anchor (ADR-0168 §2 step 1, §4)."""
+        path = self.sheets_dir / f"{stem}.json"
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise ComposeError(f"{path.name}: not readable as JSON ({e})")
+        if not isinstance(doc, dict):
+            raise ComposeError(f"{path.name}: not a JSON object")
+        return [c["metatile"] for c in (doc.get("cells") or [])
+                if isinstance(c, dict) and isinstance(c.get("metatile"), int)]
+
+    def pose_for_anchor(self, anchor: int, members=None):
+        """The pose a figure anchored at `anchor` is laid out from, or None.
+
+        ADR-0168 §4 identifies a figure by its anchor node, so the candidates
+        are the poses that contain it. Among those the pick is: the one
+        covering most of the group's other members (when the caller knows
+        them), then most frames, then id — `poses[]` is already in that order,
+        so the first hit is the most-seen silhouette the anchor appears in.
+
+        ADR-0170 explicitly leaves *grouping poses of the same subject* open,
+        and this resolves nothing of that: it picks one silhouette to lay a
+        figure out from, it does not claim the other poses containing the
+        anchor are the same character."""
+        if not self.poses:
+            return None
+        hits = self.poses.containing(anchor)
+        if not hits:
+            return None
+        if not members:
+            return hits[0]
+        wanted = set(members)
+        best, best_cover = None, -1
+        for p in hits:  # already (frames desc, id asc), so > keeps that order
+            cover = len(wanted & set(p.tiles))
+            if cover > best_cover:
+                best, best_cover = p, cover
+        return best
+
+    def figure_layout(self, stem: str) -> dict:
+        """{node: (dx, dy)} in 8 px tile units for a group sheet's figure.
+
+        ADR-0170 §4, the rule this implements: a pack that has `poses.json`
+        takes the layout from it and does **not** run the ADR-0168 §2
+        `evidence[]` walk — the walk's occupied-slot heuristic exists only to
+        guess what the sidecar states. A pack without the sidecar (everything
+        recorded before ADR-0170) walks, exactly as it does today.
+
+        With a sidecar the layout is the *pose's* tiles, which can be more
+        nodes than the group sheet holds: S10.a measured a `sprNNN` group to
+        be a sub-part of a pose, and ADR-0170 §4 is explicit that "a pose is a
+        better figure than a fragment"."""
+        return self.figure_layout_detail(stem)[0]
+
+    def figure_layout_detail(self, stem: str):
+        """`figure_layout` plus where it came from: `(layout, source, pose)`,
+        with `source` one of `"poses"` or `"walk"` and `pose` the `Pose` the
+        layout came from (None on the walk path). A caller that reports to an
+        artist needs to say which of the two paths produced what it shows."""
+        path = self.sheets_dir / f"{stem}.json"
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise ComposeError(f"{path.name}: not readable as JSON ({e})")
+        if not isinstance(doc, dict):
+            raise ComposeError(f"{path.name}: not a JSON object")
+        nodes = [c["metatile"] for c in (doc.get("cells") or [])
+                 if isinstance(c, dict) and isinstance(c.get("metatile"), int)]
+        if not nodes:
+            return ({}, "walk", None)
+        pose = self.pose_for_anchor(nodes[0], nodes[1:])
+        if pose is not None:
+            return (pose.layout(), "poses", pose)
+        return (walk_layout(nodes, doc.get("evidence")), "walk", None)
 
     # -- export --------------------------------------------------------------
 

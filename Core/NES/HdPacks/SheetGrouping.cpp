@@ -67,38 +67,6 @@ namespace MesenSheets
 
 		//---- components ----------------------------------------------------
 
-		class Dsu
-		{
-		public:
-			explicit Dsu(size_t size) : _parent(size)
-			{
-				for(size_t i = 0; i < size; i++) {
-					_parent[i] = (uint32_t)i;
-				}
-			}
-
-			uint32_t Find(uint32_t node)
-			{
-				while(_parent[node] != node) {
-					_parent[node] = _parent[_parent[node]];
-					node = _parent[node];
-				}
-				return node;
-			}
-
-			void Union(uint32_t a, uint32_t b)
-			{
-				uint32_t rootA = Find(a);
-				uint32_t rootB = Find(b);
-				if(rootA != rootB) {
-					_parent[rootA] = rootB;
-				}
-			}
-
-		private:
-			std::vector<uint32_t> _parent;
-		};
-
 		//A single cell is not a figure, and a component past kSheetMaxObjectCells
 		//is a contiguous background region - exactly the F5.4e failure ADR-0153
 		//retires. Members come out sorted ascending, which keeps every tie-break

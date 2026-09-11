@@ -1,7 +1,10 @@
 # ADR-0170: The recorder writes a pose sidecar from the OAM frame stream it already holds
 
-- Status: proposed
-- Date: 2026-09-09
+- Status: accepted (2026-09-11, by the user) — not yet in the code;
+  delivery is scheduled as **Phase 9 debt** (the F9.18 sprite layer composes
+  fragments today), not as a Phase 10 prerequisite: PRD Part A §4 Phase 9 /
+  §5 order of execution
+- Date: 2026-09-09 (accepted 2026-09-11)
 - Related: ADR-0153 (§2 the mutual-predictability grouping criterion, §5 the
   retained-stream cap), ADR-0164 (§1 `sheets/adjacency.json`, §5 the sprite
   layer), ADR-0168 (the figure as the composition unit — the walk this
@@ -109,6 +112,22 @@ cannot grow without bound on a long session. The counts a consumer needs to
 judge truncation — total retained frames, poses before and after the
 threshold and the cap — go in the save-time report line, next to the
 existing "N sprite nodes from M OAM frames".
+
+**Made exact while implementing (2026-09-11).** The prose above leaves three
+readings open, and the implementation and its tests pin these:
+
+- The frame floor is counted the way §1 counts frames — `RepeatCount`
+  included. A silhouette held through one frame repeated five times clears
+  it. That is deliberate: a pose is a still, so a static screen showing one
+  really is evidence the pose exists, and unlike the pair statistics
+  (`SelectSpriteEdges`, which ignores `RepeatCount` on purpose) a paused
+  screen cannot manufacture a *second* pose.
+- The tile floor runs inside the frame loop, so a cluster under 4 tiles
+  never enters the table: the reported "found" count is already past the
+  tile floor, and only the frame floor separates "found" from "kept".
+- "Kept" is counted before the cap. `PosesKept > poses[]` is the legitimate
+  state that says the session outgrew the file, which is what the report
+  line exists to show.
 
 ### 3. The segmentation lives in `SpriteGrouping`, host-free and unit-tested
 

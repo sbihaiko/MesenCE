@@ -2,6 +2,7 @@
 #include "NES/HdPacks/SheetRender.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <sstream>
 
@@ -530,6 +531,47 @@ namespace MesenSheets
 		} else {
 			json << "\n";
 		}
+		json << "}\n";
+		return json.str();
+	}
+
+	//ADR-0170 §1 (F9.19): see SheetRender.h. Everything hard about a pose was
+	//decided by BuildPoses - the clustering, the normalisation, the sets-equal
+	//identity, the thresholds and the cap - so this is a transcription, and it
+	//deliberately stays one: no field here is computed, because a number the
+	//serializer derives is a number the unit tests cannot reach.
+	std::string SerializePoses(const Vocabulary& sprites, const PoseStats& stats)
+	{
+		std::stringstream json;
+		json << "{\n";
+		json << "  \"version\": 1,\n";
+		//The offset unit, so dx/dy read as cells without the reader assuming 8.
+		json << "  \"unit\": " << sprites.Grid.Unit << ",\n";
+		//Frames a pose's own "frames" is a share of: retained frames weighted by
+		//RepeatCount, the universe BuildPoses counted in. The truncation counts
+		//(poses found vs kept vs capped) stay in the save-time report line, per
+		//ADR-0170 §2 - the file states its sampling, not its own pruning history.
+		json << "  \"frames\": " << stats.Frames << ",\n";
+		json << "  \"poses\": [";
+		for(size_t i = 0; i < stats.Poses.size(); i++) {
+			const PoseEntry& pose = stats.Poses[i];
+			//Sorted by frames descending, so the id is the array position and
+			//carries the ranking with it - nothing else keys a pose.
+			char id[16];
+			snprintf(id, sizeof(id), "pose%03u", (uint32_t)i);
+			json << (i ? ",\n    " : "\n    ");
+			json << "{ \"id\": \"" << id << "\""
+				<< ", \"frames\": " << pose.Frames
+				<< ", \"size\": [" << pose.Width << ", " << pose.Height << "]"
+				<< ", \"tiles\": [";
+			for(size_t t = 0; t < pose.Tiles.size(); t++) {
+				const PoseTile& tile = pose.Tiles[t];
+				json << (t ? ", " : "");
+				json << "{ \"node\": " << tile.Node << ", \"dx\": " << tile.Dx << ", \"dy\": " << tile.Dy << " }";
+			}
+			json << "] }";
+		}
+		json << (stats.Poses.empty() ? "]\n" : "\n  ]\n");
 		json << "}\n";
 		return json.str();
 	}

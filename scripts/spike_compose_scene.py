@@ -44,10 +44,6 @@ SCREEN_W, SCREEN_H = 256, 240
 #through the alpha-aware version instead.
 _ALPHA_CUTOFF = 128
 
-#Share of the strongest edge's count below which a group edge is treated as a
-#cross-pose accident rather than a neighbour relation. See `shape_layout`.
-_EDGE_COUNT_FLOOR = 0.25
-
 #How hard a background node's score is damped per cell it already occupies.
 #See `fill_background`.
 _REUSE_DAMPING = 0.35
@@ -74,55 +70,30 @@ def paste_alpha(dst, src, x, y):
 
 # -- sprite shapes: a `sprNNN` group reassembled into one character ----------
 
-def shape_layout(sheets_dir: Path, stem: str):
-    """Positions, in 8px tile units, of every node of a `sprNNN` group.
+def shape_layout(sheets_dir: Path, stem: str, pack: E.Pack = None):
+    """Positions, in 8px tile units, of every node of a `sprNNN` figure.
 
-    The group sheet records one `evidence` entry per ordered tile pair with
-    the `dx`/`dy` between them, so the layout is recovered by walking those
-    offsets out from an anchor. Edges are taken most-observed first and a tile
-    is only placed on a free slot: a group spans several animation frames, and
-    a weak edge from another frame would otherwise stack two poses on top of
-    each other."""
+    Two sources, and which one applies is ADR-0170 §4's rule, implemented in
+    `compose_engine`: a pack that carries `sheets/poses.json` takes the layout
+    from the pose the figure's anchor node appears in — a silhouette the
+    recorder actually saw in one OAM frame — and does not run the ADR-0168 §2
+    `evidence[]` walk. A pack recorded before that sidecar (every pack on disk
+    today) walks the group sheet's offsets as it always has.
+
+    `pack` is optional only so the old call shape keeps working; without it
+    there is no pack to read the sidecar from and the walk is all there is.
+    """
+    if pack is not None:
+        return pack.figure_layout(stem)
     doc = json.loads((sheets_dir / f"{stem}.json").read_text(encoding="utf-8"))
     nodes = [c["metatile"] for c in doc["cells"]]
-    if not nodes:
-        return {}
-    edges = sorted(doc.get("evidence", []), key=lambda e: -e.get("count", 0))
-    #Tiles of the same pose co-occur every frame that pose is drawn; tiles of
-    #two different poses only meet in the handful of frames the animation
-    #crosses over. Dropping the faint tail of the count distribution is what
-    #keeps a walk from wandering out of one pose and into the next, which the
-    #free-slot rule alone does not prevent (it happily puts pose two *beside*
-    #pose one). The cut is a judgement call, not a measured threshold.
-    if edges:
-        floor = edges[0].get("count", 0) * _EDGE_COUNT_FLOOR
-        edges = [e for e in edges if e.get("count", 0) >= floor]
-    pos = {nodes[0]: (0, 0)}
-    taken = {(0, 0)}
-    progress = True
-    while progress:
-        progress = False
-        for e in edges:
-            a, b, dx, dy = e["a"], e["b"], e["dx"], e["dy"]
-            if a in pos and b not in pos:
-                cand = (pos[a][0] + dx, pos[a][1] + dy)
-                who = b
-            elif b in pos and a not in pos:
-                cand = (pos[b][0] - dx, pos[b][1] - dy)
-                who = a
-            else:
-                continue
-            if cand in taken:
-                continue
-            pos[who] = cand
-            taken.add(cand)
-            progress = True
-    return pos
+    return E.walk_layout(nodes, doc.get("evidence"))
 
 
 def shape_image(pack: E.Pack, sheets_dir: Path, stem: str):
-    """One `sprNNN` group drawn as the character it is, 1x, tightly cropped."""
-    pos = shape_layout(sheets_dir, stem)
+    """One `sprNNN` figure drawn as the character it is, 1x, tightly cropped.
+    Its tiles are the pose's when the pack has one, the group's otherwise."""
+    pos = shape_layout(sheets_dir, stem, pack)
     if not pos:
         return None
     x0 = min(p[0] for p in pos.values())

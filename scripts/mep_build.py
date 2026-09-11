@@ -238,6 +238,12 @@ def _load_sheet_docs(sheets_dir: Path):
     docs = []
     claimed = set()
     for jp in sorted(sheets_dir.glob("*.json")):
+        if jp.name == "poses.json":
+            #ADR-0170 §1: the pose sidecar sits next to adjacency.json and is
+            #not a sheet either - no kind, no cells[], no PNG. Same reasoning
+            #as the adjacency skip below: only the composition tool opens it,
+            #and warning on every pack would train users to ignore warnings.
+            continue
         claimed.add(sheets_dir / f"{jp.stem}.png")
         try:
             doc = json.loads(jp.read_text(encoding="utf-8"))

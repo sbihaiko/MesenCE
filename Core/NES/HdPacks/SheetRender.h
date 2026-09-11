@@ -124,4 +124,17 @@ namespace MesenSheets
 	//sheet shows resolves to a crop from backgrounds/<screen>.orig.png. Empty
 	//by default (older callers, and packs that predate the field).
 	std::string SerializeAdjacency(const Vocabulary& background, const Vocabulary& sprites, const SpriteAdjacencyStats& stats, const TileLookup& lookup, const std::map<uint32_t, std::vector<ScreenSite>>& residentSites = {});
+
+	//ADR-0170 §1 (F9.19): serialises the sheets/poses.json sidecar - the
+	//distinct silhouettes BuildPoses segmented out of the OAM stream, which is
+	//the datum adjacency.json cannot carry (pairwise totals are a projection of
+	//the per-frame structure, and the projection cannot be inverted). `sprites`
+	//is read for its grid unit only: a pose's node indexes are the same index
+	//space as adjacency.json's sprites.nodes[], so the file states the offset
+	//unit and leaves the tiles to the vocabulary the reader already has - a
+	//node repeated here would be a second copy that can disagree.
+	//Deterministic: BuildPoses already fixes the order (frames descending, then
+	//tiles), so "poseNNN" is simply the array position and two saves of one
+	//recording produce byte-identical bytes.
+	std::string SerializePoses(const Vocabulary& sprites, const PoseStats& stats);
 }

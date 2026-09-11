@@ -296,4 +296,113 @@ namespace MesenSheets
 		}
 		return stats;
 	}
+
+	//ADR-0170 (F9.19): poses, from the per-frame structure AccumulateSpriteAdjacency
+	//throws away. See SpriteGrouping.h for why the pairwise projection cannot
+	//answer this question.
+	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab)
+	{
+		PoseStats stats;
+		stats.RetainedFrames = (uint32_t)frames.size();
+		//Sets-equal identity: the same body with a projectile one cell further
+		//away is a different pose. Deliberate - a looser identity can merge two
+		//real poses, and that failure is invisible in the file (ADR-0170).
+		std::map<std::vector<PoseTile>, uint32_t> seen;
+		for(const OamFrame& frame : frames) {
+			stats.Frames += frame.RepeatCount;
+
+			//Entries this vocabulary knows, in pixels. An unknown shape is
+			//skipped rather than clustered: it would move the top-left and so
+			//shift every offset in the pose.
+			std::vector<std::pair<int32_t, int32_t>> points;
+			std::vector<uint32_t> nodes;
+			for(const OamEntry& entry : frame.Entries) {
+				int32_t node = vocab.Find(SpriteKey(entry.Shape));
+				if(node < 0) {
+					continue;
+				}
+				points.push_back(std::make_pair((int32_t)entry.X, (int32_t)entry.Y));
+				nodes.push_back((uint32_t)node);
+			}
+			if(points.size() < kPoseMinTiles) {
+				continue;
+			}
+
+			//Spatially connected clusters, the same DSU SheetGrouping uses.
+			//Connected means both axes within kPoseMaxGap of each other's
+			//top-left, i.e. the 8x8 boxes touch or overlap.
+			Dsu sets(points.size());
+			for(size_t i = 0; i < points.size(); i++) {
+				for(size_t j = i + 1; j < points.size(); j++) {
+					if(std::abs(points[i].first - points[j].first) <= kPoseMaxGap && std::abs(points[i].second - points[j].second) <= kPoseMaxGap) {
+						sets.Union((uint32_t)i, (uint32_t)j);
+					}
+				}
+			}
+			std::map<uint32_t, std::vector<size_t>> clusters;
+			for(size_t i = 0; i < points.size(); i++) {
+				clusters[sets.Find((uint32_t)i)].push_back(i);
+			}
+
+			for(const std::pair<const uint32_t, std::vector<size_t>>& cluster : clusters) {
+				if(cluster.second.size() < kPoseMinTiles) {
+					continue;
+				}
+				int32_t minX = points[cluster.second[0]].first;
+				int32_t minY = points[cluster.second[0]].second;
+				for(size_t index : cluster.second) {
+					minX = std::min(minX, points[index].first);
+					minY = std::min(minY, points[index].second);
+				}
+				std::vector<PoseTile> tiles;
+				tiles.reserve(cluster.second.size());
+				for(size_t index : cluster.second) {
+					PoseTile tile;
+					tile.Node = nodes[index];
+					tile.Dx = ToCells(points[index].first - minX);
+					tile.Dy = ToCells(points[index].second - minY);
+					tiles.push_back(tile);
+				}
+				//A set, not a list: two OAM entries of the same shape rounding
+				//onto one cell are one member, exactly as the S10.a ground
+				//truth counted them.
+				std::sort(tiles.begin(), tiles.end());
+				tiles.erase(std::unique(tiles.begin(), tiles.end()), tiles.end());
+				if(tiles.size() < kPoseMinTiles) {
+					continue;
+				}
+				seen[tiles] += frame.RepeatCount;
+			}
+		}
+
+		stats.PosesFound = (uint32_t)seen.size();
+		std::vector<PoseEntry> kept;
+		for(const std::pair<const std::vector<PoseTile>, uint32_t>& pose : seen) {
+			if(pose.second < kPoseMinFrames) {
+				continue;
+			}
+			PoseEntry entry;
+			entry.Tiles = pose.first;
+			entry.Frames = pose.second;
+			for(const PoseTile& tile : entry.Tiles) {
+				entry.Width = std::max(entry.Width, (uint32_t)(tile.Dx + 1));
+				entry.Height = std::max(entry.Height, (uint32_t)(tile.Dy + 1));
+			}
+			kept.push_back(entry);
+		}
+		stats.PosesKept = (uint32_t)kept.size();
+
+		//Frames descending, then by the tile set - the ADR sorts "by frames,
+		//then by id", and the id is the position in this order, so the set is
+		//what breaks the tie deterministically.
+		std::stable_sort(kept.begin(), kept.end(), [](const PoseEntry& a, const PoseEntry& b) {
+			if(a.Frames != b.Frames) { return a.Frames > b.Frames; }
+			return a.Tiles < b.Tiles;
+		});
+		if(kept.size() > kMaxPoses) {
+			kept.resize(kMaxPoses);
+		}
+		stats.Poses = kept;
+		return stats;
+	}
 }

@@ -4349,6 +4349,393 @@ namespace
 		}
 	}
 
+	//--- ADR-0170 (F9.19): poses, the per-frame structure adjacency.json drops.
+	//Every case here turns on where the tiles sit inside one frame, so the
+	//streams are hand-built rather than taken from SpriteFigureFrames.
+
+	OamEntry OamAt(ShapeId shape, uint32_t x, uint32_t y)
+	{
+		OamEntry entry;
+		entry.Shape = shape;
+		entry.X = (uint8_t)x;
+		entry.Y = (uint8_t)y;
+		return entry;
+	}
+
+	//Vocabulary indexes are ordered by instance count, so a test that names a
+	//shape must ask the vocabulary where it landed.
+	int32_t SpriteNodeOf(const Vocabulary& vocab, ShapeId shape)
+	{
+		return vocab.Find(MetatileKey{ { shape, kEmptyCell, kEmptyCell, kEmptyCell } });
+	}
+
+	bool PoseHoldsNode(const PoseEntry& pose, int32_t node)
+	{
+		for(const PoseTile& tile : pose.Tiles) {
+			if(node >= 0 && tile.Node == (uint32_t)node) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//The same character in two silhouettes: torso, head and legs are the same
+	//shapes in both and only the arm moves. Sets-equal identity (ADR-0170 §1)
+	//must keep them apart, and the shared torso is a member of both.
+	void TestPosesSharingATileStayTwoPoses()
+	{
+		std::vector<OamFrame> frames;
+		for(uint32_t f = 0; f < 6; f++) {
+			//Sub-cell steps: the figure walks, but every offset inside the pose
+			//is a whole cell, so the normalised set does not wobble.
+			uint32_t x0 = 100 + f;
+			OamFrame frame;
+			frame.FrameNumber = f;
+			frame.Entries.push_back(OamAt(2, x0, 92));
+			frame.Entries.push_back(OamAt(1, x0, 100));
+			frame.Entries.push_back(OamAt(3, x0, 108));
+			//Arm raised to the west on the even frames, lowered to the east on
+			//the odd ones - a different shape at a different offset.
+			frame.Entries.push_back(f % 2 == 0 ? OamAt(4, x0 - 8, 100) : OamAt(5, x0 + 8, 100));
+			frames.push_back(frame);
+		}
+
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 2, "BlocoP: two silhouettes of one character are two poses",
+			"poses=" + std::to_string(stats.Poses.size()));
+		Check(stats.PosesFound == 2 && stats.PosesKept == 2,
+			"BlocoP: nothing merged and nothing was dropped",
+			"found=" + std::to_string(stats.PosesFound) + " kept=" + std::to_string(stats.PosesKept));
+		if(stats.Poses.size() != 2) {
+			return;
+		}
+
+		int32_t torso = SpriteNodeOf(vocab, 1);
+		int32_t armUp = SpriteNodeOf(vocab, 4);
+		int32_t armDown = SpriteNodeOf(vocab, 5);
+		Check(torso >= 0 && armUp >= 0 && armDown >= 0,
+			"BlocoP: the pose fixture's shapes are in the sprite vocabulary",
+			"torso=" + std::to_string(torso) + " armUp=" + std::to_string(armUp) + " armDown=" + std::to_string(armDown));
+		Check(PoseHoldsNode(stats.Poses[0], torso) && PoseHoldsNode(stats.Poses[1], torso),
+			"BlocoP: the shared torso tile is a member of both poses",
+			"torso=" + std::to_string(torso));
+		Check(PoseHoldsNode(stats.Poses[0], armUp) != PoseHoldsNode(stats.Poses[1], armUp)
+			&& PoseHoldsNode(stats.Poses[0], armDown) != PoseHoldsNode(stats.Poses[1], armDown),
+			"BlocoP: the arm that moved is what tells the two poses apart",
+			"armUp in pose0=" + std::to_string(PoseHoldsNode(stats.Poses[0], armUp) ? 1 : 0));
+		Check(stats.Poses[0].Frames == 3 && stats.Poses[1].Frames == 3,
+			"BlocoP: each pose counts the frames it was seen in",
+			std::to_string(stats.Poses[0].Frames) + "/" + std::to_string(stats.Poses[1].Frames));
+		Check(stats.Poses[0].Tiles.size() == 4 && stats.Poses[1].Tiles.size() == 4,
+			"BlocoP: a four-tile figure keeps its four tiles",
+			std::to_string(stats.Poses[0].Tiles.size()) + "/" + std::to_string(stats.Poses[1].Tiles.size()));
+		Check(stats.Poses[0].Width == 2 && stats.Poses[0].Height == 3,
+			"BlocoP: a pose states its extent in cells",
+			std::to_string(stats.Poses[0].Width) + "x" + std::to_string(stats.Poses[0].Height));
+	}
+
+	//Two pairs of touching tiles, the pairs themselves a diagonal gap apart.
+	//At 8 px the four are one silhouette; at 9 px they are two clusters of two,
+	//and both fall under kPoseMinTiles.
+	std::vector<OamFrame> PoseGapFrames(uint32_t gap)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < 4; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			frame.Entries.push_back(OamAt(11, 100, 100));
+			frame.Entries.push_back(OamAt(12, 108, 100));
+			frame.Entries.push_back(OamAt(13, 100 + gap, 100 + gap));
+			frame.Entries.push_back(OamAt(14, 108 + gap, 100 + gap));
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestPoseClustersJoinAcrossEightPixelsAndNotNine()
+	{
+		//Literal pixels, not kPoseMaxGap: ADR-0170 §1 pins "within 8 px on both
+		//axes", so a drifting constant must fail here rather than move the
+		//boundary the test claims to measure.
+		Check(kPoseMaxGap == 8, "BlocoP: the pose connectivity gap is the 8 px the ADR pins",
+			"gap=" + std::to_string(kPoseMaxGap));
+		std::vector<OamFrame> touching = PoseGapFrames(8);
+		Vocabulary touchingVocab = BuildSpriteVocabulary(touching);
+		PoseStats joined = BuildPoses(touching, touchingVocab);
+		Check(joined.Poses.size() == 1, "BlocoP: an 8 px diagonal gap joins two tile pairs into one pose",
+			"poses=" + std::to_string(joined.Poses.size()));
+		if(joined.Poses.size() != 1) {
+			return;
+		}
+		Check(joined.Poses[0].Tiles.size() == 4 && joined.Poses[0].Frames == 4,
+			"BlocoP: the joined cluster holds all four tiles of every frame",
+			"tiles=" + std::to_string(joined.Poses[0].Tiles.size()) + " frames=" + std::to_string(joined.Poses[0].Frames));
+		Check(joined.Poses[0].Width == 3 && joined.Poses[0].Height == 2,
+			"BlocoP: the joined pose spans both pairs",
+			std::to_string(joined.Poses[0].Width) + "x" + std::to_string(joined.Poses[0].Height));
+
+		std::vector<OamFrame> apart = PoseGapFrames(9);
+		Vocabulary apartVocab = BuildSpriteVocabulary(apart);
+		PoseStats split = BuildPoses(apart, apartVocab);
+		//Two clusters of two, so neither reaches kPoseMinTiles and nothing even
+		//becomes a silhouette - the assertion is unambiguous because the only
+		//difference from the joined stream is the single pixel.
+		Check(split.PosesFound == 0 && split.Poses.empty(),
+			"BlocoP: a 9 px gap splits them and both halves fall under the tile floor",
+			"found=" + std::to_string(split.PosesFound) + " poses=" + std::to_string(split.Poses.size()));
+		Check(split.RetainedFrames == 4 && split.Frames == 4,
+			"BlocoP: a stream that yields no pose still states its frame universe",
+			"retained=" + std::to_string(split.RetainedFrames) + " frames=" + std::to_string(split.Frames));
+	}
+
+	//A held screen is a real sighting of a pose (unlike the pair statistics,
+	//which ignore RepeatCount): the repeats count, and stats.Frames is the
+	//weighted universe while RetainedFrames is the de-duplicated frame count.
+	void TestPoseFramesCountRepeatCount()
+	{
+		OamFrame held;
+		held.FrameNumber = 0;
+		held.RepeatCount = 5;
+		held.Entries.push_back(OamAt(1, 60, 60));
+		held.Entries.push_back(OamAt(2, 68, 60));
+		held.Entries.push_back(OamAt(3, 60, 68));
+		held.Entries.push_back(OamAt(4, 68, 68));
+
+		//One frame of a second silhouette - same geometry, one shape swapped -
+		//so it is a distinct pose that the frame threshold drops.
+		OamFrame once;
+		once.FrameNumber = 5;
+		once.Entries.push_back(OamAt(1, 60, 60));
+		once.Entries.push_back(OamAt(2, 68, 60));
+		once.Entries.push_back(OamAt(3, 60, 68));
+		once.Entries.push_back(OamAt(6, 68, 68));
+
+		std::vector<OamFrame> frames{ held, once };
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+
+		Check(stats.RetainedFrames == 2, "BlocoP: retainedFrames counts the de-duplicated OAM frames",
+			std::to_string(stats.RetainedFrames));
+		Check(stats.Frames == 6, "BlocoP: the pose frame universe is weighted by RepeatCount",
+			std::to_string(stats.Frames));
+		Check(stats.Poses.size() == 1, "BlocoP: only the held silhouette clears the frame floor",
+			"poses=" + std::to_string(stats.Poses.size()));
+		Check(stats.PosesFound == 2 && stats.PosesKept == 1,
+			"BlocoP: the found/kept counts report the threshold's work",
+			"found=" + std::to_string(stats.PosesFound) + " kept=" + std::to_string(stats.PosesKept));
+		if(stats.Poses.empty()) {
+			return;
+		}
+		Check(stats.Poses[0].Frames == 5, "BlocoP: a pose held for five frames is seen five times",
+			std::to_string(stats.Poses[0].Frames));
+	}
+
+	//Three things on one screen, far enough apart to stay three clusters: a
+	//four-tile figure in every frame (kept), a three-tile cluster in every
+	//frame (under kPoseMinTiles) and a four-tile silhouette in two frames
+	//(under kPoseMinFrames).
+	void TestPoseThresholdsDropWhatTheyClaim()
+	{
+		std::vector<OamFrame> frames;
+		for(uint32_t f = 0; f < 5; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			frame.Entries.push_back(OamAt(21, 10, 10));
+			frame.Entries.push_back(OamAt(22, 18, 10));
+			frame.Entries.push_back(OamAt(23, 10, 18));
+			frame.Entries.push_back(OamAt(24, 18, 18));
+
+			frame.Entries.push_back(OamAt(31, 60, 10));
+			frame.Entries.push_back(OamAt(32, 68, 10));
+			frame.Entries.push_back(OamAt(33, 60, 18));
+
+			if(f < 2) {
+				frame.Entries.push_back(OamAt(41, 110, 10));
+				frame.Entries.push_back(OamAt(42, 118, 10));
+				frame.Entries.push_back(OamAt(43, 110, 18));
+				frame.Entries.push_back(OamAt(44, 118, 18));
+			}
+			frames.push_back(frame);
+		}
+
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		//The three-tile cluster never becomes a silhouette at all, so it is not
+		//in posesFound either: the tile floor runs before the dedup.
+		Check(stats.PosesFound == 2 && stats.PosesKept == 1,
+			"BlocoP: posesFound/posesKept report the counts before and after the frame floor",
+			"found=" + std::to_string(stats.PosesFound) + " kept=" + std::to_string(stats.PosesKept));
+		Check(stats.Poses.size() == 1, "BlocoP: only the persistent four-tile figure is kept",
+			"poses=" + std::to_string(stats.Poses.size()));
+		if(stats.Poses.size() != 1) {
+			return;
+		}
+		Check(PoseHoldsNode(stats.Poses[0], SpriteNodeOf(vocab, 21)) && stats.Poses[0].Frames == 5,
+			"BlocoP: the kept pose is the figure that was there every frame",
+			"frames=" + std::to_string(stats.Poses[0].Frames));
+		Check(!PoseHoldsNode(stats.Poses[0], SpriteNodeOf(vocab, 31)),
+			"BlocoP: a three-tile cluster is dropped rather than absorbed",
+			"tiles=" + std::to_string(stats.Poses[0].Tiles.size()));
+		Check(!PoseHoldsNode(stats.Poses[0], SpriteNodeOf(vocab, 41)),
+			"BlocoP: a silhouette seen twice is dropped by the frame floor",
+			"tiles=" + std::to_string(stats.Poses[0].Tiles.size()));
+	}
+
+	//kMaxPoses + 1 distinct silhouettes, each seen exactly kPoseMinFrames
+	//times: one 2x2 cluster whose fourth tile is a fresh shape every time, so
+	//every pose is distinct while none of them is ever disconnected.
+	void TestPoseListIsCappedAtTheMaximum()
+	{
+		std::vector<OamFrame> frames;
+		frames.reserve((size_t)(kMaxPoses + 1) * kPoseMinFrames);
+		for(uint32_t pose = 0; pose <= kMaxPoses; pose++) {
+			for(uint32_t repeat = 0; repeat < kPoseMinFrames; repeat++) {
+				OamFrame frame;
+				frame.FrameNumber = (uint32_t)frames.size();
+				frame.Entries.push_back(OamAt(1, 100, 100));
+				frame.Entries.push_back(OamAt(2, 108, 100));
+				frame.Entries.push_back(OamAt(3, 100, 108));
+				frame.Entries.push_back(OamAt((ShapeId)(16 + pose), 108, 108));
+				frames.push_back(frame);
+			}
+		}
+
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.PosesFound == kMaxPoses + 1 && stats.PosesKept == kMaxPoses + 1,
+			"BlocoP: the pose counts are reported before the cap truncates",
+			"found=" + std::to_string(stats.PosesFound) + " kept=" + std::to_string(stats.PosesKept));
+		Check(stats.Poses.size() == kMaxPoses, "BlocoP: the kept list is capped at kMaxPoses",
+			"poses=" + std::to_string(stats.Poses.size()));
+	}
+
+	//Three figures, far enough apart to stay three clusters, present in five,
+	//four and three frames.
+	std::vector<OamFrame> PoseRankFrames()
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < 5; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			frame.Entries.push_back(OamAt(51, 10, 10));
+			frame.Entries.push_back(OamAt(52, 18, 10));
+			frame.Entries.push_back(OamAt(53, 10, 18));
+			frame.Entries.push_back(OamAt(54, 18, 18));
+			if(f < 4) {
+				frame.Entries.push_back(OamAt(61, 60, 10));
+				frame.Entries.push_back(OamAt(62, 68, 10));
+				frame.Entries.push_back(OamAt(63, 60, 18));
+				frame.Entries.push_back(OamAt(64, 68, 18));
+			}
+			if(f < 3) {
+				frame.Entries.push_back(OamAt(71, 110, 10));
+				frame.Entries.push_back(OamAt(72, 118, 10));
+				frame.Entries.push_back(OamAt(73, 110, 18));
+				frame.Entries.push_back(OamAt(74, 118, 18));
+			}
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestPosesAreSortedByFramesDescending()
+	{
+		std::vector<OamFrame> frames = PoseRankFrames();
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+
+		Check(stats.Poses.size() == 3, "BlocoP: all three figures clear both floors",
+			"poses=" + std::to_string(stats.Poses.size()));
+		if(stats.Poses.size() != 3) {
+			return;
+		}
+		Check(stats.Poses[0].Frames == 5 && stats.Poses[1].Frames == 4 && stats.Poses[2].Frames == 3,
+			"BlocoP: poses come out sorted by frames descending",
+			std::to_string(stats.Poses[0].Frames) + "/" + std::to_string(stats.Poses[1].Frames)
+				+ "/" + std::to_string(stats.Poses[2].Frames));
+		Check(PoseHoldsNode(stats.Poses[0], SpriteNodeOf(vocab, 51))
+			&& PoseHoldsNode(stats.Poses[1], SpriteNodeOf(vocab, 61))
+			&& PoseHoldsNode(stats.Poses[2], SpriteNodeOf(vocab, 71)),
+			"BlocoP: the most-seen figure is first and the least-seen last",
+			"nodes=" + std::to_string(SpriteNodeOf(vocab, 51)) + "/" + std::to_string(SpriteNodeOf(vocab, 61))
+				+ "/" + std::to_string(SpriteNodeOf(vocab, 71)));
+	}
+
+	//sheets/poses.json (ADR-0170 §1) through the strict reader: the file states
+	//its own sampling, and pose000 is the most-seen silhouette.
+	void TestPoseSidecarRoundTrips()
+	{
+		std::vector<OamFrame> frames = PoseRankFrames();
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		std::string json = SerializePoses(vocab, stats);
+
+		JsonReader reader;
+		JsonValue root;
+		Check(reader.Parse(json, root), "BlocoP: the pose sidecar is strict-valid JSON", reader.GetError());
+		const JsonValue* version = root.Get("version");
+		const JsonValue* unit = root.Get("unit");
+		const JsonValue* frameCount = root.Get("frames");
+		Check(version && version->GetNumber() == 1, "BlocoP: the pose sidecar declares schema version 1",
+			version ? std::to_string(version->GetNumber()) : "missing");
+		Check(unit && unit->GetNumber() == 8, "BlocoP: the pose sidecar is written in 8 px cells",
+			unit ? std::to_string(unit->GetNumber()) : "missing");
+		Check(frameCount && frameCount->GetNumber() == stats.Frames,
+			"BlocoP: the pose sidecar names its frame universe",
+			frameCount ? std::to_string(frameCount->GetNumber()) : "missing");
+
+		const JsonValue* poses = root.Get("poses");
+		Check(poses && poses->GetArray().size() == stats.Poses.size(),
+			"BlocoP: one JSON entry per kept pose",
+			"entries=" + std::to_string(poses ? poses->GetArray().size() : 0));
+		if(!poses || poses->GetArray().size() != stats.Poses.size() || stats.Poses.empty()) {
+			return;
+		}
+
+		const JsonValue& first = poses->GetArray()[0];
+		const PoseEntry& expected = stats.Poses[0];
+		Check(first.Get("id") && first.Get("id")->GetString() == "pose000",
+			"BlocoP: the first pose is pose000", first.GetString("id", "missing"));
+		Check(first.Get("frames") && first.Get("frames")->GetNumber() == expected.Frames,
+			"BlocoP: a pose carries the frames it was seen in",
+			std::to_string(expected.Frames));
+		const JsonValue* size = first.Get("size");
+		Check(size && size->GetArray().size() == 2,
+			"BlocoP: a pose states its extent as a [w, h] pair",
+			"size entries=" + std::to_string(size ? size->GetArray().size() : 0));
+		if(size && size->GetArray().size() == 2) {
+			Check(size->GetArray()[0].GetNumber() == expected.Width && size->GetArray()[1].GetNumber() == expected.Height,
+				"BlocoP: the serialised extent is the one BuildPoses measured",
+				std::to_string(size->GetArray()[0].GetNumber()) + "x" + std::to_string(size->GetArray()[1].GetNumber()));
+		}
+
+		const JsonValue* tiles = first.Get("tiles");
+		Check(tiles && tiles->GetArray().size() == expected.Tiles.size(),
+			"BlocoP: a pose's tiles[] round-trips whole",
+			"tiles=" + std::to_string(tiles ? tiles->GetArray().size() : 0));
+		if(!tiles || tiles->GetArray().size() != expected.Tiles.size()) {
+			return;
+		}
+		bool tilesMatch = true;
+		for(size_t i = 0; i < expected.Tiles.size(); i++) {
+			const JsonValue& tile = tiles->GetArray()[i];
+			const JsonValue* node = tile.Get("node");
+			const JsonValue* dx = tile.Get("dx");
+			const JsonValue* dy = tile.Get("dy");
+			tilesMatch = tilesMatch && node && dx && dy
+				&& node->GetNumber() == expected.Tiles[i].Node
+				&& dx->GetNumber() == expected.Tiles[i].Dx
+				&& dy->GetNumber() == expected.Tiles[i].Dy;
+		}
+		Check(tilesMatch, "BlocoP: every tile keeps its node and its cell offset",
+			"first node=" + std::to_string(expected.Tiles[0].Node)
+				+ " dx=" + std::to_string(expected.Tiles[0].Dx)
+				+ " dy=" + std::to_string(expected.Tiles[0].Dy));
+		Check(SerializePoses(vocab, stats) == json, "BlocoP: pose serialisation is deterministic",
+			"bytes=" + std::to_string(json.size()));
+	}
+
 	void TestSheetJsonCarriesTheGridDecision()
 	{
 		SheetJsonDoc doc;
@@ -5163,6 +5550,13 @@ int main()
 	TestAdjacencyBackgroundSidecarCarriesDegreesAndEdges();
 	TestAdjacencyResidentNodesCarryTheirOwningScreens();
 	TestAdjacencySpriteSidecarRoundTrips();
+	TestPosesSharingATileStayTwoPoses();
+	TestPoseClustersJoinAcrossEightPixelsAndNotNine();
+	TestPoseFramesCountRepeatCount();
+	TestPoseThresholdsDropWhatTheyClaim();
+	TestPoseListIsCappedAtTheMaximum();
+	TestPosesAreSortedByFramesDescending();
+	TestPoseSidecarRoundTrips();
 
 	TestHeadlessScriptUnitsAreExplicit();
 	TestHeadlessScriptBareNumberIsAnError();

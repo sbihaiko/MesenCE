@@ -41,4 +41,18 @@ namespace MesenSheets
 	//unpruned denominators, so a reader recomputes conditional probabilities
 	//under a lock instead of guessing at them.
 	SpriteAdjacencyStats AccumulateSpriteAdjacency(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
+
+	//ADR-0170 (F9.19): the pose sidecar sheets/poses.json, from the same
+	//retained OamFrame stream. AccumulateSpriteAdjacency projects the stream
+	//onto pairwise totals, which cannot be inverted - knowing A and B were
+	//often on screen together never says whether they shared one silhouette.
+	//This keeps the per-frame structure instead: each frame is segmented into
+	//spatially connected clusters (within kPoseMaxGap on both axes), each
+	//cluster normalised to its own top-left and expressed as a set of
+	//(node, dx, dy), and equal sets merge. It is the *measured* enumeration -
+	//PRD spike S10.a built its ground truth exactly this way, off ADR-0169's
+	//live OAM channel, and found the ADR-0168 evidence[] walk recovering 6.7 %
+	//of it. Entries below kPoseMinFrames / kPoseMinTiles are dropped and the
+	//kept set is capped at kMaxPoses.
+	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
 }

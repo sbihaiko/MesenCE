@@ -56,6 +56,20 @@ namespace MesenSheets
 	constexpr uint32_t kAdjacencyMaxOffsets = 8;
 	constexpr uint32_t kAdjacencyMaxFloors = 8;
 	constexpr uint32_t kAdjacencyMinPairCount = 2;
+	//---- F9.19 (ADR-0170): sheets/poses.json -----------------------------
+	//
+	//Two OAM entries belong to the same silhouette when their 8x8 boxes are
+	//within this on both axes - 8 px is "touching", the smallest gap that
+	//still reads as one figure, and the value S10.a measured its poses with.
+	constexpr int32_t kPoseMaxGap = 8;
+	//A silhouette seen in fewer retained frames than this, or holding fewer
+	//tiles, is transient garbage (one frame of an explosion mid-redraw, a lone
+	//projectile) and must not reach a file an artist reads.
+	constexpr uint32_t kPoseMinFrames = 3;
+	constexpr uint32_t kPoseMinTiles = 4;
+	//Kept poses, by frames descending. Mirrors kMaxSheetFrames so a long
+	//session cannot grow the file without bound.
+	constexpr uint32_t kMaxPoses = 4096;
 	//Retained per-frame grids (de-duplicated); ~2.8 KB each since the ADR-0159
 	//amendment added the palette plane (1920 B of shape ids + 960 B of palette
 	//ids), i.e. ~11.5 MB with the stream full.
@@ -401,6 +415,64 @@ namespace MesenSheets
 		//rather than once in the header, so neither read as a fraction of the
 		//wrong universe.
 		uint32_t OamFrames = 0;
+	};
+
+	//---- F9.19 (ADR-0170): sheets/poses.json -------------------------------
+
+	//One tile of a pose: a sprite-vocabulary node (the same index space as
+	//adjacency.json sprites.nodes[]) at an 8 px cell offset from the pose's
+	//own top-left. Offsets come from SpriteGrouping's round-to-nearest-cell
+	//rule, so a metasprite sitting a few pixels off the grid still lands on
+	//the cell an artist would draw it in.
+	struct PoseTile
+	{
+		uint32_t Node = 0;
+		int32_t Dx = 0;
+		int32_t Dy = 0;
+
+		bool operator==(const PoseTile& o) const { return Node == o.Node && Dx == o.Dx && Dy == o.Dy; }
+		bool operator<(const PoseTile& o) const
+		{
+			if(Dy != o.Dy) { return Dy < o.Dy; }
+			if(Dx != o.Dx) { return Dx < o.Dx; }
+			return Node < o.Node;
+		}
+	};
+
+	//One distinct silhouette: a set of (node, dx, dy), normalised to its own
+	//top-left. Two clusters are the same pose when the sets are equal, and
+	//identical sets merge, summing the frames they were seen in. Tiles are
+	//kept sorted (Dy, Dx, Node) so the set comparison and the file are
+	//deterministic for a given stream.
+	struct PoseEntry
+	{
+		std::vector<PoseTile> Tiles;
+		//Retained frames this silhouette was seen in, RepeatCount included -
+		//unlike the pair statistics, which ignore RepeatCount on purpose. A
+		//pose is a still, so a paused screen showing one really is evidence
+		//that the pose exists; it cannot manufacture a *second* pose.
+		uint32_t Frames = 0;
+		//Extent in cells, for a consumer that lays poses out without walking
+		//Tiles[].
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+	};
+
+	//What BuildPoses found, with the counts a reader needs to judge
+	//truncation (ADR-0170 §2): the file states its own sampling.
+	struct PoseStats
+	{
+		//Kept poses, by Frames descending then by Tiles, capped at kMaxPoses.
+		std::vector<PoseEntry> Poses;
+		//Frames the counts live in: retained OamFrames weighted by
+		//RepeatCount, the same universe PoseEntry::Frames is counted in.
+		uint32_t Frames = 0;
+		//Retained, de-duplicated OamFrames - adjacency.json's "oamFrames".
+		uint32_t RetainedFrames = 0;
+		//Distinct silhouettes before the kPoseMinFrames threshold, and after
+		//it but before the kMaxPoses cap.
+		uint32_t PosesFound = 0;
+		uint32_t PosesKept = 0;
 	};
 
 	//---- F9.18 (ADR-0166): the owning screen of a resident node -------------

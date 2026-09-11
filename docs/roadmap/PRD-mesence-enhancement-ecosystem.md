@@ -441,6 +441,30 @@ does not exist.
   corrected mechanism (still `proposed`); ADR-0170 written `proposed` for the
   prerequisite — a pose sidecar written from `HdPackBuilder::_oamFrames`,
   which the recorder already holds at save time.
+- **F9.19 — the pose sidecar** (2026-09-11): ADR-0170 accepted by the user
+  and implemented the same day, as Phase 9 debt rather than as a Phase 10
+  prerequisite — the F9.18 sprite layer composed fragments, which is the
+  defect the human panel would have reported. `BuildPoses` in host-free
+  `SpriteGrouping` segments each retained OAM frame into spatially connected
+  clusters (within 8 px on both axes, `SheetGrouping`'s DSU promoted to its
+  header rather than copied), normalises each to its own top-left through
+  the existing round-to-nearest-cell rule, and merges equal sets; the
+  recorder writes `textures/sheets/poses.json` next to `adjacency.json` from
+  the same pass and the same sprite vocabulary, and reports found / over the
+  threshold / kept after the cap. No capture change, no new key, so nothing
+  here can break rendering. 27 `core_unit_tests` cases (Bloco P), both arms
+  defect-probed — the 8 px boundary is asserted against the literal, not
+  against its own constant, after the first probe showed a drifting
+  `kPoseMaxGap` passing unnoticed. Consumer side (ADR-0170 §4): the
+  composition engine takes a figure's layout from the sidecar when the pack
+  has one and otherwise runs the ADR-0168 walk unchanged, proven by a spy
+  rather than inferred from output; a malformed or partial sidecar degrades
+  to the fallback instead of raising. Three implementation semantics the
+  tests forced into the open (the frame floor counts `RepeatCount`, "found"
+  is already past the tile floor, "kept" is pre-cap) are recorded in
+  ADR-0170 §2. Open, and deliberately not invented: which poses belong to
+  the same subject — ADR-0170 declines it, so a figure is still identified
+  by its anchor node.
 
 ### 4. Roadmap — pending work, by slice
 
@@ -587,6 +611,7 @@ F9.6 and Phase 10).
 | Slice | Deliverable | Decision |
 |---|---|---|
 | F9.18 | **The composition editor** — an external, stdlib-only Python tool in `scripts/` (`scripts/compose_editor.py <pack folder>`, a tkinter layered canvas over a host-free `compose_engine.py`) that opens a pack recorded since F9.17 and builds the ADR-0164 §5 scene as a stack of layers: HUD/font edited in place, background from maps/metatiles/screens, objects from `objNNN`, and sprites as one sub-layer per **Y band** — `adjacency.json` `sprites.nodes[].floors[]` joined with `pairs[].coFrames`, ranked by `coFrames × band overlap`. Seed → rank → lock → recompute runs inside a layer, placing a candidate's `sprNNN` figure by the near-field `offsets[]` when one exists; export is in-place sheets for HUD/background/objects and a `usrNNN` sidecar (`composed: true`, `seed`/`locked`, `band {bottom, tolerance: 8}`) per kept sprite band. Node pixels come from the sheet that shows them (`*.orig.png`, nearest-neighbour); a screen-owned node (ADR-0156) from `backgrounds/screenNNN.orig.png` or a `textures/chr/` render, never a silent blank. No new format: the output is ordinary `mep_build.py` input (`_SHEET_RANK` ranks by `kind`; `usrNNN` sorts after `objNNN`/`sprNNN`); unpainted scenes live under `auto/`, a painted sheet is written to `mep/` (ADR-0147). The two ADR-0164 acceptance tests (seed on a Ninja Gaiden `obj000` metatile → rest of the group ranks first; the Y band of Ryu's bottom edge ranks ground enemies above projectiles) are suites against the engine, headless | **accepted 2026-09-07** — ADR-0165 (accepted 2026-09-07, by the user); delivery in progress. ADR-0166 (accepted 2026-09-07) closes the F9.18 pixel-source gap: `adjacency.json` records, per screen-resident node, the `screenNNN` that owns it and its 8 px on-screen offset, so a sheetless background cell resolves to a crop from `backgrounds/<screen>.orig.png`. **Engine acceptance run against real data, 2026-09-07** (`runs/f918-accept/report.txt`): a fresh 300 s Mega Man 3 recording since F9.17 (62 sheets, `vocabularySize` 379, 15 distinct screens, 77 background nodes carrying `screens[]`) exercised `background_rank`/`sprite_rank`/`node_art`/`export` end to end — a screen-owned node's crop is real, legible pixels (spot-checked visually, not just "did not raise"), and both a `usrNNN` object and sprite-band export round-trip through `mep_build._load_sheet_docs` unchanged. Found and fixed a real bug no synthetic fixture caught: `Pack.next_free_name()` scanned the pack's own `sheets_dir` instead of the caller's `to_dir`, so two exports into the same `mep/` folder — an ordinary editing session — both landed on `usr000` and the second silently overwrote the first on disk; fixed, with a defect-probed regression test (`test_export_twice_to_same_dir_gets_distinct_names`, 9/10 → 10/10). Engine code acceptance is done. **GUI pass 2026-09-09:** `scripts/render_compose_editor.py` opens the real `EditorApp`, drives its handlers by named step and repaints the mapped widget tree into a PNG (the `render_record_viewer.py` technique of ADR-0169 — no screencapture, no TCC prompt), so the GUI needs no display to be judged either. It exposed a headline defect the engine tests could not see: `_refresh_row` drew cells column-major while `_row_index_at` hit-tested row-major, so every cell after the seed was drawn below the canvas and clicks landed on the wrong cell — the whole lock/swap/remove gesture set was unusable. Fixed by moving the grid arithmetic into host-free `compose_editor_layout.py` (ADR-0127) where `cell_origin`/`index_at` are exact inverses, plus five packing/contrast defects (clipped export preview, Selection panel squeezed off the right edge, squeezed tab buttons, clipped Output path, four #aaa/#888 labels on the aqua theme). `scripts/test_compose_editor_gui.py` covers the layout invariants host-free and drives the real app Tk-gated (36/36; the old origin fails 14 checks; no display skips 3 cases with rc=0). Remaining before "shipped": the Phase 9 human panel (cold-read/find-and-edit/seam) and native window-manager behaviour only a desktop shows. Note for that panel: the composed band renders **fragments** of a character, not poses — the correct unit is what PRD Phase 10 spike S10.a measured as unreachable from today's sidecars, so a "still striped" verdict would be ADR-0170's subject, not a GUI defect |
+| F9.19 | **The pose sidecar** — `textures/sheets/poses.json`, written at save time next to `adjacency.json` from the same retained `_oamFrames` stream and the same sprite vocabulary: every frame segmented into spatially connected clusters (within `kPoseMaxGap` = 8 px on both axes), each normalised to its own top-left as a set of `(node, dx, dy)` at `SpriteGrouping`'s round-to-nearest-cell rule, equal sets merged and `RepeatCount`-weighted, kept at >= 3 frames / >= 4 tiles and capped at `kMaxPoses`. Host-free `BuildPoses` + `SerializePoses`, I/O only in `HdPackBuilder`; the composition engine reads the sidecar when the pack has one and otherwise runs the ADR-0168 walk unchanged | **accepted 2026-09-07 / 2026-09-11** — ADR-0170; **shipped 2026-09-11** (record in §3). The prerequisite S10.a named: the ADR-0168 `evidence[]` walk recovers 6.7 % of a character's poses because the pairwise projection cannot be inverted, and the datum was never missing from the emulator, only from what it wrote down |
 
 **Validation — qualitative and intuitive.** The deliverable is legibility,
 which no pixel metric captures, so each slice is judged by a fixed panel
@@ -656,11 +681,13 @@ started.** Nothing in this section is a decision: no module layout, sidecar
 format, tool contract, storage location, provider or emulator entry point
 is fixed here. **S10.c/S10.d shipped 2026-09-09; S10.a ran the same day and
 failed** — its premise ("every pose the recorder saw") is not reachable from
-today's sidecars, so the phase is blocked on a decision the user owns:
-accept `proposed` ADR-0170 (the recorder writes pose membership) and only
-then re-measure S10.a, or close the phase per the rule below and return the
-skin tool to "Deferred / optional". S10.b is untouched by that choice and
-still needs the user's key and hand. Each of those is an ADR, written by hand after the spike that
+today's sidecars. The user took that decision on 2026-09-11: **ADR-0170 is
+accepted and shipped as F9.19** (§3) — the recorder now writes pose
+membership — so S10.a's prerequisite exists and the spike is re-measurable
+against a freshly recorded pack. It was accepted on its Phase 9 value, not
+as a commitment to this phase: two links remain unmeasured, S10.a itself
+(not yet re-run) and S10.b, which is untouched by that choice and still
+needs the user's key and hand. Each of those is an ADR, written by hand after the spike that
 tests its premise (`docs/roadmap/AGENTS.md`: decisions are not made in a
 PRD). The first draft had it backwards — it specified the architecture and
 reserved "ADR-A/B/C" to ratify it; that draft is in git history, not here.
@@ -808,11 +835,15 @@ harness problem, solved several ways, in readable code.
 1. ~~Phase 6 · H1–H10 · Phase 5 · D1–D13 · input tester · Phase 7 · Phase 8
    · Phase 9 F9.0–F9.17~~ — shipped (§3).
 2. **Phase 9 F9.18** (composition editor GUI + human panel) — independent of
-   Part B.
+   Part B. Run the human panel *after* F9.19 (§3): the sprite layer now has
+   poses to compose, so the panel judges the intended unit instead of
+   re-reporting the fragment defect ADR-0170 already measured.
 3. **Phase 10 feasibility spikes** — S10.c, S10.d and S10.a all ran
-   2026-09-09 (§3): the two pack-side ones shipped, S10.a failed and put the
-   phase behind a user decision (ADR-0170 `proposed`, or close the phase).
-   S10.b still needs the user's key and hand. No product slice is scheduled.
+   2026-09-09 (§3): the two pack-side ones shipped and S10.a failed. The
+   user resolved that on 2026-09-11 by accepting ADR-0170, shipped as F9.19
+   (§3), so S10.a is re-measurable against a pack recorded since. Still
+   open: re-running S10.a, and S10.b, which needs the user's key and hand.
+   No product slice is scheduled.
 4. Manual and hardware residue, opportunistically: F6.5 file-picker step,
    Phase 5 listening pass, input tester with a pad, Phase 9 validation
    test 8 (needs a local diffusion stack).
@@ -842,6 +873,7 @@ files and in §3.
 | 0165 | accepted | F9.18 composition editor: external stdlib tkinter tool over a host-free engine |
 | 0168 | proposed | figure (`sprNNN` group) as the unit — Phase 10 S10.a measures the pose-membership gap its own Context names before anyone accepts it |
 | 0169 | accepted | recorder publishes frames one way; the live viewer never blocks the run |
+| 0170 | accepted (2026-09-11) | the recorder writes `sheets/poses.json` from the OAM stream it already holds; shipped as F9.19, and the prerequisite S10.a named |
 
 ### 7. Risks
 

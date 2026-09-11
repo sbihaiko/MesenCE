@@ -183,6 +183,12 @@ private:
 	//(host-free, unit-tested); this class only accumulates the sprite far-field
 	//statistics from its OAM stream and writes the bytes, per ADR-0153 §5.
 	void WriteAdjacencyFile(const string& folder, const MesenSheets::Vocabulary& vocab, const MesenSheets::Vocabulary& spriteVocab, const MesenSheets::TileLookup& lookup);
+	//F9.19 (ADR-0170): writes textures/sheets/poses.json beside adjacency.json,
+	//from the same OAM stream and over the same sprite vocabulary, so a pose's
+	//node indexes are adjacency.json's node indexes. The segmentation is
+	//host-free in SpriteGrouping and the schema in SheetRender; this class only
+	//supplies the stream and writes the bytes.
+	void WritePoseFile(const string& folder, const MesenSheets::Vocabulary& spriteVocab);
 
 	vector<MesenSheets::GridFrame> _gridFrames;
 	//F9.9: true while _gridFrames.back() is the frame OnFrameEnd is closing,

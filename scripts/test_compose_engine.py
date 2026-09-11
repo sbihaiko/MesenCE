@@ -231,6 +231,204 @@ def make_pack(root: Path, with_obj_sheet: bool = True):
     return root
 
 
+# -- ADR-0170 pose sidecar fixtures -----------------------------------------
+#
+# One `sprNNN` group sheet whose `evidence[]` exercises both halves of the
+# ADR-0168 §2 walk, so "the fallback still produces exactly today's result" is
+# an assertion about the heuristic and not just about a chain:
+#   * node 3's strongest edge points at (1, 0), which node 1 already holds, so
+#     the occupied-slot guard refuses it and a weaker edge places it at (2, 1);
+#   * node 4 is only reachable over an edge below the 25 % count floor, so it
+#     stays unplaced and is absent from the layout.
+_SPR000 = [0, 1, 2, 3, 4]
+_SPR000_EVIDENCE = [
+    {"a": 0, "b": 1, "dx": 1, "dy": 0, "count": 100},
+    {"a": 1, "b": 2, "dx": 0, "dy": 1, "count": 80},
+    {"a": 0, "b": 3, "dx": 1, "dy": 0, "count": 60},   # slot taken by node 1
+    {"a": 2, "b": 3, "dx": 1, "dy": 0, "count": 50},
+    {"a": 0, "b": 4, "dx": 0, "dy": 2, "count": 5},    # under the floor
+]
+_WALK_EXPECTED = {0: (0, 0), 1: (1, 0), 2: (1, 1), 3: (2, 1)}
+
+# The same figure as the recorder actually saw it in one OAM frame: a 2x3
+# silhouette, node 4 included (the walk could never reach it) and laid out
+# differently from anything the pairwise offsets imply.
+_POSE_TILES = {0: (0, 0), 1: (1, 0), 2: (0, 1), 3: (1, 1), 4: (0, 2)}
+
+
+def _write_spr_group(sheets, stem="spr000", nodes=None, evidence=None):
+    nodes = _SPR000 if nodes is None else nodes
+    cells = [_sprite_cell(i, m, 100) for i, m in enumerate(nodes)]
+    _write_sheet(sheets, stem, "sprite", cells, 8, 4,
+                 extra={"evidence": _SPR000_EVIDENCE if evidence is None else evidence})
+
+
+def _write_poses(sheets, doc):
+    (Path(sheets) / E.POSES_FILE).write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _poses_doc(tiles=None, extra_poses=None):
+    tiles = _POSE_TILES if tiles is None else tiles
+    poses = [{"id": "pose000", "frames": 412, "size": [2, 3],
+              "tiles": [{"node": n, "dx": d[0], "dy": d[1]} for n, d in sorted(tiles.items())]}]
+    poses.extend(extra_poses or [])
+    return {"version": 1, "unit": 8, "frames": 1440, "poses": poses}
+
+
+class _WalkSpy:
+    """Swap `E.walk_layout` out to prove ADR-0170 §4's "does not run the walk"
+    is a fact about the code path, not an inference from the output."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def __enter__(self):
+        self._real = E.walk_layout
+
+        def spy(nodes, evidence):
+            self.calls += 1
+            return self._real(nodes, evidence)
+
+        E.walk_layout = spy
+        return self
+
+    def __exit__(self, *exc):
+        E.walk_layout = self._real
+        return False
+
+
+def test_pose_sidecar_lays_the_figure_out_and_skips_the_walk():
+    """ADR-0170 §4: with `poses.json` the layout is the pose's, and the
+    ADR-0168 §2 walk is not run at all."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        _write_poses(sheets, _poses_doc())
+        pack = E.Pack(root)
+        check(pack.poses is not None, "poses.json is loaded when present")
+        with _WalkSpy() as spy:
+            layout, source, pose = pack.figure_layout_detail("spr000")
+        check(source == "poses", "layout source is the sidecar", source)
+        check(spy.calls == 0, "the evidence[] walk is not run", f"{spy.calls} call(s)")
+        check(layout == _POSE_TILES, "the figure is laid out from the pose", str(layout))
+        check(pose is not None and pose.id == "pose000" and pose.extent() == (2, 3),
+              "the pose is reported with its extent", str(pose and pose.extent()))
+        check(layout != _WALK_EXPECTED, "the pose layout is not the walk's answer")
+
+
+def test_pack_without_poses_falls_back_to_todays_walk():
+    """A pack recorded before ADR-0170 composes exactly as it does today: the
+    ADR-0168 §2 walk, its occupied-slot guard and its count floor included."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        _write_spr_group(root / "textures" / "sheets")
+        pack = E.Pack(root)
+        check(pack.poses is None, "no sidecar means no poses")
+        with _WalkSpy() as spy:
+            layout, source, pose = pack.figure_layout_detail("spr000")
+        check(source == "walk" and spy.calls == 1, "the walk runs", f"{source}/{spy.calls}")
+        check(pose is None, "no pose is reported on the fallback path")
+        check(layout == _WALK_EXPECTED, "the walk places the group as it does today", str(layout))
+        check(4 not in layout, "a member reachable only under the count floor stays unplaced")
+        # The spike is the reference implementation ADR-0168 §2 names; it and
+        # the engine must be one walk, not two.
+        import spike_compose_scene as S
+        check(S.shape_layout(root / "textures" / "sheets", "spr000") == _WALK_EXPECTED,
+              "the spike's shape_layout agrees with the engine")
+
+
+def test_malformed_pose_sidecar_degrades_to_the_walk():
+    """Every way the sidecar can be unusable ends in the fallback, never in an
+    exception: the artist keeps the composition they can get today."""
+    cases = {
+        "missing poses key": {"version": 1, "unit": 8, "frames": 10},
+        "empty poses list": {"version": 1, "unit": 8, "frames": 10, "poses": []},
+        "unknown format version": dict(_poses_doc(), version=2),
+        "not a JSON object": [1, 2, 3],
+        "poses of unknown nodes only": {"version": 1, "poses": [
+            {"id": "pose000", "frames": 9, "tiles": [{"node": 900, "dx": 0, "dy": 0}]}]},
+        "tiles are junk": {"version": 1, "poses": [
+            {"id": "pose000", "frames": 9, "tiles": [{"node": "x"}, 7, {}]}]},
+    }
+    for name, doc in cases.items():
+        with tempfile.TemporaryDirectory() as td:
+            root = make_pack(Path(td))
+            sheets = root / "textures" / "sheets"
+            _write_spr_group(sheets)
+            _write_poses(sheets, doc)
+            pack = E.Pack(root)
+            check(pack.poses is None, f"unusable sidecar ({name}) reads as absent")
+            check(pack.figure_layout("spr000") == _WALK_EXPECTED,
+                  f"unusable sidecar ({name}) still lays the figure out by the walk")
+    # Not even valid JSON.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        (sheets / E.POSES_FILE).write_text("{ not json", encoding="utf-8")
+        pack = E.Pack(root)
+        check(pack.poses is None and pack.figure_layout("spr000") == _WALK_EXPECTED,
+              "a sidecar that is not JSON reads as absent")
+
+
+def test_partial_pose_sidecar_keeps_what_it_can():
+    """A tile naming a node outside the sprite vocabulary is dropped, not
+    trusted and not fatal — `poses.json` and `adjacency.json` are two
+    projections of one stream and nothing cross-checks them (ADR-0170
+    Consequences). What is left of the pose still lays the figure out."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        tiles = dict(_POSE_TILES)
+        tiles[77] = (2, 2)  # not in sprites.nodes[]
+        # A second entry, listed first and seen less often, so the load has to
+        # re-establish ADR-0170 §1's frames-descending order to pick right.
+        stale = {"id": "pose001", "frames": 3, "size": [1, 1],
+                 "tiles": [{"node": 0, "dx": 0, "dy": 0}, {"node": 4, "dx": 1, "dy": 0}]}
+        doc = _poses_doc(tiles=tiles, extra_poses=[stale])
+        doc["poses"].reverse()
+        _write_poses(sheets, doc)
+        pack = E.Pack(root)
+        check(pack.poses.dropped_tiles == 1, "the out-of-vocabulary tile is dropped",
+              str(pack.poses.dropped_tiles))
+        check([p.id for p in pack.poses.entries] == ["pose000", "pose001"],
+              "entries are ordered most-seen first")
+        layout, source, pose = pack.figure_layout_detail("spr000")
+        check(source == "poses" and layout == _POSE_TILES,
+              "the surviving tiles lay the figure out", f"{source} {layout}")
+        check(77 not in layout, "the unknown node never reaches a consumer")
+
+
+def test_figure_layout_edges_do_not_raise():
+    """A group sheet with no cells, and an anchor no pose contains, both fall
+    through to the walk rather than blowing up."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        # A pose that holds none of the group's nodes: the anchor is unknown to
+        # the sidecar, so this figure has no pose and walks.
+        _write_poses(sheets, {"version": 1, "poses": [
+            {"id": "pose000", "frames": 40,
+             "tiles": [{"node": 2, "dx": 0, "dy": 0}, {"node": 3, "dx": 1, "dy": 0}]}]})
+        pack = E.Pack(root)
+        check(pack.poses is not None, "the sidecar itself is fine")
+        check(pack.figure_layout_detail("spr000")[1] == "walk",
+              "an anchor no pose contains falls back to the walk")
+        _write_spr_group(sheets, stem="spr001", nodes=[])
+        check(E.Pack(root).figure_layout("spr001") == {},
+              "an empty group sheet lays out as nothing")
+        check(pack.group_nodes("spr000") == _SPR000, "group_nodes reads the cells in order")
+        try:
+            pack.figure_layout("spr999")
+        except E.ComposeError as e:
+            check("not readable as JSON" in str(e), "a missing group sheet is a ComposeError", str(e))
+        else:
+            check(False, "a missing group sheet is a ComposeError", "no raise")
+
+
 def test_missing_adjacency_tells_artist_to_rebootstrap():
     with tempfile.TemporaryDirectory() as td:
         root = make_pack(Path(td))
@@ -432,6 +630,11 @@ def main():
         test_screen_owned_node_resolves_via_owning_screen,
         test_export_rejects_unknown_kind_and_noop,
         test_export_twice_to_same_dir_gets_distinct_names,
+        test_pose_sidecar_lays_the_figure_out_and_skips_the_walk,
+        test_pack_without_poses_falls_back_to_todays_walk,
+        test_malformed_pose_sidecar_degrades_to_the_walk,
+        test_partial_pose_sidecar_keeps_what_it_can,
+        test_figure_layout_edges_do_not_raise,
     ]
     for t in tests:
         t()

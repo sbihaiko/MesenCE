@@ -9,6 +9,41 @@
 
 namespace MesenSheets
 {
+	//Path-halving union-find over cell indexes. Header-level because both
+	//grouping modules need the same components: SheetGrouping over predictive
+	//edges, SpriteGrouping over an OAM frame's spatial clusters (ADR-0170).
+	class Dsu
+	{
+	public:
+		explicit Dsu(size_t size) : _parent(size)
+		{
+			for(size_t i = 0; i < size; i++) {
+				_parent[i] = (uint32_t)i;
+			}
+		}
+
+		uint32_t Find(uint32_t node)
+		{
+			while(_parent[node] != node) {
+				_parent[node] = _parent[_parent[node]];
+				node = _parent[node];
+			}
+			return node;
+		}
+
+		void Union(uint32_t a, uint32_t b)
+		{
+			uint32_t rootA = Find(a);
+			uint32_t rootB = Find(b);
+			if(rootA != rootB) {
+				_parent[rootA] = rootB;
+			}
+		}
+
+	private:
+		std::vector<uint32_t> _parent;
+	};
+
 	//ADR-0153 §2: edges that pass the mutual-predictability test, in both
 	//directions, with their evidence. Deterministic order.
 	std::vector<GroupEdge> SelectPredictiveEdges(const Vocabulary& vocab, uint32_t minCount, double minProb);

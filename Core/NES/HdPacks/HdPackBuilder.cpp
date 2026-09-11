@@ -970,6 +970,10 @@ void HdPackBuilder::BuildSheets()
 	//over that same vocabulary, after every sheet it describes is on disk.
 	MesenSheets::Vocabulary spriteVocab = WriteSpriteSheets(folder, lookup);
 	WriteAdjacencyFile(folder, vocab, spriteVocab, lookup);
+	//F9.19 (ADR-0170): the second projection of that same stream, over that
+	//same vocabulary - the per-frame silhouettes adjacency.json's pairwise
+	//totals throw away.
+	WritePoseFile(folder, spriteVocab);
 
 	MessageManager::Log("[HD Pack Builder] sheets: grid unit " + std::to_string(vocab.Grid.Unit) +
 		" (phase " + std::to_string(vocab.Grid.PhaseX) + "," + std::to_string(vocab.Grid.PhaseY) +
@@ -1273,6 +1277,35 @@ void HdPackBuilder::WriteAdjacencyFile(const string& folder, const MesenSheets::
 		(spriteVocab.Entries.empty() ? string("no OAM stream")
 			: std::to_string(spriteVocab.Entries.size()) + " sprite nodes from " + std::to_string(_oamFrames.size()) + " OAM frames") +
 		" -> textures/sheets/adjacency.json");
+}
+
+//F9.19 (ADR-0170): one entry per distinct silhouette the OAM stream held, so a
+//composition editor lays a figure out from what was recorded instead of
+//guessing it with the ADR-0168 §2 walk. Writes bytes only: the clustering,
+//the sets-equal identity and the thresholds are host-free in SpriteGrouping
+//and the schema in SheetRender. No OAM stream means no sprite vocabulary and
+//no poses - and no empty file either, so a pack that has one really saw them.
+void HdPackBuilder::WritePoseFile(const string& folder, const MesenSheets::Vocabulary& spriteVocab)
+{
+	if(spriteVocab.Entries.empty()) {
+		return;
+	}
+	MesenSheets::PoseStats stats = MesenSheets::BuildPoses(_oamFrames, spriteVocab);
+	string json = MesenSheets::SerializePoses(spriteVocab, stats);
+	ofstream out(FolderUtilities::CombinePath(folder, "poses.json"), ios::out);
+	if(!out) {
+		return;
+	}
+	out << json;
+	//ADR-0170 §2: the counts a reader needs to judge truncation live here, not
+	//in the file - found, kept after the >= 3 frames / >= 4 tiles thresholds,
+	//and what survived the kMaxPoses cap. Three equal numbers mean nothing was
+	//dropped; the last one shrinking means the session outgrew the file.
+	MessageManager::Log("[HD Pack Builder] poses: " + std::to_string(stats.PosesFound) +
+		" silhouettes from " + std::to_string(stats.RetainedFrames) + " retained OAM frames, " +
+		std::to_string(stats.PosesKept) + " over the threshold, " +
+		std::to_string(stats.Poses.size()) + " kept after the cap" +
+		" -> textures/sheets/poses.json");
 }
 
 void HdPackBuilder::CaptureScreen()
