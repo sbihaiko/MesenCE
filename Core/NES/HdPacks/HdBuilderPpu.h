@@ -150,21 +150,12 @@ private:
 	//OAM flips are attribute bits, not tile data, so a mirrored half of a figure
 	//shares its CHR with its twin. Baking the flip into the recorded shape is
 	//what lets the two sit side by side on a sheet instead of collapsing into
-	//one cell (a group cannot place the same vocabulary entry twice).
+	//one cell (a group cannot place the same vocabulary entry twice). ADR-0178:
+	//the flags travel on the tile as well, so the sheet sidecar can still name
+	//the unflipped data hires.txt keys by on a CHR RAM game.
 	static void ApplyFlips(uint8_t* tileData, bool horizontalMirror, bool verticalMirror)
 	{
-		if(verticalMirror) {
-			for(int plane = 0; plane < 16; plane += 8) {
-				for(int row = 0; row < 4; row++) {
-					std::swap(tileData[plane + row], tileData[plane + 7 - row]);
-				}
-			}
-		}
-		if(horizontalMirror) {
-			for(int i = 0; i < 16; i++) {
-				tileData[i] = BitUtilities::ReverseByte(tileData[i]);
-			}
-		}
+		MesenSheets::ApplyTileFlips(tileData, horizontalMirror, verticalMirror);
 	}
 
 	void CaptureOam()
@@ -204,6 +195,10 @@ private:
 				sprite.IsChrRamTile = isChrRam;
 				mapper->CopyChrTile((uint32_t)absoluteTileAddr & 0xFFFFFFF0, sprite.TileData);
 				ApplyFlips(sprite.TileData, horizontalMirror, verticalMirror);
+				//ADR-0178: recorded, not just consumed - HdPackBuilder un-bakes
+				//them to recover the key the run time actually looks up.
+				sprite.HorizontalMirroring = horizontalMirror;
+				sprite.VerticalMirroring = verticalMirror;
 
 				_hdPackBuilder->RecordSprite(spriteX, (uint8_t)y, sprite);
 			}

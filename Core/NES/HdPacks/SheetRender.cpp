@@ -319,6 +319,19 @@ namespace MesenSheets
 				//"key this tile by its data", which is what a CHR RAM game wants.
 				json << ", \"index\": " << tile->TileIndex;
 			}
+			if(tile->Mirrors) {
+				//ADR-0178: the shape was recorded with its OAM flips baked in, so
+				//its bitmap is a key the run time never looks up. On a CHR RAM
+				//game the rebuild keys by this instead. Absent means the shape was
+				//never flipped - or the pack predates the ADR, which the build
+				//detects rather than silently repairing.
+				std::string source;
+				for(int b = 0; b < 16; b++) {
+					source += ToHex(tile->SourceTileData[b], 2);
+				}
+				json << ", \"source\": \"" << source << "\", \"mirror\": \""
+				     << ((tile->Mirrors & 1) ? "H" : "") << ((tile->Mirrors & 2) ? "V" : "") << "\"";
+			}
 			json << " }";
 		}
 		json << "]";
