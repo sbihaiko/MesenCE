@@ -794,6 +794,7 @@ def pack_extra_data_tests(root: Path, rom: Path):
                  "scale": 4, "source": "auto/textures/sheets"}
     (folder / "pack.json").write_text(json_dumps({
         "mep": "1.6.0", "name": "S10.c Test", "version": "0.1.0", "license": "CC0-1.0",
+        "id": "probe-pack",
         "generated": generated,
         "targets": [{"system": "nes", "sha1": "2A4E126D0286BEA0BF503C80A12352C57539F76B"}],
         "sections": {"textures": {"path": "textures/"}},
@@ -812,6 +813,15 @@ def pack_extra_data_tests(root: Path, rom: Path):
         fail(f"the zipped pack.json lost the root `generated` object: {zipped.get('generated')}")
     else:
         ok("S10.c: pack carries the root `generated` object across a rebuild, on disk and in the zip")
+
+    # `id` is the pack's product identity (MEP-v1 §3.1, ADR-0140 source (1)):
+    # stable across revisions, and the catalog slot the pack competes for.
+    # Dropping it on a re-pack sends the pack down the fallback chain, which
+    # can move it to a different slot than its author declared.
+    if pj.get("id") != "probe-pack" or zipped.get("id") != "probe-pack":
+        fail(f"pack dropped the root `id`: on disk {pj.get('id')!r}, in the zip {zipped.get('id')!r}")
+    else:
+        ok("pack carries the root `id` across a rebuild, on disk and in the zip (ADR-0140)")
 
     want = ["pack.json", "audio/bgm/01.ogg", "audio/hires.txt", "audio/sfx/03.ogg",
             "studio/candidates/skin.png", "studio/transcript.jsonl",

@@ -440,9 +440,14 @@ def _write_pack_json(recipe: dict, out: Path, include_patches: bool):
         "mep": pack.get("mep") or "1.1.0",
         "name": pack["name"],
         "version": pack["version"],
-        "license": pack.get("license") or "NOASSERTION",
-        "targets": pack["targets"],
     }
+    # The same carry-over `mep_build.py pack` owes the field: `id` is the
+    # pack's product identity (MEP-v1 §3.1, ADR-0140 source (1)), so a recipe
+    # that declares one must land it in the pack.json it writes.
+    if pack.get("id"):
+        body["id"] = pack["id"]
+    body["license"] = pack.get("license") or "NOASSERTION"
+    body["targets"] = pack["targets"]
     if pack.get("author"):
         body["author"] = pack["author"]
     if include_patches and pack.get("patches"):

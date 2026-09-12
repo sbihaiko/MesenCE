@@ -116,6 +116,7 @@ def base_recipe(primary_hash: str, audio_hash: str) -> dict:
             "mep": "1.1.0",
             "name": "Synthetic Split Pack",
             "version": "1.0.0",
+            "id": "synthetic-split-pack",
             "license": "CC0-1.0",
             "targets": [{"system": "nes", "sha1": SHA1}],
             "patches": [{"sha1": SHA1, "file": "patches/game.ips"}],
@@ -236,7 +237,15 @@ def check_dry_run_lint_clean():
         if lint_rc != 0:
             fail(f"dry-run output failed mep_lint.py (exit {lint_rc})")
             return
-        ok("dry-run of a synthetic split pack is mep_lint-clean")
+        # MEP-v1 §3.1 `id` is the pack's product identity (ADR-0140 source (1)),
+        # so a recipe that declares one must land it in the pack.json it
+        # writes — otherwise the assembled pack falls to the fallback chain and
+        # can take a different catalog slot than its author declared.
+        written = json.loads((out / "pack.json").read_text(encoding="utf-8"))
+        if written.get("id") != "synthetic-split-pack":
+            fail(f"the recipe's pack.id did not reach pack.json: {written.get('id')!r}")
+            return
+        ok("dry-run of a synthetic split pack is mep_lint-clean, and carries pack.id (ADR-0140)")
 
 
 def check_wrapped_primary_uses_lint_discovery():

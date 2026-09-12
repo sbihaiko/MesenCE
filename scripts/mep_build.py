@@ -1198,9 +1198,17 @@ def cmd_pack(args) -> int:
         "mep": existing.get("mep") or "1.1.0",
         "name": args.name or existing.get("name") or folder.name,
         "version": args.version or existing.get("version") or "1.0.0",
-        "license": args.license or existing.get("license") or "NOASSERTION",
-        "targets": targets,
     }
+    # MEP-v1 §3.1 `id` is the pack's *product* identity — ADR-0140 source (1),
+    # the catalog slot it belongs to — and it is stable across revisions while
+    # `version` is not. Re-packing must carry it over verbatim: dropping it
+    # sends the pack down ADR-0140's fallback chain and can land it in a
+    # different slot than its author declared. Carried as written, malformed or
+    # not; mep_lint is the one that judges the slug (a warning, never an error).
+    if existing.get("id"):
+        body["id"] = existing["id"]
+    body["license"] = args.license or existing.get("license") or "NOASSERTION"
+    body["targets"] = targets
     if args.author or existing.get("author"):
         body["author"] = args.author or existing["author"]
     # Carry over optional MEP-v1 §3.1 fields a re-run must not silently drop
