@@ -1146,6 +1146,7 @@ void HdPackBuilder::WriteObjectSheets(const string& folder, const MesenSheets::V
 		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
 		doc.Columns = group.Columns;
 		doc.Edges = group.Edges;
+		doc.EmptySlots = MesenSheets::EmptyGroupSlots(group);
 		WriteSheetFiles(folder, buf, image, doc, lookup);
 
 		//The shapes an object is made of are the only ones that still earn an
@@ -1169,10 +1170,15 @@ void HdPackBuilder::WriteObjectSheets(const string& folder, const MesenSheets::V
 MesenSheets::Vocabulary HdPackBuilder::WriteSpriteSheets(const string& folder, const MesenSheets::TileLookup& lookup)
 {
 	_spriteSheetCount = 0;
+	_poseStats = MesenSheets::PoseStats();
 	if(_oamFrames.empty()) {
 		return MesenSheets::Vocabulary();
 	}
 	MesenSheets::Vocabulary vocab = MesenSheets::BuildSpriteVocabulary(_oamFrames);
+	//ADR-0174 (issue #174): segmented here, before the first sprNNN is named,
+	//because every group sheet cites the poses its cells belong to. WritePoseFile
+	//serialises this same table rather than rebuilding it.
+	_poseStats = MesenSheets::BuildPoses(_oamFrames, vocab);
 
 	//F9.16 (ADR-0153 §3): sprites.png is the *whole* OAM vocabulary, most-seen
 	//first, singletons included. sprNNN below only covers shapes that hold a
@@ -1222,6 +1228,11 @@ MesenSheets::Vocabulary HdPackBuilder::WriteSpriteSheets(const string& folder, c
 		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
 		doc.Columns = group.Columns;
 		doc.Edges = group.Edges;
+		doc.EmptySlots = MesenSheets::EmptyGroupSlots(group);
+		//ADR-0174: the cross-reference to the whole figures. Only a sprNNN group
+		//gets one - sprites.png is the entire vocabulary, so it would cite every
+		//pose in the pack and say nothing.
+		doc.Poses = MesenSheets::PosesForCells(_poseStats, doc.Cells);
 		WriteSheetFiles(folder, buf, image, doc, lookup);
 	}
 	return vocab;
@@ -1293,7 +1304,10 @@ void HdPackBuilder::WritePoseFile(const string& folder, const MesenSheets::Vocab
 	if(spriteVocab.Entries.empty()) {
 		return;
 	}
-	MesenSheets::PoseStats stats = MesenSheets::BuildPoses(_oamFrames, spriteVocab);
+	//ADR-0174: WriteSpriteSheets already segmented the stream over this same
+	//vocabulary - every sprNNN cites the poses its cells belong to - so this
+	//serialises that table instead of clustering 4096 frames a second time.
+	const MesenSheets::PoseStats& stats = _poseStats;
 	string json = MesenSheets::SerializePoses(spriteVocab, stats);
 	ofstream out(FolderUtilities::CombinePath(folder, "poses.json"), ios::out);
 	if(!out) {

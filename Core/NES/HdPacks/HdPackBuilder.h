@@ -174,6 +174,11 @@ private:
 	vector<MesenSheets::OamFrame> _oamFrames;
 	MesenSheets::OamFrame _frameOam;
 	uint32_t _spriteSheetCount = 0;
+	//ADR-0174 (issue #174): the poses, segmented once. WriteSpriteSheets needs
+	//them before it names a sprNNN sheet (each one cites the figures its cells
+	//belong to) and WritePoseFile serialises the same table, so the O(n^2)
+	//per-frame clustering must not run twice over a 4096-frame stream.
+	MesenSheets::PoseStats _poseStats;
 	void RecordOamFrame();
 	//Returns the sprite vocabulary it built, so BuildSheets can persist the
 	//adjacency statistics over the same vocabulary the sheets cite.

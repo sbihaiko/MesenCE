@@ -4853,6 +4853,190 @@ namespace
 			"bytes=" + std::to_string(json.size()));
 	}
 
+	//--- ADR-0174 / ADR-0175 (issues #174, #175) ----------------------------
+
+	//The shape issue #174 measured on Contra: one pair of legs sits under two
+	//different torsos, so its own appearance count is twice the count of either
+	//torso edge and ADR-0153 §2's mutual-predictability test drops both. The
+	//legs land on their own sprNNN sheet and the figure ships cut at the waist,
+	//while BuildPoses - which reads the per-frame structure - sees both whole
+	//silhouettes. Frames 20-22 add a third pose that shares only the legs' left
+	//tile, so the covered-node ordering has something to order.
+	std::vector<OamFrame> SharedLegsFrames()
+	{
+		std::vector<OamFrame> out;
+		//Sub-cell drift: the figure walks, but every offset inside it stays a
+		//whole cell, so the normalised pose set does not wobble.
+		for(uint32_t f = 0; f < 10; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			uint32_t x0 = 60 + f;
+			frame.Entries.push_back(OamAt(1, x0, 100));
+			frame.Entries.push_back(OamAt(2, x0 + 8, 100));
+			frame.Entries.push_back(OamAt(3, x0, 108));
+			frame.Entries.push_back(OamAt(4, x0 + 8, 108));
+			out.push_back(frame);
+		}
+		for(uint32_t f = 10; f < 20; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			uint32_t x0 = 60 + f;
+			frame.Entries.push_back(OamAt(5, x0, 100));
+			frame.Entries.push_back(OamAt(6, x0 + 8, 100));
+			frame.Entries.push_back(OamAt(3, x0, 108));
+			frame.Entries.push_back(OamAt(4, x0 + 8, 108));
+			out.push_back(frame);
+		}
+		for(uint32_t f = 20; f < 23; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			uint32_t x0 = 60 + f;
+			frame.Entries.push_back(OamAt(3, x0, 100));
+			frame.Entries.push_back(OamAt(7, x0 + 8, 100));
+			frame.Entries.push_back(OamAt(8, x0, 108));
+			frame.Entries.push_back(OamAt(9, x0 + 8, 108));
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	//The group holding `node`, or the end of the list.
+	size_t GroupHolding(const std::vector<SheetGroup>& groups, int32_t node)
+	{
+		for(size_t i = 0; i < groups.size(); i++) {
+			for(const SheetCell& cell : groups[i].Cells) {
+				if(node >= 0 && cell.Metatile == node) {
+					return i;
+				}
+			}
+		}
+		return groups.size();
+	}
+
+	void TestSpriteSheetNamesThePosesItsCellsBelongTo()
+	{
+		std::vector<OamFrame> frames = SharedLegsFrames();
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<SheetGroup> groups = BuildSprites(frames, vocab);
+		PoseStats poses = BuildPoses(frames, vocab);
+
+		int32_t legLeft = SpriteNodeOf(vocab, 3);
+		int32_t legRight = SpriteNodeOf(vocab, 4);
+		int32_t torsoA = SpriteNodeOf(vocab, 1);
+		size_t legGroup = GroupHolding(groups, legLeft);
+		size_t torsoGroup = GroupHolding(groups, torsoA);
+
+		//The defect itself, asserted so the fixture cannot quietly stop
+		//reproducing it: the legs never once appeared without a torso a fixed
+		//distance above them, and they are still on a different sheet.
+		Check(legGroup < groups.size() && torsoGroup < groups.size() && legGroup != torsoGroup,
+			"BlocoP: shared legs and their torso land on different sprite sheets (#174)",
+			"legGroup=" + std::to_string(legGroup) + " torsoGroup=" + std::to_string(torsoGroup));
+		Check(poses.Poses.size() == 3, "BlocoP: the same stream holds three whole silhouettes",
+			"poses=" + std::to_string(poses.Poses.size()));
+		if(legGroup >= groups.size() || torsoGroup >= groups.size() || poses.Poses.size() != 3) {
+			return;
+		}
+
+		std::vector<SheetCell> legCells;
+		RenderGroup(groups[legGroup], vocab, SheetLookup(), SheetPalette(), legCells, true);
+		std::vector<uint32_t> refs = PosesForCells(poses, legCells);
+		Check(refs.size() == 3, "BlocoP: the legs sheet names every figure it is part of",
+			"refs=" + std::to_string(refs.size()));
+		if(refs.size() != 3) {
+			return;
+		}
+		//Ordered by the count of the sheet's own nodes covered: the two whole
+		//figures hold both leg tiles, the third pose holds only the left one.
+		Check(refs[0] != refs[1] && refs[2] == 2,
+			"BlocoP: pose refs are ordered most-covered first",
+			"refs=" + std::to_string(refs[0]) + "," + std::to_string(refs[1]) + "," + std::to_string(refs[2]));
+		Check(PoseHoldsNode(poses.Poses[refs[0]], legLeft) && PoseHoldsNode(poses.Poses[refs[0]], legRight)
+			&& PoseHoldsNode(poses.Poses[refs[0]], torsoA) != PoseHoldsNode(poses.Poses[refs[1]], torsoA),
+			"BlocoP: the joined pose is the whole figure the sheet was cut out of");
+
+		//A torso sheet is part of exactly one of them, and a pack whose stream
+		//held no pose carries nothing at all.
+		std::vector<SheetCell> torsoCells;
+		RenderGroup(groups[torsoGroup], vocab, SheetLookup(), SheetPalette(), torsoCells, true);
+		Check(PosesForCells(poses, torsoCells).size() == 1,
+			"BlocoP: a torso sheet names only the figure it belongs to");
+		Check(PosesForCells(PoseStats(), legCells).empty(),
+			"BlocoP: without a pose sidecar a sheet names no pose");
+	}
+
+	void TestSpriteSheetPoseRefsAreWrittenAsPoseIds()
+	{
+		SheetJsonDoc doc;
+		doc.Kind = "sprite";
+		doc.SheetFile = "spr023.png";
+		doc.Grid.Unit = 8;
+		doc.CellWidth = doc.CellHeight = 8;
+		doc.Columns = 2;
+		SheetCell cell;
+		cell.Index = 0;
+		cell.X = 1;
+		cell.Y = 1;
+		cell.Metatile = 13;
+		cell.Key = MetatileKey{ { 3, kEmptyCell, kEmptyCell, kEmptyCell } };
+		doc.Cells.push_back(cell);
+
+		//ADR-0172 made `index` optional on read; ADR-0174 does the same for
+		//`poses`, so the no-pose sidecar must be byte-identical to the old one.
+		std::string bare = SerializeSheet(doc, SheetLookup());
+		Check(bare.find("\"poses\"") == std::string::npos,
+			"BlocoP: a sheet that belongs to no pose carries no poses field");
+
+		doc.Poses.push_back(0);
+		doc.Poses.push_back(12);
+		std::string json = SerializeSheet(doc, SheetLookup());
+		Check(json.find("\"poses\": [\"pose000\", \"pose012\"]") != std::string::npos,
+			"BlocoP: a sprite sheet joins to poses.json by pose id (#174)");
+		Check(SerializeSheet(doc, SheetLookup()) == json,
+			"BlocoP: the pose cross-reference is deterministic");
+	}
+
+	//Issue #175: a group's grid is the bounding box of a BFS layout, so a
+	//figure that is not a rectangle leaves blanks in it. The sidecar states
+	//them rather than leaving an artist to guess whether a hole is a bug.
+	void TestGroupSheetStatesItsDeliberateBlanks()
+	{
+		std::vector<OamFrame> frames = SharedLegsFrames();
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<SheetGroup> groups = BuildSprites(frames, vocab);
+
+		//Shapes 7/8/9 are three tiles of a 2x2 box - one slot short.
+		size_t lShaped = GroupHolding(groups, SpriteNodeOf(vocab, 7));
+		size_t legGroup = GroupHolding(groups, SpriteNodeOf(vocab, 3));
+		Check(lShaped < groups.size() && legGroup < groups.size(),
+			"BlocoP: the blank-slot fixture produced both groups");
+		if(lShaped >= groups.size() || legGroup >= groups.size()) {
+			return;
+		}
+		Check(groups[lShaped].Cells.size() == 3 && groups[lShaped].Columns == 2 && groups[lShaped].Rows == 2,
+			"BlocoP: three cells lay out in a 2x2 box",
+			std::to_string(groups[lShaped].Columns) + "x" + std::to_string(groups[lShaped].Rows));
+
+		std::vector<SheetSlot> blanks = EmptyGroupSlots(groups[lShaped]);
+		Check(blanks.size() == 1 && blanks[0].Col == 0 && blanks[0].Row == 0,
+			"BlocoP: the one slot the layout never filled is named (#175)",
+			"blanks=" + std::to_string(blanks.size()));
+		Check(EmptyGroupSlots(groups[legGroup]).empty(),
+			"BlocoP: a figure that fills its box states no blank");
+
+		SheetJsonDoc doc;
+		doc.Kind = "sprite";
+		doc.Grid.Unit = 8;
+		doc.CellWidth = doc.CellHeight = 8;
+		doc.Columns = groups[lShaped].Columns;
+		RenderGroup(groups[lShaped], vocab, SheetLookup(), SheetPalette(), doc.Cells, true);
+		Check(SerializeSheet(doc, SheetLookup()).find("\"emptySlots\"") == std::string::npos,
+			"BlocoP: a sidecar with no stated blank is unchanged from before ADR-0175");
+		doc.EmptySlots = blanks;
+		Check(SerializeSheet(doc, SheetLookup()).find("\"emptySlots\": [{ \"col\": 0, \"row\": 0 }]") != std::string::npos,
+			"BlocoP: the blank slot reaches the sidecar in cell coordinates");
+	}
+
 	void TestSheetJsonCarriesTheGridDecision()
 	{
 		SheetJsonDoc doc;
@@ -5676,6 +5860,9 @@ int main()
 	TestPoseListIsCappedAtTheMaximum();
 	TestPosesAreSortedByFramesDescending();
 	TestPoseSidecarRoundTrips();
+	TestSpriteSheetNamesThePosesItsCellsBelongTo();
+	TestSpriteSheetPoseRefsAreWrittenAsPoseIds();
+	TestGroupSheetStatesItsDeliberateBlanks();
 
 	TestHeadlessScriptUnitsAreExplicit();
 	TestHeadlessScriptBareNumberIsAnError();

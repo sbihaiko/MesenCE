@@ -77,6 +77,15 @@ namespace MesenSheets
 	//Kept poses, by frames descending. Mirrors kMaxSheetFrames so a long
 	//session cannot grow the file without bound.
 	constexpr uint32_t kMaxPoses = 4096;
+	//---- ADR-0174 (issue #174): the sheet -> pose cross-reference ---------
+	//
+	//A group sheet names the poses its cells belong to, most-covered first. A
+	//node shared by many silhouettes (Contra's legs sit under two torsos) can
+	//be cited by dozens of them, and a pack with kMaxPoses poses would then
+	//grow the sidecar with the *stream* instead of with the sheet. The list is
+	//a front door to poses.json, not a second copy of it, so the tail past
+	//this - the weakest joins, by the §2 order - is dropped.
+	constexpr uint32_t kSheetMaxPoseRefs = 32;
 	//Retained per-frame grids (de-duplicated); ~2.8 KB each since the ADR-0159
 	//amendment added the palette plane (1920 B of shape ids + 960 B of palette
 	//ids), i.e. ~11.5 MB with the stream full.
@@ -763,6 +772,18 @@ namespace MesenSheets
 		uint32_t Count = 0;
 		double ProbAB = 0;
 		double ProbBA = 0;
+	};
+
+	//ADR-0175 (issue #175): one slot of a group sheet's grid that the layout
+	//deliberately left blank. Col/Row are in cells, the same units SheetGroup
+	//lays its members out in, so a consumer reaches the sheet pixels with the
+	//sidecar's own cell size and gutter.
+	struct SheetSlot
+	{
+		uint32_t Col = 0;
+		uint32_t Row = 0;
+
+		bool operator==(const SheetSlot& o) const { return Col == o.Col && Row == o.Row; }
 	};
 
 	struct SheetGroup

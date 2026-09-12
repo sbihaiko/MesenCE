@@ -55,4 +55,21 @@ namespace MesenSheets
 	//of it. Entries below kPoseMinFrames / kPoseMinTiles are dropped and the
 	//kept set is capped at kMaxPoses.
 	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
+
+	//ADR-0174 (issue #174): the join from a sprNNN group sheet to the whole
+	//figures its cells are part of. ADR-0153 §2's criterion cuts a character
+	//into always-together fragments - measured on Contra, 35 sprite pairs that
+	//were never once on screen apart (count == coFrames == 1338 at a constant
+	//offset) still landed on different sheets, and a soldier ships cut at the
+	//waist. ADR-0170/ADR-0171 already put the whole silhouette in poses.json;
+	//what was missing is any way to get from a sheet to it, because a sheet
+	//addresses cells and poses.json addresses vocabulary nodes.
+	//
+	//Returns the positions in stats.Poses - i.e. the "poseNNN" ids
+	//SerializePoses writes - of every pose holding at least one of `cells`'
+	//vocabulary nodes, ordered by the number of the sheet's *distinct* nodes it
+	//covers descending, then by the pose's own rank (frames descending, then
+	//id), so the first entry is the most complete figure this sheet is part of.
+	//Capped at kSheetMaxPoseRefs. Empty when no cell belongs to a pose.
+	std::vector<uint32_t> PosesForCells(const PoseStats& stats, const std::vector<SheetCell>& cells);
 }

@@ -59,4 +59,13 @@ namespace MesenSheets
 	//shared with SpriteGrouping (F9.5): components of 2..kSheetMaxObjectCells
 	//cells, then a BFS layout at each edge's Dx/Dy, biggest group first.
 	std::vector<SheetGroup> LayoutGroups(const Vocabulary& vocab, const std::vector<GroupEdge>& edges);
+
+	//ADR-0175 (issue #175): the slots of a group's Columns x Rows grid that no
+	//member occupies, row-major. A group sheet's grid is the *bounding box* of
+	//a BFS layout, so a figure that is not a rectangle - an L-shaped ledge, the
+	//two rows of a "GAME OVER" - leaves blanks in it by construction. They are
+	//not missing art and there is nothing to paint in them; without this list
+	//an artist cannot tell a deliberate blank from a subject the recorder
+	//failed to place, which is exactly what issue #175 reported.
+	std::vector<SheetSlot> EmptyGroupSlots(const SheetGroup& group);
 }

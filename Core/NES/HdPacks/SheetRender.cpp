@@ -376,6 +376,32 @@ namespace MesenSheets
 			json << "\n  ],\n";
 		}
 
+		//ADR-0175 (issue #175): the blanks in the group's bounding box, stated
+		//rather than left to be guessed at. Written only when there are any, so
+		//a rectangular figure's sidecar is byte-identical to what it was.
+		if(!doc.EmptySlots.empty()) {
+			json << "  \"emptySlots\": [";
+			for(size_t i = 0; i < doc.EmptySlots.size(); i++) {
+				json << (i ? ", " : "");
+				json << "{ \"col\": " << doc.EmptySlots[i].Col << ", \"row\": " << doc.EmptySlots[i].Row << " }";
+			}
+			json << "],\n";
+		}
+
+		//ADR-0174 (issue #174): the whole figures this sheet's cells are part
+		//of, as the "poseNNN" ids of sheets/poses.json. Ids rather than indexes
+		//because that is what poses.json keys an entry by, so the join is a
+		//lookup and not an agreement about array order.
+		if(!doc.Poses.empty()) {
+			json << "  \"poses\": [";
+			for(size_t i = 0; i < doc.Poses.size(); i++) {
+				char id[16];
+				snprintf(id, sizeof(id), "pose%03u", doc.Poses[i]);
+				json << (i ? ", " : "") << "\"" << id << "\"";
+			}
+			json << "],\n";
+		}
+
 		json << "  \"cells\": [";
 		for(size_t i = 0; i < doc.Cells.size(); i++) {
 			const SheetCell& cell = doc.Cells[i];

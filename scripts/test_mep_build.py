@@ -30,7 +30,15 @@ hires.txt + two OGGs) and asserts the whole build/pack/rename cycle:
     `studio/` subfolder included;
   * PRD Phase 10 S10.d: coverage preservation for a repainted pack —
     `check-coverage` passes a fully skinned pack (pixels all differ) and
-    fails a pack that lost a cell's tile keys or its sheet.
+    fails a pack that lost a cell's tile keys or its sheet;
+  * #172: `check-coverage` resolves candidate and baseline from one layout
+    rule (the argument is the pack folder, as for `build`), says how to
+    obtain a baseline when there is none, and refuses to compare the
+    rebuilt manifest against itself;
+  * #173: `build` reports its key count as a delta against the key source,
+    says why dropping keys is the designed outcome and where the
+    screen-owned cells are repainted, and groups the lint warnings about
+    the tool's own sheet geometry instead of burying the rest.
 
 Framework-free, mirroring test_mep_recipe.py's ok()/fail()/main() style.
 Wired into `make doc-checks`. Usage: python3 scripts/test_mep_build.py
@@ -931,6 +939,94 @@ def coverage_preservation_tests(root: Path):
         ok("S10.d: a key whose sheet is missing fails as unresolved, not as a pass")
 
 
+def check_coverage_layout_tests(root: Path):
+    """#172: `check-coverage` resolves both of its paths from one rule — the
+    argument is the pack folder, exactly the one `build` takes — and it never
+    compares the rebuilt manifest against itself.
+
+    Three arms: the documented layout (the recorder's pack kept nested under
+    `auto/`, which is also `build`'s second key source) runs with no
+    `--baseline` at all; a pack with no baseline anywhere says how to obtain
+    one instead of telling the user to run a `build` they have just run; and a
+    `--baseline` that resolves to the candidate is refused rather than passed
+    vacuously, which is the guard the F9.18 panel never actually got."""
+    pack, _v, _c = make_sheet_folder(root, "cc-layout")
+    if run("build", str(pack)) is None:
+        return
+    # The recorder's manifest and its sheets, kept nested where `build` writing
+    # in place cannot reach them.
+    shutil.copytree(pack / "textures", pack / "auto" / "textures")
+    if run("build", str(pack)) is None:
+        return
+    out = run("check-coverage", str(pack))
+    if out is None:
+        return
+    if "every baseline tile key still resolves" not in out:
+        fail(f"#172: check-coverage on the pack folder did not run against its default baseline:\n{out}")
+    else:
+        ok("#172: check-coverage takes the pack folder and finds its default baseline there")
+
+    # No baseline anywhere: `build` has run, so "run build first" is advice
+    # about a step already taken and names a file that is not the missing one.
+    lone, _v, _c = make_sheet_folder(root, "cc-nobaseline")
+    if run("build", str(lone)) is None:
+        return
+    out = run("check-coverage", str(lone), expect=2)
+    if out is None:
+        return
+    if "run `mep_build.py build` first" in out or "before `build` ran" not in out:
+        fail(f"#172: the missing-baseline error does not say how to obtain a baseline:\n{out}")
+    else:
+        ok("#172: a missing baseline says how to obtain one, not `run build first`")
+
+    out = run("check-coverage", str(lone), "--baseline",
+              str(lone / "textures" / "hires.txt"), expect=2)
+    if out is None:
+        return
+    if "same file" not in out:
+        fail(f"#172: comparing the rebuilt manifest with itself was not refused:\n{out}")
+    else:
+        ok("#172: baseline == candidate is refused instead of passing vacuously")
+
+
+def build_summary_tests(root: Path):
+    """#173: the build summary must let an artist tell designed narrowing from
+    a broken rebuild.
+
+    A rebuild legitimately carries fewer keys than the manifest it read: the
+    bootstrap exports every CHR tile as a palette-agnostic defaultTile
+    (ADR-0043), the sheets carry only what was routed to them, and the cells a
+    captured screen owns are off the sheets entirely (ADR-0156/ADR-0160) —
+    ADR-0172 measured that shape and accepted it. So the count is reported as a
+    delta against the key source, with the reason, and the lint warnings about
+    the tool's own sheet geometry are grouped instead of burying the lines an
+    artist can act on."""
+    folder, _v, _c = make_sheet_folder(root, "summary")
+    # Four keys no sheet carries — the shape of a key the recorder exported and
+    # the rebuild cannot route, e.g. a cell a captured screen owns.
+    hires = folder / "textures" / "hires.txt"
+    hires.write_text(hires.read_text(encoding="utf-8")
+                     + "".join(f"<tile>0,{tile_hex(s)},{PAL_HEX},0,0,1,N\n" for s in range(40, 44)),
+                     encoding="utf-8")
+    out = run("build", str(folder))
+    if out is None:
+        return
+    if "tile keys: 12 in the key source" not in out or "8 carried, 4 dropped" not in out:
+        fail(f"#173: build did not report the key count as a delta against its key source:\n{out}")
+    else:
+        ok("#173: build reports tile keys as a delta against the manifest it read")
+    if "expected, not breakage" not in out or "backgrounds/screenNNN.png" not in out:
+        fail(f"#173: dropped keys came with no reason and no repaint surface named:\n{out}")
+    else:
+        ok("#173: a dropped key is explained, with the screen-owned case named")
+    if "not a multiple of" in out:
+        fail(f"#173: the tool's own sheet-geometry warnings are still inline:\n{out}")
+    elif "are about the tool's own output" not in out or "sheets/metatiles.png" not in out:
+        fail(f"#173: the tool's own warnings were silenced instead of grouped and named:\n{out}")
+    else:
+        ok("#173: the tool's own sheet-geometry warnings are grouped, counted and named")
+
+
 def make_author_folder(root: Path, keys: int = 16, name: str = "author"):
     """A buildable author folder: a 16-column sheet at scale 2 (16px cells),
     a key-source hires.txt, and one bgm + one sfx OGG."""
@@ -1126,6 +1222,12 @@ def main() -> int:
         # the coverage rule that replaces pixel identity for a skinned pack ---
         pack_extra_data_tests(root, rom)
         coverage_preservation_tests(root)
+
+        # --- #172 / #173: the two reporting defects the Phase 9 validation
+        # panel hit — a coverage check that could not be pointed anywhere, and
+        # a build summary that read as damage ---
+        check_coverage_layout_tests(root)
+        build_summary_tests(root)
 
         # --- F5.4g item 12: audio_cleanup_suggest reads the probe's log ---
         sug = root / "sug-pack"

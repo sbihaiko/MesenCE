@@ -429,4 +429,48 @@ namespace MesenSheets
 		stats.Poses = kept;
 		return stats;
 	}
+
+	//ADR-0174 (issue #174): see SpriteGrouping.h. A cross-reference and nothing
+	//more - it does not change what a sheet contains, how cells are grouped or
+	//what a pose holds, so a consumer that ignores it reads the pack exactly as
+	//before. That is the whole reason this, and not a change to the ADR-0153 §2
+	//criterion, is the fix: the criterion decides the vocabulary and the layout
+	//of every sheet, so loosening it re-cuts every pack ever recorded, while a
+	//new optional field is additive in both directions.
+	std::vector<uint32_t> PosesForCells(const PoseStats& stats, const std::vector<SheetCell>& cells)
+	{
+		std::set<uint32_t> nodes;
+		for(const SheetCell& cell : cells) {
+			if(cell.Metatile >= 0) {
+				nodes.insert((uint32_t)cell.Metatile);
+			}
+		}
+		std::vector<uint32_t> refs;
+		if(nodes.empty()) {
+			return refs;
+		}
+
+		//(covered, pose index) - covered descending, index ascending. The index
+		//is already the ADR-0170 §1 rank (frames descending, then tiles), so
+		//ties fall out in the order the file itself states.
+		std::vector<std::pair<uint32_t, uint32_t>> scored;
+		for(size_t i = 0; i < stats.Poses.size(); i++) {
+			std::set<uint32_t> covered;
+			for(const PoseTile& tile : stats.Poses[i].Tiles) {
+				if(nodes.count(tile.Node)) {
+					covered.insert(tile.Node);
+				}
+			}
+			if(!covered.empty()) {
+				scored.push_back(std::make_pair((uint32_t)covered.size(), (uint32_t)i));
+			}
+		}
+		std::stable_sort(scored.begin(), scored.end(), [](const std::pair<uint32_t, uint32_t>& a, const std::pair<uint32_t, uint32_t>& b) {
+			return a.first > b.first;
+		});
+		for(size_t i = 0; i < scored.size() && i < kSheetMaxPoseRefs; i++) {
+			refs.push_back(scored[i].second);
+		}
+		return refs;
+	}
 }

@@ -57,12 +57,19 @@ pack   writes `pack.json` at the folder root from the folder tree and the
        `--system/--sha1`, or an existing `pack.json`. The zip is linted too.
 
 check-coverage  compares a rebuilt `textures/hires.txt` against the manifest
-       its keys came from (the recorder's, by default `auto/textures/
-       hires.txt`): every baseline tile key must still resolve to a crop
-       inside a sheet that exists, and the F5.4d tiles-with-art count over
-       those keys must be unchanged. Pixels are never compared, so a
-       repainted ("skinned") pack passes and a pack that lost a key fails
-       (PRD Phase 10 S10.d).
+       its keys came from (the recorder's): every baseline tile key must
+       still resolve to a crop inside a sheet that exists, and the F5.4d
+       tiles-with-art count over those keys must be unchanged. Pixels are
+       never compared, so a repainted ("skinned") pack passes and a pack
+       that lost a key fails (PRD Phase 10 S10.d).
+
+       `<folder>` is the pack itself — the folder holding `textures/`, the
+       same argument `build` takes. Candidate: `<folder>/textures/hires.txt`.
+       Baseline: `--baseline`, else `<folder>/auto/textures/hires.txt`, the
+       nested bootstrap that is also `build`'s second key source. A pack
+       built in place over its own recorder manifest has no such nested copy
+       — pass `--baseline` a copy taken before `build` ran; comparing the
+       rebuild with itself is refused rather than passed (#172).
 
 rename-audio-id  renames an enumerated `trackNN`/`sfxNN` audio id across
        `audio/fingerprints.json` (the `id` and `midi` fields), the physical
@@ -73,7 +80,9 @@ Exit codes mirror mep_lint: 0 = clean, 1 = errors found, 2 = usage error.
 """
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import re
 import shutil
@@ -1043,6 +1052,7 @@ def cmd_build(args) -> int:
     out_lines = list(out_header)
     img_index = 0
     emitted = 0
+    rebuilt_keys = set()
     for order, slot in enumerate(slots):
         live = [(pos, e) for pos, e in enumerate(slot["entries"]) if (order, pos) in kept]
         if not live and not slot["always"]:
@@ -1054,6 +1064,7 @@ def cmd_build(args) -> int:
             fields = list(fields)
             fields[0] = str(img_index)
             out_lines.append(f"{cond}<tile>{','.join(fields)}")
+            rebuilt_keys.add((_key[1], _key[2]))
         emitted += len(live)
         img_index += 1
     out_lines.extend(body)
@@ -1095,6 +1106,37 @@ def cmd_build(args) -> int:
     hires.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
     print(f"built {hires} — {emitted} tile(s), {img_index} sheet(s), scale {scale}"
           + (f" ({len(sheet_docs)} ADR-0153 sheet(s))" if sheet_docs else ""))
+
+    # A bare survivor count reads as damage: the golden Mega Man 3 bootstrap
+    # goes from 10057 keys to 644 and the tool used to announce the 644 as if
+    # it were the whole story, which is how the F9.18 panel concluded `build`
+    # had destroyed the pack (#173). The narrowing is designed — ADR-0172
+    # measured it and accepted it — so report it as a delta against the
+    # manifest actually read, and say why, rather than let the artist guess.
+    try:
+        src_label = source.relative_to(folder).as_posix()
+    except ValueError:
+        src_label = str(source)
+    # Compared key by key, not count by count: an ADR-0153 sheet carries its
+    # own keys, so a rebuild can add keys the source never had at the same time
+    # as it drops others, and a bare subtraction would hide both.
+    source_keys = set()
+    for _cond, raw in tiles:
+        f = [x.strip() for x in raw.split(",")]
+        if len(f) >= 3:
+            source_keys.add((f[1].upper(), f[2].upper()))
+    carried = len(source_keys & rebuilt_keys)
+    dropped_keys = len(source_keys - rebuilt_keys)
+    added_keys = len(rebuilt_keys - source_keys)
+    print(f"tile keys: {len(source_keys)} in the key source ({src_label}) -> {carried} carried, "
+          f"{dropped_keys} dropped"
+          + (f", {added_keys} new key(s) the sheets brought" if added_keys else ""))
+    if dropped_keys:
+        print("info: dropping keys here is expected, not breakage — the bootstrap exports every CHR "
+              "tile as a palette-agnostic defaultTile (ADR-0043) while a rebuild carries only what "
+              "the sheets carry, and the cells a captured screen owns are not on the sheets at all "
+              "(ADR-0156/ADR-0160): repaint those scenes in textures/backgrounds/screenNNN.png, not "
+              "in textures/sheets/. ADR-0172 measured this pack shape and accepted it.")
 
     # --- regenerate audio/hires.txt (new OGGs into audio/) ---
     system = None
@@ -1389,13 +1431,36 @@ def cmd_check_coverage(args) -> int:
     if not folder.is_dir():
         print(f"error: {folder} is not a directory", file=sys.stderr)
         return 2
+    # One layout rule for both paths, the same `build` uses: <folder> IS the
+    # pack, the folder holding `textures/`. Its manifest is the candidate, and
+    # the recorder's nested bootstrap — `build`'s second key source — is the
+    # default baseline. Deriving one path as "folder is the pack" and the other
+    # as "folder contains the pack" is what left no argument that satisfied
+    # both, and printed paths nobody could create (#172).
     candidate = folder / "textures" / "hires.txt"
     if not candidate.is_file():
-        print(f"error: no built manifest to check: {candidate} (run `mep_build.py build` first)", file=sys.stderr)
+        print(f"error: no manifest to check at {candidate} — check-coverage takes the pack folder "
+              f"itself, the one holding textures/, exactly like `build`", file=sys.stderr)
         return 2
     baseline = Path(args.baseline).resolve() if args.baseline else folder / "auto" / "textures" / "hires.txt"
     if not baseline.is_file():
-        print(f"error: no baseline manifest: {baseline} (pass --baseline <recorder hires.txt>)", file=sys.stderr)
+        print(f"error: no baseline manifest to compare against.\n"
+              f"       The baseline is the recorder's textures/hires.txt as it stood BEFORE the "
+              f"rebuild.\n"
+              f"       Looked for a nested bootstrap copy at {baseline} — not there.\n"
+              f"       Pass --baseline <a copy of textures/hires.txt taken before `build` ran>.",
+              file=sys.stderr)
+        return 2
+    # `build` writes textures/hires.txt in place, so on a bootstrap pack built
+    # in its own auto/ folder the recorder's manifest no longer exists — and
+    # comparing the rebuild against itself makes the guard pass whatever was
+    # dropped. Refusing is the honest answer: only the user knows where (or
+    # whether) they kept a pristine copy, so no other default could stand in
+    # for it without quietly checking the wrong file (#172).
+    if baseline.samefile(candidate):
+        print(f"error: baseline and candidate are the same file ({candidate}) — that comparison "
+              f"passes whatever the rebuild dropped; pass --baseline a copy of the recorder's "
+              f"manifest taken before `build` overwrote it", file=sys.stderr)
         return 2
 
     base_keys, base_unresolved = _manifest_keys(baseline)
@@ -1435,11 +1500,43 @@ def cmd_check_coverage(args) -> int:
     return 0
 
 
+# A lint warning about a sheet PNG's geometry is a warning about the tool's
+# own output: the recorder and `build` are what emit `sheets/*.png`, and their
+# size is a consequence of how many crops a subject needed, not of anything an
+# artist chose. On a clean bootstrap pack these are the entire warning list (76
+# of 76 on the golden Mega Man 3 pack), and inline they bury every line that
+# can actually be acted on (#173). Grouped below — counted and named, never
+# silenced.
+_TOOL_SHEET_WARNING = re.compile(
+    r"^warning\s+\S+\s+<img> (sheets/\S+) is \d+x\d+, not a multiple of \d+")
+
+
+def _print_lint_report(text: str) -> None:
+    """Re-emits mep_lint's report with the tool's own sheet-geometry warnings
+    pulled out into one grouped line (#173)."""
+    grouped = []
+    for line in text.splitlines():
+        m = _TOOL_SHEET_WARNING.match(line)
+        if m:
+            grouped.append(m.group(1))
+            continue
+        print(line)
+    if grouped:
+        shown = ", ".join(grouped[:5])
+        more = f" (+{len(grouped) - 5} more)" if len(grouped) > 5 else ""
+        print(f"note: {len(grouped)} of those warning(s) are about the tool's own output — sheet "
+              f"PNGs whose size is not a whole number of cells, emitted that way by the recorder "
+              f"and by `build`. Nothing for an artist to fix; grouped, not silenced: {shown}{more}")
+
+
 def _run_lint(target, quiet: bool) -> int:
     argv = ["mep_build.py", str(target)]
     if quiet:
         argv.append("--quiet")
-    rc = mep_lint.main(argv)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = mep_lint.main(argv)
+    _print_lint_report(buf.getvalue())
     if rc != 0:
         print(f"error: lint failed ({target})", file=sys.stderr)
     return rc
@@ -1480,8 +1577,9 @@ def main(argv=None) -> int:
     ra.add_argument("new_id")
     ra.set_defaults(func=cmd_rename_audio_id)
     cc = sub.add_parser("check-coverage", help="a repainted pack keeps every baseline tile key and its tiles-with-art count")
-    cc.add_argument("folder")
-    cc.add_argument("--baseline", help="the manifest the keys came from (default: auto/textures/hires.txt)")
+    cc.add_argument("folder", help="the pack folder (the one holding textures/), same as `build`")
+    cc.add_argument("--baseline", help="the recorder manifest the keys came from, as it was before the "
+                                       "rebuild (default: <folder>/auto/textures/hires.txt)")
     cc.set_defaults(func=cmd_check_coverage)
 
     args = p.parse_args(argv)

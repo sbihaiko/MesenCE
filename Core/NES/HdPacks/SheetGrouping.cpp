@@ -284,4 +284,36 @@ namespace MesenSheets
 	{
 		return BuildObjects(vocab, kSheetMinPairCount, kSheetMinPairProb);
 	}
+
+	//ADR-0175 (issue #175): see SheetGrouping.h.
+	//
+	//The blank is *stated*, never filled. Filling it with the cell that would
+	//repeat there is the one option that breaks the pack: a sheet crop is keyed
+	//back to hires.txt by its tile key (ADR-0153 §4), one key can only carry one
+	//piece of art, and an artist handed two crops of one key would paint them
+	//differently and silently lose one. ADR-0171 already took this decision for
+	//the composition editor's export preview, for the same reason - a hole reads
+	//"already painted next door", not "unpainted".
+	std::vector<SheetSlot> EmptyGroupSlots(const SheetGroup& group)
+	{
+		std::vector<SheetSlot> empty;
+		if(group.Columns == 0 || group.Rows == 0) {
+			return empty;
+		}
+		std::set<std::pair<int32_t, int32_t>> taken;
+		for(const SheetCell& cell : group.Cells) {
+			taken.insert(std::make_pair(cell.X, cell.Y));
+		}
+		for(uint32_t row = 0; row < group.Rows; row++) {
+			for(uint32_t col = 0; col < group.Columns; col++) {
+				if(!taken.count(std::make_pair((int32_t)col, (int32_t)row))) {
+					SheetSlot slot;
+					slot.Col = col;
+					slot.Row = row;
+					empty.push_back(slot);
+				}
+			}
+		}
+		return empty;
+	}
 }

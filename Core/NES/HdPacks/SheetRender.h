@@ -98,6 +98,16 @@ namespace MesenSheets
 
 		//object/sprite only
 		std::vector<GroupEdge> Edges;
+		//ADR-0175 (issue #175): the slots of the Columns x Rows grid the layout
+		//left blank, from SheetGrouping::EmptyGroupSlots. Optional on read -
+		//absent, or present and empty, both mean "no blank worth stating".
+		std::vector<SheetSlot> EmptySlots;
+		//ADR-0174 (issue #174): sprite groups only - the positions in
+		//sheets/poses.json of the whole figures this sheet's cells belong to,
+		//most-covered first (SpriteGrouping::PosesForCells). Optional on read,
+		//exactly like ADR-0172's per-tile `index`: a pack recorded before
+		//ADR-0174 carries none and must still load.
+		std::vector<uint32_t> Poses;
 	};
 
 	//Serialises `doc` to the ADR-0153 §4 schema. `lookup` resolves each cell's
