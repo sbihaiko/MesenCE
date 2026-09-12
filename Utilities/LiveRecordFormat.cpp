@@ -1,17 +1,25 @@
 #include "pch.h"
 #include "Utilities/LiveRecordFormat.h"
 #include <cstdio>
+#include <fstream>
 
 bool LiveRecordFormat::AtomicWrite(const std::string& finalPath, const void* data, size_t size)
 {
 	std::string tmpPath = finalPath + ".tmp";
-	FILE* f = fopen(tmpPath.c_str(), "wb");
-	if(!f) {
-		return false;
-	}
-	bool ok = fwrite(data, 1, size, f) == size;
-	if(fclose(f) != 0) {
-		ok = false;
+	bool ok;
+	{
+		//std::ofstream rather than fopen: MSVC deprecates fopen and the Windows
+		//build treats the C4996 warning as an error. Every other first-party
+		//file write in the tree already uses a stream; the raw fopen calls that
+		//remain are all in vendored third-party sources.
+		std::ofstream f(tmpPath, std::ios::out | std::ios::binary | std::ios::trunc);
+		if(!f) {
+			return false;
+		}
+		f.write((const char*)data, (std::streamsize)size);
+		ok = f.good();
+		f.close();
+		ok = ok && f.good();
 	}
 	if(!ok) {
 		std::remove(tmpPath.c_str());
