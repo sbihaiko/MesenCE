@@ -245,6 +245,12 @@ namespace MesenSheets
 	{
 		uint8_t TileData[16] = {};
 		uint32_t PaletteColors = 0;
+		//ADR-0172: the absolute CHR index hires.txt keys this tile by on a CHR
+		//ROM game (`AbsoluteTileAddr / 16`), -1 on a CHR RAM game or when the
+		//recorder never saw one. Deliberately outside the comparisons below -
+		//identity stays TileData + PaletteColors, so the vocabulary, the dedup
+		//and every grouping decision are unchanged by carrying it.
+		int32_t TileIndex = -1;
 
 		bool operator==(const SheetTileKey& o) const
 		{

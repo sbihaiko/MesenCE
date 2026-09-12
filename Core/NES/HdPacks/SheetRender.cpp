@@ -313,7 +313,13 @@ namespace MesenSheets
 			for(int b = 0; b < 16; b++) {
 				data += ToHex(tile->TileData[b], 2);
 			}
-			json << "{ \"tile\": \"" << data << "\", \"palette\": \"" << ToHex(tile->PaletteColors, 8) << "\" }";
+			json << "{ \"tile\": \"" << data << "\", \"palette\": \"" << ToHex(tile->PaletteColors, 8) << "\"";
+			if(tile->TileIndex >= 0) {
+				//ADR-0172: only a CHR ROM game has one; its absence reads as
+				//"key this tile by its data", which is what a CHR RAM game wants.
+				json << ", \"index\": " << tile->TileIndex;
+			}
+			json << " }";
 		}
 		json << "]";
 	}

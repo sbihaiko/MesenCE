@@ -4037,10 +4037,55 @@ namespace
 		Check(SerializeSheet(doc, SheetLookup()) == json, "BlocoP: sprite serialisation is deterministic");
 	}
 
-	//ADR-0164 §1 (F9.17): the far-field statistics sheets/adjacency.json is
-	//built from. The offset histogram answers "what holds a constant offset to
-	//this shape" (a *figure*); floors[] + coFrames answer "who shares this
-	//shape's ground and moment" - the two queries §5's layered editor separates.
+	//ADR-0172 (issue #170): hires.txt keys a CHR ROM game's tiles by their CHR
+	//index, so a sidecar that only records the 16 bytes of tile data rebuilds
+	//into a pack that matches nothing. The index rides along with the art, and
+	//stays out of the key's identity so nothing upstream regroups.
+	void TestSheetJsonCarriesTheChrIndex()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
+			indexes.push_back(i);
+		}
+		SheetJsonDoc doc;
+		doc.Kind = "sprites";
+		doc.SheetFile = "sprites.png";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = 3;
+		BuildContactSheet(vocab, indexes, SheetLookup(), SheetPalette(), 3, doc.Cells, true);
+
+		//A cell carries an "index" of its own, so the negative is stated on the
+		//tile entry's own shape: palette then index, inside the same object.
+		Check(SerializeSheet(doc, SheetLookup()).find("\"palette\": \"0F162A30\", \"index\": ") == std::string::npos,
+			"BlocoP: a CHR RAM tile writes no index - there is none to write");
+
+		//The same sheet, keyed as a CHR ROM game's: every shape carries one.
+		TileLookup romLookup = [](ShapeId shape) -> const SheetTileKey* {
+			static std::map<ShapeId, SheetTileKey> cache;
+			std::map<ShapeId, SheetTileKey>::iterator it = cache.find(shape);
+			if(it == cache.end()) {
+				SheetTileKey tile = SheetTileFor(shape);
+				tile.TileIndex = (int32_t)(0x40 + shape);
+				it = cache.insert(std::make_pair(shape, tile)).first;
+			}
+			return &it->second;
+		};
+		std::string json = SerializeSheet(doc, romLookup);
+		Check(json.find("\"index\": ") != std::string::npos,
+			"BlocoP: a CHR ROM tile's sidecar entry carries its CHR index (ADR-0172)");
+		Check(json.find("\"palette\": \"0F162A30\", \"index\": ") != std::string::npos,
+			"BlocoP: the index follows the palette inside the same tile entry");
+
+		SheetTileKey a = SheetTileFor(3);
+		SheetTileKey b = SheetTileFor(3);
+		b.TileIndex = 0x40;
+		Check(a == b && !(a < b) && !(b < a),
+			"BlocoP: the CHR index is not part of the tile key's identity (ADR-0172)");
+	}
+
 	void TestAdjacencySpriteStatsCarryFloorsAndCoFrames()
 	{
 		std::vector<OamFrame> frames = SpriteFigureFrames(12);
@@ -5544,6 +5589,7 @@ int main()
 	TestSpriteGroupIsLaidOutAtItsOamOffsets();
 	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
+	TestSheetJsonCarriesTheChrIndex();
 	TestAdjacencySpriteStatsCarryFloorsAndCoFrames();
 	TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept();
 	TestAdjacencySpritePairFarApartCarriesNoOffsets();

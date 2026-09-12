@@ -177,8 +177,21 @@ def _fixed(v):
     return f"{v:.4f}"
 
 
+# ADR-0172: a CHR ROM pack's sidecar carries each tile's CHR index next to its
+# data. The fixture mints one per shape, far enough from 0 that a build reading
+# the wrong field cannot land on the right token by accident.
+CHR_INDEX_BASE = 0x40
+EMIT_TILE_INDEX = False
+
+
 def _tiles_json(tiles):
-    parts = ["null" if t is None else f'{{ "tile": "{tile_hex(t)}", "palette": "{PAL_HEX}" }}' for t in tiles]
+    parts = []
+    for t in tiles:
+        if t is None:
+            parts.append("null")
+            continue
+        idx = f', "index": {CHR_INDEX_BASE + t}' if EMIT_TILE_INDEX else ""
+        parts.append(f'{{ "tile": "{tile_hex(t)}", "palette": "{PAL_HEX}"{idx} }}')
     return "[" + ", ".join(parts) + "]"
 
 
@@ -268,9 +281,17 @@ def parse_hires(path: Path):
     return imgs, tiles
 
 
-def make_sheet_folder(root: Path, name: str, scale: int = 1):
+def make_sheet_folder(root: Path, name: str, scale: int = 1, chr_rom: bool = False,
+                      sidecar_index: bool = True):
     """An ADR-0153 author folder: a metatile vocabulary of 6 cells, a stitched
-    map over cells 0..3, and an object over cells 0..1."""
+    map over cells 0..3, and an object over cells 0..1.
+
+    `chr_rom` writes the key source in the index form a CHR ROM game's
+    manifest uses (ADR-0172); `sidecar_index` is what the sheet sidecars
+    record, so the two can be set apart to reproduce a pack recorded before
+    that ADR."""
+    global EMIT_TILE_INDEX
+    EMIT_TILE_INDEX = chr_rom and sidecar_index
     folder = root / name
     sheets = folder / "textures" / "sheets"
     sheets.mkdir(parents=True)
@@ -310,8 +331,10 @@ def make_sheet_folder(root: Path, name: str, scale: int = 1):
              "<supportedRom>2A4E126D0286BEA0BF503C80A12352C57539F76B", "<img>old.png"]
     for shape in range(8):
         extra = "0.5,Y" if shape == 0 else "1,N"
-        lines.append(f"<tile>0,{tile_hex(shape)},{PAL_HEX},0,0,{extra}")
+        key = f"{CHR_INDEX_BASE + shape:02X}" if chr_rom else tile_hex(shape)
+        lines.append(f"<tile>0,{key},{PAL_HEX},0,0,{extra}")
     (folder / "textures" / "hires.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    EMIT_TILE_INDEX = False
     return folder, vocab, cells
 
 
@@ -466,6 +489,15 @@ def screen_residency_tests(root: Path):
         fail("the captured screen was not copied up into textures/")
     else:
         ok("ADR-0156: the captured screen survives the rebuild, line and PNG")
+
+    # Issue #170: a capture draws above every <tile>, so on the scenes it
+    # covers the sheets are not the surface an artist paints. The build says so
+    # - without it, repainting metatiles.png and seeing no change in game has
+    # no explanation anywhere.
+    if "captured screen(s)" not in out or "backgrounds/screen001.png" not in out:
+        fail(f"the build does not name the captured screen as the surface to paint:\n{out}")
+    else:
+        ok("the build points at backgrounds/screen001.png as the surface that covers the scene")
 
 
 def sheet_alias_tests(root: Path):
@@ -670,6 +702,41 @@ def sheet_round_trip_tests(root: Path):
 
     edited_precedence_tests(root)
     screen_residency_tests(root)
+    chr_rom_key_tests(root)
+
+
+def chr_rom_key_tests(root: Path):
+    """ADR-0172: on a CHR ROM game hires.txt keys every tile by its CHR index,
+    so the rebuild has to emit the index the sidecar records — emitting the
+    32-hex data form instead produces a pack that loads, draws its captures and
+    matches no tile at all (issue #170)."""
+    folder, _v, _c = make_sheet_folder(root, "chr-rom", chr_rom=True)
+    out = run("build", str(folder))
+    if out is None:
+        return
+    _imgs, tiles = parse_hires(folder / "textures" / "hires.txt")
+    want = {f"{CHR_INDEX_BASE + s:02X}" for s in range(20)}
+    got = {k for k, _p in tiles}
+    if got == want:
+        ok("ADR-0172: a CHR ROM pack rebuilds with index keys, one per resolved crop")
+    else:
+        fail(f"CHR ROM rebuild keys: missing {sorted(want - got)}, unexpected {sorted(got - want)}")
+    # The key source's own attributes must still reach the tile they belong to,
+    # which only works when the carry-over lookup uses the index form too.
+    entry = tiles.get((f"{CHR_INDEX_BASE:02X}", PAL_HEX))
+    if entry and entry[3][5:] == ["0.5", "Y"]:
+        ok("ADR-0172: brightness/defaultTile are carried over across the index form")
+    else:
+        fail(f"CHR ROM rebuild lost the key source's attributes: {entry}")
+
+    # A pack recorded before the ADR has no index to emit. Failing loudly is
+    # the decision: the alternative is a pack that silently renders nothing.
+    legacy, _v, _c = make_sheet_folder(root, "chr-rom-legacy", chr_rom=True, sidecar_index=False)
+    out = run("build", str(legacy), expect=2)
+    if out is not None and "carry no tile index" in out and "re-record" in out:
+        ok("ADR-0172: a CHR ROM pack whose sidecars predate the ADR fails the build, naming the fix")
+    else:
+        fail(f"pre-ADR-0172 CHR ROM pack did not fail with the re-record message: {out}")
 
 
 def run(*argv, expect=0, cwd=None):

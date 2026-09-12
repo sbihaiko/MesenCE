@@ -857,6 +857,9 @@ MesenSheets::ShapeId HdPackBuilder::ShapeIdFor(const HdPpuTileInfo& tile)
 	MesenSheets::SheetTileKey art;
 	memcpy(art.TileData, tile.TileData, 16);
 	art.PaletteColors = tile.PaletteColors;
+	//ADR-0172: a CHR ROM game's hires.txt keys by index, so the sidecar has to
+	//carry the index or the rebuilt pack matches nothing.
+	art.TileIndex = tile.IsChrRamTile ? -1 : tile.TileIndex;
 	MesenSheets::ShapeId id = (MesenSheets::ShapeId)_shapeTiles.size();
 	_shapeTiles.push_back(art);
 	_shapeHashes.push_back(shapeKey.GetHashCode());

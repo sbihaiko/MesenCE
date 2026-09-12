@@ -194,6 +194,23 @@ _SHEET_RANK = {
 }
 _SHEET_VERSION = 1
 _HEX_TILE_RE = re.compile(r"^[0-9A-F]{32}$")
+
+
+def _is_index_key(token: str) -> bool:
+    """Whether a `<tile>`'s key field names a CHR index rather than 16 bytes
+    of tile data. HdPackLoader::ReadTileData draws the line at 32 characters:
+    anything shorter is an index, and the pack is a CHR ROM game's."""
+    return len(token.strip()) < 32
+
+
+def _index_token(index: int) -> str:
+    """The index in the width HexUtilities::ToHex writes it — 2, 4, 6 or 8
+    digits. The loader parses any width, but matching the emulator's own form
+    keeps a rebuilt manifest diffable against the bootstrap's."""
+    for digits in (2, 4, 6):
+        if index < (1 << (4 * digits)):
+            return f"{index:0{digits}X}"
+    return f"{index:08X}"
 _HEX_PAL_RE = re.compile(r"^[0-9A-F]{8}$")
 
 
@@ -539,11 +556,17 @@ def _cell_crops(tiles, ox: int, oy: int, per_cell: int, scale: int, where: str, 
         if not _HEX_TILE_RE.match(data) or not _HEX_PAL_RE.match(pal):
             skipped.append(f"{where}[{i}]")
             continue
-        out.append(((ox + (i % 2) * 8) * scale, (oy + (i // 2) * 8) * scale, data, pal, edited))
+        # ADR-0172: the CHR index, present only on a pack recorded from a CHR
+        # ROM game by a builder that has the ADR. None means "this sidecar
+        # knows the tile only by its data".
+        idx = entry.get("index")
+        idx = idx if isinstance(idx, int) and idx >= 0 else None
+        out.append(((ox + (i % 2) * 8) * scale, (oy + (i // 2) * 8) * scale, data, pal, edited, idx))
 
 
 def _slice_sheet(sd: SheetDoc, scale: int, sheets_dir: Path) -> list:
-    """(x, y, tileData, palette, edited) for every 8x8 crop the sheet resolves,
+    """(x, y, tileData, palette, edited, index) for every 8x8 crop the sheet
+    resolves,
     in sheet pixels at `scale`. `edited` says the crop's cell differs from the
     `*.orig.png` twin, i.e. the artist actually painted it. Crops that fall
     outside the PNG are dropped with a warning rather than emitting a tile that
@@ -716,6 +739,72 @@ def _build_audio_manifest(folder: Path, system: str | None, seed: list) -> str |
     return f"<ver>{NES_VER}\n" + "\n".join(keep) + "\n"
 
 
+
+def screen_shadowed_cells(sheets_dir: Path, docs: list):
+    """Cells whose art a captured screen covers, per sheet.
+
+    A bootstrap pack draws whole captured screens as `<background>` layers
+    (ADR-0050) at a priority above every `<tile>`, and ADR-0156 makes such a
+    screen the owner of the cells it covers. So on a scene a capture covers,
+    painting `metatiles.png` or `map-NNN.png` changes nothing on screen — the
+    file to paint is `backgrounds/screenNNN.png`. That is by design, and
+    invisible: an artist repaints a sheet, rebuilds, sees the old scene and has
+    no way to tell why. This reports it.
+
+    Returns `{sheet name: (count, first screen)}`. Empty is the normal answer
+    for a pack recorded since ADR-0156, which keeps a covered cell off the
+    sheets in the first place — then the scene is simply not in `sheets/` at
+    all, and `captured_screen_note` is what tells the artist where it lives.
+    Also empty when the pack carries no `adjacency.json` or no screen-resident
+    node (ADR-0166 records `screens[]`; a pack recorded before it says nothing,
+    and silence is not evidence of coverage)."""
+    adjacency = Path(sheets_dir) / "adjacency.json"
+    if not adjacency.is_file():
+        return {}
+    try:
+        doc = json.loads(adjacency.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return {}
+    nodes = ((doc.get("background") or {}).get("nodes")) or []
+    resident = {}
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        screens = n.get("screens") or []
+        cell = n.get("cell")
+        if screens and isinstance(cell, int) and isinstance(screens[0], dict):
+            resident[cell] = screens[0].get("screen")
+    if not resident:
+        return {}
+    out = {}
+    for sd in docs:
+        if sd.kind not in ("metatiles", "map", "object", "misc"):
+            continue
+        hits = [resident[c["metatile"]] for c in (sd.cells or [])
+                if isinstance(c, dict) and c.get("metatile") in resident]
+        if hits:
+            out[sd.name] = (len(hits), hits[0])
+    return out
+
+
+
+def captured_screen_note(textures_dir: Path):
+    """`(count, first capture name)` for the `<background>` captures a pack
+    carries, or None.
+
+    ADR-0050 has the bootstrap freeze static screens as whole-screen
+    `<background>` layers, and the host draws them above every `<tile>`. On a
+    scene one covers, the sheets are not the surface: repainting
+    `metatiles.png` or `map-NNN.png` and rebuilding leaves the game looking
+    exactly as before, with nothing to explain why. The F9.18 panel rehearsal
+    lost its seam test to precisely this."""
+    backgrounds = Path(textures_dir) / "backgrounds"
+    if not backgrounds.is_dir():
+        return None
+    shots = sorted(p for p in backgrounds.glob("screen*.png") if not _is_reference_png(p))
+    return (len(shots), shots[0].stem) if shots else None
+
+
 def cmd_build(args) -> int:
     folder = Path(args.folder).resolve()
     if not folder.is_dir():
@@ -810,6 +899,11 @@ def cmd_build(args) -> int:
     if total_cells > len(tiles):
         print(f"info: sheets hold {total_cells} cell(s), only {len(tiles)} are referenced; trailing cells stay unused")
 
+    for name, (count, screen) in sorted(screen_shadowed_cells(sheets_dir, sheet_docs).items()):
+        print(f"warning: {name}: {count} cell(s) are covered by the captured screen "
+              f"backgrounds/{screen}.png, which draws over every <tile> (ADR-0050/ADR-0156) — "
+              f"paint that capture to change those cells; painting this sheet will not show in game")
+
     offsets = []
     acc = 0
     for n in cell_sizes:
@@ -870,6 +964,15 @@ def cmd_build(args) -> int:
         f = [x.strip() for x in raw.split(",")]
         if len(f) >= 6:
             keysrc_attrs.setdefault((f[1].upper(), f[2].upper()), (cond, f[5:]))
+
+    # ADR-0172: a CHR ROM game's manifest keys every tile by its CHR index, so
+    # emitting the 32-hex data form the sidecar's `tile` field carries would
+    # produce a pack that loads, draws its `<background>` captures, and matches
+    # not one `<tile>` — the silent 0 % the F9.18 panel ran into. The key
+    # source's own form is what says which game this is.
+    index_keyed = any(_is_index_key(raw.split(",")[1]) for _cond, raw in tiles
+                      if len(raw.split(",")) >= 2)
+    missing_index = {}
     for sd in sheet_docs:
         try:
             crops = _slice_sheet(sd, scale, sheets_dir)
@@ -879,7 +982,12 @@ def cmd_build(args) -> int:
         entries = []
         seen = {}
         repeats = 0
-        for x, y, data, pal, edited in crops:
+        for x, y, data, pal, edited, index in crops:
+            if index_keyed:
+                if index is None:
+                    missing_index[sd.name] = missing_index.get(sd.name, 0) + 1
+                    continue
+                data = _index_token(index)
             cond, rest = keysrc_attrs.get((data, pal), ("", ["1", "N"]))
             key = (cond, data, pal)
             row = (key, cond, ["0", data, pal, str(x), str(y)] + list(rest), edited)
@@ -901,6 +1009,13 @@ def cmd_build(args) -> int:
             "comment": _emit_sheet_comment(rel, sd.kind, len(entries), sd.json_path.name),
             "entries": entries,
         })
+
+    if missing_index:
+        for name, count in sorted(missing_index.items()):
+            print(f"error: {name}: {count} crop(s) carry no tile index, but this game's keys are "
+                  f"index-based (CHR ROM) — the rebuilt pack would match nothing at run time; "
+                  f"re-record the pack with a build that has ADR-0172", file=sys.stderr)
+        return 2
 
     # Precedence (ADR-0153 §4): a cell only claims a tile key when it was
     # actually painted, measured against the `*.orig.png` twin. A painted cell
@@ -966,6 +1081,15 @@ def cmd_build(args) -> int:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(auto_cand.read_bytes())
             print(f"info: copied background {name} from auto/textures into textures/")
+
+    # Named after the captures are copied up, so the path printed is the one
+    # the artist will actually open.
+    captures = captured_screen_note(textures_dir)
+    if captures:
+        count, first = captures
+        print(f"info: {count} captured screen(s) in textures/backgrounds/ draw over every <tile> on the "
+              f"scenes they cover (ADR-0050) — to repaint one of those scenes edit "
+              f"backgrounds/{first}.png, not the sheets")
 
     hires = textures_dir / "hires.txt"
     hires.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
