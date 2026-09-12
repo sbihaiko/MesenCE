@@ -17,8 +17,11 @@
 #     and fails the run — it never force-resolves a conflict it cannot justify.
 #
 # The default branch here is `main` (the product branch; `master` is a frozen
-# full-console snapshot). The GITHUB_TOKEN writes to this fork's own repo, so
-# no upstream access or PAT is involved.
+# full-console snapshot). The GITHUB_TOKEN does every write to this fork's own
+# repo (fetch, push, issue) except opening the PR: this repository has "Allow
+# GitHub Actions to create and approve pull requests" turned off, so
+# createPullRequest is rejected for GITHUB_TOKEN. Only that one call uses the
+# existing `PROJECT_PAT` secret. No upstream access is involved either way.
 
 name: Sync upstream (MesenCE)
 
@@ -53,6 +56,8 @@ jobs:
       - name: Sync, push, and open the PR
         env:
           GH_TOKEN: ${{ github.token }}
+          # Used only for `gh pr create` (see the PR step at the end).
+          PR_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           set -euo pipefail
 
@@ -141,6 +146,17 @@ jobs:
             echo '```'
           } > /tmp/body.md
 
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BR" \
+          # GITHUB_TOKEN cannot open the PR: this repository keeps "Allow GitHub
+          # Actions to create and approve pull requests" off, and the API answers
+          # `GitHub Actions is not permitted to create or approve pull requests`.
+          # PROJECT_PAT (classic PAT, `repo` scope) is the same secret the
+          # community-pack workflows use; as a real user credential it also makes
+          # the PR a genuine `pull_request` event, so CI runs on the merged tree.
+          if [ -z "${PR_TOKEN:-}" ]; then
+            echo "::error::PROJECT_PAT is unset — branch $BR is pushed, but the PR must be opened by hand: https://github.com/$GITHUB_REPOSITORY/pull/new/$BR"
+            exit 1
+          fi
+
+          GH_TOKEN="$PR_TOKEN" gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BR" \
             --title "Sync: merge upstream @ ${UPSTREAM_SHA:0:12}" \
             --body-file /tmp/body.md
