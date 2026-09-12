@@ -4086,6 +4086,78 @@ namespace
 			"BlocoP: the CHR index is not part of the tile key's identity (ADR-0172)");
 	}
 
+	//ADR-0173 (issue #167): a HUD bar is drawn at a handful of fixed pixels for
+	//the whole capture, so its bottom edge lands in several quantised bands at
+	//once and joins every one of them. This fixture is that shape against a
+	//walking actor, long enough to clear kScreenFixedMinFrames.
+	std::vector<OamFrame> HudAndActorFrames(uint32_t frames)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < frames; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			//Shape 1: screen furniture - three pinned rows, never moving. Its
+			//bottoms fall in three different bands, which is the contamination.
+			for(uint32_t row = 0; row < 3; row++) {
+				OamEntry hud;
+				hud.Shape = 1;
+				hud.X = 16;
+				hud.Y = (uint8_t)(24 + row * 8);
+				frame.Entries.push_back(hud);
+			}
+			//Shape 2: an actor, a new place nearly every frame, on one ground.
+			OamEntry actor;
+			actor.Shape = 2;
+			actor.X = (uint8_t)(32 + f);
+			actor.Y = 160;
+			frame.Entries.push_back(actor);
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestScreenFixedSpritesAreLabelledNotDeleted()
+	{
+		std::vector<OamFrame> frames = HudAndActorFrames(128);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		SpriteAdjacencyStats stats = AccumulateSpriteAdjacency(frames, vocab);
+
+		int32_t hud = vocab.Find(MetatileKey{ { 1, kEmptyCell, kEmptyCell, kEmptyCell } });
+		int32_t actor = vocab.Find(MetatileKey{ { 2, kEmptyCell, kEmptyCell, kEmptyCell } });
+		Check(hud >= 0 && actor >= 0, "BlocoP: the screen-fixed fixture has both shapes in the vocabulary");
+		if(hud < 0 || actor < 0) {
+			return;
+		}
+
+		Check(stats.Positions[(size_t)hud] == 3,
+			"BlocoP: furniture occupies the same three pixels for the whole capture",
+			std::to_string(stats.Positions[(size_t)hud]));
+		Check(stats.Positions[(size_t)actor] == 128,
+			"BlocoP: the actor is somewhere new nearly every frame",
+			std::to_string(stats.Positions[(size_t)actor]));
+		Check(stats.NodeFrames[(size_t)hud] == 128 && stats.NodeFrames[(size_t)actor] == 128,
+			"BlocoP: a node's frame count is per frame, not per instance");
+
+		Check(stats.ScreenFixed[(size_t)hud] == 1,
+			"BlocoP: a shape that kept returning to the same pixels is screen-fixed (ADR-0173)");
+		Check(stats.ScreenFixed[(size_t)actor] == 0,
+			"BlocoP: a walking actor is not screen-fixed, however many frames it is on screen");
+		//The label is a label: the bands it stood in are still on file, so a
+		//reader that disagrees with the classification can still use them.
+		Check(stats.Floors[(size_t)hud].size() == 3,
+			"BlocoP: a screen-fixed shape keeps its floors[] - ADR-0173 labels the evidence, it does not delete it",
+			std::to_string(stats.Floors[(size_t)hud].size()));
+
+		//Too short to judge: the same pinned shape seen a few times is not
+		//evidence of being pinned, and must not be classified at all.
+		std::vector<OamFrame> brief = HudAndActorFrames(8);
+		Vocabulary briefVocab = BuildSpriteVocabulary(brief);
+		SpriteAdjacencyStats briefStats = AccumulateSpriteAdjacency(brief, briefVocab);
+		int32_t briefHud = briefVocab.Find(MetatileKey{ { 1, kEmptyCell, kEmptyCell, kEmptyCell } });
+		Check(briefHud >= 0 && briefStats.ScreenFixed[(size_t)briefHud] == 0,
+			"BlocoP: a capture too short to judge classifies nothing as screen-fixed");
+	}
+
 	void TestAdjacencySpriteStatsCarryFloorsAndCoFrames()
 	{
 		std::vector<OamFrame> frames = SpriteFigureFrames(12);
@@ -5590,6 +5662,7 @@ int main()
 	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
 	TestSheetJsonCarriesTheChrIndex();
+	TestScreenFixedSpritesAreLabelledNotDeleted();
 	TestAdjacencySpriteStatsCarryFloorsAndCoFrames();
 	TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept();
 	TestAdjacencySpritePairFarApartCarriesNoOffsets();

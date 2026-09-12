@@ -87,13 +87,19 @@ class _AdjNode:
 
 
 class _SpriteNode:
-    __slots__ = ("cell", "appearances", "floors", "tiles")
+    __slots__ = ("cell", "appearances", "floors", "tiles", "screen_fixed")
 
     def __init__(self, d):
         self.cell = int(d["cell"])
         self.appearances = int(d.get("appearances") or 0)
         self.floors = [(int(f.get("bottom") or 0), int(f.get("count") or 0)) for f in (d.get("floors") or [])]
         self.tiles = d.get("tiles") or []
+        # ADR-0173: the recorder saw this shape pinned to the screen for the
+        # whole capture (a HUD bar, a menu icon), so its floors[] are where it
+        # is painted, not a ground it stands on. Absent in a pack recorded
+        # before the ADR, and absence reads as "not classified" — the bands of
+        # such a pack are exactly what they were.
+        self.screen_fixed = bool(d.get("screenFixed"))
 
     def on_floor(self, band: int) -> bool:
         return any(bottom == band for bottom, _ in self.floors)
@@ -175,16 +181,26 @@ class Adjacency:
 
     def floors(self) -> list:
         """Every quantised bottom edge some sprite stands on, sorted ascending —
-        the Y bands a scene can materialise."""
+        the Y bands a scene can materialise. Screen-fixed shapes are not
+        standing on anything (ADR-0173), so a band only they reach is not a
+        band at all."""
         bands = set()
         for node in self.sp.values():
+            if node.screen_fixed:
+                continue
             bands.update(bottom for bottom, _ in node.floors)
         return sorted(bands)
 
     def band_members(self, band: int) -> list:
-        """Sprite nodes whose `floors[]` includes `band`, most-seen first."""
+        """Sprite nodes whose `floors[]` includes `band`, most-seen first.
+
+        A screen-fixed shape is never a member: it reaches the band by being
+        painted across it, and offering the artist a slice of the HUD as
+        something that shares this ground is the defect ADR-0173 names. The
+        file keeps its floors[] either way — this is the consumer's filter,
+        not a hole in the evidence."""
         return sorted(
-            (c for c, n in self.sp.items() if n.on_floor(band)),
+            (c for c, n in self.sp.items() if n.on_floor(band) and not n.screen_fixed),
             key=lambda c: (-self.sp[c].appearances, c),
         )
 

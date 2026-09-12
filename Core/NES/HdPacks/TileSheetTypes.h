@@ -56,6 +56,13 @@ namespace MesenSheets
 	constexpr uint32_t kAdjacencyMaxOffsets = 8;
 	constexpr uint32_t kAdjacencyMaxFloors = 8;
 	constexpr uint32_t kAdjacencyMinPairCount = 2;
+	//ADR-0173: a sprite shape is screen-fixed when it kept returning to pixels
+	//it had already been drawn at - on average, every position it ever occupied
+	//was occupied again in kScreenFixedRevisits distinct frames. A shape seen in
+	//fewer than kScreenFixedMinFrames frames is never classified: a handful of
+	//sightings in one place is no evidence of being pinned there.
+	constexpr uint32_t kScreenFixedMinFrames = 64;
+	constexpr uint32_t kScreenFixedRevisits = 32;
 	//---- F9.19 (ADR-0170): sheets/poses.json -----------------------------
 	//
 	//Two OAM entries belong to the same silhouette when their 8x8 boxes are
@@ -413,6 +420,19 @@ namespace MesenSheets
 	{
 		//Per sprite-vocabulary index: bottom-edge bands, most-seen first.
 		std::vector<std::vector<SpriteFloorBand>> Floors;
+		//Per sprite-vocabulary index: how many distinct (X, Y) screen positions
+		//the shape was ever drawn at, and how many retained frames it appeared
+		//in at all (once per frame, however many instances). Together they say
+		//how often the shape came back to a place it had already been, which is
+		//what tells furniture from an actor - see ScreenFixed below. Both are
+		//written to the file, so a reader can second-guess the classification.
+		std::vector<uint32_t> Positions;
+		std::vector<uint32_t> NodeFrames;
+		//Per sprite-vocabulary index: the shape never moved during the capture,
+		//so its Floors are a coincidence of where it is painted on the screen
+		//and not evidence of a ground it stands on (ADR-0173). Floors are kept
+		//either way - this is a label on the evidence, not a deletion of it.
+		std::vector<uint8_t> ScreenFixed;
 		//Every unordered pair with CoFrames >= kAdjacencyMinPairCount, sorted
 		//by (A, B).
 		std::vector<SpritePairStat> Pairs;

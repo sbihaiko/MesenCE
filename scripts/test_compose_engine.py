@@ -209,6 +209,12 @@ def make_pack(root: Path, with_obj_sheet: bool = True, scale: int = 1):
         {"cell": 3, "appearances": 900,
          "floors": [{"bottom": 128, "count": 800}, {"bottom": 176, "count": 30}], "tiles": _tiles()},
         {"cell": 4, "appearances": 100, "floors": [{"bottom": 176, "count": 60}], "tiles": _tiles()},
+        # ADR-0173: a HUD bar, pinned across three bands at once - one of them
+        # (192) reached by nothing else, so it is not a band at all.
+        {"cell": 5, "appearances": 9000, "screenFixed": True,
+         "floors": [{"bottom": 176, "count": 3000}, {"bottom": 128, "count": 3000},
+                    {"bottom": 192, "count": 3000}],
+         "tiles": _tiles()},
     ]
     pairs = [
         {"a": 0, "b": 1, "coFrames": 480, "count": 300, "offsets": [], "other": 0},
@@ -467,6 +473,26 @@ def test_band_membership_uses_bottom_edge():
         # whose bottom edge never reaches the band is excluded by construction.
         check(adj.sp[3].on_floor(176), "projectile touches the ground band sometimes")
         check(not any(adj.sp[m].on_floor(128) for m in (0, 1, 2)), "ground shapes never on the 128 band")
+
+
+def test_screen_fixed_sprites_are_not_band_members():
+    """ADR-0173 (issue #167): the HUD reaches a band by being painted across
+    it. It is the most-seen shape in the pack, so it would head every
+    suggestion list for every band it touches."""
+    with tempfile.TemporaryDirectory() as td:
+        pack = E.Pack(make_pack(Path(td)))
+        adj = pack.adjacency
+        check(adj.sp[5].screen_fixed, "the sidecar's screenFixed flag is read")
+        check(5 not in adj.band_members(176) and 5 not in adj.band_members(128),
+              "a screen-fixed shape is no band's member", str(adj.band_members(176)))
+        check(192 not in adj.floors(), "a band only the HUD reaches is not a band",
+              str(adj.floors()))
+        check(176 in adj.floors() and 128 in adj.floors(),
+              "the real bands survive the filter", str(adj.floors()))
+        # The evidence is not deleted - the file still says where it was drawn.
+        check(adj.sp[5].on_floor(176), "the screen-fixed shape keeps its floors[]")
+        check(5 not in [c for c, _s in pack.sprite_rank(176, locked=[0])],
+              "the HUD never reaches a band's ranking either")
 
 
 def test_acceptance_sprite_band_ranks_ground_enemies_above_projectile():
@@ -867,6 +893,7 @@ def main():
     tests = [
         test_missing_adjacency_tells_artist_to_rebootstrap,
         test_band_membership_uses_bottom_edge,
+    test_screen_fixed_sprites_are_not_band_members,
         test_acceptance_sprite_band_ranks_ground_enemies_above_projectile,
         test_acceptance_background_recompute_places_obj_group_first,
         test_export_object_is_legal_mep_build_input,

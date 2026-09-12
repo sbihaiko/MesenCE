@@ -183,6 +183,8 @@ namespace MesenSheets
 		SpriteAdjacencyStats stats;
 		stats.OamFrames = (uint32_t)frames.size();
 		std::vector<std::map<uint32_t, uint32_t>> floorCounts(vocab.Entries.size());
+		std::vector<std::set<uint32_t>> seenPositions(vocab.Entries.size());
+		std::vector<uint32_t> nodeFrames(vocab.Entries.size(), 0);
 		//Directed within-cap offsets per unordered pair. Only the lower index as
 		//reference is recorded (mirroring SelectSpriteEdges, which keeps one of
 		//the two mirrored orderings), so Dx/Dy always read "where B sits
@@ -207,12 +209,14 @@ namespace MesenSheets
 				//one ground both reach the same band.
 				uint32_t band = ((uint32_t)entry.Y + 8) & ~7u;
 				floorCounts[(size_t)cell][band]++;
+				seenPositions[(size_t)cell].insert(((uint32_t)entry.X << 8) | (uint32_t)entry.Y);
 			}
 			//Co-presence: both shapes on screen at all, any distance, counted
 			//once per frame. Every pair that ever shares a frame and clears the
 			//noise floor reaches the file - a boss and a level enemy that never
 			//come within 32 px get a pair with empty offsets, not none at all.
 			for(std::set<uint32_t>::const_iterator it = present.begin(); it != present.end(); ++it) {
+				nodeFrames[*it]++;
 				for(std::set<uint32_t>::const_iterator inner = it; inner != present.end(); ++inner) {
 					if(inner == it) {
 						continue;
@@ -256,6 +260,26 @@ namespace MesenSheets
 				bands.resize(kAdjacencyMaxFloors);
 			}
 			stats.Floors[node] = std::move(bands);
+		}
+		stats.Positions.resize(vocab.Entries.size());
+		for(size_t node = 0; node < vocab.Entries.size(); node++) {
+			stats.Positions[node] = (uint32_t)seenPositions[node].size();
+		}
+		stats.NodeFrames = std::move(nodeFrames);
+		//ADR-0173: screen furniture - a HUD bar, a menu icon - is drawn at a
+		//handful of fixed pixels for the whole capture, so its bottom edge lands
+		//in several quantised bands at once and joins every one of them as a
+		//member. An actor visits a new position nearly every frame it is on
+		//screen; furniture returns to the same one over and over. That ratio is
+		//the test, and it needs enough frames to mean anything.
+		stats.ScreenFixed.assign(vocab.Entries.size(), 0);
+		for(size_t node = 0; node < vocab.Entries.size(); node++) {
+			uint32_t frames = stats.NodeFrames[node];
+			uint32_t positions = stats.Positions[node];
+			if(frames >= kScreenFixedMinFrames && positions > 0 &&
+				(uint64_t)positions * kScreenFixedRevisits <= (uint64_t)frames) {
+				stats.ScreenFixed[node] = 1;
+			}
 		}
 
 		//Pairs: only those with enough co-presence to be evidence, offsets

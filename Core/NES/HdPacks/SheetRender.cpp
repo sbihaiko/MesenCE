@@ -513,7 +513,13 @@ namespace MesenSheets
 					json << (f ? ", " : "");
 					json << "{ \"bottom\": " << floors[f].Bottom << ", \"count\": " << floors[f].Count << " }";
 				}
-				json << "], \"tiles\": ";
+				json << "], \"positions\": "
+					<< (i < stats.Positions.size() ? stats.Positions[i] : 0u)
+					<< ", \"frames\": "
+					<< (i < stats.NodeFrames.size() ? stats.NodeFrames[i] : 0u)
+					<< ", \"screenFixed\": "
+					<< ((i < stats.ScreenFixed.size() && stats.ScreenFixed[i]) ? "true" : "false")
+					<< ", \"tiles\": ";
 				AppendTiles(json, entry.Key, sprites.Grid.Unit, lookup);
 				json << " }";
 			}
