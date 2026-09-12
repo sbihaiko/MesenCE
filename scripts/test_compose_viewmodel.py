@@ -313,6 +313,38 @@ def test_the_seed_list_offers_a_silhouette_once():
               "and every listed anchor really resolves to the silhouette shown")
 
 
+def test_the_seed_list_is_laid_out_by_cycle_then_phase():
+    """ADR-0179 §5: the seed list is the artist's grid — a cycle's poses
+    together, in phase order, before the poses no run lists — and each
+    entry still resolves to the silhouette it shows."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        # Three silhouettes with distinct rarest nodes (their anchors): pose000 (most seen, in no
+        # run), pose001 and pose002 (a 2-cycle, pose002 its first phase).
+        p1 = {"id": "pose001", "frames": 50, "size": [1, 2],
+              "tiles": [{"node": 1, "dx": 0, "dy": 0}, {"node": 3, "dx": 0, "dy": 1}]}
+        p2 = {"id": "pose002", "frames": 40, "size": [1, 2],
+              "tiles": [{"node": 2, "dx": 0, "dy": 0}, {"node": 3, "dx": 0, "dy": 1}]}
+        doc = _poses_doc(tiles={0: (0, 0), 3: (0, 1), 4: (1, 1)}, extra_poses=[p1, p2])
+        doc["cycles"] = [{"id": "cycle000", "period": 2, "repeats": 9,
+                          "poses": ["pose002", "pose001"], "hold": [4, 4]}]
+        _write_poses(sheets, doc)
+        vm = ComposeViewModel()
+        vm.load(root)
+        vm.set_band(176)
+        shown = vm.band_poses()
+        check([p.id for _a, p in shown] == ["pose002", "pose001", "pose000"],
+              "cycle phases first, in phase order, then the remainder",
+              str([(a, p.id) for a, p in shown]))
+        check([vm.pose_run_label(p) for _a, p in shown] == ["cycle000 1/2", "cycle000 2/2", ""],
+              "each entry is captioned with its run and phase, the remainder with nothing",
+              str([vm.pose_run_label(p) for _a, p in shown]))
+        check(all(vm.pose_for(a).id == p.id for a, p in shown),
+              "and every listed anchor still resolves to the silhouette shown")
+
+
 def main():
     tests = [
         test_load_reports_pack_summary_and_resets_state,
@@ -326,6 +358,7 @@ def main():
         test_a_composed_pose_exports_at_its_own_offsets_and_the_preview_is_the_file,
         test_a_pack_without_the_sidecar_keeps_the_node_gestures,
         test_the_seed_list_offers_a_silhouette_once,
+        test_the_seed_list_is_laid_out_by_cycle_then_phase,
     ]
     for t in tests:
         t()

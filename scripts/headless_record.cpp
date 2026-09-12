@@ -6,6 +6,12 @@
 //
 //Build:   make capture-tool
 //Usage:   scripts/headless_record <rom> <seconds> <output_prefix> [pal] [hdpack] [screenshot] [log] [hdpack-off|mep-off|mep-notextures|mep-nosynth|mep-disable=<container>] [romtiles] [filter=<name>] [live=<ms>]
+//         [state=<file.mss>] [save-state=<file.mss>] [input=<script>]
+//
+//F9.22: "state=" starts the run from a save state, "save-state=" writes one
+//when the run reaches its frame target (never on an INCOMPLETE run). Together
+//they chain: entry script -> stage-1 state -> a <= 60 s run per stage, each
+//into its own pack folder (scripts/record_stages.sh).
 //
 //F9.14 (ADR-0157): a run is a number of *emulated frames*, never a number of
 //host seconds. <seconds> keeps its name and its meaning for the caller, but is
@@ -106,6 +112,7 @@ struct ExecuteShortcutParamsAbi
 extern "C"
 {
 	void LoadStateFile(char* filepath);
+	void SaveStateFile(char* filepath);
 	TimingInfoAbi GetTimingInfo(uint8_t cpuType);
 	void InitDll();
 	void InitializeEmu(const char* homeFolder, void* windowHandle, void* viewerHandle, bool softwareRenderer, bool noAudio, bool noVideo, bool noInput);
@@ -292,8 +299,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "usage: %s <rom> <seconds> <output-prefix> [pal] [hdpack] [romtiles]\n"
 			"       [screenshot] [capture] [log] [bootstrap] [filter=<name>] [mep-off]\n"
 			"       [hdpack-off] [mep-notextures] [mep-nosynth] [mep-forcepatch] [mep-disable=<pack>]\n"
-			"       [state=<file.mss>] [input=<script>] [realtime] [hud-message=<title>|<msg>]\n"
-			"       [live=<ms>]\n", argv[0]);
+			"       [state=<file.mss>] [save-state=<file.mss>] [input=<script>] [realtime]\n"
+			"       [hud-message=<title>|<msg>] [live=<ms>]\n", argv[0]);
 		return 1;
 	}
 	std::string rom = argv[1];
@@ -311,6 +318,10 @@ int main(int argc, char** argv)
 	mep.BootstrapEnhancementFolder = false; //opt-in headless ("bootstrap" flag) - it writes beside the ROM
 	std::string mepDisable;
 	std::string stateFile;
+	//F9.22: written when the run reaches its frame target, so a stage reached
+	//by one scripted run is the start of the next - a per-stage recording
+	//roadmap needs states minted by the same tool that consumes them.
+	std::string saveStateFile;
 	//input script: lines "<count>f <buttons>" or "<count>s <buttons>", buttons
 	//in U D L R A B S(elect) T(start) or "-". A bare count is a parse error
 	//(ADR-0157 section 1). Parsed core-side by HeadlessInputScript, which is
@@ -390,6 +401,8 @@ int main(int argc, char** argv)
 			mep.ApplyPatchOnHashMismatch = true;
 		} else if(strncmp(argv[i], "state=", 6) == 0) {
 			stateFile = argv[i] + 6;
+		} else if(strncmp(argv[i], "save-state=", 11) == 0) {
+			saveStateFile = argv[i] + 11;
 		} else if(strncmp(argv[i], "input=", 6) == 0) {
 			inputScriptPath = argv[i] + 6;
 			FILE* f = fopen(inputScriptPath.c_str(), "rb");
@@ -874,6 +887,16 @@ int main(int argc, char** argv)
 		VgmStop();
 	}
 	printf("capture finished: %u frames (target %u), %.1fs of wall clock%s\n", HeadlessGetFrameCount(), totalFrames, elapsed(), reachedTarget ? "" : " - INCOMPLETE");
+	if(!saveStateFile.empty()) {
+		//Only a run that reached its target parks on a frame worth keeping; a
+		//state from an INCOMPLETE run would silently move the stage.
+		if(reachedTarget) {
+			SaveStateFile((char*)saveStateFile.c_str());
+			printf("state saved: %s\n", saveStateFile.c_str());
+		} else {
+			printf("state NOT saved (run incomplete): %s\n", saveStateFile.c_str());
+		}
+	}
 	if(dumpLog) {
 		std::string log(65536, '\0');
 		GetLog(log.data(), (uint32_t)log.size());

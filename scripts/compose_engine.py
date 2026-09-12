@@ -269,9 +269,10 @@ class Pose:
     """One entry of `poses.json`: a silhouette the recorder actually saw in a
     single OAM frame, normalised to its own top-left (ADR-0170 §1)."""
 
-    __slots__ = ("id", "frames", "size", "tiles", "fusion_of")
+    __slots__ = ("id", "frames", "size", "tiles", "fusion_of", "variant_of", "hold", "next")
 
-    def __init__(self, pose_id, frames, size, tiles, fusion_of=()):
+    def __init__(self, pose_id, frames, size, tiles, fusion_of=(), variant_of=None,
+                 hold=0, next_poses=()):
         self.id = pose_id
         self.frames = frames
         self.size = size          # (cols, rows) in cells, as the file states it
@@ -281,6 +282,19 @@ class Pose:
         # classified" — a pack recorded before ADR-0177 has it empty
         # everywhere, which is exactly how it read before the field existed.
         self.fusion_of = tuple(fusion_of)
+        # ADR-0179 §4: the kept pose this one is, plus a satellite too small
+        # to be a pose (a figure and its shot). None means "not labelled".
+        self.variant_of = variant_of
+        # ADR-0179 §1-2: frames this pose was linked to itself on a track, and
+        # ((pose id, count), ...) most-linked first — the raw succession
+        # evidence, not the animation (a pose can be two phases of one loop).
+        self.hold = hold
+        self.next = tuple(next_poses)
+
+    @property
+    def variant(self) -> bool:
+        """True when the recorder labelled this entry a variant (ADR-0179 §4)."""
+        return self.variant_of is not None
 
     @property
     def fused(self) -> bool:
@@ -306,6 +320,25 @@ class Pose:
         return (max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
 
 
+class PoseRun:
+    """One `cycles[]` or `sequences[]` entry (ADR-0179 §3): pose ids in phase
+    order, the median frames each phase was held, and how many times the run
+    was seen. `period` is set for cycles only; a sequence does not loop."""
+
+    __slots__ = ("id", "poses", "hold", "repeats", "period")
+
+    def __init__(self, run_id, poses, hold, repeats, period=None):
+        self.id = run_id
+        self.poses = tuple(poses)
+        self.hold = tuple(hold)
+        self.repeats = repeats
+        self.period = period
+
+    @property
+    def cyclic(self) -> bool:
+        return self.period is not None
+
+
 class Poses:
     """`textures/sheets/poses.json` (ADR-0170 §1), the recorder's record of
     which OAM tiles were on screen together in one frame and where.
@@ -316,7 +349,8 @@ class Poses:
     A malformed sidecar must never cost an artist a composition they can get
     today, so nothing in here raises."""
 
-    __slots__ = ("version", "unit", "frames", "entries", "dropped_tiles", "dropped_poses")
+    __slots__ = ("version", "unit", "frames", "entries", "dropped_tiles", "dropped_poses",
+                 "cycles", "sequences")
 
     def __init__(self):
         self.version = POSES_VERSION
@@ -325,6 +359,11 @@ class Poses:
         self.entries = []        # [Pose], most-seen first
         self.dropped_tiles = 0   # tiles naming a node outside the vocabulary
         self.dropped_poses = 0   # entries left with nothing to draw
+        # ADR-0179 §3, in file order (repeats desc). Empty on a pack recorded
+        # before the ADR and on a stream that simply showed no repetition —
+        # the file does not tell those apart and neither does this.
+        self.cycles = []         # [PoseRun] with period
+        self.sequences = []      # [PoseRun] without
 
     @staticmethod
     def load(path, vocabulary=None):
@@ -371,7 +410,54 @@ class Poses:
         # ADR-0170 §1 states the order (frames desc, then id); re-establish it
         # here so a hand-edited or partially dropped file is still deterministic.
         p.entries.sort(key=lambda e: (-e.frames, e.id))
+        known = {e.id for e in p.entries}
+        p.cycles = Poses._parse_runs(doc.get("cycles"), "cycle", known, cyclic=True)
+        p.sequences = Poses._parse_runs(doc.get("sequences"), "seq", known, cyclic=False)
         return p
+
+    @staticmethod
+    def _parse_runs(raw, prefix, known, cyclic):
+        """`cycles[]`/`sequences[]` → [PoseRun]. A run naming a pose that was
+        dropped on read is dropped whole: its phases would no longer line up
+        with its holds, and a consumer lays poses out by phase."""
+        out = []
+        if not isinstance(raw, list):
+            return out
+        for i, entry in enumerate(raw):
+            if not isinstance(entry, dict):
+                continue
+            poses = entry.get("poses")
+            if not isinstance(poses, list) or not poses:
+                continue
+            if not all(isinstance(pid, str) and pid in known for pid in poses):
+                continue
+            run_id = entry.get("id")
+            if not isinstance(run_id, str) or not run_id:
+                run_id = f"{prefix}{i:03d}"
+            hold = entry.get("hold")
+            if not (isinstance(hold, list) and len(hold) == len(poses)
+                    and all(isinstance(h, int) for h in hold)):
+                hold = [0] * len(poses)
+            try:
+                repeats = int(entry.get("repeats") or 0)
+            except (TypeError, ValueError):
+                repeats = 0
+            out.append(PoseRun(run_id, poses, hold, repeats, len(poses) if cyclic else None))
+        return out
+
+    def runs(self) -> list:
+        """Cycles then sequences — the rows of ADR-0179 §5's layout."""
+        return list(self.cycles) + list(self.sequences)
+
+    def run_position(self, pose_id):
+        """`(row, phase, run)` of the first run listing `pose_id`, or None.
+
+        A pose in two cycles (or twice in one) is laid out at its first
+        appearance: it is one picture, and the artist paints it once."""
+        for row, run in enumerate(self.runs()):
+            if pose_id in run.poses:
+                return (row, run.poses.index(pose_id), run)
+        return None
 
     @staticmethod
     def _parse_pose(entry, index, vocabulary, owner):
@@ -409,7 +495,24 @@ class Poses:
             fusion = tuple(f for f in fusion if isinstance(f, str) and f)
         else:
             fusion = ()
-        pose = Pose(pose_id, frames, size, tiles, fusion)
+        variant_of = entry.get("variantOf")
+        if not (isinstance(variant_of, str) and variant_of):
+            variant_of = None
+        hold = entry.get("hold")
+        if not isinstance(hold, int) or hold < 0:
+            hold = 0
+        next_poses = []
+        for link in (entry.get("next") or []):
+            if not isinstance(link, dict):
+                continue
+            target = link.get("pose")
+            try:
+                count = int(link.get("count") or 0)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(target, str) and target:
+                next_poses.append((target, count))
+        pose = Pose(pose_id, frames, size, tiles, fusion, variant_of, hold, next_poses)
         if size is None:
             pose.size = pose.extent()
         return pose
@@ -744,6 +847,10 @@ class Pack:
         # subject the recorder never saw alone is not lost to the label.
         unfused = [p for p in hits if not p.fused]
         hits = unfused or hits
+        # ADR-0179 §4: a variant is the figure plus its shot. The figure is
+        # what a layout starts from; the variant stays reachable by id.
+        bases = [p for p in hits if not p.variant]
+        hits = bases or hits
         if not members:
             return hits[0]
         wanted = set(members)
@@ -841,7 +948,30 @@ class Pack:
                 continue
             if standing.intersection(self.pose_bottom_nodes(pose)):
                 out.append(pose)
+        # ADR-0179 §4: the base figure ranks above its variants. Stable, so
+        # inside each class the file's frames-desc order still holds.
+        out.sort(key=lambda p: p.variant)
         return out
+
+    def pose_run_label(self, pose) -> str:
+        """`"cycle000 3/6"` — the run and phase a pose is laid out at under
+        ADR-0179 §5, or `""` for a pose no cycle or sequence lists."""
+        if not self.poses:
+            return ""
+        at = self.poses.run_position(pose.id)
+        if at is None:
+            return ""
+        row, phase, run = at
+        return f"{run.id} {phase + 1}/{len(run.poses)}"
+
+    def pose_layout_key(self, pose):
+        """Sort key for ADR-0179 §5: one row per cycle or sequence, columns in
+        phase order, then the unordered remainder in the file's own order."""
+        if self.poses:
+            at = self.poses.run_position(pose.id)
+            if at is not None:
+                return (0, at[0], at[1])
+        return (1, 0, 0)
 
     def pose_rank(self, band: int, locked: list, budget: int = 40):
         """Rank the band's poses against the locked set — ADR-0171 §4.

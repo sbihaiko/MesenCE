@@ -1188,6 +1188,32 @@ MesenSheets::Vocabulary HdPackBuilder::WriteSpriteSheets(const string& folder, c
 	//serialises this same table rather than rebuilding it.
 	_poseStats = MesenSheets::BuildPoses(_oamFrames, vocab);
 
+	//Debug aid, sibling of MESEN_SHEET_GRID_DUMP: the retained OAM stream in
+	//vocabulary indexes, one line per frame, so a spike can measure pose
+	//succession off the same data BuildPoses reads. Not a pack file.
+	#ifdef _MSC_VER
+	#pragma warning(push)
+	#pragma warning(disable : 4996)
+	#endif
+	const char* oamDumpPath = std::getenv("MESEN_OAM_STREAM_DUMP");
+	#ifdef _MSC_VER
+	#pragma warning(pop)
+	#endif
+	if(oamDumpPath && *oamDumpPath) {
+		ofstream dump(oamDumpPath, ios::out);
+		if(dump) {
+			for(const MesenSheets::OamFrame& frame : _oamFrames) {
+				dump << frame.FrameNumber << ' ' << frame.RepeatCount;
+				for(const MesenSheets::OamEntry& entry : frame.Entries) {
+					MesenSheets::MetatileKey key;
+					key.Tiles[0] = entry.Shape;
+					dump << ' ' << vocab.Find(key) << ',' << (int)entry.X << ',' << (int)entry.Y;
+				}
+				dump << '\n';
+			}
+		}
+	}
+
 	//F9.16 (ADR-0153 §3): sprites.png is the *whole* OAM vocabulary, most-seen
 	//first, singletons included. sprNNN below only covers shapes that hold a
 	//constant offset to another shape; a lone projectile, a pickup or a
@@ -1329,7 +1355,13 @@ void HdPackBuilder::WritePoseFile(const string& folder, const MesenSheets::Vocab
 	MessageManager::Log("[HD Pack Builder] poses: " + std::to_string(stats.PosesFound) +
 		" silhouettes from " + std::to_string(stats.RetainedFrames) + " retained OAM frames, " +
 		std::to_string(stats.PosesKept) + " over the threshold, " +
-		std::to_string(stats.Poses.size()) + " kept after the cap" +
+		std::to_string(stats.Poses.size()) + " kept after the cap; " +
+		//ADR-0179: what repetition found on the tracks. Zero cycles on a run
+		//that showed a loop means the linker lost the figure, not that the
+		//game has no animation.
+		std::to_string(stats.Tracks) + " tracks, " +
+		std::to_string(stats.Cycles.size()) + " cycles, " +
+		std::to_string(stats.Sequences.size()) + " sequences" +
 		" -> textures/sheets/poses.json");
 }
 

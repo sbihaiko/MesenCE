@@ -5165,6 +5165,226 @@ namespace
 
 	//sheets/poses.json (ADR-0170 §1) through the strict reader: the file states
 	//its own sampling, and pose000 is the most-seen silhouette.
+	//--- ADR-0179 (F9.20): succession on the retained stream - tracks, hold,
+	//next[], cycles found by period on a track, sequences by identical
+	//occurrence, and the figure-plus-satellite variant.
+
+	//A 2x2 figure of four distinct shapes, top-left at (x, y). Distinct shape
+	//ranges make distinct silhouettes.
+	void PushFigure(OamFrame& frame, ShapeId base, uint32_t x, uint32_t y)
+	{
+		frame.Entries.push_back(OamAt(base, x, y));
+		frame.Entries.push_back(OamAt(base + 1, x + 8, y));
+		frame.Entries.push_back(OamAt(base + 2, x, y + 8));
+		frame.Entries.push_back(OamAt(base + 3, x + 8, y + 8));
+	}
+
+	//One figure walking `step` px per frame for `count` frames.
+	std::vector<OamFrame> WalkingFigureFrames(uint32_t step, uint32_t count)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < count; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			PushFigure(frame, 31, 40 + step * f, 100);
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestPoseTrackFollowsAFigureAndBreaksAtTheLimit()
+	{
+		{
+			std::vector<OamFrame> frames = WalkingFigureFrames(3, 8);
+			Vocabulary vocab = BuildSpriteVocabulary(frames);
+			PoseStats stats = BuildPoses(frames, vocab);
+			Check(stats.Poses.size() == 1 && stats.Tracks == 1,
+				"BlocoP: a figure moving 3 px per frame is one track",
+				"poses=" + std::to_string(stats.Poses.size()) + " tracks=" + std::to_string(stats.Tracks));
+			Check(!stats.Poses.empty() && stats.Poses[0].Hold == 7 && stats.Poses[0].Next.empty(),
+				"BlocoP: a pose linked to itself on every step is held, never a successor of itself",
+				stats.Poses.empty() ? "no pose" : "hold=" + std::to_string(stats.Poses[0].Hold) + " next=" + std::to_string(stats.Poses[0].Next.size()));
+			Check(stats.Cycles.empty() && stats.Sequences.empty(),
+				"BlocoP: a single held pose is neither a cycle nor a sequence",
+				"cycles=" + std::to_string(stats.Cycles.size()) + " sequences=" + std::to_string(stats.Sequences.size()));
+		}
+		{
+			std::vector<OamFrame> frames = WalkingFigureFrames(17, 8);
+			Vocabulary vocab = BuildSpriteVocabulary(frames);
+			PoseStats stats = BuildPoses(frames, vocab);
+			Check(stats.Poses.size() == 1 && stats.Tracks == 8,
+				"BlocoP: a figure jumping 17 px per frame starts a new track every frame",
+				"poses=" + std::to_string(stats.Poses.size()) + " tracks=" + std::to_string(stats.Tracks));
+			Check(!stats.Poses.empty() && stats.Poses[0].Hold == 0,
+				"BlocoP: beyond kPoseTrackMaxMove nothing is held",
+				stats.Poses.empty() ? "no pose" : "hold=" + std::to_string(stats.Poses[0].Hold));
+		}
+	}
+
+	//Six phases in place, the second silhouette recurring as phase 5 - the
+	//Contra player's run (ADR-0179 §Context). Four full turns.
+	void TestPoseCycleWithARepeatedSilhouetteHasPeriodSix()
+	{
+		const ShapeId phases[6] = { 41, 51, 61, 71, 51, 81 };
+		std::vector<OamFrame> frames;
+		for(uint32_t f = 0; f < 24; f++) {
+			OamFrame frame;
+			frame.FrameNumber = f;
+			PushFigure(frame, phases[f % 6], 100, 100);
+			frames.push_back(frame);
+		}
+		//A second figure that walked one and a half turns and left: too short
+		//to repeat, and a window of the cycle, so not a sequence either.
+		frames.push_back(OamFrame());
+		frames.back().FrameNumber = 24;
+		for(uint32_t f = 0; f < 9; f++) {
+			OamFrame frame;
+			frame.FrameNumber = 25 + f;
+			PushFigure(frame, phases[(f + 2) % 6], 40, 40);
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 5 && stats.Tracks == 2,
+			"BlocoP: five silhouettes on two tracks",
+			"poses=" + std::to_string(stats.Poses.size()) + " tracks=" + std::to_string(stats.Tracks));
+		Check(stats.Cycles.size() == 1 && stats.Sequences.empty(),
+			"BlocoP: a repeating track is one cycle, and a shorter walk through the same loop is no sequence",
+			"cycles=" + std::to_string(stats.Cycles.size()) + " sequences=" + std::to_string(stats.Sequences.size()));
+		if(stats.Cycles.size() != 1) {
+			return;
+		}
+		const PoseRun& cycle = stats.Cycles[0];
+		Check(cycle.Poses.size() == 6, "BlocoP: the period is 6, not the 3 a first-order graph reads",
+			"period=" + std::to_string(cycle.Poses.size()));
+		Check(cycle.Repeats == 4, "BlocoP: four full turns were counted", "repeats=" + std::to_string(cycle.Repeats));
+		//pose000 is the most-seen silhouette (8 frames) and so first; it
+		//occurs at phases 0 and 3 of the canonical rotation.
+		Check(cycle.Poses.size() == 6 && cycle.Poses[0] == 0 && cycle.Poses[3] == 0,
+			"BlocoP: the repeated silhouette opens the cycle and returns three phases later",
+			cycle.Poses.size() == 6 ? std::to_string(cycle.Poses[0]) + "," + std::to_string(cycle.Poses[3]) : "short");
+		Check(cycle.Hold.size() == 6 && cycle.Hold[0] == 1 && cycle.Hold[5] == 1,
+			"BlocoP: hold is the median frames per phase", "holds=" + std::to_string(cycle.Hold.size()));
+		Check(stats.Poses[0].Next.size() == 2 && stats.Poses[0].Hold == 0,
+			"BlocoP: the repeated silhouette has two successors and no hold",
+			"next=" + std::to_string(stats.Poses[0].Next.size()) + " hold=" + std::to_string(stats.Poses[0].Hold));
+
+		std::string json = SerializePoses(vocab, stats);
+		JsonReader reader;
+		JsonValue root;
+		Check(reader.Parse(json, root), "BlocoP: a sidecar with cycles is strict-valid JSON", reader.GetError());
+		const JsonValue* cycles = root.Get("cycles");
+		Check(cycles && cycles->GetArray().size() == 1, "BlocoP: cycles[] is written when found",
+			"entries=" + std::to_string(cycles ? cycles->GetArray().size() : 0));
+		if(cycles && cycles->GetArray().size() == 1) {
+			const JsonValue& c = cycles->GetArray()[0];
+			Check(c.Get("id") && c.Get("id")->GetString() == "cycle000" && c.Get("period") && c.Get("period")->GetNumber() == 6
+				&& c.Get("poses") && c.Get("poses")->GetArray().size() == 6 && c.Get("poses")->GetArray()[0].GetString() == "pose000",
+				"BlocoP: a cycle serialises id, period and pose ids", json.substr(json.find("\"cycles\""), 120));
+		}
+		Check(root.Get("sequences") == nullptr, "BlocoP: an empty sequences[] is absent, not []", "");
+		const JsonValue* poses = root.Get("poses");
+		if(poses && !poses->GetArray().empty()) {
+			const JsonValue& first = poses->GetArray()[0];
+			const JsonValue* next = first.Get("next");
+			Check(first.Get("hold") && next && next->GetArray().size() == 2 && next->GetArray()[0].Get("count"),
+				"BlocoP: a pose serialises hold and next[] with counts", first.Get("hold") ? "hold present" : "hold missing");
+		}
+	}
+
+	//A four-pose run, two frames a pose, seen twice with an empty frame
+	//between - the death animation shape.
+	void TestTwoIdenticalRunsAreOneSequence()
+	{
+		const ShapeId steps[4] = { 41, 51, 61, 71 };
+		std::vector<OamFrame> frames;
+		uint32_t n = 0;
+		for(uint32_t pass = 0; pass < 2; pass++) {
+			for(uint32_t k = 0; k < 4; k++) {
+				for(uint32_t held = 0; held < 2; held++) {
+					OamFrame frame;
+					frame.FrameNumber = n++;
+					PushFigure(frame, steps[k], 100, 100);
+					frames.push_back(frame);
+				}
+			}
+			OamFrame empty;
+			empty.FrameNumber = n++;
+			frames.push_back(empty);
+		}
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 4 && stats.Tracks == 2,
+			"BlocoP: the empty frame ends the track",
+			"poses=" + std::to_string(stats.Poses.size()) + " tracks=" + std::to_string(stats.Tracks));
+		Check(stats.Cycles.empty() && stats.Sequences.size() == 1,
+			"BlocoP: two identical non-looping runs are one sequence and no cycle",
+			"cycles=" + std::to_string(stats.Cycles.size()) + " sequences=" + std::to_string(stats.Sequences.size()));
+		if(stats.Sequences.size() != 1) {
+			return;
+		}
+		const PoseRun& seq = stats.Sequences[0];
+		Check(seq.Poses.size() == 4 && seq.Repeats == 2,
+			"BlocoP: the longest recurring window wins and its sub-windows are folded in",
+			"length=" + std::to_string(seq.Poses.size()) + " repeats=" + std::to_string(seq.Repeats));
+		Check(seq.Hold.size() == 4 && seq.Hold[0] == 2 && seq.Hold[3] == 2,
+			"BlocoP: a sequence reports the held frames per step", "holds=" + std::to_string(seq.Hold.size()));
+		std::string json = SerializePoses(vocab, stats);
+		Check(json.find("\"sequences\": [") != std::string::npos && json.find("\"seq000\"") != std::string::npos
+			&& json.find("\"cycles\"") == std::string::npos,
+			"BlocoP: sequences[] is written and cycles[] is absent", "");
+	}
+
+	//P alone for five frames, then P plus a one-tile satellite (a shot) for
+	//three: the second is a variant of the first. Q plus R, two whole figures
+	//that touched, is ADR-0177's fusion and must not be a variant.
+	void TestAPosePlusASatelliteIsAVariantNotAFusion()
+	{
+		std::vector<OamFrame> frames;
+		uint32_t n = 0;
+		for(uint32_t f = 0; f < 5; f++) {
+			OamFrame frame;
+			frame.FrameNumber = n++;
+			PushFigure(frame, 91, 100, 100);
+			PushFigure(frame, 111, 40, 40);
+			PushFigure(frame, 121, 200, 40);
+			frames.push_back(frame);
+		}
+		for(uint32_t f = 0; f < 3; f++) {
+			OamFrame frame;
+			frame.FrameNumber = n++;
+			PushFigure(frame, 91, 100, 100);
+			frame.Entries.push_back(OamAt(95, 116, 100)); //one joining gap east of the figure
+			PushFigure(frame, 111, 40, 40);
+			PushFigure(frame, 121, 56, 40);
+			frames.push_back(frame);
+		}
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 5, "BlocoP: P, P+shot, Q, R and the Q+R fusion are five kept poses",
+			"poses=" + std::to_string(stats.Poses.size()));
+		int32_t p = -1, v = -1, fusion = -1;
+		for(size_t i = 0; i < stats.Poses.size(); i++) {
+			const PoseEntry& pose = stats.Poses[i];
+			if(pose.Tiles.size() == 5) { v = (int32_t)i; }
+			else if(pose.Tiles.size() == 8) { fusion = (int32_t)i; }
+			else if(PoseHoldsNode(pose, SpriteNodeOf(vocab, 91))) { p = (int32_t)i; }
+		}
+		Check(p >= 0 && v >= 0 && stats.Poses[v].VariantOf == p,
+			"BlocoP: the figure plus its shot is a variant of the figure",
+			"p=" + std::to_string(p) + " v=" + std::to_string(v) + " variantOf=" + std::to_string(v >= 0 ? stats.Poses[v].VariantOf : -2));
+		Check(p >= 0 && stats.Poses[p].VariantOf == -1 && stats.Poses[p].FusionOf.empty(),
+			"BlocoP: the base figure is a variant of nothing", "");
+		Check(fusion >= 0 && stats.Poses[fusion].FusionOf.size() == 2 && stats.Poses[fusion].VariantOf == -1,
+			"BlocoP: two figures that touched are a fusion and not a variant",
+			fusion >= 0 ? "fusionOf=" + std::to_string(stats.Poses[fusion].FusionOf.size()) + " variantOf=" + std::to_string(stats.Poses[fusion].VariantOf) : "no 8-tile pose");
+		std::string json = SerializePoses(vocab, stats);
+		char expected[48];
+		snprintf(expected, sizeof(expected), "\"variantOf\": \"pose%03d\"", p);
+		Check(p >= 0 && json.find(expected) != std::string::npos,
+			"BlocoP: variantOf serialises as the base pose id", expected);
+	}
+
 	void TestPoseSidecarRoundTrips()
 	{
 		std::vector<OamFrame> frames = PoseRankFrames();
@@ -6251,6 +6471,10 @@ int main()
 	TestPoseListIsCappedAtTheMaximum();
 	TestPosesAreSortedByFramesDescending();
 	TestPoseSidecarRoundTrips();
+	TestPoseTrackFollowsAFigureAndBreaksAtTheLimit();
+	TestPoseCycleWithARepeatedSilhouetteHasPeriodSix();
+	TestTwoIdenticalRunsAreOneSequence();
+	TestAPosePlusASatelliteIsAVariantNotAFusion();
 	TestSpriteSheetNamesThePosesItsCellsBelongTo();
 	TestSpriteSheetPoseRefsAreWrittenAsPoseIds();
 	TestGroupSheetStatesItsDeliberateBlanks();

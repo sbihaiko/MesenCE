@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <set>
+#include <tuple>
 #include <utility>
 
 namespace MesenSheets
@@ -236,6 +237,464 @@ namespace MesenSheets
 					}
 				}
 			}
+		}
+
+		//---- ADR-0179 (F9.20) ---------------------------------------------
+
+		//One spatially connected cluster of a frame: its normalised tile set
+		//(the pose identity) and where its top-left sat on screen, in pixels.
+		struct PoseCluster
+		{
+			std::vector<PoseTile> Tiles;
+			int32_t X = 0;
+			int32_t Y = 0;
+		};
+
+		//The ADR-0170 §1 segmentation of one retained frame: entries the
+		//vocabulary knows, DSU-joined within kPoseMaxGap on both axes, each
+		//cluster normalised to its own top-left at round-to-nearest cell and
+		//reduced to a set. Clusters under kPoseMinTiles are not returned.
+		std::vector<PoseCluster> SegmentFrame(const OamFrame& frame, const Vocabulary& vocab)
+		{
+			std::vector<PoseCluster> out;
+			//An unknown shape is skipped rather than clustered: it would move
+			//the top-left and so shift every offset in the pose.
+			std::vector<std::pair<int32_t, int32_t>> points;
+			std::vector<uint32_t> nodes;
+			for(const OamEntry& entry : frame.Entries) {
+				int32_t node = vocab.Find(SpriteKey(entry.Shape));
+				if(node < 0) {
+					continue;
+				}
+				points.push_back(std::make_pair((int32_t)entry.X, (int32_t)entry.Y));
+				nodes.push_back((uint32_t)node);
+			}
+			if(points.size() < kPoseMinTiles) {
+				return out;
+			}
+			Dsu sets(points.size());
+			for(size_t i = 0; i < points.size(); i++) {
+				for(size_t j = i + 1; j < points.size(); j++) {
+					if(std::abs(points[i].first - points[j].first) <= kPoseMaxGap && std::abs(points[i].second - points[j].second) <= kPoseMaxGap) {
+						sets.Union((uint32_t)i, (uint32_t)j);
+					}
+				}
+			}
+			std::map<uint32_t, std::vector<size_t>> clusters;
+			for(size_t i = 0; i < points.size(); i++) {
+				clusters[sets.Find((uint32_t)i)].push_back(i);
+			}
+			for(const std::pair<const uint32_t, std::vector<size_t>>& cluster : clusters) {
+				if(cluster.second.size() < kPoseMinTiles) {
+					continue;
+				}
+				PoseCluster pc;
+				pc.X = points[cluster.second[0]].first;
+				pc.Y = points[cluster.second[0]].second;
+				for(size_t index : cluster.second) {
+					pc.X = std::min(pc.X, points[index].first);
+					pc.Y = std::min(pc.Y, points[index].second);
+				}
+				pc.Tiles.reserve(cluster.second.size());
+				for(size_t index : cluster.second) {
+					PoseTile tile;
+					tile.Node = nodes[index];
+					tile.Dx = ToCells(points[index].first - pc.X);
+					tile.Dy = ToCells(points[index].second - pc.Y);
+					pc.Tiles.push_back(tile);
+				}
+				//A set, not a list: two OAM entries of the same shape rounding
+				//onto one cell are one member, exactly as the S10.a ground
+				//truth counted them.
+				std::sort(pc.Tiles.begin(), pc.Tiles.end());
+				pc.Tiles.erase(std::unique(pc.Tiles.begin(), pc.Tiles.end()), pc.Tiles.end());
+				if(pc.Tiles.size() < kPoseMinTiles) {
+					continue;
+				}
+				out.push_back(pc);
+			}
+			return out;
+		}
+
+		//Does `part`, translated so that its head lands on `at` (a tile of
+		//`whole` carrying the head's node), fit inside `wholeSet`? Fills
+		//`placed` with the translated members when it does.
+		bool PartFitsAt(const std::vector<PoseTile>& part, const PoseTile& at, const std::set<PoseTile>& wholeSet, std::set<PoseTile>& placed)
+		{
+			const PoseTile& head = part[0];
+			int32_t shiftX = at.Dx - head.Dx;
+			int32_t shiftY = at.Dy - head.Dy;
+			placed.clear();
+			for(const PoseTile& member : part) {
+				PoseTile moved;
+				moved.Node = member.Node;
+				moved.Dx = member.Dx + shiftX;
+				moved.Dy = member.Dy + shiftY;
+				if(!wholeSet.count(moved)) {
+					return false;
+				}
+				placed.insert(moved);
+			}
+			return true;
+		}
+
+		//ADR-0179 §4: a kept, non-fusion pose is a *variant* of the first kept
+		//pose (file order) that fits inside it leaving a remainder below
+		//kPoseMinTiles - a figure plus its projectile or muzzle flash. The
+		//remainder could never be a pose, which is exactly what separates a
+		//variant from ADR-0177's fusion. Containment only, no threshold.
+		void LabelPoseVariants(std::vector<PoseEntry>& entries)
+		{
+			std::map<uint32_t, std::vector<uint32_t>> byAnchorNode;
+			for(size_t i = 0; i < entries.size(); i++) {
+				if(!entries[i].Tiles.empty() && entries[i].FusionOf.empty()) {
+					byAnchorNode[entries[i].Tiles[0].Node].push_back((uint32_t)i);
+				}
+			}
+			for(size_t vi = 0; vi < entries.size(); vi++) {
+				const std::vector<PoseTile>& whole = entries[vi].Tiles;
+				if(!entries[vi].FusionOf.empty() || whole.size() <= (size_t)kPoseMinTiles) {
+					continue;
+				}
+				std::set<PoseTile> wholeSet(whole.begin(), whole.end());
+				std::set<uint32_t> candidates;
+				for(const PoseTile& tile : whole) {
+					std::map<uint32_t, std::vector<uint32_t>>::const_iterator bucket = byAnchorNode.find(tile.Node);
+					if(bucket == byAnchorNode.end()) {
+						continue;
+					}
+					for(uint32_t rank : bucket->second) {
+						size_t partSize = entries[rank].Tiles.size();
+						if(rank != (uint32_t)vi && partSize < whole.size() && whole.size() - partSize < (size_t)kPoseMinTiles) {
+							candidates.insert(rank);
+						}
+					}
+				}
+				for(uint32_t rank : candidates) {
+					const std::vector<PoseTile>& part = entries[rank].Tiles;
+					bool fits = false;
+					std::set<PoseTile> placed;
+					for(const PoseTile& tile : whole) {
+						if(tile.Node == part[0].Node && PartFitsAt(part, tile, wholeSet, placed)) {
+							fits = true;
+							break;
+						}
+					}
+					if(fits) {
+						entries[vi].VariantOf = (int32_t)rank;
+						break;
+					}
+				}
+			}
+		}
+
+		//One run of one pose on a track: the pose and how many frames
+		//(RepeatCount included) it was held before the track changed pose.
+		struct TrackRun
+		{
+			uint32_t Pose = 0;
+			uint32_t Held = 0;
+		};
+
+		//ADR-0179 §1: greedy nearest-first linking of kept clusters between
+		//consecutive retained frames, within kPoseTrackMaxMove. Fills
+		//Hold/Next on the entries and returns the tracks as runs.
+		std::vector<std::vector<TrackRun>> LinkPoseTracks(const std::vector<OamFrame>& frames, const Vocabulary& vocab, std::vector<PoseEntry>& entries)
+		{
+			std::map<std::vector<PoseTile>, uint32_t> rankOf;
+			for(size_t i = 0; i < entries.size(); i++) {
+				rankOf.emplace(entries[i].Tiles, (uint32_t)i);
+			}
+			struct Live
+			{
+				int32_t X;
+				int32_t Y;
+				uint32_t Pose;
+				size_t Track;
+			};
+			std::vector<std::vector<TrackRun>> tracks;
+			std::vector<Live> prev;
+			for(const OamFrame& frame : frames) {
+				std::vector<Live> cur;
+				for(const PoseCluster& cluster : SegmentFrame(frame, vocab)) {
+					std::map<std::vector<PoseTile>, uint32_t>::const_iterator it = rankOf.find(cluster.Tiles);
+					if(it == rankOf.end()) {
+						continue; //below the ADR-0170 §2 thresholds: invisible to the linker
+					}
+					Live live;
+					live.X = cluster.X;
+					live.Y = cluster.Y;
+					live.Pose = it->second;
+					live.Track = (size_t)-1;
+					cur.push_back(live);
+				}
+				//Every candidate link, nearest first; ties broken by position in
+				//either frame so two saves of one stream link identically.
+				std::vector<std::tuple<int32_t, size_t, size_t>> links;
+				for(size_t pi = 0; pi < prev.size(); pi++) {
+					for(size_t ci = 0; ci < cur.size(); ci++) {
+						int32_t d = std::abs(prev[pi].X - cur[ci].X) + std::abs(prev[pi].Y - cur[ci].Y);
+						if(d <= kPoseTrackMaxMove) {
+							links.push_back(std::make_tuple(d, pi, ci));
+						}
+					}
+				}
+				std::sort(links.begin(), links.end());
+				std::vector<bool> prevUsed(prev.size(), false);
+				for(const std::tuple<int32_t, size_t, size_t>& link : links) {
+					size_t pi = std::get<1>(link);
+					size_t ci = std::get<2>(link);
+					if(prevUsed[pi] || cur[ci].Track != (size_t)-1) {
+						continue;
+					}
+					prevUsed[pi] = true;
+					cur[ci].Track = prev[pi].Track;
+					std::vector<TrackRun>& track = tracks[prev[pi].Track];
+					if(prev[pi].Pose == cur[ci].Pose) {
+						entries[cur[ci].Pose].Hold++;
+						track.back().Held += frame.RepeatCount;
+					} else {
+						std::vector<PoseLink>& next = entries[prev[pi].Pose].Next;
+						bool found = false;
+						for(PoseLink& edge : next) {
+							if(edge.Pose == cur[ci].Pose) {
+								edge.Count++;
+								found = true;
+								break;
+							}
+						}
+						if(!found) {
+							PoseLink edge;
+							edge.Pose = cur[ci].Pose;
+							edge.Count = 1;
+							next.push_back(edge);
+						}
+						TrackRun run;
+						run.Pose = cur[ci].Pose;
+						run.Held = frame.RepeatCount;
+						track.push_back(run);
+					}
+				}
+				for(Live& live : cur) {
+					if(live.Track == (size_t)-1) {
+						TrackRun run;
+						run.Pose = live.Pose;
+						run.Held = frame.RepeatCount;
+						tracks.push_back(std::vector<TrackRun>(1, run));
+						live.Track = tracks.size() - 1;
+					}
+				}
+				prev = cur;
+			}
+			for(PoseEntry& entry : entries) {
+				std::stable_sort(entry.Next.begin(), entry.Next.end(), [](const PoseLink& a, const PoseLink& b) {
+					if(a.Count != b.Count) { return a.Count > b.Count; }
+					return a.Pose < b.Pose;
+				});
+			}
+			return tracks;
+		}
+
+		uint32_t MedianOf(std::vector<uint32_t> values)
+		{
+			if(values.empty()) {
+				return 0;
+			}
+			std::sort(values.begin(), values.end());
+			return values[values.size() / 2];
+		}
+
+		//A cycle occurrence, canonically rotated: the most-seen pose (lowest
+		//rank) first; when it occurs twice in the period, the rotation with
+		//the lexicographically smallest pose vector.
+		std::vector<uint32_t> CanonicalRotation(const std::vector<uint32_t>& block, size_t& shift)
+		{
+			std::vector<uint32_t> best;
+			shift = 0;
+			for(size_t r = 0; r < block.size(); r++) {
+				if(block[r] != *std::min_element(block.begin(), block.end())) {
+					continue;
+				}
+				std::vector<uint32_t> rotated;
+				for(size_t k = 0; k < block.size(); k++) {
+					rotated.push_back(block[(r + k) % block.size()]);
+				}
+				if(best.empty() || rotated < best) {
+					best = rotated;
+					shift = r;
+				}
+			}
+			return best;
+		}
+
+		//ADR-0179 §3: cycles by period repetition on each track, then
+		//sequences by identical occurrence on what the cycles left uncovered.
+		void FindPoseRuns(const std::vector<std::vector<TrackRun>>& tracks, PoseStats& stats)
+		{
+			struct Occurrences
+			{
+				uint32_t Repeats = 0;
+				std::vector<std::vector<uint32_t>> Holds; //per position
+			};
+			std::map<std::vector<uint32_t>, Occurrences> cycles;
+			std::map<std::vector<uint32_t>, Occurrences> sequences;
+
+			for(const std::vector<TrackRun>& track : tracks) {
+				size_t n = track.size();
+				std::vector<bool> covered(n, false);
+				size_t start = 0;
+				while(start < n) {
+					bool found = false;
+					for(size_t p = 2; p <= (size_t)kPoseCycleMaxPeriod && start + 2 * p <= n; p++) {
+						size_t r = 1;
+						while(start + (r + 1) * p <= n) {
+							bool same = true;
+							for(size_t k = 0; k < p && same; k++) {
+								same = track[start + k].Pose == track[start + r * p + k].Pose;
+							}
+							if(!same) {
+								break;
+							}
+							r++;
+						}
+						if(r < (size_t)kPoseCycleMinRepeats) {
+							continue;
+						}
+						std::vector<uint32_t> block;
+						for(size_t k = 0; k < p; k++) {
+							block.push_back(track[start + k].Pose);
+						}
+						if(std::set<uint32_t>(block.begin(), block.end()).size() < 2) {
+							continue;
+						}
+						size_t shift = 0;
+						std::vector<uint32_t> key = CanonicalRotation(block, shift);
+						Occurrences& occ = cycles[key];
+						occ.Repeats += (uint32_t)r;
+						occ.Holds.resize(p);
+						for(size_t k = 0; k < r * p; k++) {
+							occ.Holds[(k + p - shift) % p].push_back(track[start + k].Held);
+						}
+						//Cover the full repeats and the partial repeat that
+						//follows, so a tail of the loop is not read as a sequence.
+						size_t end = start + r * p;
+						while(end < n && track[end].Pose == block[(end - start) % p]) {
+							end++;
+						}
+						for(size_t k = start; k < end; k++) {
+							covered[k] = true;
+						}
+						start = end;
+						found = true;
+						break;
+					}
+					if(!found) {
+						start++;
+					}
+				}
+				//Uncovered segments -> every all-distinct window of an allowed length.
+				size_t i = 0;
+				while(i < n) {
+					if(covered[i]) {
+						i++;
+						continue;
+					}
+					size_t j = i;
+					while(j < n && !covered[j]) {
+						j++;
+					}
+					for(size_t a = i; a < j; a++) {
+						std::set<uint32_t> seen;
+						std::vector<uint32_t> window;
+						std::vector<uint32_t> holds;
+						for(size_t b = a; b < j && window.size() < (size_t)kPoseSequenceMaxLength; b++) {
+							if(!seen.insert(track[b].Pose).second) {
+								break;
+							}
+							window.push_back(track[b].Pose);
+							holds.push_back(track[b].Held);
+							if(window.size() >= (size_t)kPoseSequenceMinLength) {
+								Occurrences& occ = sequences[window];
+								occ.Repeats++;
+								occ.Holds.resize(window.size());
+								for(size_t k = 0; k < holds.size(); k++) {
+									occ.Holds[k].push_back(holds[k]);
+								}
+							}
+						}
+					}
+					i = j;
+				}
+			}
+
+			for(const std::pair<const std::vector<uint32_t>, Occurrences>& cycle : cycles) {
+				PoseRun run;
+				run.Poses = cycle.first;
+				run.Repeats = cycle.second.Repeats;
+				for(const std::vector<uint32_t>& holds : cycle.second.Holds) {
+					run.Hold.push_back(MedianOf(holds));
+				}
+				stats.Cycles.push_back(run);
+			}
+			//Longest first, then most repeated: a window inside an accepted
+			//longer one is the same animation seen shorter, not a second one.
+			std::vector<std::pair<std::vector<uint32_t>, Occurrences>> candidates;
+			for(const std::pair<const std::vector<uint32_t>, Occurrences>& seq : sequences) {
+				if(seq.second.Repeats >= kPoseCycleMinRepeats) {
+					candidates.push_back(seq);
+				}
+			}
+			std::stable_sort(candidates.begin(), candidates.end(), [](const std::pair<std::vector<uint32_t>, Occurrences>& a, const std::pair<std::vector<uint32_t>, Occurrences>& b) {
+				if(a.first.size() != b.first.size()) { return a.first.size() > b.first.size(); }
+				if(a.second.Repeats != b.second.Repeats) { return a.second.Repeats > b.second.Repeats; }
+				return a.first < b.first;
+			});
+			//A window of a cycle is that cycle seen too briefly to repeat - a
+			//soldier who walked one and a half turns before he died. ADR-0179
+			//§3 says "not part of any cycle", so it is matched around the loop.
+			std::vector<std::vector<uint32_t>> loops;
+			for(const PoseRun& cycle : stats.Cycles) {
+				std::vector<uint32_t> twice = cycle.Poses;
+				twice.insert(twice.end(), cycle.Poses.begin(), cycle.Poses.end());
+				loops.push_back(twice);
+			}
+			std::vector<std::vector<uint32_t>> accepted;
+			for(const std::pair<std::vector<uint32_t>, Occurrences>& seq : candidates) {
+				bool inside = false;
+				for(const std::vector<uint32_t>& loop : loops) {
+					if(seq.first.size() <= loop.size() / 2 && std::search(loop.begin(), loop.end(), seq.first.begin(), seq.first.end()) != loop.end()) {
+						inside = true;
+						break;
+					}
+				}
+				for(const std::vector<uint32_t>& longer : accepted) {
+					if(inside) {
+						break;
+					}
+					if(std::search(longer.begin(), longer.end(), seq.first.begin(), seq.first.end()) != longer.end()) {
+						inside = true;
+						break;
+					}
+				}
+				if(inside) {
+					continue;
+				}
+				accepted.push_back(seq.first);
+				PoseRun run;
+				run.Poses = seq.first;
+				run.Repeats = seq.second.Repeats;
+				for(const std::vector<uint32_t>& holds : seq.second.Holds) {
+					run.Hold.push_back(MedianOf(holds));
+				}
+				stats.Sequences.push_back(run);
+			}
+			auto byRepeats = [](const PoseRun& a, const PoseRun& b) {
+				if(a.Repeats != b.Repeats) { return a.Repeats > b.Repeats; }
+				return a.Poses < b.Poses;
+			};
+			std::stable_sort(stats.Cycles.begin(), stats.Cycles.end(), byRepeats);
+			std::stable_sort(stats.Sequences.begin(), stats.Sequences.end(), byRepeats);
+			stats.Tracks = (uint32_t)tracks.size();
 		}
 	}
 
@@ -492,68 +951,8 @@ namespace MesenSheets
 		std::map<std::vector<PoseTile>, uint32_t> seen;
 		for(const OamFrame& frame : frames) {
 			stats.Frames += frame.RepeatCount;
-
-			//Entries this vocabulary knows, in pixels. An unknown shape is
-			//skipped rather than clustered: it would move the top-left and so
-			//shift every offset in the pose.
-			std::vector<std::pair<int32_t, int32_t>> points;
-			std::vector<uint32_t> nodes;
-			for(const OamEntry& entry : frame.Entries) {
-				int32_t node = vocab.Find(SpriteKey(entry.Shape));
-				if(node < 0) {
-					continue;
-				}
-				points.push_back(std::make_pair((int32_t)entry.X, (int32_t)entry.Y));
-				nodes.push_back((uint32_t)node);
-			}
-			if(points.size() < kPoseMinTiles) {
-				continue;
-			}
-
-			//Spatially connected clusters, the same DSU SheetGrouping uses.
-			//Connected means both axes within kPoseMaxGap of each other's
-			//top-left, i.e. the 8x8 boxes touch or overlap.
-			Dsu sets(points.size());
-			for(size_t i = 0; i < points.size(); i++) {
-				for(size_t j = i + 1; j < points.size(); j++) {
-					if(std::abs(points[i].first - points[j].first) <= kPoseMaxGap && std::abs(points[i].second - points[j].second) <= kPoseMaxGap) {
-						sets.Union((uint32_t)i, (uint32_t)j);
-					}
-				}
-			}
-			std::map<uint32_t, std::vector<size_t>> clusters;
-			for(size_t i = 0; i < points.size(); i++) {
-				clusters[sets.Find((uint32_t)i)].push_back(i);
-			}
-
-			for(const std::pair<const uint32_t, std::vector<size_t>>& cluster : clusters) {
-				if(cluster.second.size() < kPoseMinTiles) {
-					continue;
-				}
-				int32_t minX = points[cluster.second[0]].first;
-				int32_t minY = points[cluster.second[0]].second;
-				for(size_t index : cluster.second) {
-					minX = std::min(minX, points[index].first);
-					minY = std::min(minY, points[index].second);
-				}
-				std::vector<PoseTile> tiles;
-				tiles.reserve(cluster.second.size());
-				for(size_t index : cluster.second) {
-					PoseTile tile;
-					tile.Node = nodes[index];
-					tile.Dx = ToCells(points[index].first - minX);
-					tile.Dy = ToCells(points[index].second - minY);
-					tiles.push_back(tile);
-				}
-				//A set, not a list: two OAM entries of the same shape rounding
-				//onto one cell are one member, exactly as the S10.a ground
-				//truth counted them.
-				std::sort(tiles.begin(), tiles.end());
-				tiles.erase(std::unique(tiles.begin(), tiles.end()), tiles.end());
-				if(tiles.size() < kPoseMinTiles) {
-					continue;
-				}
-				seen[tiles] += frame.RepeatCount;
+			for(const PoseCluster& cluster : SegmentFrame(frame, vocab)) {
+				seen[cluster.Tiles] += frame.RepeatCount;
 			}
 		}
 
@@ -585,7 +984,13 @@ namespace MesenSheets
 			kept.resize(kMaxPoses);
 		}
 		LabelPoseFusions(kept);
+		//ADR-0179: variants by containment (§4), then the tracks (§1-2) and
+		//what repetition finds on them (§3). All three read only the kept
+		//table and the stream; none changes a pose or its rank.
+		LabelPoseVariants(kept);
+		std::vector<std::vector<TrackRun>> tracks = LinkPoseTracks(frames, vocab, kept);
 		stats.Poses = kept;
+		FindPoseRuns(tracks, stats);
 		return stats;
 	}
 

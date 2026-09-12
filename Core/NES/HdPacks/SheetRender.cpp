@@ -591,6 +591,39 @@ namespace MesenSheets
 	//identity, the thresholds and the cap - so this is a transcription, and it
 	//deliberately stays one: no field here is computed, because a number the
 	//serializer derives is a number the unit tests cannot reach.
+	//One top-level array of ADR-0179 §3 runs. Ids are positions in the array,
+	//as pose ids are; `period` is written for cycles only, where it means
+	//something (a sequence's length is its poses count).
+	static void WritePoseRuns(std::stringstream& json, const char* key, const char* idPrefix, const std::vector<PoseRun>& runs, bool withPeriod)
+	{
+		if(runs.empty()) {
+			return;
+		}
+		json << ",\n  \"" << key << "\": [";
+		for(size_t i = 0; i < runs.size(); i++) {
+			const PoseRun& run = runs[i];
+			char id[16];
+			snprintf(id, sizeof(id), "%s%03u", idPrefix, (uint32_t)i);
+			json << (i ? ",\n    " : "\n    ");
+			json << "{ \"id\": \"" << id << "\"";
+			if(withPeriod) {
+				json << ", \"period\": " << run.Poses.size();
+			}
+			json << ", \"repeats\": " << run.Repeats << ", \"poses\": [";
+			for(size_t k = 0; k < run.Poses.size(); k++) {
+				char pose[16];
+				snprintf(pose, sizeof(pose), "pose%03u", run.Poses[k]);
+				json << (k ? ", \"" : "\"") << pose << "\"";
+			}
+			json << "], \"hold\": [";
+			for(size_t k = 0; k < run.Hold.size(); k++) {
+				json << (k ? ", " : "") << run.Hold[k];
+			}
+			json << "] }";
+		}
+		json << "\n  ]";
+	}
+
 	std::string SerializePoses(const Vocabulary& sprites, const PoseStats& stats)
 	{
 		std::stringstream json;
@@ -628,6 +661,27 @@ namespace MesenSheets
 				}
 				json << "]";
 			}
+			//ADR-0179 §2: frames this pose was linked to itself on a track, and
+			//the poses it was linked to next, most-linked first. `hold` is
+			//always written (0 is a fact: the pose never held); `next` only
+			//when non-empty, like fusionOf.
+			json << ", \"hold\": " << pose.Hold;
+			if(!pose.Next.empty()) {
+				json << ", \"next\": [";
+				for(size_t n = 0; n < pose.Next.size(); n++) {
+					char target[16];
+					snprintf(target, sizeof(target), "pose%03u", pose.Next[n].Pose);
+					json << (n ? ", " : "") << "{ \"pose\": \"" << target << "\", \"count\": " << pose.Next[n].Count << " }";
+				}
+				json << "]";
+			}
+			//ADR-0179 §4: the kept pose this one is, plus a satellite too small
+			//to be a pose. Same optional-id shape as fusionOf.
+			if(pose.VariantOf >= 0) {
+				char base[16];
+				snprintf(base, sizeof(base), "pose%03u", (uint32_t)pose.VariantOf);
+				json << ", \"variantOf\": \"" << base << "\"";
+			}
 			json << ", \"tiles\": [";
 			for(size_t t = 0; t < pose.Tiles.size(); t++) {
 				const PoseTile& tile = pose.Tiles[t];
@@ -636,8 +690,14 @@ namespace MesenSheets
 			}
 			json << "] }";
 		}
-		json << (stats.Poses.empty() ? "]\n" : "\n  ]\n");
-		json << "}\n";
+		json << (stats.Poses.empty() ? "]" : "\n  ]");
+		//ADR-0179 §3: what repetition found on the tracks. Both keys are
+		//absent, not empty, when the stream showed no repetition - a reader
+		//distinguishes "nothing found" from "written by an older recorder"
+		//by the version, not by these keys.
+		WritePoseRuns(json, "cycles", "cycle", stats.Cycles, true);
+		WritePoseRuns(json, "sequences", "seq", stats.Sequences, false);
+		json << "\n}\n";
 		return json.str();
 	}
 }

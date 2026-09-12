@@ -61,6 +61,14 @@ namespace MesenSheets
 	//live OAM channel, and found the ADR-0168 evidence[] walk recovering 6.7 %
 	//of it. Entries below kPoseMinFrames / kPoseMinTiles are dropped and the
 	//kept set is capped at kMaxPoses.
+	//ADR-0179 (F9.20) adds what the stream says about succession, without
+	//touching how a pose is found or ranked: kept clusters are linked frame
+	//to frame (nearest within kPoseTrackMaxMove) into tracks, each entry
+	//gains Hold/Next, a kept pose that is another plus a sub-threshold
+	//remainder is a VariantOf it, and the tracks are scanned for cycles
+	//(period repeated >= kPoseCycleMinRepeats times, found on the sequence
+	//so a silhouette can be two phases of one loop) and for sequences
+	//(identical non-looping runs seen at least twice).
 	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
 
 	//ADR-0174 (issue #174): the join from a sprNNN group sheet to the whole

@@ -313,7 +313,11 @@ class EditorApp:
         seen in."""
         self.sp_seed.delete(0, "end")
         for anchor, pose in self.vm.band_poses():
-            self.sp_seed.insert("end", f"#{anchor}  {_pose_shape(pose)}")
+            # ADR-0179 §5: the list is already in cycle-then-phase order; the
+            # caption says which loop and phase, still behind the `#<anchor>`
+            # prefix `_selected_node` parses.
+            label = self.vm.pose_run_label(pose)
+            self.sp_seed.insert("end", f"#{anchor}  {_pose_shape(pose)}" + (f"  {label}" if label else ""))
         if self.sp_seed.size():
             return
         for node in self.vm.band_members():
