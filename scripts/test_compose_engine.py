@@ -769,6 +769,75 @@ def test_a_silhouette_already_composed_is_not_offered_again():
               str(pack.pose_rank(176, locked=[0])))
 
 
+def test_a_fused_pose_is_never_offered_as_a_figure():
+    """ADR-0177 §5: an entry the recorder labelled a fusion is two figures that
+    touched, so the suggestion list must not offer it. It stays reachable by
+    id — the label is a filter for the ranked list, not a deletion."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        tiles = [{"node": n, "dx": d[0], "dy": d[1]} for n, d in sorted(_POSE_TILES.items())]
+        fused = {"id": "pose001", "frames": 9, "size": [2, 3],
+                 "fusionOf": ["pose000", "pose000"], "tiles": tiles}
+        _write_poses(sheets, _poses_doc(extra_poses=[fused]))
+        pack = E.Pack(root)
+
+        by_id = {e.id: e for e in pack.poses.entries}
+        check(set(by_id) == {"pose000", "pose001"},
+              "both entries are read, the fused one included", str(sorted(by_id)))
+        check(by_id["pose001"].fusion_of == ("pose000", "pose000"),
+              "fusionOf is read as the pose ids the entry splits into",
+              str(by_id["pose001"].fusion_of))
+        check(by_id["pose001"].fused and not by_id["pose000"].fused,
+              "only the labelled entry reads as fused",
+              f'{by_id["pose001"].fused}/{by_id["pose000"].fused}')
+
+        offered = [e.id for e in pack.pose_band_members(176)]
+        check(offered == ["pose000"],
+              "the band offers the figure and not the fusion", str(offered))
+        check(pack.poses.by_id("pose001") is not None,
+              "a fused pose is still reachable by id")
+
+
+def test_a_pose_sidecar_without_fusion_labels_reads_as_before():
+    """ADR-0177 §4: absent means *not classified*, and a pack recorded before
+    the ADR must behave exactly as it did — no entry silently filtered."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        tiles = [{"node": n, "dx": d[0], "dy": d[1]} for n, d in sorted(_POSE_TILES.items())]
+        twin = {"id": "pose001", "frames": 9, "size": [2, 3], "tiles": tiles}
+        _write_poses(sheets, _poses_doc(extra_poses=[twin]))
+        pack = E.Pack(root)
+        check(all(not e.fused for e in pack.poses.entries),
+              "no entry of a pre-ADR-0177 sidecar reads as fused")
+        offered = [e.id for e in pack.pose_band_members(176)]
+        check(offered == ["pose000", "pose001"],
+              "both entries are still offered", str(offered))
+
+
+def test_a_malformed_fusion_label_is_ignored_not_fatal():
+    """The sidecar is never trusted enough to raise (ADR-0170). A `fusionOf`
+    that is not a list of ids leaves the entry unclassified rather than
+    dropping it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        tiles = [{"node": n, "dx": d[0], "dy": d[1]} for n, d in sorted(_POSE_TILES.items())]
+        bad = {"id": "pose001", "frames": 9, "size": [2, 3],
+               "fusionOf": "pose000", "tiles": tiles}
+        _write_poses(sheets, _poses_doc(extra_poses=[bad]))
+        pack = E.Pack(root)
+        entry = pack.poses.by_id("pose001")
+        check(entry is not None, "the entry survives a malformed label")
+        check(entry.fusion_of == () and not entry.fused,
+              "a label that is not a list of ids reads as unclassified",
+              str(entry.fusion_of))
+
+
 def test_pose_cells_keep_the_silhouette_and_never_repeat_a_node():
     """ADR-0171 §5: composing poses changes which cells land where, not the
     file. A node already placed is not emitted twice — `mep_build.py` fans a
@@ -912,6 +981,9 @@ def main():
         test_pose_rank_scores_by_co_presence_damped_by_size,
         test_pose_rank_drops_the_uncorrelated_and_collapses_one_anchor,
         test_a_silhouette_already_composed_is_not_offered_again,
+        test_a_fused_pose_is_never_offered_as_a_figure,
+        test_a_pose_sidecar_without_fusion_labels_reads_as_before,
+        test_a_malformed_fusion_label_is_ignored_not_fatal,
         test_pose_cells_keep_the_silhouette_and_never_repeat_a_node,
         test_pose_placements_reach_the_exported_sheet,
         test_pack_without_poses_ranks_nodes_as_before,

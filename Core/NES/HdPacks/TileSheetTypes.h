@@ -491,6 +491,12 @@ namespace MesenSheets
 		//Tiles[].
 		uint32_t Width = 0;
 		uint32_t Height = 0;
+		//ADR-0177: the two poses this one's tiles split into, as positions in
+		//PoseStats::Poses, when it is a fusion - two figures that touched and
+		//so were clustered as one. Empty means *not classified as a fusion*,
+		//never *proved not to be one*. Both parts are kept poses themselves,
+		//and they may be the same pose twice (two copies side by side).
+		std::vector<uint32_t> FusionOf;
 	};
 
 	//What BuildPoses found, with the counts a reader needs to judge

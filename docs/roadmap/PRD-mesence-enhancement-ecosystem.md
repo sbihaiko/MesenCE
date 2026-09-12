@@ -609,6 +609,23 @@ does not exist.
   - Section 2's pass criterion was amended the same day (§5, Phase 9
     validation): it judged sheet cells, which ADR-0171 had already stopped
     being the unit, and was unpassable by construction.
+  - **#179** (fixed, ADR-0177): found while assembling the bench for the
+    human run of section 2. `BuildPoses` clusters a frame by spatial
+    connectivity, so any two actors that touch fuse into one entry, and the
+    pose list repeats the same figure with a different bystander each time —
+    the mirror of the split-cell defect the criterion amendment addressed,
+    with the unit arriving too large instead of too small. An entry is now
+    labelled `fusionOf` when its tiles split, at some translation, into two
+    entries the recorder also saw standing alone; the editor stops offering
+    a labelled entry, in the band list and when laying a figure out. No
+    threshold: the classification is a property of the tile sets. A
+    frequency ratio was measured first and rejected — continuous from 0.0 to
+    562 across the kit, with no plateau, and backwards on Excitebike.
+    Re-recording the kit labels 44 of 223 Mega Man 3 poses, 39 of 84
+    Zelda 1, 21 of 85 Contra, 12 of 77 Excitebike; each pack's `poses.json`
+    comes back identical apart from the new field, and the only other files
+    that change are the 52 `sprNNN` sidecars whose ADR-0174 `poses[]` list
+    stops citing a fusion.
   Logs: `runs/golden-20260912/panel-section2.md`, `panel-section3.md` (not
   versioned). The golden kit was re-recorded on the ADR-0172/0173 binary the
   same day: Mega Man 3 and Excitebike carry tile indices (CHR ROM, 1037 and

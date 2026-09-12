@@ -600,8 +600,22 @@ namespace MesenSheets
 			json << (i ? ",\n    " : "\n    ");
 			json << "{ \"id\": \"" << id << "\""
 				<< ", \"frames\": " << pose.Frames
-				<< ", \"size\": [" << pose.Width << ", " << pose.Height << "]"
-				<< ", \"tiles\": [";
+				<< ", \"size\": [" << pose.Width << ", " << pose.Height << "]";
+			//ADR-0177: the two poses this one's tiles split into, when it is
+			//two figures that touched. Ids rather than indexes, the same
+			//choice ADR-0174 made - an id is what poses.json keys an entry by.
+			//Absent means "not classified as a fusion", never "proved not to
+			//be one", so a reader must not require it.
+			if(!pose.FusionOf.empty()) {
+				json << ", \"fusionOf\": [";
+				for(size_t f = 0; f < pose.FusionOf.size(); f++) {
+					char part[16];
+					snprintf(part, sizeof(part), "pose%03u", pose.FusionOf[f]);
+					json << (f ? ", \"" : "\"") << part << "\"";
+				}
+				json << "]";
+			}
+			json << ", \"tiles\": [";
 			for(size_t t = 0; t < pose.Tiles.size(); t++) {
 				const PoseTile& tile = pose.Tiles[t];
 				json << (t ? ", " : "");

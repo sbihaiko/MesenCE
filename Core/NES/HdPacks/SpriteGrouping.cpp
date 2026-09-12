@@ -116,6 +116,127 @@ namespace MesenSheets
 			}
 			return best;
 		}
+
+		//ADR-0177 (issue #179): a cluster's tiles touched; that is not the same
+		//statement as "these tiles are one figure". Whenever one actor walks
+		//over or past another, the BuildPoses DSU fuses them and the pack gains
+		//an entry holding both. Label those so the composition editor can stop
+		//offering them - without deleting anything, exactly as ADR-0173 does
+		//for a screen-fixed sprite.
+		//
+		//The evidence is structural and needs no threshold: an entry is a
+		//fusion when its tiles split, at some translation, into two entries the
+		//recorder *also* saw standing on their own. Both parts are kept poses,
+		//so both already cleared kPoseMinFrames.
+		void LabelPoseFusions(std::vector<PoseEntry>& entries)
+		{
+			//Tile set -> rank. A kept pose's Tiles are normalised (the smallest
+			//Dx and the smallest Dy are both 0) and sorted, so the vector is
+			//already a usable key. emplace keeps the first, i.e. the best rank,
+			//should two entries ever share a set.
+			std::map<std::vector<PoseTile>, uint32_t> byTiles;
+			//Candidates indexed on their anchor tile's node. Tiles[0] is the
+			//topmost-leftmost tile (the sort is Dy, Dx, Node), and a candidate
+			//can only align inside another pose at a tile carrying that node -
+			//which is what keeps this pass from being poses-squared in practice.
+			std::map<uint32_t, std::vector<uint32_t>> byAnchorNode;
+			for(size_t i = 0; i < entries.size(); i++) {
+				if(entries[i].Tiles.empty()) {
+					continue;
+				}
+				byTiles.emplace(entries[i].Tiles, (uint32_t)i);
+				byAnchorNode[entries[i].Tiles[0].Node].push_back((uint32_t)i);
+			}
+
+			for(size_t bi = 0; bi < entries.size(); bi++) {
+				const std::vector<PoseTile>& whole = entries[bi].Tiles;
+				//Both halves have to clear kPoseMinTiles to be poses at all.
+				if(whole.size() < 2 * (size_t)kPoseMinTiles) {
+					continue;
+				}
+				std::set<PoseTile> wholeSet(whole.begin(), whole.end());
+
+				//Ranks, ascending: ADR-0177 §2 tries candidates in file order,
+				//so the part this names first is the most-seen part the split
+				//admits.
+				std::set<uint32_t> candidates;
+				for(const PoseTile& tile : whole) {
+					std::map<uint32_t, std::vector<uint32_t>>::const_iterator bucket = byAnchorNode.find(tile.Node);
+					if(bucket == byAnchorNode.end()) {
+						continue;
+					}
+					for(uint32_t rank : bucket->second) {
+						if(rank != (uint32_t)bi && entries[rank].Tiles.size() < whole.size()) {
+							candidates.insert(rank);
+						}
+					}
+				}
+
+				bool labelled = false;
+				for(uint32_t rank : candidates) {
+					const std::vector<PoseTile>& part = entries[rank].Tiles;
+					const PoseTile& head = part[0];
+					for(const PoseTile& tile : whole) {
+						if(tile.Node != head.Node) {
+							continue;
+						}
+						int32_t shiftX = tile.Dx - head.Dx;
+						int32_t shiftY = tile.Dy - head.Dy;
+						std::set<PoseTile> placed;
+						bool fits = true;
+						for(const PoseTile& member : part) {
+							PoseTile moved;
+							moved.Node = member.Node;
+							moved.Dx = member.Dx + shiftX;
+							moved.Dy = member.Dy + shiftY;
+							if(!wholeSet.count(moved)) {
+								fits = false;
+								break;
+							}
+							placed.insert(moved);
+						}
+						if(!fits) {
+							continue;
+						}
+
+						//The remainder, re-normalised to its own top-left -
+						//the space every kept pose's Tiles already live in.
+						std::vector<PoseTile> rest;
+						for(const PoseTile& member : whole) {
+							if(!placed.count(member)) {
+								rest.push_back(member);
+							}
+						}
+						if(rest.size() < (size_t)kPoseMinTiles) {
+							continue;
+						}
+						int32_t restX = rest[0].Dx;
+						int32_t restY = rest[0].Dy;
+						for(const PoseTile& member : rest) {
+							restX = std::min(restX, member.Dx);
+							restY = std::min(restY, member.Dy);
+						}
+						for(PoseTile& member : rest) {
+							member.Dx -= restX;
+							member.Dy -= restY;
+						}
+						std::sort(rest.begin(), rest.end());
+
+						std::map<std::vector<PoseTile>, uint32_t>::const_iterator match = byTiles.find(rest);
+						if(match == byTiles.end()) {
+							continue;
+						}
+						entries[bi].FusionOf.push_back(rank);
+						entries[bi].FusionOf.push_back(match->second);
+						labelled = true;
+						break;
+					}
+					if(labelled) {
+						break;
+					}
+				}
+			}
+		}
 	}
 
 	Vocabulary BuildSpriteVocabulary(const std::vector<OamFrame>& frames)
@@ -463,6 +584,7 @@ namespace MesenSheets
 		if(kept.size() > kMaxPoses) {
 			kept.resize(kMaxPoses);
 		}
+		LabelPoseFusions(kept);
 		stats.Poses = kept;
 		return stats;
 	}
@@ -492,6 +614,13 @@ namespace MesenSheets
 		//ties fall out in the order the file itself states.
 		std::vector<std::pair<uint32_t, uint32_t>> scored;
 		for(size_t i = 0; i < stats.Poses.size(); i++) {
+			//ADR-0177: a fused entry is two figures that touched, not a figure.
+			//This list exists so an artist can reach the subject a sheet's
+			//cells belong to, and citing a fusion spends the kSheetMaxPoseRefs
+			//budget on noise.
+			if(!stats.Poses[i].FusionOf.empty()) {
+				continue;
+			}
 			std::set<uint32_t> covered;
 			for(const PoseTile& tile : stats.Poses[i].Tiles) {
 				if(nodes.count(tile.Node)) {
