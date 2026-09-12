@@ -4199,6 +4199,96 @@ namespace
 			"BlocoP: the CHR index is not part of the tile key's identity (ADR-0172)");
 	}
 
+	//ADR-0178 (issue #181): the recorder bakes a sprite's OAM flips into the
+	//shape it records, so the two mirrored halves of a figure can sit side by
+	//side on a sheet. The run time never keys by that bitmap - it looks up the
+	//unflipped data and mirrors the replacement art itself - so on a CHR RAM
+	//game the sidecar has to name the unflipped form or the cell is inert.
+	void TestSheetJsonCarriesTheUnflippedTileData()
+	{
+		std::vector<OamFrame> frames = SpriteFigureFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		std::vector<uint32_t> indexes;
+		for(uint32_t i = 0; i < (uint32_t)vocab.Entries.size(); i++) {
+			indexes.push_back(i);
+		}
+		SheetJsonDoc doc;
+		doc.Kind = "sprites";
+		doc.SheetFile = "sprites.png";
+		doc.Grid = vocab.Grid;
+		doc.CellWidth = doc.CellHeight = vocab.Grid.Unit;
+		doc.Columns = 3;
+		BuildContactSheet(vocab, indexes, SheetLookup(), SheetPalette(), 3, doc.Cells, true);
+
+		Check(SerializeSheet(doc, SheetLookup()).find("\"source\": \"") == std::string::npos,
+			"BlocoP: an unflipped shape writes no source - its own bytes are the key");
+
+		//The same sheet, recorded from horizontally flipped OAM entries.
+		TileLookup flipLookup = [](ShapeId shape) -> const SheetTileKey* {
+			static std::map<ShapeId, SheetTileKey> cache;
+			std::map<ShapeId, SheetTileKey>::iterator it = cache.find(shape);
+			if(it == cache.end()) {
+				SheetTileKey tile = SheetTileFor(shape);
+				memcpy(tile.SourceTileData, tile.TileData, 16);
+				ApplyTileFlips(tile.SourceTileData, true, false);
+				tile.Mirrors = 1;
+				it = cache.insert(std::make_pair(shape, tile)).first;
+			}
+			return &it->second;
+		};
+		std::string json = SerializeSheet(doc, flipLookup);
+		Check(json.find("\"source\": \"") != std::string::npos,
+			"BlocoP: a flipped shape's sidecar entry carries the unflipped data (ADR-0178)");
+		Check(json.find("\"mirror\": \"H\"") != std::string::npos,
+			"BlocoP: the sidecar names which axes were baked in");
+		Check(json.find("\"mirror\": \"HV\"") == std::string::npos,
+			"BlocoP: an axis that was not baked is not claimed");
+
+		SheetTileKey a = SheetTileFor(3);
+		SheetTileKey b = SheetTileFor(3);
+		ApplyTileFlips(b.SourceTileData, true, true);
+		b.Mirrors = 3;
+		Check(a == b && !(a < b) && !(b < a),
+			"BlocoP: the unflipped data is not part of the tile key's identity (ADR-0178)");
+	}
+
+	//ADR-0178: the bake and the un-bake are one function, so they cannot drift.
+	//Per axis it is an involution; the two axes commute.
+	void TestTileFlipsAreTheirOwnInverse()
+	{
+		uint8_t original[16];
+		for(int i = 0; i < 16; i++) {
+			original[i] = (uint8_t)(0x13 * (i + 1));
+		}
+		for(int mode = 0; mode < 4; mode++) {
+			bool h = (mode & 1) != 0;
+			bool v = (mode & 2) != 0;
+			uint8_t data[16];
+			memcpy(data, original, 16);
+			ApplyTileFlips(data, h, v);
+			if(mode != 0) {
+				Check(memcmp(data, original, 16) != 0,
+					"BlocoP: a flip actually changes the recorded bitmap");
+			}
+			ApplyTileFlips(data, h, v);
+			Check(memcmp(data, original, 16) == 0,
+				"BlocoP: applying the same flips twice restores the tile (ADR-0178)");
+		}
+
+		//A horizontal flip reverses each byte's bits; a vertical one swaps the
+		//rows of both planes. Stated against a hand-checked row rather than
+		//against the implementation.
+		uint8_t asym[16] = {};
+		asym[0] = 0x01;
+		ApplyTileFlips(asym, true, false);
+		Check(asym[0] == 0x80, "BlocoP: a horizontal flip reverses the bits of a row");
+		uint8_t rows[16] = {};
+		rows[0] = 0xAA;
+		ApplyTileFlips(rows, false, true);
+		Check(rows[7] == 0xAA && rows[0] == 0x00,
+			"BlocoP: a vertical flip moves the top row to the bottom");
+	}
+
 	//ADR-0173 (issue #167): a HUD bar is drawn at a handful of fixed pixels for
 	//the whole capture, so its bottom edge lands in several quantised bands at
 	//once and joins every one of them. This fixture is that shape against a
@@ -6142,6 +6232,8 @@ int main()
 	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();
 	TestSheetJsonCarriesTheChrIndex();
+	TestSheetJsonCarriesTheUnflippedTileData();
+	TestTileFlipsAreTheirOwnInverse();
 	TestScreenFixedSpritesAreLabelledNotDeleted();
 	TestAdjacencySpriteStatsCarryFloorsAndCoFrames();
 	TestAdjacencySpritePairOffsetsArePrunedWithDenominatorsKept();

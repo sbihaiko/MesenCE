@@ -191,6 +191,21 @@ def _fixed(v):
 CHR_INDEX_BASE = 0x40
 EMIT_TILE_INDEX = False
 
+# ADR-0178: the recorder bakes a sprite's OAM flips into the shape it records,
+# so on a CHR RAM game the sidecar's `tile` is a key the run time never looks
+# up and `source` carries the one it does. EMIT_FLIP_SOURCE writes both;
+# EMIT_FLIP_BAKED writes the baked key alone, which is a pack recorded before
+# the ADR.
+EMIT_FLIP_SOURCE = False
+EMIT_FLIP_BAKED = False
+
+
+def flip_hex(data: str) -> str:
+    """`data` read as if its OAM horizontal-flip bit had been baked in."""
+    b = bytes.fromhex(data)
+    return bytes(int(f"{x:08b}"[::-1], 2) for x in b).hex().upper()
+
+
 
 def _tiles_json(tiles):
     parts = []
@@ -199,7 +214,12 @@ def _tiles_json(tiles):
             parts.append("null")
             continue
         idx = f', "index": {CHR_INDEX_BASE + t}' if EMIT_TILE_INDEX else ""
-        parts.append(f'{{ "tile": "{tile_hex(t)}", "palette": "{PAL_HEX}"{idx} }}')
+        data = tile_hex(t)
+        src = ""
+        if EMIT_FLIP_SOURCE or EMIT_FLIP_BAKED:
+            data, src = flip_hex(data), data
+            src = f', "source": "{src}", "mirror": "H"' if EMIT_FLIP_SOURCE else ""
+        parts.append(f'{{ "tile": "{data}", "palette": "{PAL_HEX}"{idx}{src} }}')
     return "[" + ", ".join(parts) + "]"
 
 
@@ -290,7 +310,8 @@ def parse_hires(path: Path):
 
 
 def make_sheet_folder(root: Path, name: str, scale: int = 1, chr_rom: bool = False,
-                      sidecar_index: bool = True):
+                      sidecar_index: bool = True, flip_baked: bool = False,
+                      sidecar_source: bool = True):
     """An ADR-0153 author folder: a metatile vocabulary of 6 cells, a stitched
     map over cells 0..3, and an object over cells 0..1.
 
@@ -298,8 +319,13 @@ def make_sheet_folder(root: Path, name: str, scale: int = 1, chr_rom: bool = Fal
     manifest uses (ADR-0172); `sidecar_index` is what the sheet sidecars
     record, so the two can be set apart to reproduce a pack recorded before
     that ADR."""
-    global EMIT_TILE_INDEX
+    global EMIT_TILE_INDEX, EMIT_FLIP_SOURCE, EMIT_FLIP_BAKED
     EMIT_TILE_INDEX = chr_rom and sidecar_index
+    # ADR-0178: `flip_baked` bakes a horizontal flip into every sidecar key;
+    # `sidecar_source` decides whether the unflipped twin rides along, i.e.
+    # whether the pack was recorded before or after the ADR.
+    EMIT_FLIP_SOURCE = flip_baked and sidecar_source
+    EMIT_FLIP_BAKED = flip_baked and not sidecar_source
     folder = root / name
     sheets = folder / "textures" / "sheets"
     sheets.mkdir(parents=True)
@@ -711,6 +737,37 @@ def sheet_round_trip_tests(root: Path):
     edited_precedence_tests(root)
     screen_residency_tests(root)
     chr_rom_key_tests(root)
+    flip_baked_key_tests(root)
+
+
+def flip_baked_key_tests(root: Path):
+    """ADR-0178: a sprite shape is recorded with its OAM flips baked in, and on
+    a CHR RAM game hires.txt keys by tile data — so the baked bitmap is a key
+    nothing ever looks up and the rebuild has to emit the `source` the sidecar
+    carries instead (issue #181)."""
+    folder, _v, _c = make_sheet_folder(root, "flip-baked", flip_baked=True)
+    out = run("build", str(folder))
+    if out is None:
+        return
+    _imgs, tiles = parse_hires(folder / "textures" / "hires.txt")
+    got = {k for k, _p in tiles}
+    want = {tile_hex(s) for s in range(20)}
+    if got == want:
+        ok("ADR-0178: a flip-baked sidecar rebuilds with the unflipped keys the run time looks up")
+    else:
+        fail(f"flip-baked rebuild keys: missing {sorted(want - got)[:3]}, "
+             f"unexpected {sorted(got - want)[:3]}")
+
+    # A pack recorded before the ADR has no `source`. Its baked keys are
+    # recognised by the un-flip test and the build fails rather than emitting
+    # cells that would render nothing.
+    legacy, _v, _c = make_sheet_folder(root, "flip-baked-legacy", flip_baked=True,
+                                       sidecar_source=False)
+    out = run("build", str(legacy), expect=2)
+    if out is not None and "flip-baked tile key" in out and "re-record" in out:
+        ok("ADR-0178: a pack whose sidecars predate the ADR fails the build, naming the fix")
+    else:
+        fail(f"pre-ADR-0178 pack did not fail with the re-record message: {out}")
 
 
 def chr_rom_key_tests(root: Path):

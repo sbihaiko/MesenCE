@@ -212,6 +212,23 @@ def _is_index_key(token: str) -> bool:
     return len(token.strip()) < 32
 
 
+def _unflips(data: str) -> set:
+    """The three flipped readings of a 32-hex tile key (H, V, H+V). ADR-0178
+    uses them only to *recognise* a sidecar recorded before the ADR — a key
+    emitted from one of these would be a second source of truth for the same
+    tile, which ADR-0172 already refused."""
+    try:
+        b = bytes.fromhex(data)
+    except ValueError:
+        return set()
+    if len(b) != 16:
+        return set()
+    h = bytes(int(f"{x:08b}"[::-1], 2) for x in b)
+    v = b[0:8][::-1] + b[8:16][::-1]
+    hv = bytes(int(f"{x:08b}"[::-1], 2) for x in v)
+    return {h.hex().upper(), v.hex().upper(), hv.hex().upper()}
+
+
 def _index_token(index: int) -> str:
     """The index in the width HexUtilities::ToHex writes it — 2, 4, 6 or 8
     digits. The loader parses any width, but matching the emulator's own form
@@ -570,12 +587,17 @@ def _cell_crops(tiles, ox: int, oy: int, per_cell: int, scale: int, where: str, 
         # knows the tile only by its data".
         idx = entry.get("index")
         idx = idx if isinstance(idx, int) and idx >= 0 else None
-        out.append(((ox + (i % 2) * 8) * scale, (oy + (i // 2) * 8) * scale, data, pal, edited, idx))
+        # ADR-0178: the unflipped tile data, present only on an entry whose
+        # shape was recorded with its OAM flips baked in. None means "never
+        # flipped, or a sidecar older than the ADR".
+        src = str(entry.get("source") or "").strip().upper()
+        src = src if _HEX_TILE_RE.match(src) else None
+        out.append(((ox + (i % 2) * 8) * scale, (oy + (i // 2) * 8) * scale, data, pal, edited, idx, src))
 
 
 def _slice_sheet(sd: SheetDoc, scale: int, sheets_dir: Path) -> list:
-    """(x, y, tileData, palette, edited, index) for every 8x8 crop the sheet
-    resolves,
+    """(x, y, tileData, palette, edited, index, source) for every 8x8 crop the
+    sheet resolves,
     in sheet pixels at `scale`. `edited` says the crop's cell differs from the
     `*.orig.png` twin, i.e. the artist actually painted it. Crops that fall
     outside the PNG are dropped with a warning rather than emitting a tile that
@@ -982,6 +1004,9 @@ def cmd_build(args) -> int:
     index_keyed = any(_is_index_key(raw.split(",")[1]) for _cond, raw in tiles
                       if len(raw.split(",")) >= 2)
     missing_index = {}
+    # ADR-0178: crops of a pack recorded before the ADR, recognised - never
+    # repaired - by the un-flip test below.
+    baked_flip = {}
     for sd in sheet_docs:
         try:
             crops = _slice_sheet(sd, scale, sheets_dir)
@@ -991,12 +1016,24 @@ def cmd_build(args) -> int:
         entries = []
         seen = {}
         repeats = 0
-        for x, y, data, pal, edited, index in crops:
+        for x, y, data, pal, edited, index, unflipped in crops:
             if index_keyed:
                 if index is None:
                     missing_index[sd.name] = missing_index.get(sd.name, 0) + 1
                     continue
                 data = _index_token(index)
+            elif unflipped is not None:
+                # ADR-0178: the recorded bitmap has the sprite's OAM flips baked
+                # in, and the run time keys by the unflipped data - it mirrors
+                # the replacement art itself. On a data-keyed (CHR RAM) game the
+                # baked form is a key nothing ever looks up.
+                data = unflipped
+            elif (data, pal) not in keysrc_attrs and any(
+                    (u, pal) in keysrc_attrs for u in _unflips(data)):
+                # No `source`, yet an un-flip of this key is one the game really
+                # has: the sidecar predates ADR-0178 and this crop would be inert.
+                baked_flip[sd.name] = baked_flip.get(sd.name, 0) + 1
+                continue
             cond, rest = keysrc_attrs.get((data, pal), ("", ["1", "N"]))
             key = (cond, data, pal)
             row = (key, cond, ["0", data, pal, str(x), str(y)] + list(rest), edited)
@@ -1018,6 +1055,14 @@ def cmd_build(args) -> int:
             "comment": _emit_sheet_comment(rel, sd.kind, len(entries), sd.json_path.name),
             "entries": entries,
         })
+
+    if baked_flip:
+        for name, count in sorted(baked_flip.items()):
+            print(f"error: {name}: {count} crop(s) carry a flip-baked tile key the run time "
+                  f"never looks up, and the unflipped twin is in this game's key source — "
+                  f"repainting them would do nothing; re-record the pack with a build that "
+                  f"has ADR-0178", file=sys.stderr)
+        return 2
 
     if missing_index:
         for name, count in sorted(missing_index.items()):

@@ -257,6 +257,33 @@ namespace MesenSheets
 
 	//An 8x8 background tile exactly as hires.txt keys it: the 16 CHR bytes plus
 	//the 4-colour NES palette word ([31:24] = colour 0 ... [7:0] = colour 3).
+	//ADR-0178: the OAM flip transform, shared by the recorder that bakes it into
+	//a sprite's recorded shape and by the code that un-bakes it to recover the
+	//tile data hires.txt keys by. Per axis it is an involution - applying the
+	//same flags twice restores the original bytes - so one function serves both
+	//directions and neither can drift from the other.
+	inline void ApplyTileFlips(uint8_t* tileData, bool horizontalMirror, bool verticalMirror)
+	{
+		if(verticalMirror) {
+			for(int plane = 0; plane < 16; plane += 8) {
+				for(int row = 0; row < 4; row++) {
+					uint8_t tmp = tileData[plane + row];
+					tileData[plane + row] = tileData[plane + 7 - row];
+					tileData[plane + 7 - row] = tmp;
+				}
+			}
+		}
+		if(horizontalMirror) {
+			for(int i = 0; i < 16; i++) {
+				uint8_t b = tileData[i];
+				b = (uint8_t)(((b & 0xF0) >> 4) | ((b & 0x0F) << 4));
+				b = (uint8_t)(((b & 0xCC) >> 2) | ((b & 0x33) << 2));
+				b = (uint8_t)(((b & 0xAA) >> 1) | ((b & 0x55) << 1));
+				tileData[i] = b;
+			}
+		}
+	}
+
 	struct SheetTileKey
 	{
 		uint8_t TileData[16] = {};
@@ -267,6 +294,16 @@ namespace MesenSheets
 		//identity stays TileData + PaletteColors, so the vocabulary, the dedup
 		//and every grouping decision are unchanged by carrying it.
 		int32_t TileIndex = -1;
+
+		//ADR-0178: the tile data as the PPU fetched it, before the OAM flip bits
+		//were baked into TileData above, and which of the two axes were baked.
+		//On a CHR RAM game hires.txt keys by the data, and the run time looks up
+		//the unflipped form - it mirrors the replacement art itself - so this is
+		//the key a rebuilt pack must emit. Mirrors bit 0 = horizontal, bit 1 =
+		//vertical; 0 means the shape was never flipped and SourceTileData equals
+		//TileData. Deliberately outside the comparisons below, like TileIndex.
+		uint8_t SourceTileData[16] = {};
+		uint8_t Mirrors = 0;
 
 		bool operator==(const SheetTileKey& o) const
 		{

@@ -626,6 +626,24 @@ does not exist.
     comes back identical apart from the new field, and the only other files
     that change are the 52 `sprNNN` sidecars whose ADR-0174 `poses[]` list
     stops citing a fusion.
+  - **#181** (fixed, ADR-0178): the CHR RAM half of the defect ADR-0172
+    fixed for CHR ROM. `HdBuilderPpu::CaptureOam` bakes a sprite's OAM flip
+    bits into the shape it records — deliberately, so the two mirrored
+    halves of a figure can sit side by side on a sheet — but the run time
+    keys by the unflipped CHR and mirrors the replacement art itself, so
+    the baked bitmap is a key nothing ever looks up. Measured over the kit:
+    156 of Contra's 446 sprite-sheet tile entries (34 %) and 88 of
+    Zelda 1's 240 (36 %) had no `<tile>` line in the pack's own
+    `hires.txt`, and un-flipping recovered 155 and 88 of them; Mega Man 3
+    and Excitebike, both index-keyed, were at 2 of 451 and 2 of 383. A
+    third of the sprite cells an artist was invited to paint were inert.
+    The sidecar now carries `source` and `mirror`, and the rebuild emits
+    the unflipped key on a data-keyed game; a pack recorded before the ADR
+    is detected by an un-flip test and fails the build rather than being
+    silently repaired.
+    The residue after the fix is 5 cells across the kit, all sharing one
+    palette word 336 other entries carry with blank tile data — a different
+    cause, filed as #183.
   Logs: `runs/golden-20260912/panel-section2.md`, `panel-section3.md` (not
   versioned). The golden kit was re-recorded on the ADR-0172/0173 binary the
   same day: Mega Man 3 and Excitebike carry tile indices (CHR ROM, 1037 and

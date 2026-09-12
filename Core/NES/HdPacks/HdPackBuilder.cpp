@@ -860,6 +860,14 @@ MesenSheets::ShapeId HdPackBuilder::ShapeIdFor(const HdPpuTileInfo& tile)
 	//ADR-0172: a CHR ROM game's hires.txt keys by index, so the sidecar has to
 	//carry the index or the rebuilt pack matches nothing.
 	art.TileIndex = tile.IsChrRamTile ? -1 : tile.TileIndex;
+	//ADR-0178: the recorder bakes a sprite's OAM flips into TileData so the two
+	//mirrored halves of a figure can sit side by side on a sheet, but the run
+	//time keys by the unflipped data and mirrors the replacement art itself.
+	//Un-bake here - the transform is its own inverse per axis - so the sidecar
+	//can name the key a rebuilt pack has to emit on a CHR RAM game.
+	memcpy(art.SourceTileData, tile.TileData, 16);
+	MesenSheets::ApplyTileFlips(art.SourceTileData, tile.HorizontalMirroring, tile.VerticalMirroring);
+	art.Mirrors = (uint8_t)((tile.HorizontalMirroring ? 1 : 0) | (tile.VerticalMirroring ? 2 : 0));
 	MesenSheets::ShapeId id = (MesenSheets::ShapeId)_shapeTiles.size();
 	_shapeTiles.push_back(art);
 	_shapeHashes.push_back(shapeKey.GetHashCode());
