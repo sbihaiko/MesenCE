@@ -77,6 +77,21 @@ namespace MesenSheets
 	//Kept poses, by frames descending. Mirrors kMaxSheetFrames so a long
 	//session cannot grow the file without bound.
 	constexpr uint32_t kMaxPoses = 4096;
+	//---- ADR-0179 (F9.20): succession, cycles, sequences, variants --------
+	//
+	//A kept cluster in frame i continues as the kept cluster in frame i+1
+	//whose top-left is nearest, within this Manhattan distance in pixels. A
+	//running actor moves a few px per frame; a teleport ends the track.
+	constexpr int32_t kPoseTrackMaxMove = 16;
+	//A cycle is a period that repeats at least this many consecutive times
+	//on one track; the period is searched up to kPoseCycleMaxPeriod poses.
+	constexpr uint32_t kPoseCycleMinRepeats = 2;
+	constexpr uint32_t kPoseCycleMaxPeriod = 16;
+	//A sequence (non-looping animation) is a run of at least this many
+	//distinct poses, outside every cycle, seen identically at least
+	//kPoseCycleMinRepeats times; windows longer than the max are not tried.
+	constexpr uint32_t kPoseSequenceMinLength = 3;
+	constexpr uint32_t kPoseSequenceMaxLength = 32;
 	//---- ADR-0174 (issue #174): the sheet -> pose cross-reference ---------
 	//
 	//A group sheet names the poses its cells belong to, most-covered first. A
@@ -516,6 +531,14 @@ namespace MesenSheets
 	//identical sets merge, summing the frames they were seen in. Tiles are
 	//kept sorted (Dy, Dx, Node) so the set comparison and the file are
 	//deterministic for a given stream.
+	//ADR-0179 §2: one first-order succession edge, pose -> Pose, seen Count
+	//times on the retained stream.
+	struct PoseLink
+	{
+		uint32_t Pose = 0;
+		uint32_t Count = 0;
+	};
+
 	struct PoseEntry
 	{
 		std::vector<PoseTile> Tiles;
@@ -534,6 +557,32 @@ namespace MesenSheets
 		//never *proved not to be one*. Both parts are kept poses themselves,
 		//and they may be the same pose twice (two copies side by side).
 		std::vector<uint32_t> FusionOf;
+		//ADR-0179 §2: retained-frame transitions on which this pose was linked
+		//to itself (the figure held still or moved without changing shape).
+		uint32_t Hold = 0;
+		//ADR-0179 §2: the poses this one was linked to, most-linked first.
+		//Raw first-order evidence - see the fork in §Context; the animation
+		//itself is PoseStats::Cycles / Sequences.
+		std::vector<PoseLink> Next;
+		//ADR-0179 §4: the kept pose this one is a strict superset of, when the
+		//remainder is below kPoseMinTiles (a figure plus its projectile). -1
+		//means *not classified as a variant*, never *proved not to be one*.
+		int32_t VariantOf = -1;
+	};
+
+	//ADR-0179 §3: one closed loop (a cycle) or one non-looping run (a
+	//sequence) of kept poses found by repetition on the tracks. Poses are
+	//indexes into PoseStats::Poses; Hold is the median held frames per
+	//position, in RepeatCount-weighted frames, so a reader can play it at
+	//the game's own cadence. A pose may occur more than once in a cycle -
+	//Contra's player run is period 6 with one silhouette at two phases.
+	struct PoseRun
+	{
+		std::vector<uint32_t> Poses;
+		std::vector<uint32_t> Hold;
+		//Cycle: consecutive repetitions of the period on tracks, summed over
+		//tracks. Sequence: identical occurrences.
+		uint32_t Repeats = 0;
 	};
 
 	//What BuildPoses found, with the counts a reader needs to judge
@@ -551,6 +600,12 @@ namespace MesenSheets
 		//it but before the kMaxPoses cap.
 		uint32_t PosesFound = 0;
 		uint32_t PosesKept = 0;
+		//ADR-0179: tracks the linker followed, and what repetition found on
+		//them. Both vectors are ordered by Repeats descending, then by Poses,
+		//so "cycleNNN"/"seqNNN" is the array position.
+		uint32_t Tracks = 0;
+		std::vector<PoseRun> Cycles;
+		std::vector<PoseRun> Sequences;
 	};
 
 	//---- F9.18 (ADR-0166): the owning screen of a resident node -------------

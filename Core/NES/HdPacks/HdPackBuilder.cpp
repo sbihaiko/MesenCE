@@ -1355,7 +1355,13 @@ void HdPackBuilder::WritePoseFile(const string& folder, const MesenSheets::Vocab
 	MessageManager::Log("[HD Pack Builder] poses: " + std::to_string(stats.PosesFound) +
 		" silhouettes from " + std::to_string(stats.RetainedFrames) + " retained OAM frames, " +
 		std::to_string(stats.PosesKept) + " over the threshold, " +
-		std::to_string(stats.Poses.size()) + " kept after the cap" +
+		std::to_string(stats.Poses.size()) + " kept after the cap; " +
+		//ADR-0179: what repetition found on the tracks. Zero cycles on a run
+		//that showed a loop means the linker lost the figure, not that the
+		//game has no animation.
+		std::to_string(stats.Tracks) + " tracks, " +
+		std::to_string(stats.Cycles.size()) + " cycles, " +
+		std::to_string(stats.Sequences.size()) + " sequences" +
 		" -> textures/sheets/poses.json");
 }
 

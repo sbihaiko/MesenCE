@@ -769,6 +769,58 @@ def test_a_silhouette_already_composed_is_not_offered_again():
               str(pack.pose_rank(176, locked=[0])))
 
 
+def test_a_variant_ranks_below_its_base_and_runs_are_read():
+    """ADR-0179 §4: a figure plus its shot is a variant of the figure — the
+    band offers the base first and a layout starts from it, the variant
+    stays reachable. §3: cycles[]/sequences[] are read with their phases and
+    holds, and a run naming a dropped pose is dropped whole."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_pack(Path(tmp))
+        sheets = root / "textures" / "sheets"
+        _write_spr_group(sheets)
+        tiles = [{"node": n, "dx": d[0], "dy": d[1]} for n, d in sorted(_POSE_TILES.items())]
+        # The same figure with one more tile - more frames than the base, so
+        # frames order alone would put it first.
+        variant = {"id": "pose001", "frames": 900, "size": [2, 3], "variantOf": "pose000",
+                   "hold": 12, "next": [{"pose": "pose000", "count": 3}], "tiles": tiles}
+        doc = _poses_doc(extra_poses=[variant])
+        doc["poses"][0]["hold"] = 400
+        doc["cycles"] = [{"id": "cycle000", "period": 2, "repeats": 5,
+                          "poses": ["pose000", "pose001"], "hold": [8, 8]}]
+        doc["sequences"] = [{"id": "seq000", "repeats": 2,
+                             "poses": ["pose000", "pose777", "pose001"], "hold": [1, 1, 1]}]
+        _write_poses(sheets, doc)
+        pack = E.Pack(root)
+
+        by_id = {e.id: e for e in pack.poses.entries}
+        check(by_id["pose001"].variant and by_id["pose001"].variant_of == "pose000",
+              "variantOf is read as the base pose id", str(by_id["pose001"].variant_of))
+        check(not by_id["pose000"].variant and by_id["pose000"].hold == 400,
+              "the base is no variant and hold is read", str(by_id["pose000"].hold))
+        check(by_id["pose001"].next == (("pose000", 3),),
+              "next[] is read as (pose id, count) pairs", str(by_id["pose001"].next))
+        offered = [e.id for e in pack.pose_band_members(176)]
+        check(offered == ["pose000", "pose001"],
+              "the band offers the base before its variant despite fewer frames", str(offered))
+        chosen = pack.pose_for_anchor(4)
+        check(chosen is not None and chosen.id == "pose000",
+              "a layout starts from the base, not the variant", str(chosen and chosen.id))
+        check(pack.poses.by_id("pose001") is not None, "a variant is still reachable by id")
+
+        check([c.id for c in pack.poses.cycles] == ["cycle000"]
+              and pack.poses.cycles[0].period == 2 and pack.poses.cycles[0].repeats == 5
+              and pack.poses.cycles[0].hold == (8, 8),
+              "cycles[] is read with period, repeats and holds",
+              str([(c.id, c.period, c.repeats, c.hold) for c in pack.poses.cycles]))
+        check(pack.poses.sequences == [],
+              "a sequence naming a pose the file does not hold is dropped whole",
+              str([q.id for q in pack.poses.sequences]))
+        check(pack.pose_run_label(by_id["pose001"]) == "cycle000 2/2",
+              "a pose is captioned with its run and phase", pack.pose_run_label(by_id["pose001"]))
+        check(pack.pose_layout_key(by_id["pose001"]) < pack.pose_layout_key(E.Pose("x", 0, None, {0: (0, 0)})),
+              "a pose in a cycle lays out before one in no run")
+
+
 def test_a_fused_pose_is_never_offered_as_a_figure():
     """ADR-0177 §5: an entry the recorder labelled a fusion is two figures that
     touched, so the suggestion list must not offer it. It stays reachable by
@@ -982,6 +1034,7 @@ def main():
         test_pose_rank_drops_the_uncorrelated_and_collapses_one_anchor,
         test_a_silhouette_already_composed_is_not_offered_again,
         test_a_fused_pose_is_never_offered_as_a_figure,
+        test_a_variant_ranks_below_its_base_and_runs_are_read,
         test_a_pose_sidecar_without_fusion_labels_reads_as_before,
         test_a_malformed_fusion_label_is_ignored_not_fatal,
         test_pose_cells_keep_the_silhouette_and_never_repeat_a_node,

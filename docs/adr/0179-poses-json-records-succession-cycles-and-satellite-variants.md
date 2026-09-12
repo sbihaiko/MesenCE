@@ -1,8 +1,8 @@
 # ADR-0179: `poses.json` records pose succession, the cycles and sequences found on it, and labels a figure-plus-projectile as a variant of the figure
 
-- Status: accepted (2026-09-12, by the user, after the spike below) — not yet
-  in the code; delivery is Phase 9 slice F9.20 in
-  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (Part A §4)
+- Status: accepted (2026-09-12, by the user, after the spike below) —
+  implemented the same day as Phase 9 slice F9.20 in
+  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (Part A §3)
 - Date: 2026-09-12
 - Related: ADR-0170 (the pose sidecar this amends; its non-goals name
   "ordering poses into an animation" as a separate question — this is that
@@ -196,3 +196,15 @@ writes no `cycles`/`sequences` key at all.
   speed. A paused screen inflates one phase's hold, not the cycle.
 - Nothing here names anything. "cycle000" is the player's run only because a
   human recognises it; the file says period 6, repeats 11.
+- **What the Contra golden run actually wrote** (2026-09-12, at delivery):
+  5 cycles, 8 sequences, 690 tracks. The soldier's two 3-cycles of §Context
+  merge into one period-6 cycle (`000 011 010 000 016 008`, 5 repeats) —
+  the soldier alternates between them, so the shortest repeating period is
+  6, and the rule reports that. The player's run is *not* a cycle: no track
+  holds it for two full turns (the longest is 8 phases), because the entry
+  script taps R in bursts. It shows up as four 3–4-pose sequences instead.
+  A sequence that is a window of a cycle (a soldier who walked one and a
+  half turns and died) is folded into the cycle, matched around the loop, as
+  §3's "not part of any cycle" asks. A base pose alternating with its
+  variant (`pose001` ↔ `pose025`, the muzzle flash) is a period-2 cycle by
+  the letter of §3 and is written as one.

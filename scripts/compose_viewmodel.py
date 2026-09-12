@@ -174,6 +174,10 @@ class ComposeViewModel:
         """Whether this pack composes poses or the pre-ADR-0170 fallback."""
         return bool(self.pack and self.pack.poses)
 
+    def pose_run_label(self, pose) -> str:
+        """The cycle/sequence and phase the View captions a pose with, or ""."""
+        return self.pack.pose_run_label(pose) if self.uses_poses() else ""
+
     def pose_for(self, anchor):
         """The silhouette an anchor stands for, or None on the fallback path —
         the View draws this instead of the anchor's lone 8x8 tile."""
@@ -213,6 +217,10 @@ class ComposeViewModel:
                 continue  # two anchors, one silhouette: offer it once
             shown_ids.add(shown.id)
             out.append((anchor, shown))
+        # ADR-0179 §5: the artist's grid — poses of one cycle together and in
+        # phase order, the remainder after, each class keeping its most-seen-
+        # first order. On a sidecar without runs this is a no-op.
+        out.sort(key=lambda item: self.pack.pose_layout_key(item[1]))
         return out
 
     def row_spec(self) -> list:
