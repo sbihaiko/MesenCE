@@ -79,8 +79,12 @@ this ADR group differently, which only a re-record can do.
 3. The criterion is then read as: *of the frames in which A appears, in how
    many is there an A with a B at this offset*. Both `probAb` and `probBa`
    use the per-frame numerator over the per-frame denominator, and
-   `kSheetMinPairCount` / `kSheetMinPairProb` keep their current values and
-   their current meaning.
+   `kSheetMinPairCount` / `kSheetMinPairProb` keep their current **values**.
+
+   `kSheetMinPairProb` also keeps its meaning. `kSheetMinPairCount` does not:
+   the floor it applies to is now a count of frames, where it used to be a
+   count of instance pairs. Amended 2026-09-12, after measurement — see the
+   Consequences.
 
 4. `Appearances` stays in the file and in `adjacency.json` unchanged — it is
    the honest instance count and ADR-0173's `positions`/`frames` pair reads
@@ -104,6 +108,19 @@ this ADR group differently, which only a re-record can do.
   This is the cost ADR-0174 declined to pay for the split-figure problem, and
   it is paid here because there is no additive alternative: an edge that was
   never created cannot be cross-referenced later.
+- **`kSheetMinPairCount` becomes a floor on frames, and that removes some
+  groups.** Measured on Excitebike: nodes 183 and 184 formed the two-cell
+  group `spr033` on the strength of 8 instance pairs — but those 8 came from
+  **2 frames**, in which the shape was drawn 4 times each. The old rule saw
+  `count = 8 >= 3` and `prob = 8/8 = 1.0`; the new one sees `count = 2 < 3`
+  and drops the edge. This is the floor finally meaning what it says, and it
+  is the same concern `Accumulate`'s own comment already names about
+  `RepeatCount` — a handful of frames must not be able to manufacture the
+  minimum count. Two frames is not evidence of a group. The effect is small
+  and one-directional where the evidence is real: across the golden kit,
+  Mega Man 3 gains 18 placements and loses none, Zelda 1 gains 5 and loses
+  none, Contra gains 1 and loses none, and Excitebike loses exactly this pair
+  and gains none.
 - ADR-0174's `poses[]` join is unaffected and still needed — poses come from
   the silhouette stream, not from these edges.
 - The `E` of `spr016` is the acceptance case, and a pack re-recorded after
