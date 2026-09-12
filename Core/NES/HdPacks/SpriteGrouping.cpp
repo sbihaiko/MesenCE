@@ -37,30 +37,45 @@ namespace MesenSheets
 			return dy >= 0 ? 'S' : 'N';
 		}
 
-		//Instances per shape and, per ordered shape pair, how often each exact
-		//relative offset was seen. Both are counted once per *recorded* frame:
-		//RepeatCount is deliberately ignored, so a paused screen cannot
-		//manufacture the minimum count the criterion asks for.
+		//Per shape: the number of OAM instances (Appearances) and the number of
+		//frames it appeared in at all (NodeFrames, once per frame however many
+		//instances - the same quantity ADR-0173 named NodeFrames for floors[]).
+		//Per ordered shape pair: how many *frames* held each exact relative
+		//offset. Everything here is counted over the de-duplicated frame stream,
+		//RepeatCount deliberately ignored, so a paused screen cannot manufacture
+		//the minimum count the criterion asks for.
+		//
+		//ADR-0176 (issue #176): Offsets and NodeFrames are both per frame, so
+		//the grouping ratio divides like by like. Appearances stays as the
+		//honest instance count - adjacency.json reports it - but is no longer
+		//the denominator of that ratio.
 		struct SpriteStats
 		{
 			std::map<uint32_t, uint32_t> Appearances;
+			std::map<uint32_t, uint32_t> NodeFrames;
 			std::map<PairKey, std::map<Offset, uint32_t>> Offsets;
 		};
 
 		SpriteStats Accumulate(const std::vector<OamFrame>& frames, const Vocabulary& vocab)
 		{
 			SpriteStats stats;
+			//Reused across frames to keep the per-frame de-duplication cheap.
+			std::set<uint32_t> present;
+			std::set<std::pair<PairKey, Offset>> seenThisFrame;
 			for(const OamFrame& frame : frames) {
 				std::vector<int32_t> cells;
 				cells.reserve(frame.Entries.size());
 				for(const OamEntry& entry : frame.Entries) {
 					cells.push_back(vocab.Find(SpriteKey(entry.Shape)));
 				}
+				present.clear();
+				seenThisFrame.clear();
 				for(size_t i = 0; i < cells.size(); i++) {
 					if(cells[i] < 0) {
 						continue;
 					}
 					stats.Appearances[(uint32_t)cells[i]]++;
+					present.insert((uint32_t)cells[i]);
 					for(size_t j = 0; j < cells.size(); j++) {
 						//A single vocabulary cell cannot hold two positions in a
 						//group, so a shape paired with itself is not an edge.
@@ -72,8 +87,18 @@ namespace MesenSheets
 						if(std::abs(dx) > kSpriteMaxOffset || std::abs(dy) > kSpriteMaxOffset) {
 							continue;
 						}
-						stats.Offsets[PairKey((uint32_t)cells[i], (uint32_t)cells[j])][Offset(dx, dy)]++;
+						//ADR-0176 §2: the frame counts once when *some* instance
+						//of A has *some* instance of B at this offset. A second
+						//instance pair at the same offset in the same frame is
+						//the same evidence seen twice, not twice the evidence.
+						seenThisFrame.insert(std::make_pair(PairKey((uint32_t)cells[i], (uint32_t)cells[j]), Offset(dx, dy)));
 					}
+				}
+				for(uint32_t node : present) {
+					stats.NodeFrames[node]++;
+				}
+				for(const std::pair<PairKey, Offset>& seen : seenThisFrame) {
+					stats.Offsets[seen.first][seen.second]++;
 				}
 			}
 			return stats;
@@ -136,17 +161,26 @@ namespace MesenSheets
 			}
 			std::pair<Offset, uint32_t> dominant = DominantOffset(pair.second);
 			uint32_t count = dominant.second;
-			uint32_t appearA = stats.Appearances[pair.first.first];
-			uint32_t appearB = stats.Appearances[pair.first.second];
-			if(count < minCount || appearA == 0 || appearB == 0) {
+			uint32_t framesA = stats.NodeFrames[pair.first.first];
+			uint32_t framesB = stats.NodeFrames[pair.first.second];
+			if(count < minCount || framesA == 0 || framesB == 0) {
 				continue;
 			}
 			//The metatile criterion's denominator is "every placement of A in
-			//that direction"; the OAM analogue is "every appearance of A", so a
-			//sprite that is only sometimes at this offset - or that turns up
-			//without its partner - fails exactly like sand next to everything.
-			double probAb = (double)count / appearA;
-			double probBa = (double)count / appearB;
+			//that direction"; the OAM analogue is "every frame A is on screen",
+			//so a sprite that is only sometimes at this offset - or that turns
+			//up without its partner - fails exactly like sand next to
+			//everything.
+			//
+			//ADR-0176 (issue #176): the denominator used to be Appearances, the
+			//instance count, against a numerator that is per frame. A shape
+			//drawn twice in one frame then had an arithmetic ceiling of 0.5 and
+			//every one of its edges was dropped regardless of the evidence -
+			//the same biased denominator ADR-0173 fixed for floors[]. Both
+			//sides are per frame now; kSheetMinPairCount / kSheetMinPairProb
+			//keep their values and their meaning.
+			double probAb = (double)count / framesA;
+			double probBa = (double)count / framesB;
 			if(probAb < minProb || probBa < minProb) {
 				continue;
 			}

@@ -3910,6 +3910,119 @@ namespace
 		Check(!touchesDrifter, "BlocoP: a sprite that never holds one offset joins nothing");
 	}
 
+	//ADR-0176 (issue #176) fixture: shape 2 is drawn *twice* every frame - once
+	//rigidly beside shape 1, once alone 80px lower, well past kSpriteMaxOffset
+	//so the lone copy forms no offset of its own. This is the Contra "E" of
+	//"GAME"/"OVER": under the old instance-counted denominator shape 2 scored
+	//two appearances per frame against a numerator that can only rise once, an
+	//arithmetic ceiling of 0.5 under a threshold of 0.80, so the edge was
+	//dropped however rigid the pair was.
+	std::vector<OamFrame> RepeatedGlyphFrames(uint32_t frames)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < frames; f++) {
+			uint32_t x0 = 40 + f * 2;
+			uint32_t y0 = 60 + (f % 4);
+			OamFrame frame;
+			frame.FrameNumber = f;
+			OamEntry left;
+			left.Shape = 1;
+			left.X = (uint8_t)x0;
+			left.Y = (uint8_t)y0;
+			frame.Entries.push_back(left);
+			OamEntry right;
+			right.Shape = 2;
+			right.X = (uint8_t)(x0 + 8);
+			right.Y = (uint8_t)y0;
+			frame.Entries.push_back(right);
+			OamEntry repeat;
+			repeat.Shape = 2;
+			repeat.X = (uint8_t)(x0 + 8);
+			repeat.Y = (uint8_t)(y0 + 80);
+			frame.Entries.push_back(repeat);
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestSpriteGroupingAdmitsAShapeDrawnTwicePerFrame()
+	{
+		std::vector<OamFrame> frames = RepeatedGlyphFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		int32_t left = vocab.Find(MetatileKey{ { 1, kEmptyCell, kEmptyCell, kEmptyCell } });
+		int32_t glyph = vocab.Find(MetatileKey{ { 2, kEmptyCell, kEmptyCell, kEmptyCell } });
+		Check(left >= 0 && glyph >= 0, "BlocoP: both fixture shapes reach the vocabulary");
+		//ADR-0176 §4: Appearances stays the honest instance count, and the
+		//vocabulary Count it mirrors is untouched by this change.
+		Check(glyph >= 0 && vocab.Entries[(size_t)glyph].Count == 24,
+			"BlocoP: the repeated glyph still counts 2 instances per frame",
+			"count=" + std::to_string(glyph >= 0 ? vocab.Entries[(size_t)glyph].Count : 0));
+
+		std::vector<GroupEdge> edges = SelectSpriteEdges(frames, vocab, kSheetMinPairCount, kSheetMinPairProb);
+		Check(edges.size() == 1, "BlocoP: ADR-0176 - a shape drawn twice per frame still forms its edge",
+			"edges=" + std::to_string(edges.size()));
+		if(edges.size() != 1) {
+			return;
+		}
+		Check(edges[0].ProbAB >= 0.999 && edges[0].ProbBA >= 0.999,
+			"BlocoP: ADR-0176 - per-frame over per-frame reads 1.0, not 0.5",
+			std::to_string(edges[0].ProbAB) + "/" + std::to_string(edges[0].ProbBA));
+		std::vector<SheetGroup> groups = BuildSprites(frames, vocab);
+		Check(groups.size() == 1 && groups[0].Cells.size() == 2,
+			"BlocoP: ADR-0176 - the pair lands on one sheet instead of no sheet at all",
+			"groups=" + std::to_string(groups.size()));
+	}
+
+	//ADR-0176 §2: two copies of the *same* pair at the *same* offset in one
+	//frame are one piece of evidence seen twice. The tally rises once per frame.
+	std::vector<OamFrame> DoubledPairFrames(uint32_t frames)
+	{
+		std::vector<OamFrame> out;
+		for(uint32_t f = 0; f < frames; f++) {
+			uint32_t x0 = 40 + f * 2;
+			uint32_t y0 = 60 + (f % 4);
+			OamFrame frame;
+			frame.FrameNumber = f;
+			for(uint32_t copy = 0; copy < 2; copy++) {
+				OamEntry left;
+				left.Shape = 1;
+				left.X = (uint8_t)x0;
+				left.Y = (uint8_t)(y0 + copy * 80);
+				frame.Entries.push_back(left);
+				OamEntry right;
+				right.Shape = 2;
+				right.X = (uint8_t)(x0 + 8);
+				right.Y = (uint8_t)(y0 + copy * 80);
+				frame.Entries.push_back(right);
+			}
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestSpriteOffsetTallyRisesOncePerFrame()
+	{
+		std::vector<OamFrame> frames = DoubledPairFrames(12);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		Check(vocab.Entries.size() == 2 && vocab.Entries[0].Count == 24,
+			"BlocoP: the doubled fixture draws each shape twice a frame",
+			"count=" + std::to_string(vocab.Entries.empty() ? 0 : vocab.Entries[0].Count));
+
+		std::vector<GroupEdge> edges = SelectSpriteEdges(frames, vocab, kSheetMinPairCount, kSheetMinPairProb);
+		Check(edges.size() == 1, "BlocoP: the doubled pair forms one edge",
+			"edges=" + std::to_string(edges.size()));
+		if(edges.size() != 1) {
+			return;
+		}
+		//12, not 24: a second instance pair at the same offset in the same frame
+		//must not raise the tally.
+		Check(edges[0].Count == 12, "BlocoP: ADR-0176 - the pair tally counts frames, not instance pairs",
+			"count=" + std::to_string(edges[0].Count));
+		Check(edges[0].ProbAB >= 0.999 && edges[0].ProbBA >= 0.999,
+			"BlocoP: ADR-0176 - both sides of the ratio are per frame, so it still reads 1.0",
+			std::to_string(edges[0].ProbAB) + "/" + std::to_string(edges[0].ProbBA));
+	}
+
 	void TestSpriteGroupIsLaidOutAtItsOamOffsets()
 	{
 		std::vector<OamFrame> frames = SpriteFigureFrames(12);
@@ -5842,6 +5955,8 @@ int main()
 	TestSheetUpscaleIsNearestNeighbour();
 	TestSheetJsonCarriesTheGridDecision();
 	TestSpriteOffsetGroupingRejectsADrifter();
+	TestSpriteGroupingAdmitsAShapeDrawnTwicePerFrame();
+	TestSpriteOffsetTallyRisesOncePerFrame();
 	TestSpriteGroupIsLaidOutAtItsOamOffsets();
 	TestSpriteVocabularySheetListsEveryShape();
 	TestSpriteSheetJsonCarriesTheOffsetEvidence();

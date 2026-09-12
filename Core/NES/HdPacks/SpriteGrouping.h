@@ -21,8 +21,15 @@ namespace MesenSheets
 
 	//Two sprites join when they hold one *constant* relative offset over at
 	//least `minCount` recorded frames and that offset accounts for at least
-	//`minProb` of both shapes' appearances. A bullet that drifts past everything
-	//has many offsets and clears none of them.
+	//`minProb` of the frames each shape appears in. A bullet that drifts past
+	//everything has many offsets and clears none of them.
+	//
+	//ADR-0176 (issue #176): both sides of that ratio are counted once per
+	//frame. The offset tally rises at most once per frame - the frame counts
+	//when *some* instance of A has *some* instance of B there - and the
+	//denominator is the frames the shape appeared in, not its instance count,
+	//so a shape drawn twice in one frame is judged on the evidence instead of
+	//being excluded by an arithmetic ceiling.
 	std::vector<GroupEdge> SelectSpriteEdges(const std::vector<OamFrame>& frames, const Vocabulary& vocab, uint32_t minCount, double minProb);
 
 	//Those edges through SheetGrouping's DSU/BFS: components of
