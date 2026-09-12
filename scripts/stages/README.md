@@ -21,8 +21,31 @@ scripts/record_stages.sh <rom> <work>/stages <work>/by-stage 60
 
 The `.mss` files are not versioned: a CHR RAM state carries the game's
 graphics. `mint-stage1-30lives.txt` types the Konami code at the Contra title
-(30 lives) — load that state in the GUI to reach the later stages and save a
-slot at the start of each; those slots are the `.mss` the batch wants.
+(30 lives); the later stages are reached headlessly from it.
+
+## Reaching a later stage without a human
+
+A stage is played as a chain of short `headless_record` runs, each loading the
+previous `.mss` and saving the next, steered by RAM read off the state with
+`scripts/mss_ram.py <file.mss> [addr...]`. For Contra: lives `$0032`, screen
+index `$0064`, stage `$0030` (0 = stage 1), player X/Y `$0334`/`$031A`, player
+state `$0090` (1 alive, 2 dying), the stage-1 core's HP `$0585` (32, one per
+hit); the fine scroll is `((ppu.tmpVideoRamAddr & 0x1f) << 3) | ppu.xScroll`.
+Two search shapes were enough on 2026-09-12: a greedy explorer over ~20
+candidate windows per hop (`Nf RB` then a jump then `RB`), keeping the window
+with the largest `screen * 256 + scroll` that lost no life, crossed stage 1;
+a depth-first search over 60 f windows (prone burst, standing burst, jump,
+aim up, step left/right, wait) with survival as the constraint and the core's
+HP as the objective beat the wall in four prone windows. What the search
+found and a human would not guess: from the small platform in front of the
+core only prone shots are at its height — standing shots pass above it from
+the platform and below it from the ground. The chain and every intermediate
+state live under `runs/golden-20260912/contra/play/` (unversioned); the
+minted states are `stages/stage1-boss.mss` (the wall, with Bill respawning on
+the top-left platform) and `stages/stage2-base.mss` (the corridor, Bill
+spawning). A save-state boundary is not input-neutral: the same 600 f prone
+script run in one piece and in ten 60 f pieces diverged after ~100 f, so a
+chain is reproducible only as a chain, not as one concatenated script.
 
 Measured 2026-09-12 (60 s from each stage-1 state): Contra 2 cycles (the
 player's period-6 run on 10-tile poses and the soldier's on 8-tile ones),
@@ -30,6 +53,10 @@ Mega Man 3 7 (the run as `001 002 001 003`, period 4 with the middle frame
 twice, 34 repeats), Zelda 1 15 (Link's two-frame walk in every direction,
 hold 6), Excitebike 8 (the wheels, 398 repeats). Cycles with a period above
 6 and a hold near 100 are echoes of the script's own loop, not animations.
+From the two later Contra states the same day: `stage1-boss` 69 poses, 3
+cycles (all period 2, a pose alternating with its muzzle-flash variant);
+`stage2-base` 163 poses, 10 cycles — the base soldier's run as three period-3
+cycles of 8-tile poses with hold 4, plus a period-4 cycle of 6–8-tile poses.
 
 A run from a state counts its <seconds> and its script from the state's
 frame (`headless_record` prints both); before 2026-09-12 both were absolute
