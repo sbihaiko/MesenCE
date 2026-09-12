@@ -565,6 +565,57 @@ does not exist.
   and carried unreadable chrome (#169, #171). All five issues (#167–#171)
   are closed and Done on the board.
 
+- **The panel ran its own sections 2 and 3, and produced four defects**
+  (2026-09-12): the first pass on a pack that actually applies, by two
+  evaluators given no access to the code or the ADRs. Both sections **failed**,
+  and both verdicts held up under re-measurement, though neither report was
+  right as written — a cold evaluator errs in both directions, and every
+  headline was re-derived before it became an issue.
+  - **#174** (fixed, ADR-0174): 35 sprite pairs at `count == coFrames == 1338`
+    at one constant offset — nodes never once on screen apart — split across
+    `spr###` sheets. A `sprNNN` sidecar now names the `poses.json` ids its
+    cells belong to, ordered most-covered first. The join rather than a
+    grouping change, because grouping changes invalidate every recorded pack:
+    verified by re-recording Contra, where all 130 sheet PNGs and `poses.json`
+    come back byte-identical and every sidecar matches once the new keys are
+    removed. `spr018` and `spr023` both name `pose001`, which covers 9 of the
+    9 nodes of the two combined.
+  - **#175** (half fixed, ADR-0175; half withdrawn): a group sheet states its
+    blank slots instead of filling them — the grid is the bounding box of a
+    BFS layout, so a non-rectangular figure holes by construction, and filling
+    would put two crops under one tile key, which the rebuild silently
+    collapses. The report's second half was wrong: the 14 background nodes on
+    no sheet are screen-resident, and 14 of 14 resolve to an existing
+    `backgrounds/screenNNN.orig.png` through ADR-0166's `screens[]`. Its
+    original count, 37, was wrong too — it did not follow `aliases`.
+  - **#172** (fixed): `check-coverage` never said which layout it expected,
+    advised `run build first` when `build` had run, and let a baseline that
+    `build` had overwritten be compared against itself. The issue's own
+    diagnosis — two incompatible layouts — was wrong; `cmd_build` reads both
+    shapes under one rule. The fix is the messages plus a `samefile` refusal.
+  - **#173** (fixed): `build` announced 644 surviving keys of 10057 as good
+    news. It now reports a key-by-key delta (which surfaces the 1 key the
+    sheets *add*, invisible to a subtraction), states that dropping keys is
+    expected under ADR-0043/0156/0160 and points the artist at
+    `backgrounds/screenNNN.png`, and groups the 76 warnings about the
+    recorder's own sheet geometry instead of burying the actionable lines.
+  - **Still open, deliberately**: `spr016` renders `GA M` / `OV R` because its
+    `E` is in *zero* slots, not because a repeat was de-duplicated. The glyph
+    occurs twice per frame, so its ADR-0153 §2 `appearances` denominator is
+    double every partner's and every edge from it is dropped — **a tile that
+    repeats within one frame can never join a group.** Same biased-denominator
+    shape as ADR-0173, and it wants the same treatment: measure the
+    distribution before choosing the rule.
+  - Section 2's pass criterion was amended the same day (§5, Phase 9
+    validation): it judged sheet cells, which ADR-0171 had already stopped
+    being the unit, and was unpassable by construction.
+  Logs: `runs/golden-20260912/panel-section2.md`, `panel-section3.md` (not
+  versioned). The golden kit was re-recorded on the ADR-0172/0173 binary the
+  same day: Mega Man 3 and Excitebike carry tile indices (CHR ROM, 1037 and
+  392), Contra and Zelda 1 correctly carry none (CHR RAM); Excitebike's
+  rebuilt pack was measured back at 100 % `bg tile match rate`, the first
+  independent confirmation of ADR-0172 outside Mega Man 3.
+
 ### 4. Roadmap — pending work, by slice
 
 #### Phase 6 — Community pack auto-install (MEP Recipe v1)
@@ -655,12 +706,16 @@ default viewport, letterbox inside the viewport, lint the bare root
 
 **Status.** F9.0–F9.17 shipped 2026-09-05 → 2026-09-07 (record in §3);
 F9.18 in delivery — code and GUI acceptance are done, the human panel is
-not: the 2026-09-12 proxy pass reached only its cold-read section, because
-the pack it judged matched 0 % of its background tiles (ADR-0172). The
-golden kit was re-recorded on the fixed binary the same day
-(`runs/golden-20260912/`, not versioned) so sections 2 and 3 can be run
-against a pack that actually applies. The problem statement below is kept
-as the baseline the validation protocol measures against.
+not. Two proxy passes ran on 2026-09-12, both by evaluators with no access
+to the code: the first reached only its cold-read section, because the pack
+it judged matched 0 % of its background tiles (ADR-0172); the second, on the
+golden kit re-recorded that day (`runs/golden-20260912/`, not versioned),
+ran sections 2 and 3 and failed both, yielding #172–#175 and ADR-0174/0175
+(record in §3). Section 2's criterion was amended in the same pass. What is
+still owed is the panel itself — a person, not a proxy; an agent that wrote
+the feature cannot be the artist who has never seen it, and both passes are
+labelled proxies for that reason. The problem statement below is kept as the
+baseline the validation protocol measures against.
 
 **Problem.** The bootstrap `auto/` pack emits `Chr_N.png` sheets in CHR
 order: thousands of 8×8 fragments with no neighbourhood — half a logo,
@@ -732,11 +787,31 @@ summary line in this PRD's shipped record.
    scene metatiles / objects named correctly ("bush", "tree", "Link"); HUD
    and font sheets recognised as such at a glance; no cell described as
    "half of something".
-2. **Side-by-side with the artist pack** (F9.1–F9.3). Zelda 1 `auto/`
-   sheets next to the community `mep/` sheets: every subject the artist
-   drew as one figure appears as one cell/object in `auto/`. Pass: no
-   subject the artist treated as a unit is split across cells in ours;
-   list the exceptions.
+2. **Side-by-side with the artist pack** (F9.1–F9.3). A golden game's
+   `auto/` sheets next to a community `mep/` pack's: every subject the
+   artist drew as one figure is **addressable as one unit** in `auto/`.
+   Pass: no subject the artist treated as a unit is unreachable as a unit
+   in ours; list the exceptions.
+
+   **The unit is the pose, not the sheet cell** (amended 2026-09-12, on
+   ADR-0171, which made the pose the unit of the sprite layer and the
+   `sprNNN` figure the fallback). The criterion as first written judged
+   sheet cells, and by 2026-09-12 it had become impossible to pass by
+   construction: the grouper deliberately cuts a shared sub-figure out to
+   its own sheet — a pair of legs worn by two torsos is stored once — so a
+   whole character is *always* split across `sprNNN` cells, on every pack,
+   for a reason the architecture is not going to give up. A sprite subject
+   therefore passes when one `poses.json` entry covers it, reachable from
+   the sheets through ADR-0174's `poses[]`; a background subject still
+   passes on the cell/object surface, where nothing forces a split, and a
+   screen-resident cell passes on its `backgrounds/screenNNN.png`
+   (ADR-0156, ADR-0166) — a captured screen **is** a painting surface, and
+   the 2026-09-12 audit failed to count it as one.
+
+   Zelda 1 was the nominated game and is not usable: its artist pack is
+   distributed only via Google Drive, which this project does not fetch
+   (Phase 6 non-goals). Contra is the substitute — the artist pack is on
+   an allow-listed host.
 3. **Find-and-edit test** (F9.4). Task card: "make every bush purple",
    "put a face on the rock", "draw a road marking on the ramp". From
    opening the folder to seeing the change in the emulator: pass when
