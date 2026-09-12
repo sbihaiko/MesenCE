@@ -407,6 +407,7 @@ class Sheet:
         self.png_path = sd.png_path
         ref = str(sd.doc.get("reference") or "").strip()
         self.orig_path = sheets_dir / ref if ref else None
+        self._scale = None
 
     @property
     def name(self) -> str:
@@ -422,6 +423,44 @@ class Sheet:
         if x < 0 or y < 0 or x + self.unit > img.width or y + self.unit > img.height:
             raise ComposeError(f"{self.name}: cell art falls outside the twin ({x},{y},{self.unit})")
         return img.crop(x, y, self.unit, self.unit)
+
+    @property
+    def scale(self) -> int:
+        """N such that the painted sheet is N x its 1x twin, 1 when the twin is
+        missing or the pair is not an integer multiple. Same factor
+        `mep_build._sheet_scale` derives, read off the pixels rather than the
+        sidecar so a sheet an artist resized is measured as it is on disk."""
+        if self._scale is None:
+            self._scale = self._measure_scale()
+        return self._scale
+
+    def _measure_scale(self) -> int:
+        if not self.orig_path or not self.orig_path.is_file() or not self.png_path.is_file():
+            return 1
+        try:
+            painted = sheet_repaint.read_png(self.png_path)
+            twin = sheet_repaint.read_png(self.orig_path)
+        except Exception:
+            return 1
+        if twin.width <= 0 or twin.height <= 0:
+            return 1
+        if painted.width % twin.width or painted.height % twin.height:
+            return 1
+        n = painted.width // twin.width
+        return n if n >= 1 and n == painted.height // twin.height else 1
+
+    def cell_image_painted(self, cell: dict, scale: int):
+        """The cell's art at `scale`, cropped from the painted sheet itself so a
+        composed sheet inherits the upscale the bootstrap emitted (and any paint
+        already on it) instead of a nearest blow-up of the twin. Returns None
+        when this sheet is not at that scale, leaving the caller its fallback."""
+        if scale <= 1 or self.scale != scale or not self.png_path.is_file():
+            return None
+        img = sheet_repaint.read_png(self.png_path)
+        x, y, unit = int(cell["x"]) * scale, int(cell["y"]) * scale, self.unit * scale
+        if x < 0 or y < 0 or x + unit > img.width or y + unit > img.height:
+            return None
+        return img.crop(x, y, unit, unit)
 
 
 # Node -> art pixel sources, exactly the sheets ADR-0164 §3 names: the
@@ -460,6 +499,21 @@ class Pack:
                                 vocabulary=set(self.adjacency.sp))
         self._bg_home = None   # (canonical node -> (Sheet, cell)) cache
         self._sp_home = None
+        self._scale = None
+
+    @property
+    def scale(self) -> int:
+        """The `<scale>` every sheet of this pack shares (ADR-0153): a bootstrap
+        pack is emitted upscaled, with a 1x `*.orig.png` twin beside each sheet.
+        A composed sheet has to be written at this factor too, or
+        `mep_build.py build` rejects the whole pack ("all sheets of a pack share
+        one <scale>") and the compose -> export -> paint -> rebuild loop never
+        closes. Sheets that disagree leave the pack at 1x — the build reports
+        that mismatch with a better message than this module could."""
+        if self._scale is None:
+            found = {s.scale for s in self.sheets if s.kind in _ALL_SHEET_KINDS and s.cells}
+            self._scale = found.pop() if len(found) == 1 else 1
+        return self._scale
 
     def layer_kinds(self) -> list:
         """Kinds actually present, in _SHEET_RANK order — the layer stack
@@ -528,6 +582,21 @@ class Pack:
         if sprite:
             raise ComposeError(f"no sheet shows sprite node {node} — re-run the bootstrap")
         return self._screen_art(node)
+
+    def node_art_at(self, node: int, sprite: bool, scale: int):
+        """`node_art` at the pack's `<scale>`. The painted sheet that shows the
+        node is the source when it is at that scale, so the composed sheet
+        carries the same pixels the rest of the pack does; anything else falls
+        back to a nearest blow-up of the 1x art (never a resample — ADR-0154
+        §7 forbids a soft edge on 8-bit tile art)."""
+        if scale <= 1:
+            return self.node_art(node, sprite)
+        home = self.sprite_home(node) if sprite else self.background_home(node)
+        if home is not None:
+            painted = home[0].cell_image_painted(home[1], scale)
+            if painted is not None:
+                return painted
+        return self.node_art(node, sprite).upscale(scale)
 
     def _screen_art(self, node: int):
         """Crop a screen-owned background node out of its owning capture."""
@@ -875,7 +944,7 @@ class Pack:
             n += 1
         return f"usr{n:03d}"
 
-    def compose_sheet(self, kind: str, nodes: list, placements: list = None):
+    def compose_sheet(self, kind: str, nodes: list, placements: list = None, scale: int = 1):
         """Lay the kept cells out as the composed sheet, without touching disk.
 
         Returns `(canvas, cells, columns, unit)` - the pixels `export` writes
@@ -887,21 +956,28 @@ class Pack:
         `pose_cells` - the sprite layer composes poses (ADR-0171 §5), and a
         pose keeps its own shape on the sheet so the character appears
         assembled instead of spread across a row of slivers. Without it the
-        cells wrap in reading order, which is what the object layer wants."""
+        cells wrap in reading order, which is what the object layer wants.
+
+        `scale` draws that same layout at the pack's `<scale>`: the pixels grow,
+        the cell records stay in 1x sheet coordinates, because that is the
+        geometry the sidecar describes and `mep_build` multiplies back out."""
         if kind not in ("object", "sprite"):
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
             raise ComposeError("nothing to export")
+        scale = max(1, int(scale))
         sprite = kind == "sprite"
         arts, unit = [], None
         for node in nodes:
-            art = self.node_art(node, sprite)
+            art = self.node_art_at(node, sprite, scale)
             if unit is None:
-                unit = art.width
-            if art.width != unit or art.height != unit:
-                raise ComposeError(f"node {node} art is {art.width}x{art.height}, not {unit}x{unit}")
+                unit = art.width // scale
+            if art.width != unit * scale or art.height != unit * scale:
+                raise ComposeError(
+                    f"node {node} art is {art.width}x{art.height}, "
+                    f"not {unit * scale}x{unit * scale}")
             arts.append(art)
-        stride = unit + GUTTER
+        stride = (unit + GUTTER) * scale
         if placements:
             coords = [(cx, cy) for _n, cx, cy in placements]
             columns = max(cx for cx, _cy in coords) + 1
@@ -910,18 +986,19 @@ class Pack:
             columns = max(1, min(len(nodes), 16))
             coords = [(i % columns, i // columns) for i in range(len(nodes))]
             rows = (len(nodes) + columns - 1) // columns
-        canvas = sheet_repaint.Image(columns * stride + GUTTER, rows * stride + GUTTER)
+        canvas = sheet_repaint.Image(columns * stride + GUTTER * scale,
+                                     rows * stride + GUTTER * scale)
         adj = self.adjacency
         cells = []
         for i, node in enumerate(nodes):
             cx, cy = coords[i]
-            x = GUTTER + cx * stride
-            y = GUTTER + cy * stride
+            x = (GUTTER + cx * (unit + GUTTER)) * scale
+            y = (GUTTER + cy * (unit + GUTTER)) * scale
             canvas.paste(arts[i], x, y)
             src = adj.sp.get(node) if sprite else adj.bg.get(node)
             cells.append({
                 "index": i,
-                "x": x, "y": y,
+                "x": x // scale, "y": y // scale,
                 "count": src.appearances if sprite and src else (src.count if src else 0),
                 "context": "" if sprite else (src.context if src else "scene"),
                 "metatile": node,
@@ -935,9 +1012,13 @@ class Pack:
         """Write a composed sheet (`usrNNN`) to `to_dir` (default the pack's own
         sheets dir). `kind` is `object` or `sprite`; `nodes` are the kept node
         ids in sheet order; `band` is the quantised bottom for a sprite band.
-        Returns the sidecar stem. The PNG and its `*.orig.png` twin start
-        identical (1x); the artist paints `usrNNN.png` in an image editor and
-        `mep_build.py` fans the painted cells back out, as for any sheet."""
+        Returns the sidecar stem. The sheet is written at the pack's `<scale>`
+        and its `*.orig.png` twin at 1x, the same pair every bootstrap sheet
+        forms: a pack whose sheets are 4x rejects a 1x sheet outright ("all
+        sheets of a pack share one <scale>"), so writing the twin's size here
+        would break `mep_build.py build` for the whole pack. The artist paints
+        `usrNNN.png` in an image editor and `mep_build.py` fans the painted
+        cells back out, as for any sheet."""
         if kind not in ("object", "sprite"):
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
@@ -946,9 +1027,12 @@ class Pack:
         to_dir = Path(to_dir) if to_dir is not None else self.sheets_dir
         if not to_dir.is_dir():
             raise ComposeError(f"{to_dir}: not a folder")
+        scale = self.scale
+        painted = (self.compose_sheet(kind, nodes, placements, scale=scale)[0]
+                   if scale > 1 else canvas.clone())
         name = self.next_free_name(to_dir)
-        sheet_repaint.write_png(to_dir / f"{name}.png", canvas)
-        sheet_repaint.write_png(to_dir / f"{name}.orig.png", canvas.clone())
+        sheet_repaint.write_png(to_dir / f"{name}.png", painted)
+        sheet_repaint.write_png(to_dir / f"{name}.orig.png", canvas)
         doc = {
             "version": SHEET_VERSION,
             "kind": kind,

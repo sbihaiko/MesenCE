@@ -47,7 +47,7 @@ def _node_color(node, band=0):
     return (r, g, b, 255)
 
 
-def _write_sheet(dirpath, stem, kind, cells, unit, columns, extra=None):
+def _write_sheet(dirpath, stem, kind, cells, unit, columns, extra=None, scale=1):
     """Sidecar + PNG + orig twin for one ADR-0153 sheet. `cells` is a list of
     dicts already carrying x/y/metatile; each cell's region in the image is a
     solid colour keyed off its metatile, so art is resolvable and comparable."""
@@ -60,7 +60,13 @@ def _write_sheet(dirpath, stem, kind, cells, unit, columns, extra=None):
         m = int(c["metatile"])
         art = _solid(unit, _node_color(m))
         canvas.paste(art, int(c["x"]), int(c["y"]))
-    sheet_repaint.write_png(dirpath / f"{stem}.png", canvas)
+    painted = canvas.clone() if scale == 1 else canvas.upscale(scale)
+    if scale > 1:
+        # Mark the upscaled sheet so a composed sheet sourced from it is
+        # distinguishable from a blow-up of the 1x twin: that is the difference
+        # between inheriting the pack's art and re-deriving it.
+        painted.set(0, 0, (1, 2, 3, 255))
+    sheet_repaint.write_png(dirpath / f"{stem}.png", painted)
     sheet_repaint.write_png(dirpath / f"{stem}.orig.png", canvas.clone())
     doc = {
         "version": 1,
@@ -141,7 +147,7 @@ _BG_NODES = {
 _OBJ000 = [0, 1, 2, 3]
 
 
-def make_pack(root: Path, with_obj_sheet: bool = True):
+def make_pack(root: Path, with_obj_sheet: bool = True, scale: int = 1):
     """A synthetic pack recorded since F9.17: metatiles + sprites + (optionally)
     obj000 sheets and an adjacency.json consistent with the above numbers."""
     sheets = root / "textures" / "sheets"
@@ -155,16 +161,16 @@ def make_pack(root: Path, with_obj_sheet: bool = True):
         _bg_cell(4, 5, 250),
         _bg_cell(5, 6, 200),
     ]
-    _write_sheet(sheets, "metatiles", "metatiles", cells, 16, 4)
+    _write_sheet(sheets, "metatiles", "metatiles", cells, 16, 4, scale=scale)
     # Object sheet: the group whose members the acceptance test must re-rank
     # first after a seed + lock.
     if with_obj_sheet:
         obj_cells = [_bg_cell(i, m, 100, context="scene") for i, m in enumerate(_OBJ000)]
-        _write_sheet(sheets, "obj000", "object", obj_cells, 16, 4)
+        _write_sheet(sheets, "obj000", "object", obj_cells, 16, 4, scale=scale)
     # Sprite vocabulary: nodes 0..3 have art (Ryu, two ground enemies, a
     # projectile); node 4 is a far-field decoy with no sheet art.
     sprite_cells = [_sprite_cell(idx, m, (3000, 500, 400, 900)[idx]) for idx, m in enumerate((0, 1, 2, 3))]
-    _write_sheet(sheets, "sprites", "sprites", sprite_cells, 8, 4)
+    _write_sheet(sheets, "sprites", "sprites", sprite_cells, 8, 4, scale=scale)
 
     # ADR-0166 (F9.18): whole-screen captures the screen-owned nodes live on.
     # Node 7 is resident (no sheet cell) and is drawn on two captures, at scale
@@ -801,6 +807,62 @@ def test_pack_without_poses_ranks_nodes_as_before():
         check(nodes[:2] == [1, 2], "the node ranking is untouched", str(nodes))
 
 
+def test_export_writes_the_sheet_at_the_packs_scale():
+    """A bootstrap pack is emitted upscaled (4x sheet, 1x twin). A composed
+    sheet written at 1x makes `mep_build.py build` reject the whole pack -
+    "all sheets of a pack share one <scale>" - so the compose -> export ->
+    paint -> rebuild loop never closes on a real pack. Issue #169."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td), scale=4)
+        pack = E.Pack(root)
+        check(pack.scale == 4, "the pack reports its sheets' scale", str(pack.scale))
+        name = pack.export("object", [0, 2, 3], seed=0, locked=[2, 3])
+        sheets = root / "textures" / "sheets"
+        painted = sheet_repaint.read_png(sheets / f"{name}.png")
+        twin = sheet_repaint.read_png(sheets / f"{name}.orig.png")
+        check(painted.width == twin.width * 4 and painted.height == twin.height * 4,
+              "the sheet is written at the pack's scale, the twin at 1x",
+              f"{painted.width}x{painted.height} vs {twin.width}x{twin.height}")
+        doc = json.loads((sheets / f"{name}.json").read_text())
+        logical_w = doc["columns"] * (doc["gridUnit"] + doc["gutter"]) + doc["gutter"]
+        check(painted.width == logical_w * 4,
+              "the sidecar geometry stays 1x, so mep_build derives scale 4",
+              f"{painted.width} vs {logical_w}")
+        check(all(int(c["x"]) % 1 == 0 and int(c["x"]) < logical_w for c in doc["cells"]),
+              "cell records stay inside the 1x sheet the sidecar describes")
+        # The pixels come from the painted sheet itself (the marker the fixture
+        # stamps on it), not from a blow-up of the twin.
+        cell0 = doc["cells"][0]
+        mark = painted.get(cell0["x"] * 4, cell0["y"] * 4)
+        source = sheet_repaint.read_png(sheets / "metatiles.png").get(
+            int(_first_metatile_xy(doc, sheets)[0]) * 4, int(_first_metatile_xy(doc, sheets)[1]) * 4)
+        check(mark == source, "composed art is cropped from the painted sheet", f"{mark} vs {source}")
+
+
+def _first_metatile_xy(doc, sheets):
+    """Where the first composed cell's node lives on the metatiles sheet."""
+    node = doc["cells"][0]["metatile"]
+    src = json.loads((sheets / "metatiles.json").read_text())
+    for c in src["cells"]:
+        if c["metatile"] == node:
+            return c["x"], c["y"]
+    raise AssertionError(f"node {node} is not on the metatiles sheet")
+
+
+def test_a_1x_pack_still_exports_a_1x_pair():
+    """The old behaviour is the special case, not a second code path."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_pack(Path(td))
+        pack = E.Pack(root)
+        check(pack.scale == 1, "a 1x pack reports scale 1", str(pack.scale))
+        name = pack.export("object", [0, 2], seed=0, locked=[2])
+        sheets = root / "textures" / "sheets"
+        a = sheet_repaint.read_png(sheets / f"{name}.png")
+        b = sheet_repaint.read_png(sheets / f"{name}.orig.png")
+        check((a.width, a.height) == (b.width, b.height) and a.px == b.px,
+              "sheet and twin start identical at 1x", f"{a.width}x{a.height} vs {b.width}x{b.height}")
+
+
 def main():
     tests = [
         test_missing_adjacency_tells_artist_to_rebootstrap,
@@ -826,6 +888,8 @@ def main():
         test_pose_cells_keep_the_silhouette_and_never_repeat_a_node,
         test_pose_placements_reach_the_exported_sheet,
         test_pack_without_poses_ranks_nodes_as_before,
+        test_export_writes_the_sheet_at_the_packs_scale,
+        test_a_1x_pack_still_exports_a_1x_pair,
     ]
     for t in tests:
         t()

@@ -79,6 +79,11 @@ class EditorApp:
         # exactly the bug that cost the first GUI pass; None means the fixed
         # pre-ADR-0171 grid, which `compose_editor_layout` reproduces verbatim.
         self._row_metrics = None
+        # Secondary text, resolved against the theme this window really runs
+        # under: the fixed #555/#444 this file used to pass were unreadable in
+        # dark mode, and so were the frame titles ttk styles from the theme.
+        self.muted = self._muted_foreground()
+        ttk.Style(root).configure("TLabelframe.Label", foreground=self.muted)
 
         top = ttk.Frame(root, padding=6)
         top.pack(fill="x")
@@ -95,7 +100,7 @@ class EditorApp:
         ttk.Button(top, text="Export", command=self.export).pack(side="left")
 
         self.status = tk.StringVar(value="no pack open")
-        ttk.Label(root, textvariable=self.status, foreground="#555").pack(fill="x", padx=6)
+        ttk.Label(root, textvariable=self.status, foreground=self.muted).pack(fill="x", padx=6)
 
         # The export preview: the pixels `Export` writes, drawn from the very
         # image the engine composes (ADR-0165 - the artist approves the file,
@@ -104,10 +109,10 @@ class EditorApp:
         # widgets their requested size first, and when it served the tab body
         # first this preview was the strip that got clipped away - the one
         # thing the artist is meant to approve before pressing Export.
-        pane = ttk.LabelFrame(root, text="Export preview — the sheet Export writes", padding=4)
+        pane = self._labelframe(root, "Export preview — the sheet Export writes", padding=4)
         pane.pack(side="bottom", fill="x", padx=6, pady=(0, 6))
         self.export_lbl = tk.StringVar(value="nothing composed yet — seed a cell")
-        ttk.Label(pane, textvariable=self.export_lbl, foreground="#555").pack(anchor="w")
+        ttk.Label(pane, textvariable=self.export_lbl, foreground=self.muted).pack(anchor="w")
         self.canvas = tk.Canvas(pane, height=120, background="#2b2b33", highlightthickness=0)
         self.canvas.pack(fill="x")
 
@@ -120,13 +125,13 @@ class EditorApp:
         # expand) squeezed this panel off the right edge on a narrow window.
         side = ttk.Frame(body)
         side.pack(side="right", fill="y", padx=(8, 0))
-        ttk.Label(side, text="Selection", foreground="#444").pack(anchor="w")
+        ttk.Label(side, text="Selection", foreground=self.muted).pack(anchor="w")
         self.preview = tk.Canvas(side, width=L.PREVIEW_BOX, height=L.PREVIEW_BOX,
                                  background="#1e1e24", highlightthickness=0)
         self.preview.pack()
         self.preview_tk = None   # keep the PhotoImage alive
         self.preview_lbl = tk.StringVar(value="—")
-        ttk.Label(side, textvariable=self.preview_lbl, foreground="#444",
+        ttk.Label(side, textvariable=self.preview_lbl, foreground=self.muted,
                   wraplength=L.PREVIEW_ART).pack(anchor="w", pady=(4, 0))
 
         nb = ttk.Notebook(body)
@@ -141,6 +146,29 @@ class EditorApp:
 
         if folder.is_dir():
             self.load_pack(folder)
+
+    def _labelframe(self, parent, text: str, **kw):
+        """A `ttk.LabelFrame` whose title is a label this file colours itself.
+        The aqua theme ignores `TLabelframe.Label`'s `foreground`, so styling
+        alone left every frame title in the theme's own grey — unreadable on a
+        dark background, which is how the F9.18 panel rehearsal found them. A
+        `labelwidget` is honoured by every theme."""
+        frame = ttk.LabelFrame(parent, **kw)
+        frame.configure(labelwidget=ttk.Label(frame, text=text, foreground=self.muted))
+        return frame
+
+    def _muted_foreground(self) -> str:
+        """Secondary text colour for this window, measured off the theme's own
+        frame background through `winfo_rgb` — the same call
+        `render_compose_editor.py` resolves colours with, so what the render
+        shows is what the artist reads. Falls back to the light-theme grey when
+        Tk cannot answer."""
+        try:
+            bg = ttk.Style(self.root).lookup("TFrame", "background") or self.root.cget("background")
+            r, g, b = self.root.winfo_rgb(bg)
+        except Exception:
+            return L.MUTED_ON_LIGHT
+        return L.muted_foreground(r, g, b)
 
     # ---- pack ---------------------------------------------------------------
 
@@ -161,22 +189,31 @@ class EditorApp:
         self._fill_bg_seed_list()
         self._fill_band_selector()
         self.refresh_all()
+        # Open on art, not on a column of ids: the seed list reads "#0 count
+        # 2626 x1y1", and until something is highlighted the Selection panel is
+        # an empty box, so a pack opens looking like a spreadsheet. Selecting
+        # the first row draws its pixels straight away.
+        if self.bg_seed.size():
+            self.bg_seed.selection_clear(0, "end")
+            self.bg_seed.selection_set(0)
+            self.bg_seed.activate(0)
+            self._show_selected(self.bg_seed)
 
     # ---- background / object layer ------------------------------------------
 
     def _build_bg_tab(self):
         f = self.bg_tab
-        left = ttk.LabelFrame(f, text="Background cells (most seen first)", padding=4)
+        left = self._labelframe(f, "Background cells (most seen first)", padding=4)
         left.pack(side="left", fill="y", padx=4, pady=4)
         # The lists fill the window (`expand`), so the requested height is a
         # floor, not the size: a tall request squeezed the tab's own buttons
         # off the bottom edge on a shorter window.
-        self.bg_seed = tk.Listbox(left, width=46, height=12)
+        self.bg_seed = tk.Listbox(left, width=46, height=12, exportselection=False)
         self.bg_seed.pack(fill="both", expand=True)
         ttk.Button(left, text="Seed selected", command=self._seed_bg).pack(pady=2)
-        mid = ttk.LabelFrame(f, text="Ranked neighbours — lock to compose", padding=4)
+        mid = self._labelframe(f, "Ranked neighbours — lock to compose", padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
-        self.bg_sugg = tk.Listbox(mid, width=46, height=12)
+        self.bg_sugg = tk.Listbox(mid, width=46, height=12, exportselection=False)
         self.bg_sugg.pack(fill="both", expand=True)
         ttk.Button(mid, text="Lock suggestion", command=self._lock_bg).pack(pady=2)
         ttk.Button(mid, text="Recompute (seed + locks)", command=self.refresh_all).pack(pady=2)
@@ -209,12 +246,12 @@ class EditorApp:
 
     def _build_sprite_tab(self):
         f = self.sprite_tab
-        sel = ttk.LabelFrame(f, text="Floor band (bottom edge, 8 px) — seed palette", padding=4)
+        sel = self._labelframe(f, "Floor band (bottom edge, 8 px) — seed palette", padding=4)
         sel.pack(side="left", fill="y", padx=4, pady=4)
         self.band_var = tk.StringVar()
         self.band_box = ttk.Combobox(sel, textvariable=self.band_var, state="readonly", width=12)
         self.band_box.pack()
-        self.sp_seed = tk.Listbox(sel, width=24, height=10)
+        self.sp_seed = tk.Listbox(sel, width=24, height=10, exportselection=False)
         self.sp_seed.pack(fill="both", expand=True, pady=4)
         ttk.Button(sel, text="Seed selected", command=self._seed_sprite).pack(pady=2)
 
@@ -223,8 +260,8 @@ class EditorApp:
         # locked cell to swap it for the next recommendation (the butterfly: the
         # lock set changed, so the whole row re-ranks), right-click to remove a
         # lock. Removing the last lock clears the composition.
-        mid = ttk.LabelFrame(
-            f, text="Composed band — click + to lock · click a locked cell to swap · right-click to remove",
+        mid = self._labelframe(
+            f, "Composed band — click + to lock · click a locked cell to swap · right-click to remove",
             padding=4)
         mid.pack(side="left", fill="both", expand=True, padx=4, pady=4)
         self.row_canvas = tk.Canvas(mid, height=L.EMPTY_ROW_H, background="#1e1e24",
@@ -232,9 +269,9 @@ class EditorApp:
         self.row_canvas.pack(fill="x")
         self.row_canvas.bind("<Button-1>", self._row_left)
         self.row_canvas.bind("<Button-3>", self._row_right)
-        sugg = ttk.LabelFrame(mid, text="Ranked band members (coFrames) — or lock a pick here", padding=2)
+        sugg = self._labelframe(mid, "Ranked band members (coFrames) — or lock a pick here", padding=2)
         sugg.pack(fill="both", expand=True, pady=(4, 0))
-        self.sp_sugg = tk.Listbox(sugg, width=42, height=8)
+        self.sp_sugg = tk.Listbox(sugg, width=42, height=8, exportselection=False)
         self.sp_sugg.pack(fill="both", expand=True)
         btns = ttk.Frame(sugg)
         btns.pack(fill="x", pady=(2, 0))
@@ -468,15 +505,21 @@ class EditorApp:
 
     def _show_selected(self, listbox):
         """Show the actual pixels of the highlighted cell in the preview panel,
-        so a composer sees the art instead of decoding "#47"."""
-        self.preview.delete("all")
-        self.preview_lbl.set("—")
-        self.preview_tk = None
+        so a composer sees the art instead of decoding "#47".
+
+        A list that has just *lost* its selection says nothing about what the
+        artist is looking at, so it leaves the panel alone: every Listbox here
+        is `exportselection=False`, but Tk still delivers a <<ListboxSelect>>
+        with an empty selection in other cases, and clearing the art on it
+        blanked the panel the moment a second list was touched."""
         if not self.vm.pack:
             return
         node = self._selected_node(listbox)
         if node is None:
             return
+        self.preview.delete("all")
+        self.preview_lbl.set("—")
+        self.preview_tk = None
         sprite = listbox in (self.sp_seed, self.sp_sugg)
         kind = "sprite" if sprite else "object"
         # A sprite list names an anchor, and ADR-0171 makes the pose behind it
@@ -538,7 +581,8 @@ class EditorApp:
         self.canvas.config(height=h + 4)
         self.canvas.create_image(2, 2, image=img, anchor="nw")
         self.export_lbl.set(L.export_caption(name, cells, columns, unit,
-                                             sheet.width, sheet.height, scale))
+                                             sheet.width, sheet.height, scale,
+                                             self.vm.pack.scale))
 
     def export(self):
         if not self.vm.pack:

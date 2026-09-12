@@ -227,9 +227,51 @@ ROW_NEEDS_SEED = ("seed a band member (left) — it becomes the first locked "
                   "cell")
 
 
-def export_caption(name, cells, columns, unit, width, height, scale):
+def export_caption(name, cells, columns, unit, width, height, scale, pack_scale=1):
     """The export preview's one-line caption: the file `Export` writes, its
     cell count and grid, its real pixel size, and the magnification it is
-    being shown at (so "big on screen" is never mistaken for "big on disk")."""
+    being shown at (so "big on screen" is never mistaken for "big on disk").
+
+    `width`/`height` are the 1x geometry; the sheet is written at the pack's
+    `<scale>`, so the caption states the size the file really takes and names
+    the factor - a caption that quoted the 1x size would send an artist looking
+    for a 37x19 PNG that is 148x76 on disk."""
+    if pack_scale > 1:
+        return (f"{name}.png — {cells} cell(s), {columns} column(s) of {unit}px, "
+                f"{width * pack_scale}×{height * pack_scale} px at {pack_scale}× "
+                f"(shown at {scale}× of 1x art)")
     return (f"{name}.png — {cells} cell(s), {columns} column(s) of {unit}px, "
             f"{width}×{height} px (shown at {scale}×)")
+
+
+# Secondary text ("muted") colours. The editor hard-coded #555/#444 for its
+# status line, the selection caption and the export caption: readable on the
+# light aqua theme it was checked against, near-invisible on the dark theme Tk
+# hands it when the system is in dark mode - which is where the F9.18 panel
+# rehearsal read them. The colour is therefore derived from the background the
+# widget really sits on instead of being fixed.
+MUTED_ON_LIGHT = "#555555"
+MUTED_ON_DARK = "#b9b9c6"
+
+# Relative luminance below this counts as a dark surface (WCAG, 0..1). 0.18 is
+# mid grey: everything below it needs light ink, everything above it dark ink.
+DARK_SURFACE = 0.18
+
+
+def relative_luminance(r, g, b, depth=65535):
+    """WCAG relative luminance of an (r, g, b) triple, 0..1. `depth` is the
+    maximum channel value - 65535 for `winfo_rgb`, 255 for an 8-bit colour.
+    The channels are linearised first, so the contrast ratios computed from
+    this are the ones a reader actually perceives."""
+    depth = float(depth or 1)
+
+    def lin(v):
+        v = max(0.0, min(1.0, v / depth))
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+
+def muted_foreground(r, g, b, depth=65535):
+    """A secondary text colour that stays readable on the given background."""
+    return MUTED_ON_DARK if relative_luminance(r, g, b, depth) < DARK_SURFACE else MUTED_ON_LIGHT

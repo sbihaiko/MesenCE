@@ -241,6 +241,31 @@ def test_the_captions_say_what_lands_on_disk():
     for part in ("usr003.png", "4 cell(s)", "4 column(s) of 16px", "69×18 px",
                  "shown at 6×"):
         check(part in caption, f"the export caption states {part!r}", caption)
+    # A pack whose sheets are 4x gets a 4x sheet (issue #169), so the caption
+    # has to name the size the file really takes - quoting the 1x geometry
+    # would send the artist looking for a PNG that is not there.
+    scaled = L.export_caption("usr003", 4, 4, 16, 69, 18, 6, 4)
+    for part in ("276×72 px", "at 4×"):
+        check(part in scaled, f"the caption of a 4x pack states {part!r}", scaled)
+    check("69×18 px" not in scaled, "the 1x geometry is not quoted as the file size", scaled)
+
+
+def test_secondary_text_is_readable_on_either_theme():
+    """The status line, the selection caption and the frame titles were fixed
+    #555/#444: readable on the light aqua theme they were checked against,
+    invisible on a dark one. Issue #171."""
+    light = L.muted_foreground(0xEE, 0xEE, 0xEE, 255)
+    dark = L.muted_foreground(0x2B, 0x2B, 0x33, 255)
+    check(light == L.MUTED_ON_LIGHT, "a light surface keeps the dark grey", light)
+    check(dark == L.MUTED_ON_DARK, "a dark surface gets a light grey", dark)
+    check(L.muted_foreground(0xEE * 257, 0xEE * 257, 0xEE * 257) == light,
+          "16-bit channels (winfo_rgb) read the same as 8-bit")
+    # Contrast against the surface it sits on, both ways round.
+    for bg, fg in ((0xEE, light), (0x2B, dark)):
+        surface = L.relative_luminance(bg, bg, bg, 255)
+        ink = L.relative_luminance(int(fg[1:3], 16), int(fg[3:5], 16), int(fg[5:7], 16), 255)
+        ratio = (max(surface, ink) + 0.05) / (min(surface, ink) + 0.05)
+        check(ratio >= 3.0, f"secondary text on 0x{bg:02x} clears 3:1", f"{ratio:.2f}:1")
     check("seed" in L.ROW_NEEDS_SEED and "tab" in L.ROW_WRONG_LAYER,
           "both row placeholders tell the artist what to do next")
 
@@ -389,6 +414,32 @@ def test_both_preview_panels_survive_a_small_window(root):
               f"reaches {bottom} px of a {root.winfo_height()} px window")
 
 
+def test_a_pack_opens_on_art_and_each_list_keeps_its_own_selection(root):
+    """Issue #171: a pack used to open on a column of ids with an empty
+    Selection panel, and - because Tk Listboxes export their selection by
+    default - picking a row in any other list cleared the first one and blanked
+    the art the artist was looking at."""
+    with tempfile.TemporaryDirectory() as td:
+        app, _dialogs = _open_editor(root, make_pack(Path(td) / "pack"))
+        check(app.bg_seed.curselection() == (0,),
+              "opening a pack selects the first background cell",
+              str(app.bg_seed.curselection()))
+        opened = app.preview_lbl.get()
+        check(opened.startswith("#") and "—" not in opened,
+              "so the Selection panel shows art, not a dash", opened)
+
+        app.sprite_tab.master.select(app.sprite_tab)
+        root.update()          # the list has to be viewable to receive the event
+        _select(app.sp_seed, 0)
+        root.update()
+        check(app.bg_seed.curselection() == (0,),
+              "picking a sprite row leaves the background selection alone",
+              str(app.bg_seed.curselection()))
+        shown = app.preview_lbl.get()
+        check(shown.startswith("#") and "sprite" in shown,
+              "and the preview follows the list that was just touched", shown)
+
+
 def main():
     host_free = [
         test_drawing_and_hit_testing_are_inverse,
@@ -401,11 +452,13 @@ def main():
         test_the_row_cell_is_cut_to_the_art_the_row_holds,
         test_scales_are_integers_that_fit_and_never_vanish,
         test_the_captions_say_what_lands_on_disk,
+        test_secondary_text_is_readable_on_either_theme,
     ]
     windowed = [
         test_real_window_composes_a_band_through_its_own_widgets,
         test_real_row_canvas_draws_every_cell_where_a_click_can_reach_it,
         test_both_preview_panels_survive_a_small_window,
+        test_a_pack_opens_on_art_and_each_list_keeps_its_own_selection,
     ]
     for t in host_free:
         t()
