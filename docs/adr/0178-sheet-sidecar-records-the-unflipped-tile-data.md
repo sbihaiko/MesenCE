@@ -142,8 +142,11 @@ this is the CHR RAM half.
 - Every reader of `cells[].tiles[]` — `mep_build`, `compose_engine`,
   `mep_lint`, `sheet_repaint` — must keep treating the new fields as optional.
   The composition editor does not use them: it composes by node.
-- The two crops each of Mega Man 3 and Excitebike that still match nothing are
-  not explained by this ADR and are not a flip. They are left open.
+- The five crops across the kit that still match nothing are not explained by
+  this ADR and are not a flip: they share one palette word, `FF013403`, which
+  336 other sidecar entries carry with all-zero tile data. Filed as issue #183
+  rather than folded in here — it is a different cause and may not need a
+  decision at all.
 - The `[HDPack-Debug] bg tile match rate` line stays the ground truth for "did
   this pack actually apply". It reports *background* tiles, so it will not move
   when this lands — the regression test for this ADR is the key-coverage count

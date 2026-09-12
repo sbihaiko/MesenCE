@@ -641,6 +641,9 @@ does not exist.
     the unflipped key on a data-keyed game; a pack recorded before the ADR
     is detected by an un-flip test and fails the build rather than being
     silently repaired.
+    The residue after the fix is 5 cells across the kit, all sharing one
+    palette word 336 other entries carry with blank tile data — a different
+    cause, filed as #183.
   Logs: `runs/golden-20260912/panel-section2.md`, `panel-section3.md` (not
   versioned). The golden kit was re-recorded on the ADR-0172/0173 binary the
   same day: Mega Man 3 and Excitebike carry tile indices (CHR ROM, 1037 and
