@@ -269,13 +269,27 @@ class Pose:
     """One entry of `poses.json`: a silhouette the recorder actually saw in a
     single OAM frame, normalised to its own top-left (ADR-0170 §1)."""
 
-    __slots__ = ("id", "frames", "size", "tiles")
+    __slots__ = ("id", "frames", "size", "tiles", "fusion_of")
 
-    def __init__(self, pose_id, frames, size, tiles):
+    def __init__(self, pose_id, frames, size, tiles, fusion_of=()):
         self.id = pose_id
         self.frames = frames
         self.size = size          # (cols, rows) in cells, as the file states it
         self.tiles = tiles        # {node: (dx, dy)}, 8 px cell offsets
+        # ADR-0177: the pose ids this entry's tiles split into, when the
+        # recorder classified it as two figures that touched. Empty means "not
+        # classified" — a pack recorded before ADR-0177 has it empty
+        # everywhere, which is exactly how it read before the field existed.
+        self.fusion_of = tuple(fusion_of)
+
+    @property
+    def fused(self) -> bool:
+        """True when the recorder labelled this entry a fusion (ADR-0177).
+
+        False covers both "classified and not a fusion" and "never
+        classified" — the file cannot tell them apart, and a consumer that
+        needs to must look at whether *any* entry carries the field."""
+        return bool(self.fusion_of)
 
     def layout(self) -> dict:
         """The figure's layout — the same shape `walk_layout` returns."""
@@ -390,7 +404,12 @@ class Poses:
             tiles.setdefault(node, (dx, dy))
         if not tiles:
             return None
-        pose = Pose(pose_id, frames, size, tiles)
+        fusion = entry.get("fusionOf")
+        if isinstance(fusion, (list, tuple)):
+            fusion = tuple(f for f in fusion if isinstance(f, str) and f)
+        else:
+            fusion = ()
+        pose = Pose(pose_id, frames, size, tiles, fusion)
         if size is None:
             pose.size = pose.extent()
         return pose
@@ -719,6 +738,12 @@ class Pack:
         hits = self.poses.containing(anchor)
         if not hits:
             return None
+        # ADR-0177 §5: laying a figure out from a fused entry hands the artist
+        # a figure plus a bystander. Prefer the entries that are figures; fall
+        # back to the full list only when every candidate is labelled, so a
+        # subject the recorder never saw alone is not lost to the label.
+        unfused = [p for p in hits if not p.fused]
+        hits = unfused or hits
         if not members:
             return hits[0]
         wanted = set(members)
@@ -809,6 +834,11 @@ class Pack:
             return []
         out = []
         for pose in self.poses.entries:
+            # ADR-0177: a fused entry is two figures that touched. Offering it
+            # here puts a figure-plus-bystander in the artist's suggestion
+            # list, and both its parts are entries of this same file.
+            if pose.fused:
+                continue
             if standing.intersection(self.pose_bottom_nodes(pose)):
                 out.append(pose)
         return out

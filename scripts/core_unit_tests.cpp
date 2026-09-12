@@ -4683,6 +4683,187 @@ namespace
 		return out;
 	}
 
+	//ADR-0177 (issue #179): two figures that touched are one DSU cluster, so
+	//the pack gains an entry holding both. The `apart` frames put them on
+	//opposite sides of the screen (two clusters, two poses); the `together`
+	//ones put them a joining gap apart (one cluster of eight).
+	std::vector<OamFrame> PoseFusionFrames(uint32_t apart, uint32_t together, uint32_t farX)
+	{
+		std::vector<OamFrame> out;
+		uint32_t frameNumber = 0;
+		for(uint32_t f = 0; f < apart; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(21, 100, 100));
+			frame.Entries.push_back(OamAt(22, 108, 100));
+			frame.Entries.push_back(OamAt(23, 100, 108));
+			frame.Entries.push_back(OamAt(24, 108, 108));
+			frame.Entries.push_back(OamAt(31, farX, 100));
+			frame.Entries.push_back(OamAt(32, farX + 8, 100));
+			frame.Entries.push_back(OamAt(33, farX, 108));
+			frame.Entries.push_back(OamAt(34, farX + 8, 108));
+			out.push_back(frame);
+		}
+		for(uint32_t f = 0; f < together; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(21, 100, 100));
+			frame.Entries.push_back(OamAt(22, 108, 100));
+			frame.Entries.push_back(OamAt(23, 100, 108));
+			frame.Entries.push_back(OamAt(24, 108, 108));
+			//8 px from the first figure's right column: the DSU joins them.
+			frame.Entries.push_back(OamAt(31, 116, 100));
+			frame.Entries.push_back(OamAt(32, 124, 100));
+			frame.Entries.push_back(OamAt(33, 116, 108));
+			frame.Entries.push_back(OamAt(34, 124, 108));
+			out.push_back(frame);
+		}
+		return out;
+	}
+
+	void TestAPoseThatSplitsIntoTwoPosesIsLabelledAFusion()
+	{
+		std::vector<OamFrame> frames = PoseFusionFrames(5, 3, 200);
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 3,
+			"BlocoP: two figures seen apart and once touching are three entries",
+			"poses=" + std::to_string(stats.Poses.size()));
+		if(stats.Poses.size() != 3) {
+			return;
+		}
+
+		//Frames descending: the two lone figures (5 each) outrank the fused
+		//one (3), so the fusion is the last entry.
+		const PoseEntry& fused = stats.Poses[2];
+		Check(fused.Tiles.size() == 8 && fused.Frames == 3,
+			"BlocoP: the fused entry holds both figures' tiles",
+			"tiles=" + std::to_string(fused.Tiles.size()) + " frames=" + std::to_string(fused.Frames));
+		Check(fused.FusionOf.size() == 2,
+			"BlocoP: a pose that splits into two poses is labelled a fusion of them",
+			"fusionOf=" + std::to_string(fused.FusionOf.size()));
+		Check(stats.Poses[0].FusionOf.empty() && stats.Poses[1].FusionOf.empty(),
+			"BlocoP: neither lone figure is labelled a fusion",
+			"pose0=" + std::to_string(stats.Poses[0].FusionOf.size())
+				+ " pose1=" + std::to_string(stats.Poses[1].FusionOf.size()));
+		if(fused.FusionOf.size() != 2) {
+			return;
+		}
+		Check((fused.FusionOf[0] == 0 && fused.FusionOf[1] == 1)
+			|| (fused.FusionOf[0] == 1 && fused.FusionOf[1] == 0),
+			"BlocoP: the label names the two entries the tiles split into",
+			std::to_string(fused.FusionOf[0]) + "+" + std::to_string(fused.FusionOf[1]));
+		//ADR-0177 §2: candidates are tried in file order, so the part named
+		//first is the best-ranked one the split admits.
+		Check(fused.FusionOf[0] == 0,
+			"BlocoP: the first part named is the better-ranked of the two",
+			"first=" + std::to_string(fused.FusionOf[0]));
+
+		//ADR-0177 §6: PosesForCells must not spend its budget on a fusion.
+		std::vector<SheetCell> cells;
+		for(const PoseTile& tile : fused.Tiles) {
+			SheetCell cell;
+			cell.Metatile = (int32_t)tile.Node;
+			cells.push_back(cell);
+		}
+		std::vector<uint32_t> refs = PosesForCells(stats, cells);
+		bool citesFusion = false;
+		for(uint32_t ref : refs) {
+			if(ref == 2) {
+				citesFusion = true;
+			}
+		}
+		Check(!citesFusion && refs.size() == 2,
+			"BlocoP: an ADR-0174 poses[] list cites the figures, never the fusion",
+			"refs=" + std::to_string(refs.size()) + " citesFusion=" + std::to_string(citesFusion ? 1 : 0));
+	}
+
+	void TestAFigurePlusALooseProjectileIsNotAFusion()
+	{
+		//The same first figure, but what joins it is three tiles that are never
+		//a cluster of their own - a muzzle flash, a projectile. Three is below
+		//kPoseMinTiles, so the remainder is not a pose and nothing is labelled.
+		std::vector<OamFrame> frames;
+		uint32_t frameNumber = 0;
+		for(uint32_t f = 0; f < 5; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(21, 100, 100));
+			frame.Entries.push_back(OamAt(22, 108, 100));
+			frame.Entries.push_back(OamAt(23, 100, 108));
+			frame.Entries.push_back(OamAt(24, 108, 108));
+			frame.Entries.push_back(OamAt(25, 100, 116));
+			frames.push_back(frame);
+		}
+		for(uint32_t f = 0; f < 4; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(21, 100, 100));
+			frame.Entries.push_back(OamAt(22, 108, 100));
+			frame.Entries.push_back(OamAt(23, 100, 108));
+			frame.Entries.push_back(OamAt(24, 108, 108));
+			frame.Entries.push_back(OamAt(25, 100, 116));
+			frame.Entries.push_back(OamAt(41, 116, 100));
+			frame.Entries.push_back(OamAt(42, 124, 100));
+			frame.Entries.push_back(OamAt(43, 132, 100));
+			frames.push_back(frame);
+		}
+
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 2,
+			"BlocoP: a figure alone and the same figure with a projectile are two entries",
+			"poses=" + std::to_string(stats.Poses.size()));
+		for(size_t i = 0; i < stats.Poses.size(); i++) {
+			Check(stats.Poses[i].FusionOf.empty(),
+				"BlocoP: tiles that never stood alone are part of the figure, not a fusion",
+				"pose" + std::to_string(i) + " fusionOf=" + std::to_string(stats.Poses[i].FusionOf.size()));
+		}
+	}
+
+	void TestTwoCopiesOfOneShapeAreAFusionOfItWithItself()
+	{
+		//ADR-0177 §1: the two parts may be the same pose. Two identical
+		//enemies walking into each other is the commonest case in the kit.
+		std::vector<OamFrame> frames;
+		uint32_t frameNumber = 0;
+		for(uint32_t f = 0; f < 5; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(51, 100, 100));
+			frame.Entries.push_back(OamAt(52, 108, 100));
+			frame.Entries.push_back(OamAt(53, 100, 108));
+			frame.Entries.push_back(OamAt(54, 108, 108));
+			frames.push_back(frame);
+		}
+		for(uint32_t f = 0; f < 3; f++) {
+			OamFrame frame;
+			frame.FrameNumber = frameNumber++;
+			frame.Entries.push_back(OamAt(51, 100, 100));
+			frame.Entries.push_back(OamAt(52, 108, 100));
+			frame.Entries.push_back(OamAt(53, 100, 108));
+			frame.Entries.push_back(OamAt(54, 108, 108));
+			frame.Entries.push_back(OamAt(51, 116, 100));
+			frame.Entries.push_back(OamAt(52, 124, 100));
+			frame.Entries.push_back(OamAt(53, 116, 108));
+			frame.Entries.push_back(OamAt(54, 124, 108));
+			frames.push_back(frame);
+		}
+
+		Vocabulary vocab = BuildSpriteVocabulary(frames);
+		PoseStats stats = BuildPoses(frames, vocab);
+		Check(stats.Poses.size() == 2,
+			"BlocoP: one enemy and a pair of them are two entries",
+			"poses=" + std::to_string(stats.Poses.size()));
+		if(stats.Poses.size() != 2) {
+			return;
+		}
+		const PoseEntry& pair = stats.Poses[1];
+		Check(pair.FusionOf.size() == 2 && pair.FusionOf[0] == 0 && pair.FusionOf[1] == 0,
+			"BlocoP: two copies of one shape are a fusion of that pose with itself",
+			"fusionOf=" + std::to_string(pair.FusionOf.size()));
+	}
+
 	void TestPoseClustersJoinAcrossEightPixelsAndNotNine()
 	{
 		//Literal pixels, not kPoseMaxGap: ADR-0170 §1 pins "within 8 px on both
@@ -5970,6 +6151,9 @@ int main()
 	TestAdjacencySpriteSidecarRoundTrips();
 	TestPosesSharingATileStayTwoPoses();
 	TestPoseClustersJoinAcrossEightPixelsAndNotNine();
+	TestAPoseThatSplitsIntoTwoPosesIsLabelledAFusion();
+	TestAFigurePlusALooseProjectileIsNotAFusion();
+	TestTwoCopiesOfOneShapeAreAFusionOfItWithItself();
 	TestPoseFramesCountRepeatCount();
 	TestPoseThresholdsDropWhatTheyClaim();
 	TestPoseListIsCappedAtTheMaximum();
