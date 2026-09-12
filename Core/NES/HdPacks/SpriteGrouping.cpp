@@ -308,13 +308,13 @@ namespace MesenSheets
 		//the test, and it needs enough frames to mean anything.
 		stats.ScreenFixed.assign(vocab.Entries.size(), 0);
 		for(size_t node = 0; node < vocab.Entries.size(); node++) {
-			//Named nodeFrames, not frames: the enclosing function's parameter is
-			//already called `frames` (the OAM stream), and MSVC's C4457 is an
-			//error in the Windows build.
-			uint32_t nodeFrames = stats.NodeFrames[node];
+			//Neither `frames` (the function's OAM-stream parameter, C4457) nor
+			//`nodeFrames` (the vector declared above, C4456): MSVC treats both
+			//shadowing warnings as errors, and this scope is inside both.
+			uint32_t frameCount = stats.NodeFrames[node];
 			uint32_t positions = stats.Positions[node];
-			if(nodeFrames >= kScreenFixedMinFrames && positions > 0 &&
-				(uint64_t)positions * kScreenFixedRevisits <= (uint64_t)nodeFrames) {
+			if(frameCount >= kScreenFixedMinFrames && positions > 0 &&
+				(uint64_t)positions * kScreenFixedRevisits <= (uint64_t)frameCount) {
 				stats.ScreenFixed[node] = 1;
 			}
 		}
