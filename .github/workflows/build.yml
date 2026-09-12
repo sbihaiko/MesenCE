@@ -9,6 +9,18 @@ on:
       - 'main'
   workflow_dispatch:
 
+# Every job used to carry
+#   if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+# to avoid building one commit twice. That guard assumes `push` fires for the
+# branch a pull request comes from — true upstream, where contributors push
+# branches to the repo itself, and false here: `push` above is restricted to
+# `main`, and a pull request's head branch is never `main`. The two triggers
+# therefore cannot overlap, and the guard only had the effect of skipping every
+# internal pull request — including each `sync/upstream/<date>` branch the
+# upstream-sync workflow opens, which reached `main` never having been compiled
+# (#178). Removed. If `push` is ever widened beyond `main`, restore a guard
+# keyed on the branch, not on the head repository.
+
 # A newer push/PR-update on the same ref cancels whatever this workflow was
 # still building for the previous commit — no point finishing a build for a
 # revision that's already superseded.
@@ -22,7 +34,6 @@ env:
 
 jobs:
   windows:
-    if: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository) }}
     strategy:
       matrix:
         platform: [
@@ -70,7 +81,6 @@ jobs:
 
 
   linux:
-    if: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository) }}
     strategy:
       matrix:
         compiler: [gcc, clang, clang_aot]
@@ -128,7 +138,6 @@ jobs:
           path: bin/linux-${{ matrix.platform.path }}/Release/linux-${{ matrix.platform.path }}/publish/Mesen
 
   appimage:
-    if: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository) }}
     strategy:
       matrix:
         compiler: [clang_appimage]
@@ -173,7 +182,6 @@ jobs:
 
 
   macos:
-    if: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository) }}
     strategy:
       matrix:
         compiler: [clang, clang_aot]
