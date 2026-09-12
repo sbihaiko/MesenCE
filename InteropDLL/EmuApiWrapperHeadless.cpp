@@ -68,6 +68,13 @@ extern "C"
 		GetHeadlessInput()->SetPauseFrame(frame);
 	}
 
+	//F9.22: script frame 0 is emulator frame 'frame' - called after a save
+	//state load, whose restored frame counter would otherwise skip the script.
+	DllExport void __stdcall HeadlessSetScriptStartFrame(uint32_t frame)
+	{
+		GetHeadlessInput()->SetScriptStartFrame(frame);
+	}
+
 	//Length of the loaded script, in frames.
 	DllExport uint32_t __stdcall HeadlessGetScriptFrameCount()
 	{

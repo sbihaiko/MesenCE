@@ -25,8 +25,12 @@ graphics. `mint-stage1-30lives.txt` types the Konami code at the Contra title
 slot at the start of each; those slots are the `.mss` the batch wants.
 
 Measured 2026-09-12 (60 s from each stage-1 state): Contra 2 cycles (the
-player's period-6 run, the somersault), Mega Man 3 8 (the run as
-`002 005 002 006`, period 4 with the middle frame twice), Zelda 1 12 (Link's
-two-frame walk in every direction, hold 6), Excitebike 12 (the wheels,
-345 repeats). Cycles with a period above 6 and a hold near 100 are echoes of
-the script's own loop, not animations.
+player's period-6 run on 10-tile poses and the soldier's on 8-tile ones),
+Mega Man 3 7 (the run as `001 002 001 003`, period 4 with the middle frame
+twice, 34 repeats), Zelda 1 15 (Link's two-frame walk in every direction,
+hold 6), Excitebike 8 (the wheels, 398 repeats). Cycles with a period above
+6 and a hold near 100 are echoes of the script's own loop, not animations.
+
+A run from a state counts its <seconds> and its script from the state's
+frame (`headless_record` prints both); before 2026-09-12 both were absolute
+emulator frames, so a state older than the run ended it on the spot.

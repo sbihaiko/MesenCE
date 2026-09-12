@@ -53,6 +53,11 @@ void HeadlessInputProvider::SetPauseFrame(uint32_t frame)
 	_engine.SetPauseFrame(frame);
 }
 
+void HeadlessInputProvider::SetScriptStartFrame(uint32_t frame)
+{
+	_engine.SetScriptStartFrame(frame);
+}
+
 uint32_t HeadlessInputProvider::GetScriptFrameCount()
 {
 	return _engine.GetScriptFrameCount();

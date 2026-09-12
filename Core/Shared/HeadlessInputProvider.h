@@ -65,6 +65,7 @@ public:
 	//Pause the emulator from inside the first frame whose number reaches
 	//'frame'. UINT32_MAX (the default) never pauses.
 	void SetPauseFrame(uint32_t frame);
+	void SetScriptStartFrame(uint32_t frame);
 
 	//Length of the loaded script in frames.
 	uint32_t GetScriptFrameCount();

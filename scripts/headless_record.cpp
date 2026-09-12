@@ -127,6 +127,7 @@ extern "C"
 	//F9.14 (ADR-0157) - InteropDLL/EmuApiWrapperHeadless.cpp
 	bool HeadlessLoadInputScript(const char* scriptText, double frameRate, char* outError, uint32_t maxErrorLength);
 	void HeadlessSetPauseFrame(uint32_t frame);
+void HeadlessSetScriptStartFrame(uint32_t frame);
 	uint32_t HeadlessGetScriptFrameCount();
 	uint32_t HeadlessGetFrameCount();
 	//ADR-0169 2026-09-08 update ("frame/state capture race") - see
@@ -657,7 +658,16 @@ int main(int argc, char** argv)
 
 	if(!stateFile.empty()) {
 		LoadStateFile((char*)stateFile.c_str());
-		printf("state loaded: %s\n", stateFile.c_str());
+		//A state restores the emulator's frame counter, and the pause target
+		//below is absolute: <seconds> must count from the state's frame, or a
+		//state saved past the target ends the run on the spot (and one saved
+		//before it silently shortens the run by its own age).
+		uint32_t stateFrame = HeadlessGetFrameCount();
+		totalFrames += stateFrame;
+		//The script is indexed by emulator frame too: its frame 0 is the
+		//state's frame, or the whole script lands before the run begins.
+		HeadlessSetScriptStartFrame(stateFrame);
+		printf("state loaded: %s (at frame %u; the run ends at frame %u)\n", stateFile.c_str(), stateFrame, totalFrames);
 	}
 	TimingInfoAbi timing = GetTimingInfo(CpuTypeFromExtension(rom));
 	printf("ROM loaded: %s%s\n", rom.c_str(), pal ? " [region forced: PAL]" : "");

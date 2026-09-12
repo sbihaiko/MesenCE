@@ -81,6 +81,10 @@ private:
 	vector<HeadlessInputStep> _steps;
 	uint32_t _pauseFrame = UINT32_MAX;
 	bool _pauseRequested = false;
+	//F9.22: the emulator frame the script's frame 0 maps to. A save state
+	//restores the emulator's frame counter, so a run started from one must
+	//shift the script by that frame or it has already ended before it starts.
+	uint32_t _scriptStartFrame = 0;
 
 	void ApplyToTarget(IHeadlessInputTarget& target, const HeadlessInputStep& step);
 
@@ -99,6 +103,10 @@ public:
 
 	//Length of the loaded script in frames.
 	uint32_t GetScriptFrameCount();
+
+	//Maps script frame 0 onto emulator frame 'frame' (default 0). Frames
+	//before it press nothing.
+	void SetScriptStartFrame(uint32_t frame);
 
 	//Runs one frame of the script against 'target'. Returns the value
 	//IInputProvider::SetInput must return: always false, i.e. overlay on top
