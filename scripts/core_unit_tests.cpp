@@ -5943,6 +5943,28 @@ namespace
 			"BlocoR: the next step starts on its own start frame, not one late");
 	}
 
+	//F9.22: a run started from a save state begins at the state's frame; the
+	//script's frame 0 must be that frame, and nothing is pressed before it.
+	void TestHeadlessEngineScriptStartsAtTheStateFrame()
+	{
+		FakeHeadlessHost host;
+		HeadlessInputEngine engine(&host);
+		std::string error;
+		engine.LoadScript("2f A\n1f B\n", HeadlessInputScript::NtscFrameRate, error);
+		engine.SetScriptStartFrame(1000);
+		bool everReplaced = false;
+		std::vector<std::string> before = RunHeadlessFrames(engine, host, 3, everReplaced);
+		Check(JoinHeadlessTimeline(before) == "- - -", "BlocoR: before the start frame the script presses nothing", JoinHeadlessTimeline(before));
+		std::vector<std::string> timeline;
+		for(uint32_t frame = 1000; frame < 1004; frame++) {
+			host.Frame = frame;
+			FakeHeadlessPad pad = MakeFakeNesPad();
+			engine.ApplyFrame(pad);
+			timeline.push_back(pad.Signature());
+		}
+		Check(JoinHeadlessTimeline(timeline) == "a a b -", "BlocoR: script frame 0 is the start frame, the steps follow from there", JoinHeadlessTimeline(timeline));
+	}
+
 	void TestHeadlessEngineOverlaysRatherThanReplaces()
 	{
 		FakeHeadlessHost host;
@@ -6486,6 +6508,7 @@ int main()
 	TestHeadlessScriptButtonNamesCoverEveryConsole();
 
 	TestHeadlessEngineStepOwnsItsStartFrameAndIsGoneAtItsEnd();
+	TestHeadlessEngineScriptStartsAtTheStateFrame();
 	TestHeadlessEngineOverlaysRatherThanReplaces();
 	TestHeadlessEngineDrivesPortOneOnly();
 	TestHeadlessEngineResolvesButtonsByName();

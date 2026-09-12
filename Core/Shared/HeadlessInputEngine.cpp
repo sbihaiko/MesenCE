@@ -25,6 +25,12 @@ void HeadlessInputEngine::SetPauseFrame(uint32_t frame)
 	_pauseRequested = false;
 }
 
+void HeadlessInputEngine::SetScriptStartFrame(uint32_t frame)
+{
+	auto lock = _lock.AcquireSafe();
+	_scriptStartFrame = frame;
+}
+
 uint32_t HeadlessInputEngine::GetScriptFrameCount()
 {
 	auto lock = _lock.AcquireSafe();
@@ -61,8 +67,8 @@ bool HeadlessInputEngine::ApplyFrame(IHeadlessInputTarget& target)
 
 	//The harness drives port 1 only (it forces a standard controller there -
 	//without a control device the whole provider chain is never consulted).
-	if(target.GetPort() == 0) {
-		const HeadlessInputStep* step = HeadlessInputScript::GetStep(_steps, frame);
+	if(target.GetPort() == 0 && frame >= _scriptStartFrame) {
+		const HeadlessInputStep* step = HeadlessInputScript::GetStep(_steps, frame - _scriptStartFrame);
 		if(step) {
 			ApplyToTarget(target, *step);
 		}
