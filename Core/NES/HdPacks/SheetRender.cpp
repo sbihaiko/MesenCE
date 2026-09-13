@@ -636,6 +636,40 @@ namespace MesenSheets
 		//(poses found vs kept vs capped) stay in the save-time report line, per
 		//ADR-0170 §2 - the file states its sampling, not its own pruning history.
 		json << "  \"frames\": " << stats.Frames << ",\n";
+		//ADR-0181 §2: what the recording exercised on the controller. Written
+		//only when some button was ever held - a passive capture writes no
+		//block, and a reader tells that from an older recorder by the version.
+		//`never` is the point: the buttons and the direction+action pairs the
+		//run never held at once are moves this sidecar cannot have seen.
+		if(stats.Input.Any()) {
+			const InputStats& in = stats.Input;
+			json << "  \"input\": { \"frames\": " << in.Frames << ", \"ports\": " << in.Ports << ", \"held\": {";
+			bool first = true;
+			for(uint32_t b = 0; b < kButtonCount; b++) {
+				if(in.Held[b]) {
+					json << (first ? " " : ", ") << "\"" << kButtonNames[b] << "\": " << in.Held[b];
+					first = false;
+				}
+			}
+			json << " }, \"never\": [";
+			first = true;
+			for(uint32_t b = 0; b < kButtonCount; b++) {
+				if(!in.Held[b]) {
+					json << (first ? "" : ", ") << "\"" << kButtonNames[b] << "\"";
+					first = false;
+				}
+			}
+			for(uint32_t d = 0; d < 4; d++) {
+				for(uint32_t a = 0; a < 2; a++) {
+					//A pair whose button was never held is already named above.
+					if(!in.Pairs[d][a] && in.Held[4 + d] && in.Held[a]) {
+						json << (first ? "" : ", ") << "\"" << kButtonNames[4 + d] << "+" << kButtonNames[a] << "\"";
+						first = false;
+					}
+				}
+			}
+			json << "] },\n";
+		}
 		json << "  \"poses\": [";
 		for(size_t i = 0; i < stats.Poses.size(); i++) {
 			const PoseEntry& pose = stats.Poses[i];

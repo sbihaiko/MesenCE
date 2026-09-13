@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "NES/NesConsole.h"
 #include "NES/NesControlManager.h"
+#include "NES/Input/NesController.h"
+#include "Shared/Input/SnesController.h"
 #include "NES/MapperFactory.h"
 #include "NES/APU/NesApu.h"
 #include "NES/NesCpu.h"
@@ -584,7 +586,27 @@ void NesConsole::InternalRunFrame()
 	_apu->EndFrame();
 
 	if(_hdPackBuilder) {
-		_hdPackBuilder->OnFrameEnd();
+		//ADR-0181 §1: the buttons held on ports 1 and 2 ride on the retained
+		//OAM frame, in NesController::ToByte order. A SNES pad on an NES port
+		//(a supported host device) contributes the eight buttons it shares
+		//with the NES pad; any other device, or no device, contributes 0.
+		uint8_t buttons[2] = {};
+		for(uint8_t port = 0; port < 2; port++) {
+			shared_ptr<BaseControlDevice> device = _controlManager->GetControlDevice(port, 0);
+			if(shared_ptr<NesController> pad = std::dynamic_pointer_cast<NesController>(device)) {
+				buttons[port] = pad->ToByte();
+			} else if(shared_ptr<SnesController> snesPad = std::dynamic_pointer_cast<SnesController>(device)) {
+				buttons[port] = (uint8_t)snesPad->IsPressed(SnesController::Buttons::A) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::B) << 1) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Select) << 2) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Start) << 3) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Up) << 4) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Down) << 5) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Left) << 6) |
+					((uint8_t)snesPad->IsPressed(SnesController::Buttons::Right) << 7);
+			}
+		}
+		_hdPackBuilder->OnFrameEnd(buttons);
 	}
 
 	if(_hdAudioDevice) {

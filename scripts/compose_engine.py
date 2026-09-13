@@ -339,6 +339,42 @@ class PoseRun:
         return self.period is not None
 
 
+class PoseInput:
+    """ADR-0181 §2: the `input` block of `poses.json` — retained frames the
+    block was computed over, ports that ever pressed anything, frames each
+    button was held (a lower bound: a repeated frame keeps its first buttons),
+    and the buttons / direction+action pairs the run never held at once. The
+    last is what tells an artist a state the game lacks from a state the run
+    never reached."""
+
+    __slots__ = ("frames", "ports", "held", "never")
+
+    def __init__(self, frames=0, ports=0, held=None, never=None):
+        self.frames = frames
+        self.ports = ports
+        self.held = dict(held or {})
+        self.never = tuple(never or ())
+
+    @staticmethod
+    def parse(raw):
+        if not isinstance(raw, dict):
+            return None
+        try:
+            frames = int(raw.get("frames") or 0)
+            ports = int(raw.get("ports") or 0)
+        except (TypeError, ValueError):
+            return None
+        held = raw.get("held")
+        if not isinstance(held, dict):
+            held = {}
+        held = {k: v for k, v in held.items() if isinstance(k, str) and isinstance(v, int) and v > 0}
+        never = raw.get("never")
+        if not isinstance(never, list):
+            never = []
+        never = [n for n in never if isinstance(n, str) and n]
+        return PoseInput(frames, ports, held, never)
+
+
 class Poses:
     """`textures/sheets/poses.json` (ADR-0170 §1), the recorder's record of
     which OAM tiles were on screen together in one frame and where.
@@ -350,7 +386,7 @@ class Poses:
     today, so nothing in here raises."""
 
     __slots__ = ("version", "unit", "frames", "entries", "dropped_tiles", "dropped_poses",
-                 "cycles", "sequences")
+                 "cycles", "sequences", "input")
 
     def __init__(self):
         self.version = POSES_VERSION
@@ -364,6 +400,9 @@ class Poses:
         # the file does not tell those apart and neither does this.
         self.cycles = []         # [PoseRun] with period
         self.sequences = []      # [PoseRun] without
+        # ADR-0181 §2: what the recording exercised on the controller, or None
+        # when the file has no block (a passive capture, or an older recorder).
+        self.input = None        # PoseInput
 
     @staticmethod
     def load(path, vocabulary=None):
@@ -413,6 +452,7 @@ class Poses:
         known = {e.id for e in p.entries}
         p.cycles = Poses._parse_runs(doc.get("cycles"), "cycle", known, cyclic=True)
         p.sequences = Poses._parse_runs(doc.get("sequences"), "seq", known, cyclic=False)
+        p.input = PoseInput.parse(doc.get("input"))
         return p
 
     @staticmethod

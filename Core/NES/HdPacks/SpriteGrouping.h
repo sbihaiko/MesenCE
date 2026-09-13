@@ -71,6 +71,11 @@ namespace MesenSheets
 	//(identical non-looping runs seen at least twice).
 	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab);
 
+	//ADR-0181 §2: the controller evidence summed over the retained stream
+	//(see InputStats). Called by BuildPoses; exposed so a test or a spike can
+	//read it without the pose pass.
+	InputStats BuildInputStats(const std::vector<OamFrame>& frames);
+
 	//ADR-0174 (issue #174): the join from a sprNNN group sheet to the whole
 	//figures its cells are part of. ADR-0153 §2's criterion cuts a character
 	//into always-together fragments - measured on Contra, 35 sprite pairs that

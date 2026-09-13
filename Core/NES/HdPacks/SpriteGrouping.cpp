@@ -390,11 +390,7 @@ namespace MesenSheets
 
 		//One run of one pose on a track: the pose and how many frames
 		//(RepeatCount included) it was held before the track changed pose.
-		struct TrackRun
-		{
-			uint32_t Pose = 0;
-			uint32_t Held = 0;
-		};
+		typedef PoseTrackRun TrackRun;
 
 		//ADR-0179 §1: greedy nearest-first linking of kept clusters between
 		//consecutive retained frames, within kPoseTrackMaxMove. Fills
@@ -470,6 +466,7 @@ namespace MesenSheets
 							next.push_back(edge);
 						}
 						TrackRun run;
+						run.Frame = frame.FrameNumber;
 						run.Pose = cur[ci].Pose;
 						run.Held = frame.RepeatCount;
 						track.push_back(run);
@@ -478,6 +475,7 @@ namespace MesenSheets
 				for(Live& live : cur) {
 					if(live.Track == (size_t)-1) {
 						TrackRun run;
+						run.Frame = frame.FrameNumber;
 						run.Pose = live.Pose;
 						run.Held = frame.RepeatCount;
 						tracks.push_back(std::vector<TrackRun>(1, run));
@@ -941,6 +939,44 @@ namespace MesenSheets
 	//ADR-0170 (F9.19): poses, from the per-frame structure AccumulateSpriteAdjacency
 	//throws away. See SpriteGrouping.h for why the pairwise projection cannot
 	//answer this question.
+	InputStats BuildInputStats(const std::vector<OamFrame>& frames)
+	{
+		InputStats input;
+		bool portSeen[2] = { false, false };
+		for(const OamFrame& frame : frames) {
+			input.Frames += frame.RepeatCount;
+			uint8_t held = 0;
+			bool pair[4][2] = {};
+			for(uint32_t port = 0; port < 2; port++) {
+				uint8_t byte = frame.Buttons[port];
+				held |= byte;
+				portSeen[port] = portSeen[port] || byte != 0;
+				//A direction+action pair is a move one player made, so it is
+				//read within a port; port 1 holding Right while port 2 holds A
+				//is not a Right+A. Directions are bits 4..7, actions bits 0..1.
+				for(uint32_t d = 0; d < 4; d++) {
+					for(uint32_t a = 0; a < 2; a++) {
+						pair[d][a] = pair[d][a] || ((byte & (1 << (4 + d))) && (byte & (1 << a)));
+					}
+				}
+			}
+			for(uint32_t b = 0; b < kButtonCount; b++) {
+				if(held & (1 << b)) {
+					input.Held[b] += frame.RepeatCount;
+				}
+			}
+			for(uint32_t d = 0; d < 4; d++) {
+				for(uint32_t a = 0; a < 2; a++) {
+					if(pair[d][a]) {
+						input.Pairs[d][a] += frame.RepeatCount;
+					}
+				}
+			}
+		}
+		input.Ports = (portSeen[0] ? 1 : 0) + (portSeen[1] ? 1 : 0);
+		return input;
+	}
+
 	PoseStats BuildPoses(const std::vector<OamFrame>& frames, const Vocabulary& vocab)
 	{
 		PoseStats stats;
@@ -991,6 +1027,8 @@ namespace MesenSheets
 		std::vector<std::vector<TrackRun>> tracks = LinkPoseTracks(frames, vocab, kept);
 		stats.Poses = kept;
 		FindPoseRuns(tracks, stats);
+		stats.Input = BuildInputStats(frames);
+		stats.TrackRuns = tracks;
 		return stats;
 	}
 

@@ -1,9 +1,17 @@
 # ADR-0180: A pose decomposes into rigid parts the recorder found recurring across poses, stored once and cited by every pose that wears them
 
-- Status: proposed (2026-09-12) — the Decision below has open points (§4);
-  stays `proposed` until the algorithm is measured on the golden kit and a
-  human picks. If accepted: Phase 9 slice F9.21 in
-  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`
+- Status: superseded (2026-09-12, by the user, on the cover measurement) —
+  Superseded by: ADR-0179 §4 (`variantOf`), which is the part story the data
+  supports. Measured on the golden kit
+  (`runs/golden-20260912/spike-pose-parts.md`, summarised at the end of §4):
+  the best cover reaches 21–43 % of the poses with 1.0–1.4 parts each, i.e.
+  the "part" is the whole figure recurring inside its projectile variant;
+  genuine limb parts tile 10 of 37 Contra stage-1 poses and none on Mega
+  Man 3, Zelda 1 or Excitebike. A pack format must not carry a block that
+  is empty on three of four golden games. The door reopens as a
+  *measurement*, not a slice: a game whose `nofig`+`conn` cover (see §4)
+  tiles a majority of its kept poses with >= 2 parts each. Slice F9.21 is
+  withdrawn from the PRD.
 - Date: 2026-09-12
 - Related: ADR-0170 (pose sidecar), ADR-0171 (pose as the unit; "a shared
   sub-figure is stored once" is the storage rule this makes visible),
@@ -124,6 +132,20 @@ phases, cells decomposed into the parts that are actually stored.
   `sprNNN` sheet *is* the part's painting surface and `parts[]` only needs
   to cite it. If it does not hold, parts need a surface of their own, which
   is a bigger decision.
+
+**Measured 2026-09-12** on the F9.22 per-stage packs (kept non-fusion poses;
+parts = maximal rigid subsets >= 4 tiles shared by a pose pair, kept when
+in >= 2 poses, folded per §1; four greedy covers): the best algorithm
+(largest part first) fully covers 16/37 Contra stage-1 poses, 39/147 on the
+base, 18/79 Mega Man 3, 5/24 Zelda, 9/36 Excitebike — with 1.0–1.4 parts per
+covered pose, i.e. the "part" is mostly the whole figure recurring inside
+its projectile variant. Banning parts that are themselves kept poses leaves
+10 Contra stage-1 poses tiled by 2.2 parts each (the torso/legs case is
+real) and **0** on the three other games. Preferring frequent parts never
+beats size; requiring connectivity costs almost nothing and removes the
+parts no artist would call a limb. The decomposition this ADR wants exists
+on Contra and is marginal elsewhere; ADR-0179 §4's `variantOf` already
+carries the rest.
 
 ## Consequences
 

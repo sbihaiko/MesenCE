@@ -280,7 +280,10 @@ public:
 	//F9.5: one on-screen sprite, post-flip shape, screen origin in pixels.
 	//Gated on screen capture like the background grid, and a no-op otherwise.
 	void RecordSprite(uint8_t x, uint8_t y, HdPpuTileInfo& tile);
-	void OnFrameEnd();
+	//ADR-0181 §1: `buttons` is the packed button byte of ports 1 and 2 at
+	//frame end (NesController::ToByte order), 0 for a port without a pad;
+	//it rides on the retained OamFrame and never enters frame identity.
+	void OnFrameEnd(const uint8_t buttons[2]);
 
 	//Static export (no gameplay needed): every 16-byte tile of CHR ROM becomes
 	//a palette-agnostic defaultTile entry drawn with a neutral gray ramp.

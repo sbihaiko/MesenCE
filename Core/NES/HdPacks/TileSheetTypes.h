@@ -429,6 +429,13 @@ namespace MesenSheets
 		std::vector<OamEntry> Entries;
 		uint32_t FrameNumber = 0;
 		uint32_t RepeatCount = 1;
+		//ADR-0181 §1: the packed button byte of ports 1 and 2 at frame end, in
+		//NesController::ToByte order (A, B, Select, Start, Up, Down, Left,
+		//Right; bit 0 = A). Not part of frame identity: a repeated frame
+		//keeps the buttons of its first occurrence, so a held button that
+		//changes nothing on screen is under-counted (a lower bound on
+		//attention, not a duty cycle). 0 for a port with no controller.
+		uint8_t Buttons[2] = {};
 
 		bool SameEntries(const OamFrame& o) const { return Entries == o.Entries; }
 	};
@@ -587,6 +594,36 @@ namespace MesenSheets
 
 	//What BuildPoses found, with the counts a reader needs to judge
 	//truncation (ADR-0170 §2): the file states its own sampling.
+	//ADR-0181 §2: the controller evidence of a recording, summed over the
+	//retained stream. Buttons are indexed in OamFrame::Buttons bit order
+	//(kButtonNames); a button counts as held in a frame when either port held
+	//it, so a two-player run reads as one report and `Ports` says how many
+	//ports ever pressed anything. Counts are RepeatCount-weighted, the same
+	//universe PoseStats::Frames is - and, as OamFrame::Buttons says, a lower
+	//bound. `Pairs` is the directional+action matrix (Up/Down/Left/Right x
+	//A/B) the `never` list is read off: a pair the run never held at once is a
+	//move the sidecar cannot have seen.
+	constexpr uint32_t kButtonCount = 8;
+	constexpr const char* kButtonNames[kButtonCount] = { "A", "B", "Select", "Start", "Up", "Down", "Left", "Right" };
+	//One run of a pose on a track (ADR-0179 §1): the retained frame index it
+	//began on, the kept pose, and the RepeatCount-weighted frames it held.
+	struct PoseTrackRun
+	{
+		uint32_t Frame = 0;
+		uint32_t Pose = 0;
+		uint32_t Held = 0;
+	};
+
+	struct InputStats
+	{
+		uint32_t Frames = 0;
+		uint32_t Ports = 0;
+		uint32_t Held[kButtonCount] = {};
+		uint32_t Pairs[4][2] = {};
+
+		bool Any() const { return Ports > 0; }
+	};
+
 	struct PoseStats
 	{
 		//Kept poses, by Frames descending then by Tiles, capped at kMaxPoses.
@@ -606,6 +643,11 @@ namespace MesenSheets
 		uint32_t Tracks = 0;
 		std::vector<PoseRun> Cycles;
 		std::vector<PoseRun> Sequences;
+		//ADR-0181 §2: what the recording exercised on the controller.
+		InputStats Input;
+		//The tracks themselves, for the save-time debug dump and the ADR-0181
+		//§3 measurement (which cycle answers which button). Not a pack file.
+		std::vector<std::vector<PoseTrackRun>> TrackRuns;
 	};
 
 	//---- F9.18 (ADR-0166): the owning screen of a resident node -------------
