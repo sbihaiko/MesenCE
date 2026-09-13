@@ -5958,19 +5958,23 @@ namespace
 		frames[2].Buttons[0] = 0x80 | 0x02;  //Right+B
 		//Frame 3: A on port 2 only - counts as held, and makes it two ports.
 		frames[3].Buttons[1] = 0x01;
-		//Frames 4-5: nothing held.
+		//Frame 4: Right on port 1 while port 2 holds A - two players, not a
+		//Right+A; the pair must stay in `never`.
+		frames[4].Buttons[0] = 0x80;
+		frames[4].Buttons[1] = 0x01;
+		//Frame 5: nothing held.
 		Vocabulary vocab = BuildSpriteVocabulary(frames);
 		PoseStats stats = BuildPoses(frames, vocab);
 		const InputStats& in = stats.Input;
-		Check(in.Frames == 9 && in.Ports == 2 && in.Held[7] == 6 && in.Held[1] == 1 && in.Held[0] == 1 && in.Held[4] == 0,
+		Check(in.Frames == 9 && in.Ports == 2 && in.Held[7] == 7 && in.Held[1] == 1 && in.Held[0] == 2 && in.Held[4] == 0,
 			"BlocoS: held counts are RepeatCount-weighted and a union of both ports",
 			"frames=" + std::to_string(in.Frames) + " ports=" + std::to_string(in.Ports) + " right=" + std::to_string(in.Held[7])
 				+ " b=" + std::to_string(in.Held[1]) + " a=" + std::to_string(in.Held[0]));
 		Check(in.Pairs[3][1] == 1 && in.Pairs[3][0] == 0,
-			"BlocoS: Right+B was held once, Right+A never",
+			"BlocoS: Right+B was held once, Right+A never - a pair is read within one port",
 			"right+b=" + std::to_string(in.Pairs[3][1]) + " right+a=" + std::to_string(in.Pairs[3][0]));
 		std::string json = SerializePoses(vocab, stats);
-		Check(json.find("\"input\": { \"frames\": 9, \"ports\": 2, \"held\": { \"A\": 1, \"B\": 1, \"Right\": 6 }") != std::string::npos,
+		Check(json.find("\"input\": { \"frames\": 9, \"ports\": 2, \"held\": { \"A\": 2, \"B\": 1, \"Right\": 7 }") != std::string::npos,
 			"BlocoS: poses.json writes the input block with held counts in button order", json.substr(0, 200));
 		Check(json.find("\"never\": [\"Select\", \"Start\", \"Up\", \"Down\", \"Left\", \"Right+A\"]") != std::string::npos,
 			"BlocoS: never names the unheld buttons and the unheld direction+action pairs", json.substr(0, 300));

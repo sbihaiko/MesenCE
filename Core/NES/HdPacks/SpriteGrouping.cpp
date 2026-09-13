@@ -946,9 +946,19 @@ namespace MesenSheets
 		for(const OamFrame& frame : frames) {
 			input.Frames += frame.RepeatCount;
 			uint8_t held = 0;
+			bool pair[4][2] = {};
 			for(uint32_t port = 0; port < 2; port++) {
-				held |= frame.Buttons[port];
-				portSeen[port] = portSeen[port] || frame.Buttons[port] != 0;
+				uint8_t byte = frame.Buttons[port];
+				held |= byte;
+				portSeen[port] = portSeen[port] || byte != 0;
+				//A direction+action pair is a move one player made, so it is
+				//read within a port; port 1 holding Right while port 2 holds A
+				//is not a Right+A. Directions are bits 4..7, actions bits 0..1.
+				for(uint32_t d = 0; d < 4; d++) {
+					for(uint32_t a = 0; a < 2; a++) {
+						pair[d][a] = pair[d][a] || ((byte & (1 << (4 + d))) && (byte & (1 << a)));
+					}
+				}
 			}
 			for(uint32_t b = 0; b < kButtonCount; b++) {
 				if(held & (1 << b)) {
@@ -957,8 +967,7 @@ namespace MesenSheets
 			}
 			for(uint32_t d = 0; d < 4; d++) {
 				for(uint32_t a = 0; a < 2; a++) {
-					//Directions are bits 4..7 of the byte, actions bits 0..1.
-					if((held & (1 << (4 + d))) && (held & (1 << a))) {
+					if(pair[d][a]) {
 						input.Pairs[d][a] += frame.RepeatCount;
 					}
 				}

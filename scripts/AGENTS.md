@@ -66,6 +66,25 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 - `roles_probe.cpp` / `headless_record.cpp` / `spike_sound_driver.cpp` run
   the emulator headless against a real ROM; they link `InteropDLL`'s shared
   lib and need `make core` first.
+- **Per-stage recording (F9.22)** — `stages/<game>/` holds
+  `mint-<stage>.txt` (power-on to a stage; run with `save-state=<f.mss>`)
+  and `<stage>.txt` (a run *from* that state, <= 3600 frames so it fits the
+  batch's 60 s default); `record_stages.sh <rom> <stages-dir> <out> [s]`
+  runs one bootstrap record per `<stage>.mss`+`<stage>.txt` pair into its
+  own pack folder. `headless_record` flags: `state=<f.mss>` (the run and its
+  script count from the state's frame), `save-state=<f.mss>` (written only
+  when the run reached its frame target). Later stages are reached
+  **headlessly**: short runs chained state to state, steered by RAM read off
+  the `.mss` with `mss_ram.py <f.mss> [addr…] | --diff <other.mss>` (header
+  version aware: format 3 carries a 40-byte SHA-1 the loader skips). A
+  save-state boundary is not input-neutral, so a chain reproduces only as a
+  chain. Workflow, RAM addresses and measured results: `stages/README.md`.
+  `.mss` files are not versioned (CHR-RAM states carry ROM graphics); they
+  live under `runs/`. The consumer side of the recorder's `poses.json`
+  (`compose_engine.Poses`: entries, `cycles`/`sequences`, and `input` as
+  `PoseInput` — ADR-0181 §2's `held`/`never`, None when the block is
+  absent) tolerates every optional field being missing; the producer
+  contract is in `Core/AGENTS.md`.
 - `headless_record.cpp` counts a run in **emulated frames**, never in host
   seconds (ADR-0157/F9.14). Its `<seconds>` argument keeps its meaning and is
   converted to a frame count at startup; an `input=<script>` line is
@@ -761,6 +780,9 @@ these tools call into, or the goldens under `docs/specs/golden/` (owned by
 
 ## Child DOX Index
 
+- `stages/` - per-stage recording scripts, one folder per golden game, with
+  `stages/README.md` as the operating note (no AGENTS.md: the contract is
+  the Work Guidance entry above).
 - `checks/` - acceptance-criteria verifiers for deliverables and community packs, and
   one-script-one-contract structural checkers (see Work Guidance above); no
   dedicated AGENTS.md yet (a flat collection of independent per-AC

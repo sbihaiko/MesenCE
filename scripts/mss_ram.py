@@ -6,18 +6,33 @@ state, so a headless input chain can be steered by what the game knows.
     scripts/mss_ram.py <file.mss> 0x32 0x64 0x30  # named bytes, one line
     scripts/mss_ram.py <file.mss> --diff <other.mss>  # bytes that differ
 
-Layout (Mesen 2, NES): "MSS" header, video data zlib at 0x23, then uint32
-ROM name length + name, then the Serializer blob (1 byte compressed flag,
-uint32 original size, uint32 stored size, zlib data). Blob entries are
-`key\\0` + uint32 size + bytes; the RAM is `memoryManager.internalRam`.
+Layout (Mesen 2, NES; SaveStateManager::GetSaveStateHeader): "MSS", uint32
+emulator version, uint32 format version, a 40-byte SHA-1 field on format
+version <= 3 only (the loader still accepts version 3 and skips it), uint32
+console type, then the video data - a 20-byte frame header followed by the
+zlib frame buffer - then uint32 ROM name length + name, then the Serializer
+blob (1 byte compressed flag, uint32 original size, uint32 stored size, zlib
+data). Blob entries are `key\\0` + uint32 size + bytes; the RAM is
+`memoryManager.internalRam`.
 """
 import struct, sys, zlib
+
+VIDEO_HEADER = 20
+
+
+def video_offset(d):
+    """Offset of the zlib frame buffer, derived from the header version."""
+    if d[:3] != b"MSS":
+        raise ValueError("not a Mesen save state")
+    version = struct.unpack("<I", d[7:11])[0]
+    offset = 11 + (40 if version <= 3 else 0) + 4  # console type
+    return offset + VIDEO_HEADER
 
 
 def blob(path):
     d = open(path, "rb").read()
     z = zlib.decompressobj()
-    z.decompress(d[0x23:])
+    z.decompress(d[video_offset(d):])
     rest = z.unused_data
     n = struct.unpack("<I", rest[:4])[0]
     p = 4 + n

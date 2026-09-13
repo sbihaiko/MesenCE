@@ -85,7 +85,7 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ## Child DOX Index
 
-- Core/ — C++ CPU, memory, APU emulation cores
+- Core/ — C++ emulation cores; `Core/AGENTS.md` records the pack-recorder contracts (per-frame hook, `poses.json` fields, debug dumps)
 - InteropDLL/ — C++ interop bridge for .NET UI
 - Linux/ — Linux platform support layer
 - MacOS/ — macOS platform support layer

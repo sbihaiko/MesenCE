@@ -1151,7 +1151,7 @@ files and in §3.
 | 0169 | accepted | recorder publishes frames one way; the live viewer never blocks the run |
 | 0170 | accepted (2026-09-11) | the recorder writes `sheets/poses.json` from the OAM stream it already holds; shipped as F9.19, and the prerequisite S10.a named |
 | 0179 | accepted (2026-09-12) | `poses.json` gains succession (`next[]`/`hold`), `cycles[]`/`sequences[]` found on the track sequence, and `variantOf` for figure + projectile; the editor lays poses out by cycle. Shipped as F9.20 (2026-09-12) |
-| 0180 | proposed (2026-09-12), open | a pose decomposes into rigid `parts[]` recurring across poses, stored once and cited by `composition[]`; cover algorithm and pose-anchored `spriteNearby` export are the open points. Slice F9.21 |
+| 0180 | proposed (2026-09-12), open; measured 2026-09-12 | a pose decomposes into rigid `parts[]` recurring across poses, stored once and cited by `composition[]`. The kit measurement (`runs/golden-20260912/spike-pose-parts.md`) covers 21–43 % of the poses and mostly with the whole figure as the part, i.e. `variantOf` under another name; the torso/legs case is real on Contra (10 of 37 stage-1 poses) and absent on the other three games — argues for narrowing or superseding. Slice F9.21 if accepted |
 | 0181 | proposed (2026-09-12); §1–§2 implemented | the retained frame keeps the controller state of both ports and `poses.json` reports what the run exercised (`input.held`, `input.never`); the `driver` attribution rule (§3) and its thresholds stay open after the first kit measurement. Under F9.22 |
 
 ### 7. Risks

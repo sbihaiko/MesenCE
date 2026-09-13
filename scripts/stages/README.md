@@ -6,7 +6,8 @@ folder per golden game. Two kinds:
 - `mint-<stage>.txt` — plays from power-on to the start of a stage. Run with
   `save-state=<stages-dir>/<stage>.mss` to mint the state that stage's
   recording starts from.
-- `<stage>.txt` — plays *from* the state for <= 60 s, holding a direction long
+- `<stage>.txt` — plays *from* the state for <= 60 s (<= 3600 frames, the
+  batch's default duration; a longer script is cut where the run ends), holding a direction long
   enough for every loop to complete two turns on one track (ADR-0179 §3 needs
   `repeats >= 2`; a Contra turn is 6 x 8 frames, so `90f R` is 1.9 turns and
   `240f R` is 5).
