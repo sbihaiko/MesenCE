@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "NES/NesConsole.h"
 #include "NES/NesControlManager.h"
+#include "NES/Input/NesController.h"
 #include "NES/MapperFactory.h"
 #include "NES/APU/NesApu.h"
 #include "NES/NesCpu.h"
@@ -584,7 +585,16 @@ void NesConsole::InternalRunFrame()
 	_apu->EndFrame();
 
 	if(_hdPackBuilder) {
-		_hdPackBuilder->OnFrameEnd();
+		//ADR-0181 §1: the buttons held on ports 1 and 2 ride on the retained
+		//OAM frame. A port without a standard pad contributes 0.
+		uint8_t buttons[2] = {};
+		for(uint8_t port = 0; port < 2; port++) {
+			shared_ptr<NesController> pad = std::dynamic_pointer_cast<NesController>(_controlManager->GetControlDevice(port, 0));
+			if(pad) {
+				buttons[port] = pad->ToByte();
+			}
+		}
+		_hdPackBuilder->OnFrameEnd(buttons);
 	}
 
 	if(_hdAudioDevice) {

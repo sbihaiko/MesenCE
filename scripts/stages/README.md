@@ -58,6 +58,16 @@ cycles (all period 2, a pose alternating with its muzzle-flash variant);
 `stage2-base` 163 poses, 10 cycles — the base soldier's run as three period-3
 cycles of 8-tile poses with hold 4, plus a period-4 cycle of 6–8-tile poses.
 
+Since ADR-0181 §1–§2 (2026-09-12) `poses.json` carries an `input` block:
+`held` frames per button and `never`, the buttons and direction+action pairs
+the run never held at once. That is the check on a `<stage>.txt`: Contra's
+`stage1-run` says `never: Select, Start, Left, Up+A, Down+A, Down+B`, so its
+sidecar cannot hold the aim-while-jumping or prone-shooting states, and a
+script that wants them has to press them. Two env-gated save-time dumps back
+a measurement: `MESEN_OAM_STREAM_DUMP` (retained frame, repeat, port 1 and 2
+button bytes, then `node,x,y` per sprite) and `MESEN_POSE_TRACK_DUMP` (one
+ADR-0179 track per line as `frame:pose:held`).
+
 A run from a state counts its <seconds> and its script from the state's
 frame (`headless_record` prints both); before 2026-09-12 both were absolute
 emulator frames, so a state older than the run ended it on the spot.

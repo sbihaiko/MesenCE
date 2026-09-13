@@ -787,6 +787,8 @@ def test_a_variant_ranks_below_its_base_and_runs_are_read():
         doc["poses"][0]["hold"] = 400
         doc["cycles"] = [{"id": "cycle000", "period": 2, "repeats": 5,
                           "poses": ["pose000", "pose001"], "hold": [8, 8]}]
+        doc["input"] = {"frames": 400, "ports": 1, "held": {"B": 40, "Right": 300, "bogus": "x"},
+                        "never": ["Select", "Start", "Up+A", 7]}
         doc["sequences"] = [{"id": "seq000", "repeats": 2,
                              "poses": ["pose000", "pose777", "pose001"], "hold": [1, 1, 1]}]
         _write_poses(sheets, doc)
@@ -812,6 +814,11 @@ def test_a_variant_ranks_below_its_base_and_runs_are_read():
               and pack.poses.cycles[0].hold == (8, 8),
               "cycles[] is read with period, repeats and holds",
               str([(c.id, c.period, c.repeats, c.hold) for c in pack.poses.cycles]))
+        check(pack.poses.input is not None and pack.poses.input.ports == 1
+              and pack.poses.input.held == {"B": 40, "Right": 300}
+              and pack.poses.input.never == ("Select", "Start", "Up+A"),
+              "input{} is read with held counts and the never list (ADR-0181 §2)",
+              str(pack.poses.input and (pack.poses.input.ports, pack.poses.input.held, pack.poses.input.never)))
         check(pack.poses.sequences == [],
               "a sequence naming a pose the file does not hold is dropped whole",
               str([q.id for q in pack.poses.sequences]))

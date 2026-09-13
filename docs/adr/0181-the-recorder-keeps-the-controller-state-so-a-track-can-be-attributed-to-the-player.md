@@ -1,9 +1,12 @@
 # ADR-0181: The recorder keeps the controller state per retained frame, so a track can be attributed to the player and the sidecar can say which inputs it exercised
 
-- Status: proposed (2026-09-12) — §1 is a firm decision (capture the
-  evidence); §3 and §4 name the rule and the thresholds a measurement over
-  the golden kit has to settle before a human accepts this. If accepted:
-  Phase 9 slice F9.22 in
+- Status: proposed (2026-09-12) — §1 and §2 are firm and **implemented the
+  same day** (the retained frame carries the two port bytes, `poses.json`
+  writes the `input` block; recorded in the PRD's §3 under F9.22); §3 and
+  §4 name the rule and the thresholds a measurement over the golden kit has
+  to settle before a human accepts this. The first measurement
+  (`runs/golden-20260912/spike-pose-driver.md`, 2026-09-12, summarised in
+  §3 below) left them open. If accepted: Phase 9 slice F9.22 in
   `docs/roadmap/PRD-mesence-enhancement-ecosystem.md` (Part A §4)
 - Date: 2026-09-12
 - Related: ADR-0179 (tracks, `cycles[]` and `sequences[]` — this attributes
@@ -129,6 +132,24 @@ rule that cannot separate them is not a rule. Excitebike is the counter-case:
 the rival bikes run the same cycles as the player's with no input at all.
 
 Until a human picks, this ADR stays `proposed`.
+
+**Measured 2026-09-12** (`runs/golden-20260912/spike-pose-driver.md`; the
+tracks come out of the recorder under `MESEN_POSE_TRACK_DUMP`, the buttons
+ride on `MESEN_OAM_STREAM_DUMP`): conditional frequency attributes Zelda's
+four walks to the four directions with a 3x margin — and attributes eleven
+enemy cycles to Up for having been on screen while Up was held. Where one
+button is held most of the run it says nothing: Contra's player and soldier
+runs both score Right 1.14, Excitebike's wheels score A 1.00 for player and
+rivals alike, Mega Man 3's runs 1.09–1.14. That is the frequency argument
+ADR-0177 rejected, failing the same way. Interruption is the evidence that
+would separate them, and the 60 s stage-1 recordings cannot measure it: on
+Contra every cycle has one window per minute (a soldier fuses the player's
+cluster and ends the track), and its windows end on fusions, not releases.
+A fair measurement needs more windows (F9.22's states) and scripts shaped
+for it — hold, release, idle — so the rule stays open. What §2 already
+delivers stands on its own: the Contra stage-1 sidecar says
+`never: Select, Start, Left, Up+A, Down+A, Down+B`, naming the aim-while-
+jumping and prone-shooting states ADR-0179 could only assert were absent.
 
 ### 4. Thresholds (open)
 

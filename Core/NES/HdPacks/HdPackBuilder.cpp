@@ -638,11 +638,13 @@ void HdPackBuilder::EnableScreenCapture()
 	_screensSeen.clear();
 }
 
-void HdPackBuilder::OnFrameEnd()
+void HdPackBuilder::OnFrameEnd(const uint8_t buttons[2])
 {
 	if(!_captureScreens) {
 		return;
 	}
+	_frameOam.Buttons[0] = buttons[0];
+	_frameOam.Buttons[1] = buttons[1];
 
 	//F5.4e: accumulate this frame's background-tile adjacency pairs into the
 	//co-occurrence graph (grid filled in ProcessBgPixel), then reset the grid.
@@ -1203,11 +1205,36 @@ MesenSheets::Vocabulary HdPackBuilder::WriteSpriteSheets(const string& folder, c
 		ofstream dump(oamDumpPath, ios::out);
 		if(dump) {
 			for(const MesenSheets::OamFrame& frame : _oamFrames) {
-				dump << frame.FrameNumber << ' ' << frame.RepeatCount;
+				//ADR-0181: the two port bytes follow the repeat count.
+				dump << frame.FrameNumber << ' ' << frame.RepeatCount << ' ' << (int)frame.Buttons[0] << ' ' << (int)frame.Buttons[1];
 				for(const MesenSheets::OamEntry& entry : frame.Entries) {
 					MesenSheets::MetatileKey key;
 					key.Tiles[0] = entry.Shape;
 					dump << ' ' << vocab.Find(key) << ',' << (int)entry.X << ',' << (int)entry.Y;
+				}
+				dump << '\n';
+			}
+		}
+	}
+
+	//Debug aid, sibling of the above: the ADR-0179 tracks, one line per track
+	//as `frame:pose:held` triples in retained-frame indexes, so the ADR-0181
+	//§3 measurement can join a cycle's phase advances to the button bytes of
+	//the stream dump. Not a pack file.
+	#ifdef _MSC_VER
+	#pragma warning(push)
+	#pragma warning(disable : 4996)
+	#endif
+	const char* trackDumpPath = std::getenv("MESEN_POSE_TRACK_DUMP");
+	#ifdef _MSC_VER
+	#pragma warning(pop)
+	#endif
+	if(trackDumpPath && *trackDumpPath) {
+		ofstream dump(trackDumpPath, ios::out);
+		if(dump) {
+			for(const vector<MesenSheets::PoseTrackRun>& track : _poseStats.TrackRuns) {
+				for(size_t i = 0; i < track.size(); i++) {
+					dump << (i ? " " : "") << track[i].Frame << ':' << track[i].Pose << ':' << track[i].Held;
 				}
 				dump << '\n';
 			}

@@ -685,6 +685,22 @@ does not exist.
   the same day (163 poses and 10 cycles from the corridor alone). Stages
   3–8 stay open, with the same tooling.
 
+- **Controller state per retained frame** (2026-09-12, ADR-0181 §1–§2 under
+  F9.22): `OamFrame` carries the packed button byte of ports 1 and 2 at
+  frame end (not part of frame identity — a repeated frame keeps its first
+  buttons), `NesConsole` passes them to `HdPackBuilder::OnFrameEnd`, and
+  `poses.json` writes an optional `input` block — frames, ports, `held`
+  per button and `never`: the buttons and direction+action pairs the run
+  never held at once. On the Contra stage-1 run that reads `never: Select,
+  Start, Left, Up+A, Down+A, Down+B`, which is the "what the recording did
+  not exercise" ADR-0179's Consequences could only assert. The §3 `driver`
+  rule was measured on the kit the same day and left open (conditional
+  frequency attributes Zelda's walks and nothing else; interruption is the
+  right evidence and the 60 s stage-1 data has too few windows for it —
+  `runs/golden-20260912/spike-pose-driver.md`). One `core_unit_tests`
+  case, one Python check; `MESEN_POSE_TRACK_DUMP` joins `MESEN_OAM_STREAM_DUMP`
+  as a save-time debug dump.
+
 ### 4. Roadmap — pending work, by slice
 
 #### Phase 6 — Community pack auto-install (MEP Recipe v1)
@@ -1136,6 +1152,7 @@ files and in §3.
 | 0170 | accepted (2026-09-11) | the recorder writes `sheets/poses.json` from the OAM stream it already holds; shipped as F9.19, and the prerequisite S10.a named |
 | 0179 | accepted (2026-09-12) | `poses.json` gains succession (`next[]`/`hold`), `cycles[]`/`sequences[]` found on the track sequence, and `variantOf` for figure + projectile; the editor lays poses out by cycle. Shipped as F9.20 (2026-09-12) |
 | 0180 | proposed (2026-09-12), open | a pose decomposes into rigid `parts[]` recurring across poses, stored once and cited by `composition[]`; cover algorithm and pose-anchored `spriteNearby` export are the open points. Slice F9.21 |
+| 0181 | proposed (2026-09-12); §1–§2 implemented | the retained frame keeps the controller state of both ports and `poses.json` reports what the run exercised (`input.held`, `input.never`); the `driver` attribution rule (§3) and its thresholds stay open after the first kit measurement. Under F9.22 |
 
 ### 7. Risks
 
