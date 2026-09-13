@@ -1,13 +1,17 @@
 # ADR-0180: A pose decomposes into rigid parts the recorder found recurring across poses, stored once and cited by every pose that wears them
 
-- Status: proposed (2026-09-12) — the Decision below has open points (§4);
-  stays `proposed` until a human picks. **Measured on the golden kit the
-  same day** (`runs/golden-20260912/spike-pose-parts.md`, summarised at the
-  end of §4): the cover as proposed reaches a fifth to two fifths of the
-  poses and most of that is `variantOf` under another name, so the
-  measurement argues for narrowing or superseding, not accepting as is. If
-  accepted: Phase 9 slice F9.21 in
-  `docs/roadmap/PRD-mesence-enhancement-ecosystem.md`
+- Status: superseded (2026-09-12, by the user, on the cover measurement) —
+  Superseded by: ADR-0179 §4 (`variantOf`), which is the part story the data
+  supports. Measured on the golden kit
+  (`runs/golden-20260912/spike-pose-parts.md`, summarised at the end of §4):
+  the best cover reaches 21–43 % of the poses with 1.0–1.4 parts each, i.e.
+  the "part" is the whole figure recurring inside its projectile variant;
+  genuine limb parts tile 10 of 37 Contra stage-1 poses and none on Mega
+  Man 3, Zelda 1 or Excitebike. A pack format must not carry a block that
+  is empty on three of four golden games. The door reopens as a
+  *measurement*, not a slice: a game whose `nofig`+`conn` cover (see §4)
+  tiles a majority of its kept poses with >= 2 parts each. Slice F9.21 is
+  withdrawn from the PRD.
 - Date: 2026-09-12
 - Related: ADR-0170 (pose sidecar), ADR-0171 (pose as the unit; "a shared
   sub-figure is stored once" is the storage rule this makes visible),
