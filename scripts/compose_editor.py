@@ -10,6 +10,14 @@ kept cells as a composed `usrNNN` sheet. `compose_engine.Pack` is the Model,
 state, no tkinter), and `EditorApp` below is the View: it renders the
 ViewModel's state and forwards tkinter events into its methods, nothing more.
 
+ADR-0196 (F12.5) adds the overflow layer to the sprite side: with a
+silhouette seeded, the "Overflow" pane adds 8x8 cells at a signed pixel offset
+from the pose's root cell, and the export reserves a blank cell per overflow
+and writes the `additions[]` record `mep_build` turns into an `<addition>`
+tag. `--rom <file.nes>` is needed only there, and only on a CHR ROM game: the
+synthetic target key is `chrTileCount + n`, and that count is read off the
+ROM's own iNES header rather than guessed.
+
 This is the interactive half and is judged by the human Phase 9 panel — the
 automated half is `test_compose_engine.py` (the engine's two ADR-0164
 acceptance tests) and `test_compose_viewmodel.py` (a full seed/lock/swap/
@@ -27,6 +35,7 @@ from tkinter import filedialog, messagebox, ttk
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compose_editor_layout as L  # noqa: E402
 import compose_engine as E  # noqa: E402
+import mep_addition  # noqa: E402 — ADR-0196 §3, the ROM's CHR tile count
 from compose_viewmodel import ComposeViewModel  # noqa: E402
 
 
@@ -66,10 +75,17 @@ def _pose_shape(pose):
 
 
 class EditorApp:
-    def __init__(self, root: tk.Tk, folder: Path):
+    def __init__(self, root: tk.Tk, folder: Path, rom: Path = None):
         self.root = root
         root.title("MesenAI — composition editor (F9.18)")
         self.vm = ComposeViewModel()
+        # ADR-0196 §3: on a CHR ROM game the synthetic target index is
+        # `chrTileCount + n`, and that count comes from the ROM's iNES header
+        # — never from the recording. Without `--rom` the overflow layer still
+        # composes, and `export` refuses with the ADR named.
+        self.rom = Path(rom) if rom else None
+        if self.rom is not None:
+            self.vm.chr_tile_count = mep_addition.chr_tile_count(self.rom)
         self._imgs = []       # keep PhotoImage references alive
         self._cell_imgs = []
         # The grid the band row was last painted with (ADR-0171: a row of
@@ -278,6 +294,51 @@ class EditorApp:
         ttk.Button(btns, text="Lock selected suggestion", command=self._lock_sprite).pack(side="left", padx=(0, 4))
         ttk.Button(btns, text="Recompute", command=self.refresh_all).pack(side="left")
         self.band_box.bind("<<ComboboxSelected>>", lambda _e: self._on_band())
+        self._build_overflow_pane(mid)
+
+    def _build_overflow_pane(self, parent):
+        """The ADR-0196 overflow layer: blank cells the artist paints with art
+        that falls outside the seeded pose's hardware box. The offsets are
+        typed in native pixels, signed, relative to the pose's root cell —
+        which is the one number the tag itself carries, so asking for it
+        directly keeps the View from inventing a second geometry."""
+        pane = self._labelframe(
+            parent, "Overflow layer (ADR-0196) — cells drawn outside the pose's box",
+            padding=2)
+        pane.pack(fill="x", pady=(4, 0))
+        row = ttk.Frame(pane)
+        row.pack(fill="x")
+        ttk.Label(row, text="dx", foreground=self.muted).pack(side="left")
+        self.ov_dx = tk.StringVar(value="0")
+        ttk.Entry(row, textvariable=self.ov_dx, width=5).pack(side="left", padx=(2, 6))
+        ttk.Label(row, text="dy", foreground=self.muted).pack(side="left")
+        self.ov_dy = tk.StringVar(value="-8")
+        ttk.Entry(row, textvariable=self.ov_dy, width=5).pack(side="left", padx=(2, 6))
+        ttk.Button(row, text="Add overflow cell", command=self._add_overflow).pack(side="left")
+        ttk.Button(row, text="Remove", command=self._remove_overflow).pack(side="left", padx=4)
+        self.ov_list = tk.Listbox(pane, width=42, height=3, exportselection=False)
+        self.ov_list.pack(fill="x", pady=(2, 0))
+
+    def _add_overflow(self):
+        try:
+            dx, dy = int(self.ov_dx.get()), int(self.ov_dy.get())
+        except ValueError:
+            messagebox.showwarning("Overflow offset",
+                                   "dx and dy are whole native pixels, and may be negative.")
+            return
+        self.vm.add_overflow(dx, dy)
+        self.refresh_all()
+
+    def _remove_overflow(self):
+        sel = self.ov_list.curselection()
+        if sel:
+            self.vm.remove_overflow(int(sel[0]))
+        self.refresh_all()
+
+    def _refresh_overflow(self):
+        self.ov_list.delete(0, "end")
+        for label in self.vm.overflow_rows():
+            self.ov_list.insert("end", label)
 
     def _fill_band_selector(self):
         bands = self.vm.bands()
@@ -553,6 +614,7 @@ class EditorApp:
         self._refresh_bg_sugg()
         self._refresh_sp_sugg()
         self._refresh_row()
+        self._refresh_overflow()
         self._refresh_kept()
 
     def _refresh_kept(self):
@@ -609,10 +671,14 @@ class EditorApp:
 def main(argv=None):
     ap = argparse.ArgumentParser(description="MesenAI composition editor (ADR-0165, F9.18)")
     ap.add_argument("folder", nargs="?", default=None, help="pack folder with textures/sheets/")
+    ap.add_argument("--rom", default=None,
+                    help="the ROM this pack was recorded from — required only to export an "
+                         "ADR-0196 overflow layer on a CHR ROM game (the synthetic target "
+                         "index is read past the iNES header's CHR size)")
     args = ap.parse_args(argv)
     root = tk.Tk()
     folder = Path(args.folder) if args.folder else Path.cwd()
-    EditorApp(root, folder)
+    EditorApp(root, folder, rom=Path(args.rom) if args.rom else None)
     root.mainloop()
     return 0
 

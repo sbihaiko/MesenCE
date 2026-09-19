@@ -63,6 +63,7 @@ import sys
 import zipfile
 from pathlib import Path, PurePosixPath
 
+import mep_addition  # ADR-0196 <addition> tags and their synthetic target keys
 import mep_conditions  # ADR-0197 authored conditions and their evaluation over routes
 import mep_content_id  # ADR-0139 tree content_id of the discovered pack root
 import mep_errata  # ADR-0152 reviewed known-missing declarations, shared with the smoke gate
@@ -944,6 +945,8 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     conds = {}
     cond_kinds = {}
     tile_keys = {}
+    keyed = set()       # (tileData, palette) a <tile> rule keys, prefix-free
+    additions = []      # (line, where, conditions, params) — checked after the pass
     dups = []
     missing = {}
     badcase = {}
@@ -1025,10 +1028,15 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
             elif imgs[idx] and scale and (x + 8 * scale > imgs[idx][0] or y + 8 * scale > imgs[idx][1]):
                 rep.warning(where, f"<tile> at ({x},{y}) is outside image #{idx} ({imgs[idx][0]}x{imgs[idx][1]}) — renders as fully transparent, load continues (HdPackTileInfo::Init bounds check)")
             key = (tokens[1], tokens[2].upper(), tuple(sorted(used)))
+            # ADR-0196 §4 needs the key set without its condition prefixes: an
+            # <addition> cites a key, never a conditioned entry of it.
+            keyed.add((tokens[1].upper(), tokens[2].upper()))
             if key in tile_keys:
                 dups.append((n, tile_keys[key]))
             else:
                 tile_keys[key] = n
+        elif tag == "addition":
+            additions.append((n, where, used, params))
         elif tag == "background":
             if len(tokens) < 2:
                 rep.error(where, "<background> needs file and brightness")
@@ -1157,7 +1165,90 @@ def lint_nes_hires(src: Source, rel: str, rep: Report):
     if dups:
         sample = ", ".join(f"{n}(={first})" for n, first in dups[:5])
         rep.warning(rel, f"{len(dups)} duplicate <tile>(s) (same key/palette/conditions); only the first of each is used — e.g. lines {sample}")
-    rep.info(rel, f"NES hires.txt: ver {version}, scale {scale}, {len(imgs)} images, {len(tile_keys)} tiles, {len(conds)} conditions")
+    if additions:
+        lint_additions(src, rel, folder, version, additions, keyed, rep)
+    rep.info(rel, f"NES hires.txt: ver {version}, scale {scale}, {len(imgs)} images, {len(tile_keys)} tiles, {len(conds)} conditions"
+                  + (f", {len(additions)} additions" if additions else ""))
+
+
+def synthetic_sidecar_keys(src: Source, folder: str):
+    """The `(tileData, palette)` and CHR indices every sheet sidecar of this
+    pack marks `synthetic` (ADR-0196 §1). Returns `(keys, indices, sidecars)`;
+    `sidecars` is how many were read, so a caller can tell "marked nowhere"
+    from "this pack ships no sidecars at all"."""
+    keys, indices, seen = set(), set(), 0
+    prefix = f"{folder}sheets/"
+    for name in sorted(n for n in src.names if n.startswith(prefix) and n.endswith(".json")):
+        try:
+            doc = json.loads(src.text(name))
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if not isinstance(doc, dict):
+            continue
+        seen += 1
+        for cell in doc.get("cells") or []:
+            if not isinstance(cell, dict) or not cell.get("synthetic"):
+                continue
+            for entry in cell.get("tiles") or []:
+                if not isinstance(entry, dict):
+                    continue
+                data = str(entry.get("tile") or "").strip().upper()
+                pal = str(entry.get("palette") or "").strip().upper()
+                keys.add((data, pal))
+                if isinstance(entry.get("index"), int):
+                    indices.add(mep_addition.index_token(entry["index"]))
+    return keys, indices, seen
+
+
+def lint_additions(src: Source, rel: str, folder: str, version: int, additions: list,
+                   keyed: set, rep: Report):
+    """ADR-0196 §4 on the `<addition>` lines of one NES hires.txt.
+
+    Three refusals, in the ADR's own words: an anchor no `<tile>` rule keys, a
+    target not marked synthetic in the sidecar, and a synthetic key that fails
+    §3's check for the console's key kind. The §3 check here is the pack-local
+    form — a linter has no ROM, so a CHR ROM target is required to be past
+    every index the pack's own manifest names, while `mep_build --rom` makes
+    the header assertion the ADR states."""
+    marked, marked_idx, sidecars = synthetic_sidecar_keys(src, folder)
+    index_keyed = any(mep_addition.is_index_key(d) for d, _p in keyed)
+    max_real = -1
+    if index_keyed:
+        for data, _pal in keyed:
+            if (data, _pal) in marked or data in marked_idx:
+                continue
+            try:
+                max_real = max(max_real, int(data, 16))
+            except ValueError:
+                pass
+    for _n, where, used, params in additions:
+        if version < mep_addition.MIN_VERSION:
+            rep.error(where, f"<addition> requires <ver>{mep_addition.MIN_VERSION}+, this pack declares {version} — HdPackLoader::ProcessAdditionTag refuses the file")
+            continue
+        if used:
+            rep.warning(where, "<addition> carries a condition prefix — HdPackLoader::ProcessAdditionTag ignores it, the tag always applies")
+        try:
+            anchor, (dx, dy), target, ignore = mep_addition.parse_addition(params)
+        except mep_addition.AdditionError as e:
+            rep.error(where, f"<addition> {e}")
+            continue
+        if ignore is not None and version < mep_addition.IGNORE_PALETTE_VERSION:
+            rep.error(where, f"<addition> ignorePalette requires <ver>{mep_addition.IGNORE_PALETTE_VERSION}+, this pack declares {version}")
+        if ignore:
+            rep.error(where, "<addition> sets ignorePalette on its target — ADR-0196 §3 keeps the palette half of a synthetic key load-bearing, and dropping it is what lets the key collide")
+        if abs(dx) > 255 or abs(dy) > 239:
+            rep.warning(where, f"<addition> offset ({dx},{dy}) is larger than the screen — HdNesPack::InsertAdditionalSprite drops every placement off-screen")
+        if anchor not in keyed:
+            rep.error(where, f"<addition> anchor {anchor[0]}/{anchor[1]} is keyed by no <tile> rule in this manifest — the tag can never fire (ADR-0196 §4)")
+        if target not in keyed:
+            rep.error(where, f"<addition> target {target[0]}/{target[1]} is keyed by no <tile> rule — the overflow has no art to draw (ADR-0196 §4)")
+        if sidecars and target not in marked and target[0] not in marked_idx:
+            rep.error(where, f"<addition> target {target[0]}/{target[1]} is not marked synthetic in any sheet sidecar (ADR-0196 §4) — a key no recording observed has to say so, or it inflates coverage")
+        elif not sidecars:
+            rep.warning(where, "this pack ships no sheet sidecars, so ADR-0196 §4's \"marked synthetic in the sidecar\" cannot be checked here")
+        why = mep_addition.target_verdict(target, index_keyed, max_real)
+        if why:
+            rep.error(where, f"<addition> {why}")
 
 
 def lint_gbsms_hires(src: Source, rel: str, rep: Report):

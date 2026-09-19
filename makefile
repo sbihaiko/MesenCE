@@ -422,6 +422,10 @@ doc-checks: check-manifest
 	python3 scripts/test_gemini_classify.py
 	python3 scripts/test_mep_build.py
 	python3 scripts/test_mep_lint_border.py
+	#ADR-0196 (F12.5): the `<addition>` tag's synthetic target key — the rule
+	#itself, then the lint that gates a pack carrying one.
+	python3 scripts/test_mep_addition.py
+	python3 scripts/test_mep_lint_addition.py
 	python3 scripts/test_mep_errata.py
 	python3 scripts/test_mep_audio_patch_resolution.py
 	#Downloader hop/shape rules and the lint decompression cap (review pass 2026-09-06).

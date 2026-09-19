@@ -51,7 +51,13 @@ hires.txt + two OGGs) and asserts the whole build/pack/rename cycle:
   * #256: every `[condition]` rule keeps its unconditional fallback twin in
     the rebuilt `hires.txt`, so a condition miss still shows the painted art;
   * #253: a painted sprite sheet whose cells lose to another sheet fails the
-    build with an ownership error instead of a silent all-green success.
+    build with an ownership error instead of a silent all-green success;
+  * ADR-0196 (F12.5): a sheet's `additions[]` overflow layer round-trips —
+    the `<addition>` tag and the synthetic target's own `<tile>` rule come
+    out of the same sheet cell, a rebuild re-emits rather than stacks them,
+    and the build refuses a target the sidecar does not mark synthetic, a
+    CHR RAM target that is not the reserved key, and a CHR ROM target it
+    cannot assert against the ROM's iNES header.
 
 Framework-free, mirroring test_mep_recipe.py's ok()/fail()/main() style.
 Wired into `make doc-checks`. Usage: python3 scripts/test_mep_build.py
@@ -1093,6 +1099,138 @@ def chr_rom_key_tests(root: Path):
         fail(f"pre-ADR-0172 CHR ROM pack did not fail with the re-record message: {out}")
 
 
+def author_overflow(folder: Path, target, anchor, cell: int = 1, offset=(16, -24),
+                    synthetic: bool = True, sheet: str = "obj000"):
+    """Author an ADR-0196 overflow layer on `sheet` by hand: cell `cell` is
+    re-keyed to the synthetic `target` and marked synthetic, and one
+    `additions[]` record anchors on `anchor` and points at that cell. This is
+    what `compose_engine.export(overflow=...)` writes; doing it by hand here
+    keeps the build test independent of the editor."""
+    path = folder / "textures" / "sheets" / f"{sheet}.json"
+    doc = json_loads(path.read_text(encoding="utf-8"))
+    entry = {"tile": target[0], "palette": target[1]}
+    if len(target) > 2 and target[2] is not None:
+        entry["index"] = target[2]
+    for c in doc["cells"]:
+        if c["index"] == cell:
+            c["tiles"] = [entry]
+            if synthetic:
+                c["synthetic"] = True
+                c["ordinal"] = 1
+                c["pose"] = "pose000"
+    rec = {"pose": "pose000", "offsetX": offset[0], "offsetY": offset[1], "cell": cell,
+           "anchor": {"node": 0, "tile": anchor[0], "palette": anchor[1]}}
+    if len(anchor) > 2 and anchor[2] is not None:
+        rec["anchor"]["index"] = anchor[2]
+    doc["additions"] = [rec]
+    path.write_text(json_dumps(doc), encoding="utf-8")
+
+
+def ines_header(path: Path, chr_units: int):
+    """A bare iNES header — all `mep_addition.chr_tile_count` reads."""
+    data = bytearray(16)
+    data[0:4] = b"NES\x1a"
+    data[4] = 2
+    data[5] = chr_units
+    path.write_bytes(bytes(data))
+    return path
+
+
+def addition_chr_ram_tests(root: Path):
+    """ADR-0196 (F12.5): a CHR RAM pack's overflow layer round-trips — the
+    sheet cell carries the reserved key, the build emits both the `<tile>` rule
+    for it and the `<addition>` that points at it, and the two cannot drift
+    because the cell is the only source of the target key."""
+    import mep_addition
+    target = (mep_addition.chr_ram_target(1), mep_addition.RESERVED_PALETTE)
+    anchor = (tile_hex(0), PAL_HEX)
+    folder, _v, _c = make_sheet_folder(root, "addition-ram")
+    author_overflow(folder, target, anchor)
+    out = run("build", str(folder))
+    if out is None:
+        return
+    text = (folder / "textures" / "hires.txt").read_text(encoding="utf-8")
+    want = f"<addition>{anchor[0]},{anchor[1]},16,-24,{target[0]},{target[1]}"
+    if want in text:
+        ok("ADR-0196: the overflow layer emits its <addition> line")
+    else:
+        fail(f"no <addition> line for the authored overflow:\n{want}")
+    _imgs, tiles = parse_hires(folder / "textures" / "hires.txt")
+    if target in tiles:
+        ok("ADR-0196: the synthetic target is keyed by a <tile> rule of its own sheet")
+    else:
+        fail(f"the synthetic target {target} got no <tile> rule: {sorted(tiles)[:4]}")
+    if "synthetic target key(s)" in out:
+        ok("ADR-0196: the build says how many keys no recording observed")
+    else:
+        fail(f"build summary does not report the synthetic keys: {out}")
+
+    # A rebuild must not stack a second copy of the tag on the carried manifest.
+    if run("build", str(folder)) is None:
+        return
+    again = (folder / "textures" / "hires.txt").read_text(encoding="utf-8")
+    if again.count("<addition>") == 1:
+        ok("ADR-0196: a rebuild re-emits the tag from the sheets, it does not stack")
+    else:
+        fail(f"rebuild left {again.count('<addition>')} <addition> lines")
+
+
+def addition_refusal_tests(root: Path):
+    """The two refusals the build owns: a target the sidecar does not mark
+    synthetic, and a CHR RAM target that is not ADR-0196 §3's reserved key."""
+    import mep_addition
+    anchor = (tile_hex(0), PAL_HEX)
+    folder, _v, _c = make_sheet_folder(root, "addition-unmarked")
+    author_overflow(folder, (mep_addition.chr_ram_target(1), mep_addition.RESERVED_PALETTE),
+                    anchor, synthetic=False)
+    out = run("build", str(folder), expect=2)
+    if out is not None and "not marked synthetic" in out:
+        ok("ADR-0196 §4: a target the sidecar does not mark synthetic fails the build")
+    else:
+        fail(f"an unmarked synthetic target did not fail the build: {out}")
+
+    folder, _v, _c = make_sheet_folder(root, "addition-unreserved")
+    author_overflow(folder, (tile_hex(3), PAL_HEX), anchor)
+    out = run("build", str(folder), expect=2)
+    if out is not None and "reserved" in out:
+        ok("ADR-0196 §3: a target that is not the reserved key fails the build")
+    else:
+        fail(f"an unreserved CHR RAM target did not fail the build: {out}")
+
+
+def addition_chr_rom_tests(root: Path):
+    """On a CHR ROM pack ADR-0196 §3's proof is an assertion against the ROM's
+    own iNES header, so the build refuses to make it without the ROM."""
+    import mep_addition
+    anchor = (tile_hex(0), PAL_HEX, CHR_INDEX_BASE)
+    target = (mep_addition.chr_ram_target(1), mep_addition.RESERVED_PALETTE, 8192)
+    folder, _v, _c = make_sheet_folder(root, "addition-rom", chr_rom=True)
+    author_overflow(folder, target, anchor)
+    out = run("build", str(folder), expect=2)
+    if out is not None and "--rom" in out:
+        ok("ADR-0196 §3: a CHR ROM pack with no ROM cannot assert, and says so")
+    else:
+        fail(f"a CHR ROM overflow built with no ROM did not name the fix: {out}")
+
+    rom = ines_header(root / "addition-rom.nes", 16)   # 16 x 8 KB = 8192 tiles
+    out = run("build", str(folder), "--rom", str(rom))
+    if out is None:
+        return
+    text = (folder / "textures" / "hires.txt").read_text(encoding="utf-8")
+    want = f"<addition>{CHR_INDEX_BASE:02X},{PAL_HEX},16,-24,2000,{mep_addition.RESERVED_PALETTE}"
+    if want in text:
+        ok("ADR-0196 §3: the CHR ROM target is the first index past the ROM's CHR")
+    else:
+        fail(f"no index-keyed <addition> line:\n{want}")
+
+    inside = ines_header(root / "addition-rom-big.nes", 64)   # 32768 tiles
+    out = run("build", str(folder), "--rom", str(inside), expect=2)
+    if out is not None and "inside the ROM's CHR" in out:
+        ok("ADR-0196 §3: a target inside CHR is refused against the header, not guessed")
+    else:
+        fail(f"a target inside CHR was not refused: {out}")
+
+
 def run(*argv, expect=0, cwd=None):
     p = subprocess.run([PY, str(MEP_BUILD), *argv], capture_output=True, text=True, cwd=cwd)
     out = (p.stdout + p.stderr).strip()
@@ -1654,6 +1792,11 @@ def main() -> int:
         # --- #218: the baseline universe (only what `build` re-derives) ---
         check_coverage_baseline_universe_tests(root)
         build_summary_tests(root)
+
+        # --- ADR-0196 / F12.5: the overflow layer's <addition> tags ---
+        addition_chr_ram_tests(root)
+        addition_refusal_tests(root)
+        addition_chr_rom_tests(root)
 
         # --- F5.4g item 12: audio_cleanup_suggest reads the probe's log ---
         sug = root / "sug-pack"

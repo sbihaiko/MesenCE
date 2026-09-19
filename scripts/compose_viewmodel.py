@@ -26,6 +26,11 @@ class ComposeViewModel:
         self.band = None        # current Y band (sprite mode only)
         self.bg_members = []    # (node, Sheet, cell), most-seen first
         self.sp_members = []
+        # ADR-0196: the overflow layer of the sprite composition — cells the
+        # artist wants drawn outside a pose's hardware box. Session state, like
+        # the locks: it is spent by `export` and never read back off a sidecar.
+        self.overflow = []      # [compose_engine.Overflow]
+        self.chr_tile_count = 0  # from the ROM, when the View was given one
         self.status = "no pack open"
 
     # ---- pack lifecycle -------------------------------------------------
@@ -38,6 +43,7 @@ class ComposeViewModel:
         self.bg_members = pack.background_cells()
         self.sp_members = pack.sprite_cells()
         self.seed, self.kept = None, []
+        self.overflow = []
         self.mode = "object"
         bands = self.bands()
         self.band = bands[-1] if bands else None  # default: the most common ground
@@ -112,6 +118,46 @@ class ComposeViewModel:
             self.status = f"unlocked #{node}"
             return True
         return False
+
+    # ---- the overflow layer (ADR-0196) ------------------------------------
+
+    def overflow_pose(self):
+        """The pose an overflow cell would anchor on: the silhouette of the
+        seed. ADR-0196 §1 admits an overflow layer only on a **composed pose**,
+        so this is None — and `add_overflow` refuses — on the object layer, on
+        a pack with no `poses.json`, and before anything is seeded."""
+        if self.mode != "sprite" or self.seed is None or not self.uses_poses():
+            return None
+        return self.pack.pose_of(self.seed)
+
+    def add_overflow(self, dx: int, dy: int) -> bool:
+        """Add one 8x8 overflow cell at `(dx, dy)` native pixels from the
+        pose's root cell. False (with `status` saying why) when the gesture is
+        not available, or when that exact cell is already in the layer."""
+        pose = self.overflow_pose()
+        if pose is None:
+            self.status = ("an overflow cell is drawn on a composed pose — seed a "
+                           "silhouette in the sprite layer first (ADR-0196 §1)")
+            return False
+        item = E.Overflow(pose.id, dx, dy)
+        if item in self.overflow:
+            self.status = f"{pose.id} already has an overflow cell at ({dx},{dy})"
+            return False
+        self.overflow.append(item)
+        self.status = (f"{len(self.overflow)} overflow cell(s); {pose.id} + ({dx},{dy}) "
+                       f"anchored on #{self.pack.pose_root(pose)}")
+        return True
+
+    def remove_overflow(self, index: int) -> bool:
+        if not 0 <= index < len(self.overflow):
+            return False
+        gone = self.overflow.pop(index)
+        self.status = f"removed the overflow cell at ({gone.dx},{gone.dy})"
+        return True
+
+    def overflow_rows(self) -> list:
+        """One label per overflow cell, for the View's list."""
+        return [f"{o.pose_id}  ({o.dx:+d},{o.dy:+d})" for o in self.overflow]
 
     def swap_cell(self, index: int):
         """Advance the locked cell at `index` to the next sprite the engine
@@ -262,7 +308,9 @@ class ComposeViewModel:
         placements = self.placements()
         if placements:
             order = [n for n, _cx, _cy in placements]
-        canvas, _cells, columns, unit = self.pack.compose_sheet(self.mode, order, placements)
+        extra = len(self.overflow) if self.mode == "sprite" else 0
+        canvas, _cells, columns, unit = self.pack.compose_sheet(self.mode, order, placements,
+                                                                extra=extra)
         where = Path(to_dir) if to_dir else self.pack.sheets_dir
         name = self.pack.next_free_name(where) if where.is_dir() else "usr???"
         return canvas, columns, unit, name
@@ -276,5 +324,6 @@ class ComposeViewModel:
             nodes = [n for n, _cx, _cy in placements] if placements else order
             return self.pack.export("sprite", nodes, seed=self.seed, locked=self.kept,
                                     band=self.band, to_dir=Path(to_dir),
-                                    placements=placements)
+                                    placements=placements, overflow=self.overflow,
+                                    chr_tile_count=self.chr_tile_count)
         return self.pack.export("object", order, seed=self.seed, locked=self.kept, to_dir=Path(to_dir))

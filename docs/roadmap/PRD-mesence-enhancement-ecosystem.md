@@ -340,6 +340,32 @@ or Part B §8. Dates below describe delivery, not a new validation run.
   until F12.9 ships, and the SMB row says so.
   [Log](../validation/f12.10-unattended-recording-job-2026-09-19.md).
 
+- **F12.5** (2026-09-19) — the composition editor now emits `<addition>`, the
+  one thing the format could do that this toolchain never wrote. An overflow
+  layer on a pose reserves a blank sheet cell per cell the artist wants drawn
+  outside the hardware silhouette, keys it with ADR-0196 §3's synthetic target
+  and exports an `additions[]` record that `mep_build.py` turns into the tag,
+  anchored on the pose's **root** cell (ADR-0189 §1's most-seen member, the
+  opposite of `pose_anchor`). Every decision about that key lives in
+  `scripts/mep_addition.py`, so the editor, the build and `mep_lint.py` read one
+  rule. Measured on the row's bounded input: **Mega Man 3** (CHR ROM) target
+  `2000` — the first index past its 8192 CHR tiles, asserted against the iNES
+  header rather than the sidecar — and **Contra** (CHR RAM) target
+  `00000000000000010000000000000000` / `0D0D0D0D`, the reserved pattern and the
+  `$0D` palette, with §3's evidence check run over the recording's own
+  vocabulary (`[]` on both). Both build and lint at exit 0. Pixel-exact on
+  frame 1924 of each: against a control that differs only by the tag, the Mega
+  Man 3 frame changes in exactly 800 pixels, one 32×32 block, all of them the
+  synthetic cell's paint — and moving the offset by one cell translates that
+  block by exactly 32 px and nothing else. Two things the row did not
+  anticipate are in the log: the pose's most-seen member is usually a
+  **transparent** OAM cell, so `pose_root` skips blanks or the overflow would
+  fire off every blank sprite cell on screen; and `HdNesPack::ProcessAdditionalSprites`
+  corrupts the screen's first pixel through a C++ reference assignment whenever
+  a pack declares any `<addition>` — an upstream defect, visible in the Contra
+  frame, reported rather than patched here.
+  [Log](../validation/f12.5-addition-overflow-layer-2026-09-19.md).
+
 
 ### 4. Roadmap — pending work, by slice
 
@@ -788,8 +814,8 @@ is back in the running game in 2 ms, without reopening the ROM. F12.4 then made
 the file name the join (ADR-0213), so the artist's own program exports onto the
 name the kit published. ADR-0196, ADR-0197 and ADR-0198 were accepted 2026-09-16 (§3 of
 each decided: reserved pattern + `$0D` palette; fixed `$0000`–`$07FF` window;
-import against the patched ROM with its cost stated), so F12.5 is unblocked;
-F12.6a, F12.6b and F12.7 shipped on 2026-09-19 (§3). The day-one
+import against the patched ROM with its cost stated); F12.5, F12.6a, F12.6b
+and F12.7 all shipped on 2026-09-19 (§3). The day-one
 block (F12.9–F12.12, added 2026-09-19) is **not** unblocked: three of its four
 slices wait on an ADR named in their Decision cell.
 
@@ -854,7 +880,6 @@ tile normalization by similarity; embedding the Python toolchain in the UI.
 | Slice | Deliverable | Decision |
 |---|---|---|
 | F12.2 | **Copy as MEP sheet cell.** The Tile/Tilemap/Sprite viewers' right-click menu gains *Copy as MEP sheet cell*, emitting the `(tileData, palette)` key in the exact form `mep_build.py` reads from a sheet sidecar, beside the inherited *Copy tile (HD pack format)*. | No prerequisite; UI only, no Core change. Bounded input: Zelda 1 and Contra paused in the viewers. Stop when the pasted text round-trips through `mep_build.py build` on both: the pasted key is emitted as a `<tile>` whose `x,y` is the painted cell's crop, and `mep_lint.py` exits 0. (Reworded 2026-09-17 — the rule named `mep_build.py --verify`, which does not exist; `verify` is a subcommand of `mep_import.py` and checks a different subject. A machine-readable `verify-cell` subcommand stays a possible follow-up slice.) Human panel row: a person pastes one cell and paints it without reading `hires.txt`; the script is `docs/validation/f12.2-copy-sheet-cell-panel-script.md`, whose setup step S1 re-records both packs — the installed `auto/` recordings predate ADR-0178 and `build` refuses them. Re-measures "Picking a tile's key by hand". |
-| F12.5 | **`<addition>` from the composition editor.** An overflow layer on a pose exports `<addition>` lines anchored on the pose's root cell, with the target key chosen per ADR-0196 §3, and the round-trip and lint of ADR-0196 §4. | ADR-0196 accepted 2026-09-16 (§3: reserved pattern + `$0D` palette on CHR RAM). Bounded input: one pose each on Mega Man 3 (CHR ROM) and Contra (CHR RAM). Stop when the expanded pose renders pixel-exact on a known frame and the pack round-trips with the synthetic keys listed. Re-measures "Extra tiles drawn on match". |
 
 **Day-one material without a human at the controller (added 2026-09-19).**
 The slices above all assume a recorded `auto/` exists. The artist evidence
@@ -898,8 +923,8 @@ slice that changes what the artist sees (F12.11) is not shipped until a person
 who did not build it logs its open-and-paint row.
 
 **Order.** F12.1, F12.3, F12.4 and F12.6a are delivered (2026-09-17,
-2026-09-19), and F12.6b and F12.7 with them (2026-09-19); F12.5 follows its
-own ADR. F12.6b closed half of what F12.6a's report left open:
+2026-09-19), and F12.5, F12.6b and F12.7 with them (2026-09-19). F12.6b
+closed half of what F12.6a's report left open:
 `memoryCheckConstant` is a verdict, `spriteNearby` and `memoryCheck` are still
 `not evaluable` and now wait on an OAM-format decision nobody has taken. One
 slice per task. F12.8 shipped on 2026-09-19 (§3) and is not a
@@ -940,10 +965,10 @@ sequence and bound the work.
    work additionally depends on Phase 9 selection/export/paint evidence.
 4. **Manual/hardware residue:** native picker, audio listening, physical input
    and optional classical A/B when their prerequisites are available.
-5. **Phase 12:** F12.1, F12.3, F12.4, F12.6a, F12.6b, F12.7 and F12.10 are
-   delivered (2026-09-17 and 2026-09-19, §3). F12.2's code is on `main` with
-   its human panel row open; F12.5 is unblocked since ADR-0196 was accepted on
-   2026-09-16. Of the day-one block (F12.9–F12.12, added
+5. **Phase 12:** F12.1, F12.3, F12.4, F12.5, F12.6a, F12.6b, F12.7 and
+   F12.10 are delivered (2026-09-17 and 2026-09-19, §3). F12.2's code is on `main` with
+   its human panel row open, and so does F12.5's — the pane is driven
+   headlessly, but nobody has added an overflow cell by hand. Of the day-one block (F12.9–F12.12, added
    2026-09-19), F12.10 shipped the same day — it needed no ADR and its paths
    (a)–(c) did not depend on F12.9. What remains runs F12.9 → F12.11 → F12.12,
    each waiting on its own decision (ADR-0183 §1 amendment, `.ora` layer
@@ -1005,7 +1030,7 @@ files and in §3.
 | 0207/0208 | accepted (2026-09-17); implemented | `core_unit_tests.cpp` loses its line ceiling (the ratchet guards the rest); the core log keeps a 1 000-entry ring plus an uncapped `mesen.log` with truncation marked |
 | 0211 | accepted (2026-09-19); shipped the same day | a declared `<supportedRom>` that contradicts the loaded ROM refuses the install — the guard for #314 (Bomberman rendered with Contra's art). Amended on acceptance: the loaded ROM's No-Intro body hash also counts as a match (the loader already accepts both forms for `<patch>`), and a declaration equal to the pack's own `<patch>` target is the patched ROM (ADR-0198 §2), not a contradiction |
 | 0193 | accepted (2026-09-15); documented in the same change | `checks.yml` keeps **both** triggers, and the `push` on `main` is not an optimization to be cut: `pull_request` reports the five required checks before merge, and `push` is the only gate for the paths that bypass the ruleset — a direct push (admin `bypass_actors`, which is how `community-pack-catalog.yml` and a hand fix land) and a merge-commit/rebase tree the PR never tested (`strict_required_status_checks_policy: false`). Measured over the last 60 commits on `main`: 49 squash-merges, 7 merge-commit/rebase PRs, 4 with no PR at all. Reopening conditions in §5; the verifier asserts the `pull_request` + dispatch half and deliberately not the `push` one |
-| 0196 | accepted (2026-09-16), pending slice | `<addition>` is a compose-editor export anchored on a pose's observed root cell; its target key is synthetic by construction and provably unmatched (CHR ROM: index past CHR; CHR RAM: reserved pattern + `$0D` palette, evidence check on the palette). Slice F12.5 |
+| 0196 | accepted (2026-09-16), shipped as F12.5 (2026-09-19) | `<addition>` is a compose-editor export anchored on a pose's observed root cell; its target key is synthetic by construction and provably unmatched (CHR ROM: index past CHR; CHR RAM: reserved pattern + `$0D` palette, evidence check on the palette). Slice F12.5 |
 | 0197 | accepted (2026-09-16), §1–§2 shipped as F12.6a (2026-09-19), §3 shipped as F12.6b (2026-09-19); amends 0189 §4's scope to emission only | hand-authored conditions are admitted in sheets and `mep_lint.py --routes` evaluates them on every retained frame of every recording; the three refusals of 0189 §4 stand; the recorder retains `$0000`–`$07FF` per retained frame so `memoryCheckConstant` in that window is evaluable (§3). `spriteNearby` is still `not evaluable` — F12.6b widened the memory plane, not the sprite stream |
 | 0198 | accepted (2026-09-16), §1 shipped as F12.7 (2026-09-17, completed 2026-09-19); §3 pending | a legacy plain `hires.txt` pack is imported into a MEP project by an external stdlib tool in the stock-ROM namespace — round-trip proven with 0 differing keys on Ninja Gaiden, Contra80s and Super Mario Bros.; a pack keyed against an IPS-patched ROM imports against the patched ROM as a second namespace that the recording loop does not reach (§3), which is the follow-up slice |
 | 0209 | Q4 accepted and shipped as F12.8 (2026-09-19); Q1–Q3 proposed | MesenAI owns **selection** and **return**, painting is delegated to the artist's own program; the `unsorted` remainder sheet gives every recorded shape a cell. Q1–Q3 (label author, export unit, return path) still need one answer each. Slices F12.9–F12.12 are bounded by its three constraints |

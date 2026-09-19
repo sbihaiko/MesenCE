@@ -28,6 +28,7 @@ audio_cleanup_suggest.py
 cdl_tool.py
 compose_engine.py
 fm2_to_bk2.py
+mep_addition.py
 mep_build.py
 mep_compare.py
 mep_conditions.py

@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compose_engine as E  # noqa: E402
+import mep_addition  # noqa: E402 — ADR-0196 reserved key constants
 import sheet_repaint  # noqa: E402 — Image/read_png/write_png for fixtures
 
 _FAILURES = []
@@ -1022,6 +1023,165 @@ def test_a_1x_pack_still_exports_a_1x_pair():
               "sheet and twin start identical at 1x", f"{a.width}x{a.height} vs {b.width}x{b.height}")
 
 
+# -- ADR-0196 / F12.5: the overflow layer -------------------------------------
+
+def _patch_sp_tiles(sheets, cell, tiles):
+    """Rewrite one sprite node's recorded tile key in `adjacency.json` — the
+    vocabulary `node_key`, `index_keyed` and the evidence check all read."""
+    path = Path(sheets) / "adjacency.json"
+    adj = json.loads(path.read_text(encoding="utf-8"))
+    for node in adj["sprites"]["nodes"]:
+        if node["cell"] == cell:
+            node["tiles"] = tiles
+    path.write_text(json.dumps(adj) + "\n", encoding="utf-8")
+
+
+def _overflow_pack(td, blank_node=None):
+    """A pose pack ready for an overflow layer. `blank_node`, when given, has
+    its recorded pattern replaced by sixteen zero bytes."""
+    root = make_pack(Path(td))
+    sheets = root / "textures" / "sheets"
+    _write_spr_group(sheets)
+    if blank_node is not None:
+        _patch_sp_tiles(sheets, blank_node, [{"tile": "0" * 32, "palette": "0F0F0F0F"}])
+    _write_poses(sheets, _poses_doc())
+    return root, sheets
+
+
+def test_pose_root_is_the_most_seen_member_not_the_rarest():
+    """ADR-0196 §2 anchors on ADR-0189 §1's spanning-tree root — the member the
+    game draws most — which is the opposite pick from `pose_anchor`."""
+    with tempfile.TemporaryDirectory() as td:
+        root, _sheets = _overflow_pack(td)
+        pack = E.Pack(root)
+        pose = pack.poses.entries[0]
+        # appearances: 0:3000, 1:500, 2:400, 3:900, 4:100
+        check(pack.pose_root(pose) == 0, "the root is the pose's most-seen member",
+              str(pack.pose_root(pose)))
+        check(pack.pose_anchor(pose) == 4,
+              "and it is not the anchor, which stays the rarest member",
+              str(pack.pose_anchor(pose)))
+
+
+def test_pose_root_skips_a_blank_member():
+    """A transparent OAM cell is usually the most-seen member of all. Anchoring
+    on it would fire the overflow off every blank sprite cell on screen."""
+    with tempfile.TemporaryDirectory() as td:
+        root, _sheets = _overflow_pack(td, blank_node=0)
+        pack = E.Pack(root)
+        pose = pack.poses.entries[0]
+        check(pack.pose_root(pose) == 3,
+              "the blank most-seen member is skipped for the next drawn one",
+              str(pack.pose_root(pose)))
+
+
+def test_overflow_export_writes_the_addition_and_its_synthetic_cell():
+    with tempfile.TemporaryDirectory() as td:
+        root, _sheets = _overflow_pack(td)
+        pack = E.Pack(root)
+        out = root / "mep" / "textures" / "sheets"
+        out.mkdir(parents=True)
+        cells_before = len(pack.export("sprite", [0, 1, 2], seed=0, locked=[0],
+                                       to_dir=out) and
+                           json.loads((out / "usr000.json").read_text())["cells"])
+        name = pack.export("sprite", [0, 1, 2], seed=0, locked=[0], to_dir=out,
+                           overflow=[E.Overflow("pose000", 16, -24)])
+        doc = json.loads((out / f"{name}.json").read_text(encoding="utf-8"))
+        cells = doc["cells"]
+        check(len(cells) == cells_before + 1,
+              "the overflow reserves one more cell than the plain export",
+              f"{len(cells)} vs {cells_before}")
+        syn = [c for c in cells if c.get("synthetic")]
+        check(len(syn) == 1 and syn[0]["ordinal"] == 1 and syn[0]["pose"] == "pose000",
+              "the reserved cell is marked synthetic, with its pose and ordinal",
+              str(syn))
+        check(syn[0]["tiles"] == [{"tile": mep_addition.chr_ram_target(1),
+                                   "palette": mep_addition.RESERVED_PALETTE}],
+              "and carries ADR-0196 §3's reserved CHR RAM key", str(syn[0]["tiles"]))
+        rec = doc["additions"][0]
+        check(rec["anchor"]["node"] == 0 and (rec["offsetX"], rec["offsetY"]) == (16, -24),
+              "the record names the pose's root cell and the measured offset", str(rec))
+        check(rec["cell"] == syn[0]["index"] and "tile" not in rec,
+              "and points at the cell rather than restating the target key", str(rec))
+        check(sheet_repaint.read_png(out / f"{name}.png").height
+              > sheet_repaint.read_png(out / "usr000.png").height,
+              "the reserved cell gets a row of its own below the pose")
+
+
+def test_export_without_overflow_writes_no_additions_key():
+    """A caller that passes nothing produces exactly the sidecar it always did."""
+    with tempfile.TemporaryDirectory() as td:
+        root, _sheets = _overflow_pack(td)
+        pack = E.Pack(root)
+        out = root / "mep" / "textures" / "sheets"
+        out.mkdir(parents=True)
+        name = pack.export("sprite", [0, 1, 2], seed=0, locked=[0], to_dir=out)
+        doc = json.loads((out / f"{name}.json").read_text(encoding="utf-8"))
+        check("additions" not in doc, "no overflow, no additions[] key", str(doc.keys()))
+
+
+def test_overflow_refuses_a_pack_whose_recording_saw_the_reserved_palette():
+    """ADR-0196 §3's evidence check: the target is evidence-bounded, and the
+    evidence has to be checked rather than assumed."""
+    with tempfile.TemporaryDirectory() as td:
+        root, sheets = _overflow_pack(td)
+        _patch_sp_tiles(sheets, 1, [{"tile": "F" * 32,
+                                     "palette": mep_addition.RESERVED_PALETTE}])
+        pack = E.Pack(root)
+        check(pack.reserved_palette_seen() == [mep_addition.RESERVED_PALETTE],
+              "the recording's own palettes are what the check reads",
+              str(pack.reserved_palette_seen()))
+        out = root / "mep" / "textures" / "sheets"
+        out.mkdir(parents=True)
+        try:
+            pack.export("sprite", [0, 1, 2], seed=0, locked=[0], to_dir=out,
+                        overflow=[E.Overflow("pose000", 16, -24)])
+            check(False, "an observed reserved palette refuses the export")
+        except E.ComposeError as e:
+            check("evidence check" in str(e),
+                  "an observed reserved palette refuses the export", str(e))
+
+
+def test_overflow_ordinals_are_pack_wide():
+    """Two composed sheets must never claim one synthetic key."""
+    with tempfile.TemporaryDirectory() as td:
+        root, _sheets = _overflow_pack(td)
+        out = root / "textures" / "sheets"
+        first = E.Pack(root).export("sprite", [0, 1, 2], seed=0, locked=[0],
+                                    overflow=[E.Overflow("pose000", 16, -24)])
+        second = E.Pack(root).export("sprite", [0, 1, 2], seed=0, locked=[0],
+                                     overflow=[E.Overflow("pose000", 8, -16)])
+        got = []
+        for name in (first, second):
+            doc = json.loads((out / f"{name}.json").read_text(encoding="utf-8"))
+            got += [c["ordinal"] for c in doc["cells"] if c.get("synthetic")]
+        check(got == [1, 2], "the second sheet takes the next free ordinal", str(got))
+
+
+def test_synthetic_target_follows_the_packs_key_kind():
+    with tempfile.TemporaryDirectory() as td:
+        root, sheets = _overflow_pack(td)
+        pack = E.Pack(root)
+        check(not pack.index_keyed, "a pack with no recorded index keys by pattern")
+        check(pack.synthetic_target(1) ==
+              (mep_addition.chr_ram_target(1), mep_addition.RESERVED_PALETTE, None),
+              "so its synthetic target is the reserved pattern and palette",
+              str(pack.synthetic_target(1)))
+        for cell in range(6):
+            _patch_sp_tiles(sheets, cell, [dict(_tiles()[0], index=0x12)])
+        pack = E.Pack(root)
+        check(pack.index_keyed, "a recorded CHR index makes the pack index-keyed")
+        check(pack.synthetic_target(1, 8192)[2] == 8192,
+              "and its synthetic target is the first index past CHR",
+              str(pack.synthetic_target(1, 8192)))
+        try:
+            pack.synthetic_target(1, 0)
+            check(False, "an index-keyed pack refuses a target with no CHR tile count")
+        except mep_addition.AdditionError as e:
+            check("CHR tile count" in str(e),
+                  "an index-keyed pack refuses a target with no CHR tile count", str(e))
+
+
 def main():
     tests = [
         test_missing_adjacency_tells_artist_to_rebootstrap,
@@ -1054,6 +1214,13 @@ def main():
         test_pack_without_poses_ranks_nodes_as_before,
         test_export_writes_the_sheet_at_the_packs_scale,
         test_a_1x_pack_still_exports_a_1x_pair,
+        test_pose_root_is_the_most_seen_member_not_the_rarest,
+        test_pose_root_skips_a_blank_member,
+        test_overflow_export_writes_the_addition_and_its_synthetic_cell,
+        test_export_without_overflow_writes_no_additions_key,
+        test_overflow_refuses_a_pack_whose_recording_saw_the_reserved_palette,
+        test_overflow_ordinals_are_pack_wide,
+        test_synthetic_target_follows_the_packs_key_kind,
     ]
     for t in tests:
         t()

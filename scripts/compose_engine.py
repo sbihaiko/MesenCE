@@ -10,6 +10,14 @@ composition as an ordinary `object`/`sprite` sidecar (`usrNNN`) with
 `composed`/`seed`/`locked` and, for a sprite band, `band` — legal `mep_build`
 input, rank inherited from `_SHEET_RANK` by `kind`.
 
+ADR-0196 (F12.5) adds the overflow layer: `export(overflow=[Overflow(...)])`
+reserves one blank cell per overflow item on a row of its own, keys it with
+the synthetic target ADR-0196 §3 proves unmatched, and writes an
+`additions[]` record anchored on the pose's root cell (`pose_root` — the
+most-seen member, ADR-0189 §1, the opposite of `pose_anchor`). Every decision
+about that key lives in `mep_addition`, so the editor, the build and the lint
+read one rule.
+
 The tree's codecs are reused, not duplicated: PNG decoding through
 `mep_build._png_pixels` (the tree's single decoder) and the RGBA `Image`
 plus `read_png`/`write_png` from `sheet_repaint`. This module never imports
@@ -23,6 +31,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import mep_addition  # noqa: E402 — ADR-0196 synthetic target keys
 import mep_build  # noqa: E402 — PNG decoder (_png_pixels) and the sheet loader
 import sheet_repaint  # noqa: E402 — Image/read_png/write_png, stdlib RGBA codec
 
@@ -318,6 +327,34 @@ class Pose:
         xs = [p[0] for p in self.tiles.values()]
         ys = [p[1] for p in self.tiles.values()]
         return (max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
+
+
+class Overflow:
+    """One 8x8 cell of the ADR-0196 overflow layer: art the artist wants drawn
+    outside `pose_id`'s hardware bounding box, at `(dx, dy)` **native pixels**
+    from the pose's root cell.
+
+    The offset is the one `HdNesPack::InsertAdditionalSprite` adds to the
+    matched cell's own screen position, so it is signed and in pixels, not in
+    the 8 px cell units `Pose.tiles` uses. The editor lays it out over the
+    pose's recorded geometry; nothing here composes an offset transitively."""
+
+    __slots__ = ("pose_id", "dx", "dy")
+
+    def __init__(self, pose_id, dx, dy):
+        self.pose_id = str(pose_id)
+        self.dx = int(dx)
+        self.dy = int(dy)
+
+    def __repr__(self):
+        return f"Overflow({self.pose_id!r}, {self.dx}, {self.dy})"
+
+    def __eq__(self, other):
+        return (isinstance(other, Overflow) and other.pose_id == self.pose_id
+                and other.dx == self.dx and other.dy == self.dy)
+
+    def __hash__(self):
+        return hash((self.pose_id, self.dx, self.dy))
 
 
 class PoseRun:
@@ -964,6 +1001,173 @@ class Pack:
 
         return min(pose.tiles.items(), key=rank)[0]
 
+    # -- the overflow layer (ADR-0196) ---------------------------------------
+
+    def pose_root(self, pose) -> int:
+        """The pose's **most-seen** member — the cell ADR-0189 §1 roots a
+        group's spanning tree at, and therefore the cell ADR-0196 §2 anchors
+        an `<addition>` on. Ties go to the lower vocabulary index, which is
+        the rule `SpriteGrouping::PlanSpriteNearby` uses (a `std::map` iterated
+        ascending), so one recording always picks one root.
+
+        This is deliberately the *opposite* pick from `pose_anchor`, and both
+        are right for their own job: a session reopens on the rarest member
+        because that is what tells two poses of one character apart, while an
+        `<addition>` fires off the member the game draws most, because that is
+        the match the run time has the most chances to see."""
+        if not pose.tiles:
+            raise ComposeError(f"{pose.id} has no tiles to anchor on")
+        sp = self.adjacency.sp
+
+        def rank(node):
+            entry = sp.get(node)
+            return (-(entry.appearances if entry else 0), node)
+
+        # A blank cell is skipped. ADR-0189 §1 roots on the most-seen cell of
+        # the *group sheet*, whose cells are the ones the builder drew; a pose
+        # entry also carries the transparent members of the OAM silhouette, and
+        # the all-zero pattern is usually the most-seen member of all. Anchoring
+        # on it would fire the overflow off every blank sprite cell on screen —
+        # the "paint the artist's overflow onto an unrelated tile" failure
+        # ADR-0196 §3 exists to rule out, arriving through the anchor instead.
+        drawn = [n for n in pose.tiles if not self._blank_node(n)]
+        if not drawn:
+            raise ComposeError(f"{pose.id} has no cell with art to anchor on")
+        return min(drawn, key=rank)
+
+    def _blank_node(self, node: int) -> bool:
+        """True when this sprite node's recorded pattern is sixteen zero bytes,
+        i.e. a fully transparent cell."""
+        src = self.adjacency.sp.get(node)
+        for entry in (src.tiles if src else None) or []:
+            if isinstance(entry, dict):
+                data = str(entry.get("source") or entry.get("tile") or "")
+                return set(data.strip().upper()) <= {"0"}
+        return True
+
+    def node_key(self, node: int, sprite: bool = True):
+        """`(tileData, palette, index)` as `mep_build` emits this node's
+        `<tile>` rule — the form an `<addition>` anchor has to spell, or the
+        loader keys the tag on something the run time never looks up.
+
+        ADR-0178: when the recorded entry carries `source`, the run time keys
+        by the *unflipped* data and `mep_build` emits that; the baked form is
+        a key nothing ever looks up. ADR-0172: on a CHR ROM pack the key is
+        the index, and `index` is what carries it."""
+        src = self.adjacency.sp.get(node) if sprite else self.adjacency.bg.get(node)
+        tiles = (src.tiles if src else None) or []
+        entry = tiles[0] if isinstance(tiles[0] if tiles else None, dict) else None
+        if entry is None:
+            raise ComposeError(f"node {node} has no recorded tile key")
+        data = str(entry.get("source") or entry.get("tile") or "").strip().upper()
+        pal = str(entry.get("palette") or "").strip().upper()
+        idx = entry.get("index")
+        idx = idx if isinstance(idx, int) and idx >= 0 else None
+        if len(data) != 32 or len(pal) != 8:
+            raise ComposeError(f"node {node} tile key {data!r}/{pal!r} is not a pack key")
+        return (data, pal, idx)
+
+    @property
+    def index_keyed(self) -> bool:
+        """True when this pack keys its tiles by CHR index (a CHR ROM game,
+        ADR-0172) — read off the recorded vocabulary, the same fact
+        `mep_build` reads off the key source's own `<tile>` token width."""
+        for src in list(self.adjacency.sp.values()) + list(self.adjacency.bg.values()):
+            for entry in src.tiles or []:
+                if isinstance(entry, dict) and isinstance(entry.get("index"), int):
+                    return True
+        return False
+
+    def synthetic_ordinals(self) -> set:
+        """Every ADR-0196 ordinal already taken by a sheet of this pack. The
+        ordinal is the pack's, not the sheet's: two composed sheets must never
+        claim one synthetic key."""
+        taken = set()
+        for sd in self.docs:
+            for cell in sd.cells:
+                if not isinstance(cell, dict) or not cell.get("synthetic"):
+                    continue
+                n = cell.get("ordinal")
+                if isinstance(n, int) and n >= 1:
+                    taken.add(n)
+        return taken
+
+    def synthetic_target(self, ordinal: int, chr_tile_count: int = 0):
+        """The `(tileData, palette, index)` of the `ordinal`-th synthetic cell,
+        per ADR-0196 §3 for this pack's key kind. `chr_tile_count` is required
+        on a CHR ROM pack and ignored on a CHR RAM one."""
+        pattern = mep_addition.chr_ram_target(ordinal)
+        if self.index_keyed:
+            index = mep_addition.chr_rom_target(chr_tile_count, ordinal)
+            # The pattern half is carried so the sidecar entry is a well-formed
+            # ADR-0153 tile record; on an index-keyed pack `mep_build` emits the
+            # index and never reads it, and §3's proof is the index alone.
+            return (pattern, mep_addition.RESERVED_PALETTE, index)
+        return (pattern, mep_addition.RESERVED_PALETTE, None)
+
+    def reserved_palette_seen(self) -> list:
+        """ADR-0196 §3's evidence check, run over what *this recording*
+        observed: the reserved palette among the vocabulary's own keys. Empty
+        is evidence-bounded, never a proof — a recording covers routes."""
+        pals = []
+        for src in list(self.adjacency.sp.values()) + list(self.adjacency.bg.values()):
+            for entry in src.tiles or []:
+                if isinstance(entry, dict):
+                    pals.append(entry.get("palette") or "")
+        return mep_addition.reserved_palette_evidence(pals)
+
+    def _plan_additions(self, overflow: list, cells: list, first: int, chr_tile_count: int) -> list:
+        """The `additions[]` record for `overflow`, stamping each reserved
+        blank cell of `cells` with the synthetic key it owns.
+
+        This is where ADR-0196 §2 and §3 meet: §2 picks the anchor (the pose's
+        root cell) and keeps the offset as measured, §3 picks the target key
+        and proves it unmatched. The evidence check is run once, on the
+        palette, and refuses the whole export rather than shipping a key the
+        recording contradicts."""
+        if not overflow:
+            return []
+        if self.poses is None:
+            raise ComposeError("this pack has no sheets/poses.json — an <addition> is "
+                               "anchored on a recorded pose (ADR-0196 §1)")
+        seen = self.reserved_palette_seen()
+        if seen:
+            raise ComposeError(
+                f"this recording observed the reserved palette {', '.join(seen)} — "
+                "ADR-0196 §3's evidence check refuses a synthetic target on it")
+        taken = self.synthetic_ordinals()
+        ordinal = 1
+        out = []
+        for j, item in enumerate(overflow):
+            pose = self.poses.by_id(item.pose_id)
+            if pose is None:
+                raise ComposeError(f"{item.pose_id}: no such pose in sheets/poses.json")
+            root = self.pose_root(pose)
+            data, pal, idx = self.node_key(root, sprite=True)
+            while ordinal in taken:
+                ordinal += 1
+            taken.add(ordinal)
+            tdata, tpal, tidx = self.synthetic_target(ordinal, chr_tile_count)
+            cell = cells[first + j]
+            cell["synthetic"] = True
+            cell["ordinal"] = ordinal
+            cell["pose"] = pose.id
+            entry = {"tile": tdata, "palette": tpal}
+            if tidx is not None:
+                entry["index"] = tidx
+            cell["tiles"] = [entry]
+            anchor = {"node": root, "tile": data, "palette": pal}
+            if idx is not None:
+                anchor["index"] = idx
+            out.append({
+                "pose": pose.id,
+                "anchor": anchor,
+                "offsetX": item.dx,
+                "offsetY": item.dy,
+                "cell": cell["index"],
+            })
+        return out
+
     def pose_bottom_nodes(self, pose) -> list:
         """The pose's bottom row — its members at `max(dy)`, which is the part
         of it that stands on a floor (ADR-0171 §3)."""
@@ -1165,8 +1369,14 @@ class Pack:
             n += 1
         return f"usr{n:03d}"
 
-    def compose_sheet(self, kind: str, nodes: list, placements: list = None, scale: int = 1):
+    def compose_sheet(self, kind: str, nodes: list, placements: list = None, scale: int = 1,
+                      extra: int = 0):
         """Lay the kept cells out as the composed sheet, without touching disk.
+
+        `extra` reserves that many blank cells after the composed ones — the
+        ADR-0196 overflow layer. They carry no recorded art by construction
+        (the game never draws them); the artist paints them and `mep_build`
+        emits their synthetic key from the sidecar like any other cell.
 
         Returns `(canvas, cells, columns, unit)` - the pixels `export` writes
         and the sidecar cell records that describe them. `export` is this plus
@@ -1207,6 +1417,11 @@ class Pack:
             columns = max(1, min(len(nodes), 16))
             coords = [(i % columns, i // columns) for i in range(len(nodes))]
             rows = (len(nodes) + columns - 1) // columns
+        extra = max(0, int(extra))
+        if extra:
+            columns = max(columns, min(extra, 16))
+            coords = list(coords) + [(i % columns, rows + i // columns) for i in range(extra)]
+            rows += (extra + columns - 1) // columns
         canvas = sheet_repaint.Image(columns * stride + GUTTER * scale,
                                      rows * stride + GUTTER * scale)
         adj = self.adjacency
@@ -1226,11 +1441,19 @@ class Pack:
                 "label": "",
                 "tiles": src.tiles if src else [],
             })
+        for j in range(extra):
+            cx, cy = coords[len(nodes) + j]
+            cells.append({
+                "index": len(nodes) + j,
+                "x": GUTTER + cx * (unit + GUTTER),
+                "y": GUTTER + cy * (unit + GUTTER),
+                "count": 0, "context": "", "metatile": None, "label": "", "tiles": [],
+            })
         return canvas, cells, columns, unit
 
     def export(self, kind: str, nodes: list, seed, locked: list, band=None,
                to_dir: Path = None, placements: list = None, poses: list = None,
-               name: str = None):
+               name: str = None, overflow: list = None, chr_tile_count: int = 0):
         """Write a composed sheet (`usrNNN`) to `to_dir` (default the pack's own
         sheets dir). `kind` is `object` or `sprite`; `nodes` are the kept node
         ids in sheet order; `band` is the quantised bottom for a sprite band.
@@ -1250,17 +1473,30 @@ class Pack:
         `name` is the `usrNNN` stem to write, for a caller that already claimed
         one (by creating the file) so two writers into one `to_dir` cannot be
         handed the same number; without it the stem is the first free one, as
-        it always was."""
+        it always was.
+
+        `overflow` is the ADR-0196 layer: `[Overflow(pose_id, dx, dy)]`, each
+        one 8x8 cell of art the artist wants drawn outside the pose's hardware
+        bounding box. Each gets a blank cell on the sheet keyed by a synthetic
+        `(tileData, palette)` the ROM cannot match, and one `additions[]`
+        record naming the pose's root cell as the anchor. `chr_tile_count` is
+        the ROM's own CHR tile count and is **required** on a CHR ROM pack —
+        §3's target index is `chrTileCount + n`, and there is no honest way to
+        guess it from a recording."""
         if kind not in ("object", "sprite"):
             raise ComposeError(f"composed kind {kind!r} must be 'object' or 'sprite'")
         if not nodes:
             raise ComposeError("nothing to export")
-        canvas, cells, columns, unit = self.compose_sheet(kind, nodes, placements)
+        overflow = list(overflow or [])
+        canvas, cells, columns, unit = self.compose_sheet(kind, nodes, placements,
+                                                          extra=len(overflow))
+        additions = self._plan_additions(overflow, cells, len(nodes), chr_tile_count)
         to_dir = Path(to_dir) if to_dir is not None else self.sheets_dir
         if not to_dir.is_dir():
             raise ComposeError(f"{to_dir}: not a folder")
         scale = self.scale
-        painted = (self.compose_sheet(kind, nodes, placements, scale=scale)[0]
+        painted = (self.compose_sheet(kind, nodes, placements, scale=scale,
+                                      extra=len(overflow))[0]
                    if scale > 1 else canvas.clone())
         name = name or self.next_free_name(to_dir)
         sheet_repaint.write_png(to_dir / f"{name}.png", painted)
@@ -1278,6 +1514,11 @@ class Pack:
             "locked": list(locked),
             "cells": cells,
         }
+        if additions:
+            # ADR-0196 §1: the per-pose overflow record, beside the cells it
+            # keys. Absent rather than empty, so a sheet with no overflow layer
+            # is byte for byte the sidecar the editor always wrote.
+            doc["additions"] = additions
         if poses:
             # ADR-0174 §1: ids, not an agreement about array order, and the
             # key is absent rather than empty when there is nothing to say.

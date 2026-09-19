@@ -54,7 +54,7 @@ Two facts about the base that colour the rest:
 | **Ambiguity of a reused tile** | 13 condition types, all hand-written by the author | `spriteNearby` (spanning tree, ADR-0189) and `tileNearby` (directed co-occurrence, ADR-0190) emitted automatically, each with a mandatory bare twin | **MesenAI** |
 | **Conditions deliberately refused** | All 13 available to a human author | `frameRange`, `tileAtPosition`, `memoryCheckConstant` are not emitted (ADR-0189 §4) | **MesenCE** (a hand author can do what our tool will not) |
 | **Sprite composition** | Nothing in the emulator; the community's answer is an external editor (`mkwong98/HDNes-Graphics-Pack-Editor`, CHR ROM only, wxWidgets) | `compose_editor.py`: MVVM tkinter over a host-free engine, poses as the unit, export as legal build input | **MesenAI** |
-| **Extra tiles drawn on match** | `<addition>` — composes sprites without spending the 8-per-scanline limit; 1987 uses in one community pack | Loader reads it; *inherited*, and we never emit it | **MesenCE** |
+| **Extra tiles drawn on match** | `<addition>` — composes sprites without spending the 8-per-scanline limit; 1987 uses in one community pack | Emitted from the composition editor's overflow layer (F12.5, ADR-0196): anchored on the pose's root cell, target key proved unmatched against the ROM's CHR, linted | **Even** — upstream's format, authored by tool here |
 | **Writing `hires.txt`** | By hand, or by the author's own generator (the most prolific author ships a 9.9 MB, 34-sheet Excel workbook) | `mep_build.py build` regenerates it from sheets; the guide forbids hand-editing | **MesenAI** |
 | **File-level duplicate bitmaps (CHR ROM)** | `automaticFallbackTiles` exists in the format and the builder never set it | Set on every CHR ROM recording (ADR-0195) | **MesenAI** |
 | **Validation** | None. No linter, no spec that matches the code | `mep_lint.py`, versioned MEP-v1, canonical `content_id`, sha256 errata, pack CI | **MesenAI** |
@@ -93,7 +93,7 @@ loop and hand-authored conditions**, opened 2026-09-16). The mapping:
 | Vocabulary scale | F12.1 — delivered 2026-09-17: the pack is measured and every count now carries its definition ([log](validation/f12.1-scale-and-load-2026-09-17.md)); what remains open on this row is the recording's vocabulary, not the tools' speed | — |
 | Picking a tile's key by hand | F12.2 (*Copy as MEP sheet cell*) | — |
 | Painting, end to end · Staying inside the emulator | F12.3 (reload without reopening the ROM), F12.4 (asset-name template) | — |
-| Extra tiles drawn on match | F12.5 | ADR-0196 (accepted 2026-09-16) |
+| Extra tiles drawn on match | F12.5 — delivered 2026-09-19: the overflow layer emits `<addition>`, proved pixel-exact on one pose each of Mega Man 3 (CHR ROM) and Contra (CHR RAM) ([log](validation/f12.5-addition-overflow-layer-2026-09-19.md)) | ADR-0196 (accepted 2026-09-16) |
 | Conditions deliberately refused | F12.6a / F12.6b | ADR-0197 (accepted 2026-09-16; amends ADR-0189 §4's scope, keeps its refusals) |
 | Interop with community packs | F12.7 (plain packs first; a patched-ROM pack imports against the patched ROM, ADR-0198 §3) | ADR-0198 (accepted 2026-09-16) |
 | Tile identity | none — it is the inherited contract | — |
